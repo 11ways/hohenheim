@@ -144,15 +144,26 @@ public final class InstanceBackups {
      * commit nothing here can reproduce. Backing up only its data volumes would be a new payload, not decided.
      */
     public static @Nullable Microcopy backupRefusal(@NonNull Row row) {
-        String name = String.valueOf((Object) row.get(InstanceModel.NAME));
-        if (sourceUnreproducible(row)) {
-            return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_source_unreproducible").withArg("name", name);
+        Microcopy source = sourceRefusal(row);
+        if (source != null) {
+            return source;
         }
+        String name = String.valueOf((Object) row.get(InstanceModel.NAME));
         if (row.get(InstanceModel.BACKUP_TARGET_ID) != null) {
             return null;
         }
         // The target is the instance's own choice (no installation default), so the refusal says where it is made.
         return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none").withArg("name", name);
+    }
+
+    /**
+     * The part of {@link #backupRefusal} no later setting lifts, so a schedule's back up step on it is refused at save.
+     *
+     * @return the refusal, null for a source a backup can restore
+     */
+    public static @Nullable Microcopy sourceRefusal(@NonNull Row row) {
+        return sourceUnreproducible(row) ? HohenheimMicrocopy.VIOLATIONS.of("instance_backup_source_unreproducible")
+            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))) : null;
     }
 
     /** Whether the record is an application whose release is built from git or a build context. */

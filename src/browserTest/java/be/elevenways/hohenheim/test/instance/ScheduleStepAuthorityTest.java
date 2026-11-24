@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -183,5 +184,57 @@ class ScheduleStepAuthorityTest extends HohenheimHttpTestBase {
                 Map.of(RecordScheduleStepModel.POSITION.getName(), 3), powerOnly))
             .as("step 5: a power-only delegate cannot edit the chain")
             .isInstanceOf(Violations.class);
+    }
+
+    /**
+     * A back up step on an application built from its repository could never run, so its save is refused in the words
+     * the app's Back up now gives, while another step on the same app is saved.
+     */
+    @Test
+    void aBackUpStepOnAGitBuiltApplicationIsRefusedAtSave() {
+        PanelResource<Row> steps = PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_SCHEDULE_STEPS);
+        AccessContext owner = contextOf(ownerId, "Chain Owner");
+        Model instances = Models.get(InstanceModel.class);
+        Row app = instances.createEmptyRow();
+        app.set(InstanceModel.NAME, PREFIX + "git-built");
+        app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        app.set(InstanceModel.SETTINGS, Map.of("repository_url", "https://example.invalid/app.git", "branch", "main"));
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        instances.save(app);
+        int appId = app.get(InstanceModel.ID);
+        int gitSchedule = schedule(appId, PREFIX + "git-nightly");
+        try {
+            RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, appId,
+                HohenheimCapabilities.MANAGE, true);
+            // A back up step is offered only to someone holding the backups capability too.
+            RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, appId,
+                HohenheimCapabilities.BACKUPS, true);
+            Map<String, Object> backUp = new LinkedHashMap<>(stepValues(gitSchedule));
+            backUp.put(RecordScheduleStepModel.ACTION.getName(), InstanceOperations.BACKUP.id().toString());
+
+            // 1. The back up step is refused with the source's reason, and nothing is written.
+            assertThatThrownBy(() -> PartsWrites.persistRow(steps, Map.copyOf(backUp), owner))
+                .as("step 1: a back up the source can never take is refused at save")
+                .isInstanceOfSatisfying(Violations.class, refused -> assertThat(refused.all())
+                    .anySatisfy(violation -> assertThat(violation.message().key())
+                        .isEqualTo("instance_backup_source_unreproducible")));
+            assertThat(Models.get(RecordScheduleStepModel.class).find()
+                    .where(RecordScheduleStepModel.SCHEDULE_ID.eq(gitSchedule)).count())
+                .as("step 1: no step was written").isZero();
+
+            // 2. A restart step on the same app is saved.
+            Integer restart = (Integer) PartsWrites.persistRow(steps, stepValues(gitSchedule), owner);
+            stepIds.add(restart);
+            assertThat(restart).as("step 2: the restart step is saved").isNotNull();
+        } finally {
+            Models.get(RecordScheduleStepModel.class).find()
+                .where(RecordScheduleStepModel.SCHEDULE_ID.eq(gitSchedule)).all()
+                .forEach(row -> stepIds.remove(row.get(RecordScheduleStepModel.ID)));
+            Models.get(RecordScheduleStepModel.class).find()
+                .where(RecordScheduleStepModel.SCHEDULE_ID.eq(gitSchedule)).all()
+                .forEach(row -> Models.get(RecordScheduleStepModel.class).delete(row));
+            Models.get(RecordScheduleModel.class).delete(gitSchedule);
+            HardDeletes.byId(instances, appId);
+        }
     }
 }

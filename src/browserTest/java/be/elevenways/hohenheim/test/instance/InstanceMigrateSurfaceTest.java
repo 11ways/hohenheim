@@ -383,7 +383,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(response.body()).as(step + ": the migrate form is redrawn, still on its tab")
             .contains("name=\"" + CmsEndpoints.TAB_PARAM.getName() + "\"")
             .contains("value=\"" + HohenheimSlugs.Tab.MIGRATE + "\"")
-            .contains("name=\"" + InstanceOperations.TARGET_HOST.getName() + "\"");
+            .contains("name=\"" + InstanceOperations.TARGET_HOST.name() + "\"");
     }
 
     /** @return a refusal key's shipped English text for this name, as the page escapes it */
@@ -398,7 +398,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                 InstanceOperations.MIGRATE.id())
             .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
         return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), HohenheimSlugs.Tab.MIGRATE,
-            InstanceOperations.TARGET_HOST.getName(), String.valueOf(target),
+            InstanceOperations.TARGET_HOST.name(), String.valueOf(target),
             CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
             CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF));
     }

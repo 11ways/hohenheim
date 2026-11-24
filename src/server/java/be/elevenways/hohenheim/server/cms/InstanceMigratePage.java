@@ -62,7 +62,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
             .withArg("name", instance.get(InstanceModel.NAME))
             .withArg("from", HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)))
             .withArg("to", HostModel.nameOf(destination(input))))
-        .transport(InstanceOperations.TARGET_HOST.getName())
+        .transport(InstanceOperations.TARGET_HOST.name())
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
@@ -136,13 +136,13 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
     /** The migrate form preset with one destination; null when the operation withholds a form. */
     private @Nullable PageFormState formFor(@NonNull PanelRequest request, @NonNull Row instance, int serverId) {
         PageActions.Opened opened = PageActions.open(request, this, instance, MIGRATE.id(),
-            Map.of(InstanceOperations.TARGET_HOST.getName(), serverId));
+            Map.of(InstanceOperations.TARGET_HOST.name(), serverId));
         return opened instanceof PageActions.Form form ? form.state() : null;
     }
 
     /** @return the destination the form opens with, -1 when it names none */
     private static int destination(@NonNull Map<String, Object> input) {
-        Object value = input.get(InstanceOperations.TARGET_HOST.getName());
+        Object value = input.get(InstanceOperations.TARGET_HOST.name());
         return RawValues.intOr(value, -1);
     }
 

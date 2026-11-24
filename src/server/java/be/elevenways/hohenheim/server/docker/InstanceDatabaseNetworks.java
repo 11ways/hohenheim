@@ -91,6 +91,27 @@ public final class InstanceDatabaseNetworks {
     }
 
     /**
+     * The hosts of the databases attached to the app, read once for the rule {@link #attachLinks} enforces at deploy:
+     * a link network exists on one daemon alone, so the app runs only on a host every one of them runs on.
+     *
+     * @return each attached database's name and the canonical id of the host it runs on
+     */
+    public static @NonNull Map<String, Integer> attachedDatabaseHosts(@NonNull Row instance) {
+        List<Integer> databaseIds = new ArrayList<>();
+        for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(
+                ApplicationReleases.linkOwnerOf(instance))) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            if (databaseId != null) databaseIds.add(databaseId);
+        }
+        Map<String, Integer> hosts = new LinkedHashMap<>();
+        if (databaseIds.isEmpty()) return hosts;
+        for (Row database : Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(databaseIds)).all()) {
+            hosts.put(database.get(DatabaseModel.NAME), HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID)));
+        }
+        return hosts;
+    }
+
+    /**
      * Between container CREATE and START: ensure the link network of every attached
      * database (a deploy recreates the container, which drops every non-primary
      * attachment) and join both members.

@@ -3,8 +3,11 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ChildList;
@@ -28,6 +31,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.ScheduleStepForms;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
@@ -207,11 +211,18 @@ public final class InstanceScheduleStepParts {
         String recordId = schedule.get(RecordScheduleModel.RECORD_ID);
         InstanceScheduleParts.requireManage(save.access(), InstanceScheduleParts.parseInstanceId(recordId));
         Object action = step.get(RecordScheduleStepModel.ACTION);
+        Row instance = Models.get(InstanceModel.class).findById(InstanceScheduleParts.parseInstanceId(recordId));
         StepActionRefusal refusal = RecordSchedules.stepActionRefusal(save.access(), InstanceModel.MODEL_ID,
-            Models.get(InstanceModel.class).findById(InstanceScheduleParts.parseInstanceId(recordId)),
-            action instanceof String key ? key : null);
+            instance, action instanceof String key ? key : null);
         if (refusal != null) {
             throw Violations.ofField("action", action, refusal.message());
+        }
+        // A back up the app's source can never take would fail at every run: refused now, in its own words.
+        Microcopy never = instance != null && action instanceof String key
+            && ((RegistryMemberField) RecordScheduleStepModel.ACTION).memberFor(key) == InstanceOperations.BACKUP
+            ? InstanceBackups.sourceRefusal(instance) : null;
+        if (never != null) {
+            throw Violations.ofField("action", action, never);
         }
     }
 }

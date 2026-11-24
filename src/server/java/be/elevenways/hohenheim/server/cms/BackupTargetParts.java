@@ -6,11 +6,13 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -28,8 +30,10 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -72,6 +76,21 @@ public final class BackupTargetParts {
             .command(CmsCommands.EXTERNAL)
             .register();
 
+    /** Removes a target; refused while a setting still names it (BackupTargetModel's removal hook). */
+    public static final Operation<Row, Void, Integer> DELETE =
+        Operation.declare(HohenheimIds.id("delete_backup_target"))
+            .happened(OperationSentences.of("delete_backup_target"))
+            .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_backup_target_description"))
+            .icon(Icon.TRASH)
+            .one(SUBJECT)
+            .verb(OperationVerb.DELETE)
+            .gate(HohenheimSources.OPERATOR)
+            .result(Integer.class)
+            .facts(OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.TRANSACTIONAL)
+            .register();
+
     /**
      * One health check's outcome.
      *
@@ -106,6 +125,10 @@ public final class BackupTargetParts {
             }
             return new TestOutcome(name, null);
         });
+        OperationHandlers.attach(DELETE).handle(call -> {
+            Models.get(BackupTargetModel.class).delete(call.subject());
+            return 1;
+        });
     }
 
     private BackupTargetParts() {
@@ -137,7 +160,7 @@ public final class BackupTargetParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(BackupTargetModel.NAME).build())
             .form(ResourceForm.<Row>of(form).build())
-            .writes(ResourceMutations.rows().create().update().delete().build())
+            .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))

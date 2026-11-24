@@ -9,14 +9,18 @@ import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimVerbs;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
@@ -25,7 +29,6 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.orm.field.IntegerField;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -363,11 +366,9 @@ public final class InstanceOperations {
         .command(COMMAND_FACET)
         .register();
 
-    /** The host a migration moves the workload to. */
-    public static final IntegerField TARGET_HOST = IntegerField.builder("targetServerId")
-        .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("host"))
-        .required()
-        .build();
+    /** The host a migration moves the workload to, named by its code (SR1) or, from the migrate tab, its id. */
+    public static final FormEntry TARGET_HOST = OperationForms.recordId("host",
+        HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_host_help"), HostModel.MODEL_ID, true);
 
     /**
      * The cold move of one instance to another host: what the migrate tab places, once per destination row.
@@ -380,20 +381,19 @@ public final class InstanceOperations {
         Operation.declare(HohenheimIds.id("migrate_instance"))
             .happened(OperationSentences.of("migrate_instance"))
             .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate").withFallback("Migrate"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("migrate_instance_description"))
             .icon(Icon.of("truck-fast"))
             .one(INSTANCE)
-            .notForAssistants("names its destination host by a stored number, not a code; its tool comes once the"
-                + " input names a host by its code")
             .gate(HohenheimSources.OPERATOR)
             .input(OperationInput.of(FormSpec.builder().add(TARGET_HOST).build(), MigrateInput.class,
-                values -> new MigrateInput(values.get(TARGET_HOST))))
+                values -> new MigrateInput(RawValues.positiveInt(values.get(TARGET_HOST.name())))))
             .result(Integer.class)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
     /** The migration's input: the destination host. */
-    public record MigrateInput(@Nullable Integer targetServerId) {
+    public record MigrateInput(@Nullable Integer host) {
     }
 
     /**

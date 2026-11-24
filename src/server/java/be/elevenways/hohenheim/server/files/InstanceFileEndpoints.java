@@ -70,6 +70,7 @@ public final class InstanceFileEndpoints {
         initHtmlLane();
         initApiLane();
         VolumeFileOperations.init();
+        InstanceFileOperations.init();
     }
 
     // -- HTML lane ------------------------------------------------------------

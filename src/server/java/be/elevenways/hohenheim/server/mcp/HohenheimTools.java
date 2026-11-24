@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.AddressWrites;
 import be.elevenways.hohenheim.server.cms.AppKindWrites;
+import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.BuildHookParts;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
@@ -61,6 +62,7 @@ public final class HohenheimTools extends McpToolCollection {
 
     private HohenheimTools() {
         for (McpHostTool tool : declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimDataTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -68,7 +70,7 @@ public final class HohenheimTools extends McpToolCollection {
         return new HohenheimTools();
     }
 
-    private static @NonNull Microcopy words(@NonNull String key) {
+    static @NonNull Microcopy words(@NonNull String key) {
         return HohenheimMicrocopy.HOHENHEIM.of(key);
     }
 
@@ -102,6 +104,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(DatabaseParts.DELETE_ENGINE, null, FORCE, "false")
             .route(DatabaseParts.FORCE_DELETE_ENGINE, null, FORCE, "true")
             .route(DatabaseDumpParts.DELETE, null)
+            .route(BackupTargetParts.DELETE, null)
             .route(StackOperations.DELETE_STACK, null)
             .route(StackOperations.DELETE_SERVICE, null)
             .route(HostParts.DELETE, null)
@@ -148,6 +151,7 @@ public final class HohenheimTools extends McpToolCollection {
             .code(words("mcp_code_test"))
             .route(DomainParts.CHECK_REACH, null)
             .route(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
+            .route(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .build();
         // DNS records have no code: they are read and set by their zone, each by its name and type.
         McpHostTool recordList = McpCodeTool.builder("dns_record_list", words("mcp_tool_dns_record_list"),
@@ -202,11 +206,11 @@ public final class HohenheimTools extends McpToolCollection {
         return tools;
     }
 
-    private static McpHostTool.@NonNull Annotations writes() {
+    static McpHostTool.@NonNull Annotations writes() {
         return new McpHostTool.Annotations(null, false, false, false, false);
     }
 
-    private static McpHostTool.@NonNull Annotations destroys() {
+    static McpHostTool.@NonNull Annotations destroys() {
         return new McpHostTool.Annotations(null, false, true, false, false);
     }
 }

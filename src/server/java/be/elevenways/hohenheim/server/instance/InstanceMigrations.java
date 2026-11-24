@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -141,6 +142,7 @@ public final class InstanceMigrations {
     public @NonNull List<Destination> destinationsFor(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         boolean sourceTransportable = hasTransport(resolved.runtime());
+        Map<String, Integer> databaseHosts = InstanceDatabaseNetworks.attachedDatabaseHosts(resolved.row());
         List<Destination> destinations = new ArrayList<>();
         for (Row server : Models.get(HostModel.class).find().all()) {
             Integer serverId = server.get(HostModel.ID);
@@ -148,7 +150,7 @@ public final class InstanceMigrations {
                 continue;
             }
             String name = String.valueOf((Object) server.get(HostModel.NAME));
-            Microcopy refusal = refusalFor(serverId, name, resolved, sourceTransportable);
+            Microcopy refusal = refusalFor(serverId, name, resolved, sourceTransportable, databaseHosts);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
                 Math.clamp(InstanceCapacity.bookedMbOn(serverId), 0, Integer.MAX_VALUE),
@@ -169,7 +171,8 @@ public final class InstanceMigrations {
     private static @Nullable Microcopy refusalFor(int serverId,
                                                   @NonNull String name,
                                                   @NonNull Resolved resolved,
-                                                  boolean sourceTransportable) {
+                                                  boolean sourceTransportable,
+                                                  @NonNull Map<String, Integer> databaseHosts) {
         // A container that takes its image from an app first: no host but its app's can run it, whatever it offers.
         Microcopy followsApp = followsAppRefusal(resolved);
         if (followsApp != null) {
@@ -208,6 +211,24 @@ public final class InstanceMigrations {
         }
         if (resolved.spec().publication() != null) {
             return HohenheimViolations.instanceRefusalText("migrate_publication_present", resolved.row(), null);
+        }
+        return databaseRefusal(resolved, databaseHosts, serverId);
+    }
+
+    /**
+     * An attached database stays on its host and its link network on that host's daemon: an app moved away from it
+     * could never deploy, so the move is refused by name until the database is detached.
+     *
+     * @param databaseHosts the app's attached databases by name, each with its host
+     *     ({@link InstanceDatabaseNetworks#attachedDatabaseHosts})
+     */
+    private static @Nullable Microcopy databaseRefusal(@NonNull Resolved resolved,
+                                                       @NonNull Map<String, Integer> databaseHosts, int serverId) {
+        for (Map.Entry<String, Integer> database : databaseHosts.entrySet()) {
+            if (database.getValue() != serverId) {
+                return HohenheimMicrocopy.VIOLATIONS.of("migrate_database_attached")
+                    .withArg("name", resolved.row().get(InstanceModel.NAME)).withArg("database", database.getKey());
+            }
         }
         return null;
     }
@@ -329,6 +350,11 @@ public final class InstanceMigrations {
         // HERE when it does not -- its public port claim is what cannot move.
         if (resolved.spec().publication() != null) {
             throw HohenheimViolations.instanceRefusal("migrate_publication_present", resolved.row(), null);
+        }
+        Microcopy database = databaseRefusal(resolved, InstanceDatabaseNetworks.attachedDatabaseHosts(resolved.row()),
+            targetServerId);
+        if (database != null) {
+            throw Violations.ofForm(database);
         }
 
         String handle = resolved.spec().handle();

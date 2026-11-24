@@ -68,7 +68,9 @@ public final class InstanceSnapshotParts {
                 .inlineEditable(InstanceSnapshotModel.NOTE).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).search(InstanceSnapshotModel.NOTE).build())
             .reads(ResourceReads.rows().title(snapshot -> Microcopy.literalOrNull(title(snapshot))))
-            .writes(ResourceMutations.rows().update().delete(InstanceSnapshotOperations.DELETE).build())
+            // The note's save is the operation the assistants' snapshot_set runs too; a snapshot carries no version.
+            .writes(ResourceMutations.rows().update(InstanceSnapshotOperations.CHANGE_NOTE, row -> 0L)
+                .delete(InstanceSnapshotOperations.DELETE).build())
             .authority(ResourceAuthority.<Row>builder().write(null,
                     (row, access) -> HohenheimAccess.reachesRecord(access,
                 InstanceModel.MODEL_ID, row.get(InstanceSnapshotModel.INSTANCE_ID),

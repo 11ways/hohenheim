@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.model.*;
@@ -135,14 +134,13 @@ public final class HohenheimMcpModule implements ZenitModule {
         // AIDEV-NOTE: an operation a hand-declared tool routes (HohenheimTools) is placed there and never here, so
         // each is reached by exactly one tool and argument value (HohenheimMcpTest pins it).
         List<Operation<?, ?, ?>> placed = new ArrayList<>(List.of(
-            InstanceOperations.CONNECT_WEBHOOK, InstanceOperations.SNAPSHOT,
+            InstanceOperations.CONNECT_WEBHOOK,
             InstanceOperations.INSTALL, InstanceOperations.REINSTALL, InstanceOperations.CAPTURE_TEMPLATE,
             InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
-            InstanceSnapshotOperations.RESTORE, InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
+            InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
             InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE,
             SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
             AccessRuleParts.TOGGLE,
-            DatabaseParts.MOVE_TO_SHARED, DatabaseParts.FINISH_OLD_ENGINE,
             StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
         // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
@@ -153,7 +151,6 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(StackOperations.REFRESH, HohenheimMcpAnswers::output)
             .answersWith(SpamserviceOperations.TEST, HohenheimMcpAnswers::output)
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
-            .answersWith(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys)

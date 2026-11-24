@@ -127,13 +127,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record", "hohenheim:lift_ban",
         "hohenheim:linked_server_add", "hohenheim:linked_server_check", "hohenheim:linked_server_offer_join",
         "hohenheim:linked_server_remove", "hohenheim:manage_update_site",
-        "hohenheim:migrate_instance", "hohenheim:open_framebuffer", "hohenheim:open_shell",
+        "hohenheim:open_framebuffer", "hohenheim:open_shell",
         "hohenheim:protect_path", "hohenheim:put_address_online", "hohenheim:put_machine_online",
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
         "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
         "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
-        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place", "hohenheim:restore_database_dump",
-        "hohenheim:restore_database_dump_in_place", "hohenheim:rollback_release", "hohenheim:rotate_host_key",
+        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place",
+        "hohenheim:rollback_release", "hohenheim:rotate_host_key",
         "hohenheim:rotate_incus_cert", "hohenheim:route_notification_events", "hohenheim:run_schedule",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
@@ -766,8 +766,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             }
 
             // 10. A backup and a snapshot are refused, without naming what he lacks.
-            for (Map.Entry<String, String> withheld : Map.of("back_up", "code",
-                    Objects.requireNonNull(InstanceOperations.SNAPSHOT.assistantName()), "code").entrySet()) {
+            for (Map.Entry<String, String> withheld : Map.of("back_up", "code", "snapshot_set", "code").entrySet()) {
                 McpHttpSession.Answer refused = session.call(withheld.getKey(), Map.of(withheld.getValue(), appCode));
                 assertThat(refused.error()).as("step 10: " + withheld.getKey() + " refused").isTrue();
                 assertThat(refused.text()).as("step 10: without naming the capability")
@@ -1513,7 +1512,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /** A session of a key the account mints from the "Hohenheim assistant" preset, as its API keys page does. */
-    private static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name) {
+    static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name) {
         AccessContext account = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(accountId, name)));
         CredentialPresets.Preset preset = server.credentialPreset(account);
         assertThat(preset).as(name + " is offered the preset").isNotNull();
@@ -1534,7 +1533,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /** @return what the run's read tool tells of the run once it is no longer running */
-    private static McpHttpSession.Answer followed(McpHttpSession session, String run, String step) {
+    static McpHttpSession.Answer followed(McpHttpSession session, String run, String step) {
         String read = Objects.requireNonNull(OperationRunOperations.READ.assistantName());
         String running = "status: " + OperationRunStatus.RUNNING.storageKey();
         McpHttpSession.Answer ended = Poll.value(step + ": " + run + " ends", Duration.ofSeconds(20),
@@ -1553,14 +1552,14 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .isTrue();
     }
 
-    private static String code(Identifier model, int id, AccessContext reader) {
+    static String code(Identifier model, int id, AccessContext reader) {
         String code = RecordCodes.codes(model, List.of(String.valueOf(id)), reader).get(String.valueOf(id));
         assertThat(code).as(model + " " + id + " has a code").isNotNull();
         return code;
     }
 
     /** @return letters alone, so a name says no number an answer could be suspected of */
-    private static String letters() {
+    static String letters() {
         return UUID.randomUUID().toString().replaceAll("[^a-f]", "");
     }
 

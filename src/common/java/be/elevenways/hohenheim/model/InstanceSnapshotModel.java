@@ -115,6 +115,7 @@ public class InstanceSnapshotModel extends Model {
     /** Free-form operator note ("before 1.20 upgrade"). */
     public static final StringField NOTE = SCHEMA.addField(StringField.builder().name("note")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("note"))
+        .help(HohenheimMicrocopy.HELP.of("snapshot_note"))
         .build());
 
     /** Host directory holding this snapshot's payload files (volume-tar lane only). */

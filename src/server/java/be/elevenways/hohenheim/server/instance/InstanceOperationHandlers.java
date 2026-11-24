@@ -432,9 +432,9 @@ public final class InstanceOperationHandlers {
      */
     private static @NonNull Integer migrate(@NonNull OperationCall<Row, MigrateInput> call) {
         MigrateInput input = call.input();
-        Integer target = input == null ? null : input.targetServerId();
+        Integer target = input == null ? null : input.host();
         if (target == null) {
-            throw Violations.ofField(InstanceOperations.TARGET_HOST.getName(), null,
+            throw Violations.ofField(InstanceOperations.TARGET_HOST.name(), null,
                 HohenheimMicrocopy.VIOLATIONS.of("migrate_target_required"));
         }
         new InstanceMigrations().migrateTo(instanceId(call), target);
