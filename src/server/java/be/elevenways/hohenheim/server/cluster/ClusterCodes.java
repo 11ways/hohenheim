@@ -52,6 +52,8 @@ import java.util.UUID;
  * in force with that row (CodeGrants.joined): a refused join leaves a grant that names nobody, its numbers never
  * handed out again. The codes call of a join runs inside the join code's transaction, so on SQLite this server's
  * writers wait for it (at most one call deadline): that is what makes the join all or nothing here.
+ * Removing a managed server's row, on any path, ends its grants in the same transaction (CodeGrants.released): its
+ * codes then name nobody on the master, and its numbers are never handed out again.
  *
  * AIDEV-NOTE: localized content: none; codes are not localized.
  *
@@ -296,6 +298,11 @@ public final class ClusterCodes {
     /** Puts the grants made for a server's join in force, in the caller's transaction: the one that adds its row. */
     static void joined(@NonNull Row server) {
         CodeGrants.joined(datasource(), peerKey(server));
+    }
+
+    /** Ends every grant of a server this one stops managing, in the caller's transaction: the one removing its row. */
+    static void released(@NonNull Row server) {
+        CodeGrants.released(datasource(), peerKey(server));
     }
 
     /** @return the wants of prefixes this build declares */

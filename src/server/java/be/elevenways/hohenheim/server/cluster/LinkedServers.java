@@ -797,7 +797,8 @@ public final class LinkedServers {
 
     /**
      * Removes a linked server's row and, in the same step, everything this server keeps of it; a master's row leaves
-     * this server's code numbers to its own sequence again (ClusterCodes.left).
+     * this server's code numbers to its own sequence again (ClusterCodes.left), and a managed server's row ends every
+     * grant of numbers it had (ClusterCodes.released).
      */
     private static void forget(@NonNull Row row) {
         forget(row, false);
@@ -819,8 +820,10 @@ public final class LinkedServers {
                 return false;
             }
             ClusterRecords.forget(id);
-            if (roleOf(row) == LinkRole.MANAGED_BY) {
-                ClusterCodes.left();
+            switch (roleOf(row)) {
+                case MANAGED_BY -> ClusterCodes.left();
+                case MANAGES -> ClusterCodes.released(row);
+                case null -> { }
             }
             return true;
         });

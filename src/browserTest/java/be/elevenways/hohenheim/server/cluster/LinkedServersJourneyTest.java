@@ -614,6 +614,14 @@ class LinkedServersJourneyTest {
         return codes;
     }
 
+    /** Asserts the master answers that each code lives on that linked server; null: nothing here has it. */
+    private static void livesOn(List<String> codes, String peer, String step) {
+        assertThat(codes).as(step + ": Kuifje has codes").isNotEmpty();
+        for (String each : codes) {
+            assertThat(CodeHomes.peerOf(each)).as("%s: where %s lives", step, each).isEqualTo(peer);
+        }
+    }
+
     /** @return whether a grant of the master that never came into force holds the code's number */
     private static boolean voidGrantHolds(String code) {
         RecordCodeBehaviour.Allocated kind = RecordCodeKinds.allocatedOf(code);
@@ -836,17 +844,24 @@ class LinkedServersJourneyTest {
             assertThat(kuifje.ask("remove-master")).isEqualTo("removed " + LinkedServers.Removal.LEFT.token());
             assertThat(kuifje.ask("rows")).isEqualTo("rows -");
 
-            // 8. Remove from the master with Kuifje up: both sides forget the link.
+            // 8. Remove from the master with Kuifje up: both sides forget the link, and the codes Kuifje made while
+            //    linked live on no server here any more: nothing here has them.
             add(codeOf(kuifje.ask("offer")));
+            List<String> removedCodes = codesOf(kuifje);
+            livesOn(removedCodes, ClusterRecords.peerKey(only()), "step 8: before removing");
             assertThat(remove(only())).as("step 8: removed on both")
                 .isEqualTo(LinkedServers.Removal.LEFT.token());
             assertThat(kuifje.ask("rows")).as("step 8: Kuifje forgot it too").isEqualTo("rows -");
+            livesOn(removedCodes, null, "step 8: removed");
             // And with Kuifje down: the master forgets it and says Kuifje still holds it until removed there.
             add(codeOf(kuifje.ask("offer")));
+            List<String> downCodes = codesOf(kuifje);
+            livesOn(downCodes, ClusterRecords.peerKey(only()), "step 8: before removing a silent server");
             kuifje.close();
             assertThat(remove(only())).as("step 8: removed here only")
                 .isEqualTo(LinkedServers.Removal.KEPT_THERE.token());
             assertThat(LinkedServers.all()).isEmpty();
+            livesOn(downCodes, null, "step 8: a silent server removed");
             kuifje = boot(directory, copyDb, false, reporter);
             relay.retarget(kuifje.port());
             assertThat(kuifje.ask("rows")).as("step 8: Kuifje still holds the link")
@@ -939,8 +954,10 @@ class LinkedServersJourneyTest {
             LinkCalls.Answered held = (LinkCalls.Answered) LinkCalls.join(CHILD_ADDRESS,
                 joinBody(codeOf(kuifje.ask("offer")), heldId, heldKey));
             assertThat(held.status()).as("step 11: Kuifje took the join").isEqualTo(200);
+            List<String> heldCodes = codesOf(kuifje);
             assertThat(kuifje.ask("cut")).isEqualTo("ok");
             LinkedServers.recorded(heldId, "Kuifje", CHILD_ADDRESS, heldKey, held.body());
+            livesOn(heldCodes, heldId.toString(), "step 11: recorded");
             assertThat(stateOf(only())).as("step 11: the master's row is not confirmed").isEqualTo(LinkState.JOINING);
             assertThat(kuifje.ask("rows")).as("step 11: nor Kuifje's").startsWith(joining);
             assertThat(kuifje.ask("offset 6")).isEqualTo("ok");
@@ -952,6 +969,7 @@ class LinkedServersJourneyTest {
             LinkedServers.sweep();
             assertThat(LinkedServers.all()).as("step 11: refused by Kuifje, the master forgets its unconfirmed row")
                 .isEmpty();
+            livesOn(heldCodes, null, "step 11: the unconfirmed row forgotten");
 
             // 12. Refusals, each in words: a second master, a managed server adding one, a master getting a master,
             //     then a wrong, a used and an expired code, and the spent failure budget.
