@@ -86,7 +86,7 @@ final class ClusterToolCalls implements McpToolCarrier {
         if (realm == null || !(caller.principal() instanceof ScopedAccountPrincipal person)) {
             return refused(caller, CarriedCallRefusal.NO_SHARED_SIGN_IN, name);
         }
-        List<String> subjects = SharedSignIn.subjectsOf(person.reference().id());
+        List<String> subjects = SharedSignIn.subjectsOf(person.reference().id(), realm);
         if (subjects.isEmpty()) {
             return refused(caller, CarriedCallRefusal.NO_SHARED_SIGN_IN, name);
         }
@@ -187,7 +187,7 @@ final class ClusterToolCalls implements McpToolCarrier {
         if (server == null) {
             return new Unknown();
         }
-        UUID account = SharedSignIn.accountOf(asked.subjects());
+        UUID account = SharedSignIn.accountOf(asked.subjects(), realm);
         // The master's name as this server calls it is the credential: what every write is credited through.
         HostCredentialPrincipal person = account == null ? null : HostCredentialPrincipals.forAccount(account,
             String.valueOf((Object) master.get(LinkedServerModel.NAME)), asked.scopes());

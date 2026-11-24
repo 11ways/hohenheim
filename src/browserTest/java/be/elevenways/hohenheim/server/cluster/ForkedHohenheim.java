@@ -63,6 +63,7 @@ import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.OutboundTlsStub;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -138,9 +139,16 @@ final class ForkedHohenheim implements AutoCloseable {
         identity.set(ExternalIdentityModel.PROVIDER_SLUG, ProteusSignIn.SLUG);
         identity.set(ExternalIdentityModel.SUBJECT, subject);
         identity.set(ExternalIdentityModel.USER_ID, account);
+        identity.set(ExternalIdentityModel.REALM, ProteusSignIn.realm());
         identity.set(ExternalIdentityModel.LINKED_AT, Now.instant());
         identity.set(ExternalIdentityModel.UPDATED_AT, Now.instant());
         identities.save(identity);
+    }
+
+    /** Restamps the account's identity links as vouched for by the realm, as a sign-in through it does. */
+    static void vouchedBy(@NonNull UUID account, @Nullable String realm) {
+        Models.get(ExternalIdentityModel.class).find().where(ExternalIdentityModel.USER_ID.eq(account))
+            .assign(ExternalIdentityModel.REALM, realm).updateAll();
     }
 
     private final RunningProcess process;

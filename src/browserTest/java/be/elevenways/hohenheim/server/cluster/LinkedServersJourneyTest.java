@@ -540,11 +540,14 @@ class LinkedServersJourneyTest {
             assertThat(kuifje.ask("tool-master " + ownCode + " " + PERSON))
                 .as("step 6: a managed server speaks for nobody on its master").isEqualTo("status 403");
 
-            // 7. A master signing people in with another realm names nobody on Kuifje.
+            // 7. A master signing people in with another realm, which vouches for the person here, names nobody on
+            //    Kuifje.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT, "elsewhere");
+            ForkedHohenheim.vouchedBy(operatorId, ProteusSignIn.realm());
             McpHttpSession.Answer realm = master.call("read", Map.of("ids", List.of(appCode)));
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT,
                 ForkedHohenheim.PROTEUS_REALM_CLIENT);
+            ForkedHohenheim.vouchedBy(operatorId, ProteusSignIn.realm());
             assertThat(realm.text()).as("step 7: another realm").isEqualTo("Kuifje does not sign people in with this"
                 + " server's Proteus realm, so nobody can act on it from here; nothing was changed.");
 
