@@ -123,7 +123,7 @@ public final class DomainParts {
      * default (exact) is what a hostname typed into a one-line bar means anyway.
      */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
-        .of(SiteDomainModel.HOSTNAME.getName(), SiteDomainModel.FORCE_SSL.getName())
+        .of(SiteDomainModel.HOSTNAME.getInputName(), SiteDomainModel.FORCE_SSL.getInputName())
         .presets(SiteDomainModel.SITE_ID.getName());
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.REF);
@@ -511,8 +511,8 @@ public final class DomainParts {
                                                                @NonNull Panel panel) {
         Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
         fixedOnCreate(access, panel).forEach((field, value) -> {
-            if (spec.findEntry(field.getName()) != null) {
-                values.put(field.getName(), value);
+            if (spec.findEntry(field.getInputName()) != null) {
+                values.put(field.getInputName(), value);
             }
         });
         return Map.copyOf(values);
@@ -521,7 +521,7 @@ public final class DomainParts {
     /** A switch read-only wherever the domain's site fixes it, on a create and on an edit or inline cell alike. */
     private static @NonNull ResourceFieldBinding switchAccess(@NonNull BooleanField field,
                                                               @NonNull String panelSlug) {
-        return ResourceFieldBinding.of(field.getName(), FieldAccess.customRecordAware((access, record) ->
+        return ResourceFieldBinding.of(field.getInputName(), FieldAccess.customRecordAware((access, record) ->
                 fixes(field, access, record, panelSlug) ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE)
             .acrossRecords(access -> FieldAccess.Decision.EDITABLE)
             // Read-only or editable, never hidden: every stored domain reads it.
@@ -666,21 +666,21 @@ public final class DomainParts {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.CUSTOM_HEADERS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.RESPONSE_HEADERS))
             .section(HohenheimFormSections.open(HohenheimFormSections.ADDRESS_REQUESTS, List.of(
-                SiteDomainModel.HOSTNAME.getName(),
-                SiteDomainModel.MATCH_TYPE.getName(),
-                SiteDomainModel.PATH.getName(),
-                SiteDomainModel.STRIP_PATH.getName(),
-                SiteDomainModel.LISTEN_ON.getName())))
+                SiteDomainModel.HOSTNAME.getInputName(),
+                SiteDomainModel.MATCH_TYPE.getInputName(),
+                SiteDomainModel.PATH.getInputName(),
+                SiteDomainModel.STRIP_PATH.getInputName(),
+                SiteDomainModel.LISTEN_ON.getInputName())))
             .section(HohenheimFormSections.open(HohenheimFormSections.ADDRESS_HTTPS, List.of(
-                SiteDomainModel.FORCE_SSL.getName(),
-                SiteDomainModel.CERTIFICATE_ID.getName(),
-                SiteDomainModel.HSTS_ENABLED.getName(),
-                SiteDomainModel.HSTS_SUBDOMAINS.getName(),
-                SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName())))
+                SiteDomainModel.FORCE_SSL.getInputName(),
+                SiteDomainModel.CERTIFICATE_ID.getInputName(),
+                SiteDomainModel.HSTS_ENABLED.getInputName(),
+                SiteDomainModel.HSTS_SUBDOMAINS.getInputName(),
+                SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName())))
             // Headers are tuning most addresses never need: folded until an operator opens them.
             .section(HohenheimFormSections.collapsed(HohenheimFormSections.ADDRESS_HEADERS, List.of(
-                SiteDomainModel.CUSTOM_HEADERS.getName(),
-                SiteDomainModel.RESPONSE_HEADERS.getName())))
+                SiteDomainModel.CUSTOM_HEADERS.getInputName(),
+                SiteDomainModel.RESPONSE_HEADERS.getInputName())))
             .build();
     }
 

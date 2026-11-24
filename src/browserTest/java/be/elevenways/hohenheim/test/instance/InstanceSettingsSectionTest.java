@@ -63,7 +63,7 @@ class InstanceSettingsSectionTest {
         FormSpec derived = FieldFormEntryRegistry.INSTANCE.deriveSpec(schema);
         List<String> visible = new ArrayList<>();
         for (Field<?, ?> field : schema.getFields().values()) {
-            if (!sectioned.contains(field.getName()) && offeredInSomeView(derived, field.getName())) {
+            if (!sectioned.contains(field.getName()) && offeredInSomeView(derived, field.getInputName())) {
                 visible.add(field.getName());
             }
         }

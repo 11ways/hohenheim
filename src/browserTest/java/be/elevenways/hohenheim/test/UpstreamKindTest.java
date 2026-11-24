@@ -79,7 +79,7 @@ class UpstreamKindTest extends HohenheimTestBase {
 
         selectUpstreamKind("hohenheim:instance");
         page.waitForSelector("pl-input[name='settings.port']");
-        assertThat(page.locator("pl-select[name='settings.scheme']").count())
+        assertThat(page.locator("pl-select[name='settings.forward_scheme']").count())
             .as("step 2: the instance upstream asks which port and scheme to serve")
             .isEqualTo(1);
 

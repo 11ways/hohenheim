@@ -64,7 +64,7 @@ control CREATE%20settings[hohenheim:release]/settings.pre_deploy_timeout at=6 ki
 control CREATE%20settings[hohenheim:release]/settings.tag at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.command at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.workdir at=9 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:release]/settings.console_kind at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:release]/settings.console_mode at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:release]/settings.container_port at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.environment_variables at=12 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.volume_mounts at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -98,13 +98,13 @@ control CREATE%20settings[hohenheim:application]/settings.memory_limit_mb at=24 
 control CREATE%20settings[hohenheim:application]/settings.pre_deploy_command at=25 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.pre_deploy_timeout at=26 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.drain_seconds at=27 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:application]/settings.console_kind at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:application]/settings.console_mode at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:application]/settings.cpu_limit at=29 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.tag at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.command at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.container_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.port_protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:docker_container]/settings.port_exposure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=loopback,public binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -114,7 +114,7 @@ control CREATE%20settings[hohenheim:docker_container]/settings.environment_varia
 control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.console_mode at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -129,7 +129,7 @@ control CREATE%20settings[hohenheim:static_site]/settings.shallow_clone at=10 ki
 control CREATE%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.missing_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -172,7 +172,7 @@ control CREATE%20settings[hohenheim:workspace]/settings.home_quota_mb at=15 kind
 control CREATE%20settings[hohenheim:workspace]/settings.environment_variables at=16 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.memory_limit_mb at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.cpu_limit at=18 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:workspace]/settings.console_kind at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:workspace]/settings.console_mode at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:stack_service]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:stack_service]/settings.command at=1 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
 control CREATE%20settings[hohenheim:stack_service]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
@@ -268,7 +268,7 @@ control CREATE%20settings[hohenheim:release]/settings.pre_deploy_timeout at=6 ki
 control CREATE%20settings[hohenheim:release]/settings.tag at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.command at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.workdir at=9 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:release]/settings.console_kind at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:release]/settings.console_mode at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:release]/settings.container_port at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.environment_variables at=12 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:release]/settings.volume_mounts at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -302,13 +302,13 @@ control CREATE%20settings[hohenheim:application]/settings.memory_limit_mb at=24 
 control CREATE%20settings[hohenheim:application]/settings.pre_deploy_command at=25 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.pre_deploy_timeout at=26 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.drain_seconds at=27 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:application]/settings.console_kind at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:application]/settings.console_mode at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:application]/settings.cpu_limit at=29 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.tag at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.command at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.container_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.port_protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:docker_container]/settings.port_exposure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=loopback,public binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -318,7 +318,7 @@ control CREATE%20settings[hohenheim:docker_container]/settings.environment_varia
 control CREATE%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:docker_container]/settings.console_mode at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -333,7 +333,7 @@ control CREATE%20settings[hohenheim:static_site]/settings.shallow_clone at=10 ki
 control CREATE%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static_site]/settings.missing_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -376,7 +376,7 @@ control CREATE%20settings[hohenheim:workspace]/settings.home_quota_mb at=15 kind
 control CREATE%20settings[hohenheim:workspace]/settings.environment_variables at=16 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.memory_limit_mb at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.cpu_limit at=18 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:workspace]/settings.console_kind at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings[hohenheim:workspace]/settings.console_mode at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:stack_service]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:stack_service]/settings.command at=1 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
 control CREATE%20settings[hohenheim:stack_service]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
@@ -421,7 +421,7 @@ control EDIT%20settings[hohenheim:release]/settings.pre_deploy_timeout at=6 kind
 control EDIT%20settings[hohenheim:release]/settings.tag at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:release]/settings.command at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:release]/settings.workdir at=9 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:release]/settings.console_kind at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:release]/settings.console_mode at=10 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:release]/settings.container_port at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:release]/settings.environment_variables at=12 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:release]/settings.volume_mounts at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -455,13 +455,13 @@ control EDIT%20settings[hohenheim:application]/settings.memory_limit_mb at=24 ki
 control EDIT%20settings[hohenheim:application]/settings.pre_deploy_command at=25 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.pre_deploy_timeout at=26 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.drain_seconds at=27 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:application]/settings.console_kind at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:application]/settings.console_mode at=28 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:application]/settings.cpu_limit at=29 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.tag at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.command at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.container_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.port_protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:docker_container]/settings.protocol at=4 kind=zenitforms:form/select input=select required=false readonly=false options=tcp,udp binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:docker_container]/settings.port_exposure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=loopback,public binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:docker_container]/settings.host_port at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.published_ports at=7 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
@@ -471,7 +471,7 @@ control EDIT%20settings[hohenheim:docker_container]/settings.environment_variabl
 control EDIT%20settings[hohenheim:docker_container]/settings.volumes at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.memory_limit_mb at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:docker_container]/settings.cpu_limit at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:docker_container]/settings.console_kind at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:docker_container]/settings.console_mode at=14 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static_site]/settings.repository_url at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static_site]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver#35e141c07927,clearable:true,free:true
@@ -486,7 +486,7 @@ control EDIT%20settings[hohenheim:static_site]/settings.shallow_clone at=10 kind
 control EDIT%20settings[hohenheim:static_site]/settings.submodules at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.output_directory at=12 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.build_image at=13 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static_site]/settings.not_found_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static_site]/settings.missing_page at=14 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.memory_limit_mb at=15 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static_site]/settings.cpu_limit at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:system_container]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -529,7 +529,7 @@ control EDIT%20settings[hohenheim:workspace]/settings.home_quota_mb at=15 kind=z
 control EDIT%20settings[hohenheim:workspace]/settings.environment_variables at=16 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.memory_limit_mb at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.cpu_limit at=18 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:workspace]/settings.console_kind at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:workspace]/settings.console_mode at=19 kind=zenitforms:form/select input=select required=false readonly=false options=plain,tty binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:stack_service]/settings.image at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:stack_service]/settings.command at=1 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
 control EDIT%20settings[hohenheim:stack_service]/settings.environment_variables at=2 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=

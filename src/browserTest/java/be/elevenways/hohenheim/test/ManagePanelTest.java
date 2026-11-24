@@ -336,7 +336,7 @@ class ManagePanelTest extends HohenheimHttpTestBase {
         // A forged non-exact match type never lands: the form drops it and the pipeline
         // refuses an effective value other than exact.
         assertThat(assertNotStale(httpPostEdit("/manage/domains/" + domainAId,
-            "site_id=" + siteAId + "&hostname=" + managedHost + "&match_type=regex", operatorSession, operatorCsrf))
+            "site_id=" + siteAId + "&hostname=" + managedHost + "&match=regex", operatorSession, operatorCsrf))
             .statusCode()).as("the forged match type is dropped (a save) or refused (422), never a stale refusal")
             .isIn(302, 303, 422);
 
@@ -413,7 +413,7 @@ class ManagePanelTest extends HohenheimHttpTestBase {
         assertThat(operatorGet("/manage/domains/" + domainAId).statusCode())
             .as("5. A's domain opens").isEqualTo(200);
         assertThat(httpPostEdit("/manage/domains/" + domainAId,
-            "site_id=" + siteAId + "&hostname=" + managedHost + "&force_ssl=true", operatorSession, operatorCsrf)
+            "site_id=" + siteAId + "&hostname=" + managedHost + "&force_https=true", operatorSession, operatorCsrf)
             .statusCode())
             .as("5. A's domain saves").isIn(302, 303);
     }

@@ -516,20 +516,19 @@ public final class CertificateParts {
 
     /** The waiting manual DNS-01 order's records as "name TXT value" entries, or the sentence that none waits. */
     private static @NonNull String dnsRecordsText(@NonNull Row row) {
+        List<String> records = waitingDnsRecords(row.get(CertificateModel.ID));
+        return records.isEmpty() ? copy("dns_records_none") : String.join("; ", records);
+    }
+
+    /** @return the TXT records a waiting manual DNS-01 order needs, "name TXT value" each; empty when none waits */
+    public static @NonNull List<String> waitingDnsRecords(@Nullable Integer certificateId) {
         var proxy = ServerMain.getProxyServer();
-        AcmeService.ManualDnsRequest pending = proxy == null ? null
-            : proxy.getAcmeService().manualDnsRequestFor(row.get(CertificateModel.ID));
-        if (pending == null || pending.records().isEmpty()) {
-            return copy("dns_records_none");
-        }
-        StringBuilder text = new StringBuilder();
-        for (var record : pending.records()) {
-            if (!text.isEmpty()) {
-                text.append("; ");
-            }
-            text.append(record.name()).append(" TXT ").append(record.value());
-        }
-        return text.toString();
+        AcmeService.ManualDnsRequest pending = proxy == null || certificateId == null ? null
+            : proxy.getAcmeService().manualDnsRequestFor(certificateId);
+        List<String> records = new ArrayList<>();
+        if (pending == null) return records;
+        for (var record : pending.records()) records.add(record.name() + " TXT " + record.value());
+        return records;
     }
 
     /** The moment on the reader's clock plus how long ago it was, or the absence sentence. */

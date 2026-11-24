@@ -422,8 +422,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             //    the save stores; HSTS stays the caller's choice.
             Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
             Map<String, Object> fixed = new LinkedHashMap<>(none);
-            fixed.put(SiteDomainModel.FORCE_SSL.getName(), false);
-            fixed.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+            fixed.put(SiteDomainModel.FORCE_SSL.getInputName(), false);
+            fixed.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName(), true);
             assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
                 .as("step 1: the holder's own passthrough site previews the stored switches").isEqualTo(fixed);
             assertThat(switchAccess(holder(), HohenheimSlugs.MANAGE, own))
@@ -440,19 +440,19 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             // 1c. The operator reads every site, so the same site previews its switches on /admin.
             assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
                 .as("step 1c: the operator's create form previews the stored switches")
-                .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
-                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+                .containsEntry(SiteDomainModel.FORCE_SSL.getInputName(), false)
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName(), true);
             assertThat(switchAccess(operator(), HohenheimSlugs.ADMIN, foreign))
                 .as("step 1c: and shows them read-only").containsExactly(FieldAccess.Decision.READONLY,
                     FieldAccess.Decision.READONLY, FieldAccess.Decision.EDITABLE);
 
             // 1d. The create form says why both switches are fixed, in place of their own help; HSTS keeps its own.
             String createForm = adminGet("/admin/domains/new?parent=" + foreign).body();
-            assertThat(entryHelp(createForm, SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(entryHelp(createForm, SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 1d: the create form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
-            assertThat(entryHelp(createForm, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+            assertThat(entryHelp(createForm, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName()))
                 .as("step 1d: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
-            assertThat(entryHelp(createForm, SiteDomainModel.HSTS_ENABLED.getName()))
+            assertThat(entryHelp(createForm, SiteDomainModel.HSTS_ENABLED.getInputName()))
                 .as("step 1d: HSTS keeps its own help").isNotEqualTo(PASSTHROUGH_REASON);
 
             // 1e. The Addresses list's quick-add bar under that site decides force_ssl by the create form's own access
@@ -460,18 +460,18 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             //     TLS it stays the operator's switch with its own help.
             ResourceListState.QuickAdd fixedBar = quickAddBar(operator(), foreign);
             InlineCreateFormState fixedForm = fixedBar.quickAddForm();
-            InlineCreateFieldState fixedSwitch = createField(fixedForm, SiteDomainModel.FORCE_SSL.getName());
+            InlineCreateFieldState fixedSwitch = createField(fixedForm, SiteDomainModel.FORCE_SSL.getInputName());
             assertThat(fixedSwitch.readonly()).as("step 1e: the bar shows force_ssl fixed").isTrue();
             assertThat(fixedSwitch.help()).as("step 1e: and says why, in the create form's words")
                 .isEqualTo(HohenheimMicrocopy.HELP.of("tls_passthrough_switch"));
-            assertThat(fixedBar.quickAddValues().get(SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(fixedBar.quickAddValues().get(SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 1e: at the value the save stores").isEqualTo(false);
             assertThat(ZfChooserClient.createBody(Map.of(SiteDomainModel.HOSTNAME.getName(), "bar.example.test",
-                    SiteDomainModel.FORCE_SSL.getName(), true), Map.of(), "", fixedForm.fields()))
+                    SiteDomainModel.FORCE_SSL.getInputName(), true), Map.of(), "", fixedForm.fields()))
                 .as("step 1e: an add posts the hostname and nothing for the fixed switch")
                 .containsOnlyKeys(SiteDomainModel.HOSTNAME.getName());
             InlineCreateFieldState openSwitch = createField(quickAddBar(operator(), siteId).quickAddForm(),
-                SiteDomainModel.FORCE_SSL.getName());
+                SiteDomainModel.FORCE_SSL.getInputName());
             assertThat(openSwitch.readonly()).as("step 1e: a TLS-terminating site's bar keeps the switch").isFalse();
             assertThat(openSwitch.help()).as("step 1e: with its own help").isNotNull()
                 .isNotEqualTo(HohenheimMicrocopy.HELP.of("tls_passthrough_switch"));
@@ -492,7 +492,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             // 3. The create form keeps storing them, whatever its switches submitted.
             String hostname = PREFIX + "form.example.test";
             var response = adminPostForm("/admin/domains/new?parent=" + own,
-                "site_id=" + own + "&hostname=" + hostname + "&match_type=exact&force_ssl=true");
+                "site_id=" + own + "&hostname=" + hostname + "&match=exact&force_https=true");
             assertThat(response.statusCode()).as("step 3: the form create is accepted").isIn(200, 302, 303);
             Row viaForm = domains.find().where(SiteDomainModel.HOSTNAME.eq(hostname)).first();
             assertThat(viaForm).as("step 3: the form create is stored").isNotNull();
@@ -512,7 +512,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .isEqualTo("/admin/domains?site_id=" + own);
             String crafted = PREFIX + "crafted.example.test";
             InlineCreateResult forged = quickAdd(operator(), own, Map.of(SiteDomainModel.HOSTNAME.getName(), crafted,
-                SiteDomainModel.FORCE_SSL.getName(), true, SiteDomainModel.SITE_ID.getName(), foreign));
+                SiteDomainModel.FORCE_SSL.getInputName(), true, SiteDomainModel.SITE_ID.getName(), foreign));
             assertThat(forged.succeeded()).as("step 4: the crafted add is stored: " + forged.violations()).isTrue();
             Row viaBar = domains.find().where(SiteDomainModel.HOSTNAME.eq(crafted)).first();
             assertThat(viaBar).as("step 4: the crafted add is stored").isNotNull();
@@ -558,25 +558,26 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         try {
             // 1. The edit form draws both switches as read-only values, at what the save stored; HSTS stays a switch.
             String form = adminGet("/admin/domains/" + fixedId).body();
-            assertThat(readonlyValue(form, SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(readonlyValue(form, SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 1: the edit form shows force_ssl fixed off").isEqualTo("No");
-            assertThat(readonlyValue(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+            assertThat(readonlyValue(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName()))
                 .as("step 1: and the ACME exclusion fixed on").isEqualTo("Yes");
-            assertThat(readonlyValue(form, SiteDomainModel.HSTS_ENABLED.getName()))
+            assertThat(readonlyValue(form, SiteDomainModel.HSTS_ENABLED.getInputName()))
                 .as("step 1: HSTS stays the operator's switch").isNull();
-            assertThat(entryHelp(form, SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(entryHelp(form, SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 1: the edit form says why force_ssl is fixed").isEqualTo(PASSTHROUGH_REASON);
-            assertThat(entryHelp(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+            assertThat(entryHelp(form, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName()))
                 .as("step 1: and why the ACME exclusion is").isEqualTo(PASSTHROUGH_REASON);
 
             // 2. The inline cells (the Domains list and the site's Domains tab ask the same per-record state) offer
             //    only HSTS, and carry the stored switch values.
             InlineEditState cells = cellState("/admin/domains/" + fixedId + "/cell-state");
             assertThat(cells.editableFields()).as("step 2: only HSTS is editable in place")
-                .containsExactly(SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName());
-            assertThat(String.valueOf(cells.values().get(SiteDomainModel.FORCE_SSL.getName())))
+                .containsExactly(SiteDomainModel.HSTS_ENABLED.getInputName(),
+                    SiteDomainModel.HSTS_SUBDOMAINS.getInputName());
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.FORCE_SSL.getInputName())))
                 .as("step 2: the force_ssl cell shows the stored value").isEqualTo("false");
-            assertThat(String.valueOf(cells.values().get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName())))
+            assertThat(String.valueOf(cells.values().get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName())))
                 .as("step 2: the ACME cell shows the stored value").isEqualTo("true");
 
             // 3. The delegated twin answers the same for the site's manage holder.
@@ -587,17 +588,17 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
             // 4. A domain under a site that terminates TLS keeps every switch editable on every surface.
             String normal = adminGet("/admin/domains/" + domainId).body();
-            assertThat(readonlyValue(normal, SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(readonlyValue(normal, SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 4: a normal site's domain keeps its force_ssl switch").isNull();
-            assertThat(readonlyValue(normal, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName()))
+            assertThat(readonlyValue(normal, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName()))
                 .as("step 4: and its ACME switch").isNull();
-            assertThat(entryHelp(normal, SiteDomainModel.FORCE_SSL.getName()))
+            assertThat(entryHelp(normal, SiteDomainModel.FORCE_SSL.getInputName()))
                 .as("step 4: a normal site's force_ssl keeps its own help").isNotNull()
                 .isNotEqualTo(PASSTHROUGH_REASON);
             assertThat(cellState("/admin/domains/" + domainId + "/cell-state").editableFields())
-                .as("step 4: and every inline cell").containsExactly(SiteDomainModel.FORCE_SSL.getName(),
-                    SiteDomainModel.HSTS_ENABLED.getName(), SiteDomainModel.HSTS_SUBDOMAINS.getName(),
-                    SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName());
+                .as("step 4: and every inline cell").containsExactly(SiteDomainModel.FORCE_SSL.getInputName(),
+                    SiteDomainModel.HSTS_ENABLED.getInputName(), SiteDomainModel.HSTS_SUBDOMAINS.getName(),
+                    SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getInputName());
             assertThat(recordSwitchAccess(holder(), HohenheimSlugs.MANAGE, domains.findById(domainId)))
                 .as("step 4: on /manage too").containsOnly(FieldAccess.Decision.EDITABLE);
         } finally {
@@ -614,7 +615,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         List<FieldAccess.Decision> decisions = new ArrayList<>();
         for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
                 SiteDomainModel.HSTS_ENABLED)) {
-            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(ctx, domain));
+            decisions.add(access.getOrDefault(field.getInputName(), FieldAccess.ALWAYS_EDITABLE).decide(ctx, domain));
         }
         return decisions;
     }
@@ -673,7 +674,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         List<FieldAccess.Decision> decisions = new ArrayList<>();
         for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
                 SiteDomainModel.HSTS_ENABLED)) {
-            decisions.add(access.getOrDefault(field.getName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
+            decisions.add(access.getOrDefault(field.getInputName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
         }
         return decisions;
     }

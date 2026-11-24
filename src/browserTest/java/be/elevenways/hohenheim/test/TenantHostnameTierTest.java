@@ -154,7 +154,7 @@ class TenantHostnameTierTest extends HohenheimHttpTestBase {
         //    in the HOSTNAME and hiding it behind the delegable match type.
         tenantPost("/manage/domains/new", "site_id=" + ownSiteId
             + "&hostname=" + java.net.URLEncoder.encode("*." + VICTIM_APEX, "UTF-8")
-            + "&match_type=" + SiteDomainModel.MATCH_EXACT);
+            + "&match=" + SiteDomainModel.MATCH_EXACT);
         assertThat(domainByHostname("*." + VICTIM_APEX))
             .as("step 2: a hostname that ROUTES as a wildcard is not a delegable claim, "
                 + "whatever the column says")
@@ -173,7 +173,7 @@ class TenantHostnameTierTest extends HohenheimHttpTestBase {
         //    rule is about the routing tier, not about a "*." prefix.
         tenantPost("/manage/domains/new", "site_id=" + ownSiteId
             + "&hostname=" + java.net.URLEncoder.encode("?." + VICTIM_APEX, "UTF-8")
-            + "&match_type=" + SiteDomainModel.MATCH_EXACT);
+            + "&match=" + SiteDomainModel.MATCH_EXACT);
         assertThat(domainByHostname("?." + VICTIM_APEX))
             .as("step 4: '?' routes in the wildcard tier too").isNull();
 

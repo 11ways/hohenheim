@@ -68,7 +68,7 @@ public final class SiteApi {
             }
             try {
                 int siteId = (Integer) ResourceWrites.create(panel, sites,
-                    FormSubmissionRawValues.fromConduit(conduit), ctx);
+                    ApiConduits.formValues(sites, FormSubmissionRawValues.fromConduit(conduit)), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
                 return ApiConduits.json(PaasApi.siteProjection(created, true));
@@ -146,7 +146,8 @@ public final class SiteApi {
                 return null;
             }
             try {
-                int domainId = (Integer) ResourceWrites.create(panel, domains, raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(panel, domains, ApiConduits.formValues(domains, raw),
+                    ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
                 History.event(Models.get(SiteModel.class), siteId, Change.fact(HohenheimActivityAction.DOMAIN_ADDED,

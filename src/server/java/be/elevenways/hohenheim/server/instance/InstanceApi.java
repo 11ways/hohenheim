@@ -432,7 +432,8 @@ public final class InstanceApi {
             return null;
         }
         try {
-            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances, form, ctx);
+            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances,
+                ApiConduits.formValues(instances, form), ctx);
             Row created = reload(instanceId);
             return ApiConduits.json(projection(created));
         } catch (Violations refused) {

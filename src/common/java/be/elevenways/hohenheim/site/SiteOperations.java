@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
-import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
@@ -135,7 +134,7 @@ public final class SiteOperations {
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.RUN_READERS)
+            .description(HohenheimMicrocopy.HOHENHEIM.of("rollback_release_description"))
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))
             .register();

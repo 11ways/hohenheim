@@ -101,10 +101,10 @@ public final class CertificateOperations {
 
     // The dialog's, the HTTP API's and the assistant's one input: each entry goes by its field's input name.
     private static final FormSpec INPUT = FormSpec.builder()
-        .add(Array.of(DOMAINS, DOMAIN_NAME).minCount(1).build().named(DOMAINS.getInputName()))
-        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(NICE_NAME))
-        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(EMAIL))
-        .add(FieldFormEntryRegistry.INSTANCE.deriveInputEntry(CHALLENGE))
+        .add(Array.of(DOMAINS, DOMAIN_NAME).minCount(1).build())
+        .add(NICE_NAME)
+        .add(EMAIL)
+        .add(CHALLENGE)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DNS_PUBLISHER))
         .showWhen(DNS_PUBLISHER.getName(), CHALLENGE.getInputName(), CertificateModel.CHALLENGE_DNS)
         .build();

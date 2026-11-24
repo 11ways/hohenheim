@@ -821,7 +821,7 @@ public final class InstanceParts {
     }
 
     /**
-     * Both twins' default writes: a create's placement and declarations, an update's resize.
+     * Both twins' default writes: a create's placement and declarations, an update's kept settings and resize.
      *
      * @throws Violations when the placement or the model's declarations refuse a create
      */
@@ -829,11 +829,35 @@ public final class InstanceParts {
         if (save.isCreate()) {
             place(save);
         } else {
-            resize(save);
+            Integer instanceId = save.row().get(InstanceModel.ID);
+            Row stored = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
+            keepUndeclaredSettings(save.row(), stored);
+            resize(save, stored);
             if (save.values().containsKey(InstanceModel.GAME_ADDRESS.getName())) {
                 GameAddresses.prepare(save.row());
             }
         }
+    }
+
+    /**
+     * Puts back the stored settings keys the kind's form does not declare, which its closed-world sub-form cannot post
+     * and so would drop: a change writes only what it was sent. Only a kind change leaves behind what the new kind
+     * lacks.
+     *
+     * @param stored the record as stored before this save, null when it is gone
+     */
+    private static void keepUndeclaredSettings(@NonNull Row row, @Nullable Row stored) {
+        if (stored == null || !Objects.equals(row.get(InstanceModel.KIND), stored.get(InstanceModel.KIND))) return;
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        if (handler == null) return;
+        Map<String, Object> settings = new LinkedHashMap<>(InstanceModel.settingsOf(row));
+        boolean kept = false;
+        for (Map.Entry<String, Object> entry : InstanceModel.settingsOf(stored).entrySet()) {
+            if (handler.getSchema().getField(entry.getKey()) != null || settings.containsKey(entry.getKey())) continue;
+            settings.put(entry.getKey(), entry.getValue());
+            kept = true;
+        }
+        if (kept) row.set(InstanceModel.SETTINGS, settings);
     }
 
     /** A changed game address takes its records along (GameAddresses, the address's one home). */
@@ -906,10 +930,11 @@ public final class InstanceParts {
      * AIDEV-NOTE: the submitted values are already applied to the row, so the BEFORE state is the stored row, read
      * here inside the panel's write transaction; the recreate waits for that transaction's commit. A configuration
      * save never carries the operation-owned columns ({@code InstanceModel.prepareConfigurationSave}).
+     *
+     * @param stored the record as stored before this save, null when it is gone
      */
-    private static void resize(@NonNull RowSave save) {
+    private static void resize(@NonNull RowSave save, @Nullable Row stored) {
         Integer instanceId = save.row().get(InstanceModel.ID);
-        Row stored = Models.get(InstanceModel.class).findById(instanceId);
         InstanceModel.prepareConfigurationSave(save.row());
         if (instanceId != null && stored != null) {
             InstanceResize.recreateAfterCommit(instanceId, InstanceResize.settingsOf(stored),

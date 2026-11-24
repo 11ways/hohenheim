@@ -210,7 +210,9 @@ public class InstanceModel extends Model {
 
     // Polymorphic per-kind settings. AIDEV-NOTE: the dynamic (schemaFrom) form entry
     // REWRITES this whole map on every admin save (the SiteModel.SECURITY_REPORT_TOKEN
-    // lesson) -- anything that must survive an admin save gets a COLUMN, never a key here.
+    // lesson); the instance resource puts back the keys the kind does not declare
+    // (InstanceParts.keepUndeclaredSettings) unless the save changes the kind. Anything an
+    // edited declared setting must not overwrite still gets a COLUMN, never a key here.
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("kind")

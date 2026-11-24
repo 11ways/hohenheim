@@ -31,6 +31,7 @@ import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.hohenheim.server.cms.SiteKindWrites;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
@@ -54,6 +55,7 @@ public final class HohenheimTools extends McpToolCollection {
 
     private static final String WITH_DATA = "with_data";
     private static final String FORCE = "force";
+    private static final String PERMANENT = "permanent";
     private static final String ACTION = "action";
     private static final String CONSOLE = "console";
     private static final String OWNER = "owner";
@@ -85,6 +87,7 @@ public final class HohenheimTools extends McpToolCollection {
             .code(words("mcp_code_delete"))
             .flag(WITH_DATA, words("mcp_with_data"))
             .flag(FORCE, words("mcp_force"))
+            .flag(PERMANENT, words("mcp_permanent"))
             .route(InstanceOperations.DELETE, null, WITH_DATA, "false")
             .route(InstanceOperations.DESTROY_WITH_DATA, null, WITH_DATA, "true")
             .route(InstanceBackupOperations.DELETE_BACKUP, null)
@@ -94,7 +97,9 @@ public final class HohenheimTools extends McpToolCollection {
             .route(VolumeOperations.DESTROY, null)
             .route(GameDomainOperations.DELETE, null)
             .route(PreviewOperations.EXPIRE, HohenheimMcpAnswers::output)
-            .route(SiteWrites.DELETE, null)
+            // A site goes to the trash; one already there is removed for good, as the panel's trash does.
+            .route(SiteWrites.DELETE, null, PERMANENT, "false")
+            .route(SiteWrites.PURGE, null, PERMANENT, "true")
             .route(AccessRuleParts.DELETE, null)
             .route(BuildHookParts.REVOKE, null)
             .route(DnsOperations.DELETE_ZONE, null)
@@ -122,6 +127,12 @@ public final class HohenheimTools extends McpToolCollection {
             .code(words("mcp_code_roll_back"))
             .route(InstanceOperations.ROLLBACK, null)
             .route(StackOperations.ROLLBACK, null)
+            .route(SiteOperations.ROLLBACK_RELEASE, null)
+            .build();
+        // A trashed site comes back as it was deleted, through the panel trash's own restore.
+        McpHostTool restore = McpCodeTool.builder("site_restore", words("mcp_tool_site_restore"), writes())
+            .code(words("mcp_code_site_restore"))
+            .route(SiteWrites.RESTORE, null)
             .build();
         McpHostTool power = McpCodeTool.builder("power", words("mcp_tool_power"), writes())
             .code(words("mcp_code_power"))
@@ -165,17 +176,19 @@ public final class HohenheimTools extends McpToolCollection {
             .build();
         McpHostTool address = McpCodeTool.builder("address_set", words("mcp_tool_address_set"), writes())
             .code(words("mcp_code_address"))
-            .creates(AddressWrites.CREATE, null, List.of(AddressWrites.SITE, SiteDomainModel.HOSTNAME.getName()),
+            .creates(AddressWrites.CREATE, null,
+                List.of(AddressWrites.SITE, SiteDomainModel.HOSTNAME.getInputName()),
                 words("address_thing"))
             .route(AddressWrites.CHANGE, HohenheimMcpAnswers::changed)
             .build();
         // A new certificate for names, one for an address (address=D4), or the same one ordered again (code=C8).
         McpHostTool order = McpCodeTool.builder("certificate_order", words("mcp_tool_certificate_order"), writes())
             .code(words("mcp_code_certificate_order"))
-            .creates(CertificateOperations.REQUEST, null, CertificateOperations.DOMAINS.getInputName(),
-                words("certificate_thing"))
-            .route(CertificateOperations.REISSUE, null)
-            .routeBy(ADDRESS, words("mcp_address_certificate_order"), CertificateOperations.REQUEST_FOR_DOMAIN, null)
+            .creates(CertificateOperations.REQUEST, HohenheimMcpAnswers::ordered,
+                CertificateOperations.DOMAINS.getInputName(), words("certificate_thing"))
+            .route(CertificateOperations.REISSUE, HohenheimMcpAnswers::ordered)
+            .routeBy(ADDRESS, words("mcp_address_certificate_order"), CertificateOperations.REQUEST_FOR_DOMAIN,
+                HohenheimMcpAnswers::ordered)
             .build();
         // A waiting manual DNS order is finished, any other Let's Encrypt certificate renewed: as the record stands.
         McpHostTool renew = McpCodeTool.builder("certificate_renew", words("mcp_tool_certificate_renew"), writes())
@@ -183,7 +196,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(CertificateOperations.RENEW, null)
             .routeByState(CertificateOperations.CONTINUE_DNS, null)
             .build();
-        List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, power, backUp,
+        List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, restore, power, backUp,
             exec, variables, test, recordList, recordSet, address, order, renew));
         for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
             tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())

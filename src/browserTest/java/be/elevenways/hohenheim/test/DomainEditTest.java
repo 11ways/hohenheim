@@ -57,7 +57,7 @@ class DomainEditTest extends HohenheimTestBase {
         int siteId = createSite(siteName, "");
         String hostname = hostFor(tag);
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + hostname + "&match_type=exact" + domainExtra);
+            "site_id=" + siteId + "&hostname=" + hostname + "&match=exact" + domainExtra);
         assertThat(response.statusCode()).as("fixture: the domain %s is accepted", hostname)
             .isIn(200, 302, 303);
         Row domain = Models.get(SiteDomainModel.class).find()
@@ -106,15 +106,15 @@ class DomainEditTest extends HohenheimTestBase {
         // 2. The new-domain form opens with its defaults.
         navigateToApp("/admin/domains/new?site_id=" + siteId);
         waitForHydration();
-        assertThat(page.locator("pl-select[name='match_type'] .pl-select-value")
+        assertThat(page.locator("pl-select[name='match'] .pl-select-value")
             .textContent().trim()).as("step 2: match type defaults to exact").isEqualTo("Exact hostname");
         // A new address forces HTTPS by itself once its certificate works (ForceSslLatch), never before.
-        assertThat(page.locator("pl-switch[name='force_ssl']").getAttribute("checked"))
+        assertThat(page.locator("pl-switch[name='force_https']").getAttribute("checked"))
             .as("step 2: force SSL defaults off until a certificate works").isNull();
 
         // 3. The created domain belongs to that site.
         var domainResponse = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + hostFor("create") + "&match_type=exact");
+            "site_id=" + siteId + "&hostname=" + hostFor("create") + "&match=exact");
         assertThat(domainResponse.statusCode()).as("step 3: the domain create is accepted")
             .isIn(200, 302, 303);
 
@@ -223,10 +223,10 @@ class DomainEditTest extends HohenheimTestBase {
     void updateDomainSettingsIncludingHeaderMaps() throws Exception {
         Fixture f = fixture("update", "");
         var response = adminPostEdit("/admin/domains/" + f.domainId(),
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=wildcard"
-            + "&force_ssl=true&hsts_enabled=true"
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=wildcard"
+            + "&force_https=true&hsts=true"
             + "&path=%2Fapp&strip_path=true&listen_on=127.0.0.1"
-            + "&custom_headers.0.key=X-Injected&custom_headers.0.value=yes"
+            + "&request_headers.0.key=X-Injected&request_headers.0.value=yes"
             + "&response_headers.0.key=X-Strip-Me&response_headers.0.value=");
         assertThat(response.statusCode()).as("the update is accepted").isIn(200, 302, 303);
 
@@ -247,7 +247,7 @@ class DomainEditTest extends HohenheimTestBase {
     void blankHostnameIsRejected() throws Exception {
         Fixture f = fixture("blank", "");
         var response = adminPostEdit("/admin/domains/" + f.domainId(),
-            "site_id=" + f.siteId() + "&hostname=&match_type=exact");
+            "site_id=" + f.siteId() + "&hostname=&match=exact");
         assertRefused(assertNotStale(response), HOSTNAME_REQUIRED, "a blank hostname");
 
         Row domain = Models.get(SiteDomainModel.class).findById(f.domainId());
@@ -260,7 +260,7 @@ class DomainEditTest extends HohenheimTestBase {
     void duplicateHostnameAndPathOnSameSiteIsRejected() throws Exception {
         Fixture f = fixture("dup", "&path=%2Fapp");
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact&path=%2Fapp");
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact&path=%2Fapp");
         assertRefused(response, ROUTE_TAKEN, "the same hostname and path");
 
         assertThat(domainsNamed(f.hostname()))
@@ -277,7 +277,7 @@ class DomainEditTest extends HohenheimTestBase {
         Fixture f = fixture("slash", "&path=%2Fapp");
         for (String spelling : new String[] {"app", "%2Fapp%2F", "+%2Fapp+"}) {
             var response = adminPostForm("/admin/domains/new",
-                "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact"
+                "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact"
                 + "&path=" + spelling);
             assertRefused(response, ROUTE_TAKEN, "path spelling '" + spelling + "'");
 
@@ -295,7 +295,7 @@ class DomainEditTest extends HohenheimTestBase {
     void sameHostnameOnADifferentPathIsAccepted() throws Exception {
         Fixture f = fixture("paths", "&path=%2Fapp");
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact"
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact"
             + "&path=%2Fmanagement.ProxyService");
         assertThat(response.statusCode()).as("the second path is accepted").isIn(200, 302, 303);
 
@@ -315,14 +315,14 @@ class DomainEditTest extends HohenheimTestBase {
     void catchAllAlongsidePathRowsIsAccepted() throws Exception {
         Fixture f = fixture("catchall", "&path=%2Fapp");
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact&path=");
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact&path=");
         assertThat(response.statusCode()).as("the catch-all is accepted").isIn(200, 302, 303);
 
         assertThat(domainsNamed(f.hostname())).as("the catch-all is a route of its own").isEqualTo(2);
 
         // ...but only once: blank and "/" are the same catch-all route.
         var slash = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact&path=%2F");
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact&path=%2F");
         assertRefused(slash, HOSTNAME_TAKEN, "a second catch-all spelled \"/\"");
         assertThat(domainsNamed(f.hostname()))
             .as("blank and \"/\" are the same catch-all route")
@@ -334,8 +334,8 @@ class DomainEditTest extends HohenheimTestBase {
     void updatingARowKeepingItsPathIsAllowed() throws Exception {
         Fixture f = fixture("keep", "&path=%2Fapp");
         var response = adminPostEdit("/admin/domains/" + f.domainId(),
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=wildcard"
-            + "&path=%2Fapp&force_ssl=true");
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=wildcard"
+            + "&path=%2Fapp&force_https=true");
         assertThat(response.statusCode()).as("the self-update is accepted").isIn(200, 302, 303);
 
         Row domain = Models.get(SiteDomainModel.class).findById(f.domainId());
@@ -349,13 +349,13 @@ class DomainEditTest extends HohenheimTestBase {
     void updatingARowOntoASiblingPathIsRejected() throws Exception {
         Fixture f = fixture("sibling", "&path=%2Fapp");
         var sibling = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact"
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact"
             + "&path=%2Fmanagement.ProxyService");
         assertThat(sibling.statusCode()).as("the sibling path row is accepted").isIn(200, 302, 303);
         assertThat(domainsNamed(f.hostname())).as("both rows exist").isEqualTo(2);
 
         var response = adminPostEdit("/admin/domains/" + f.domainId(),
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact"
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact"
             + "&path=%2Fmanagement.ProxyService");
         assertRefused(assertNotStale(response), ROUTE_TAKEN, "moving onto the sibling's path");
 
@@ -375,7 +375,7 @@ class DomainEditTest extends HohenheimTestBase {
         Fixture f = fixture("case", "&path=%2Fapp");
         var response = adminPostForm("/admin/domains/new",
             "site_id=" + f.siteId() + "&hostname=Case.Domain-Edit.EXAMPLE.com"
-            + "&match_type=exact&path=%2Fapp");
+            + "&match=exact&path=%2Fapp");
         assertRefused(response, ROUTE_TAKEN, "a case-variant hostname");
 
         assertThat(domainsNamed(f.hostname()))
@@ -392,7 +392,7 @@ class DomainEditTest extends HohenheimTestBase {
     void doubleSlashIsTheSameCatchAll() throws Exception {
         Fixture f = fixture("slashes", "");
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match_type=exact&path=%2F%2F");
+            "site_id=" + f.siteId() + "&hostname=" + f.hostname() + "&match=exact&path=%2F%2F");
         assertRefused(response, HOSTNAME_TAKEN, "a catch-all spelled \"//\"");
 
         assertThat(domainsNamed(f.hostname()))
@@ -410,7 +410,7 @@ class DomainEditTest extends HohenheimTestBase {
         String host = hostFor("listen");
 
         var first = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact"
             + "&path=%2Fapp&listen_on=127.0.0.1");
         assertThat(first.statusCode()).as("step 1: a restricted row is accepted").isIn(200, 302, 303);
         assertThat(domainsNamed(host)).as("step 1: and stored").isEqualTo(1);
@@ -418,7 +418,7 @@ class DomainEditTest extends HohenheimTestBase {
         // ::1 always exists in the discovered set (the listen_on select validates
         // against it), so the disjoint case does not depend on this machine's NICs.
         var second = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact"
             + "&path=%2Fapp&listen_on=%3A%3A1");
         assertThat(second.statusCode()).as("step 2: a disjoint row is accepted").isIn(200, 302, 303);
         assertThat(domainsNamed(host))
@@ -427,7 +427,7 @@ class DomainEditTest extends HohenheimTestBase {
 
         // Same address as the first row: one route, so the row must be refused.
         var overlapping = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact"
             + "&path=%2Fapp&listen_on=127.0.0.1");
         assertRefused(overlapping, ROUTE_TAKEN, "step 3: an overlapping listen_on set");
         assertThat(domainsNamed(host))
@@ -436,7 +436,7 @@ class DomainEditTest extends HohenheimTestBase {
 
         // An UNRESTRICTED row listens everywhere, so it overlaps both restricted ones.
         var unrestricted = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Fapp");
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact&path=%2Fapp");
         assertRefused(unrestricted, ROUTE_TAKEN, "step 4: an unrestricted listener set");
         assertThat(domainsNamed(host))
             .as("an unrestricted listener set overlaps every restricted one")
@@ -453,7 +453,7 @@ class DomainEditTest extends HohenheimTestBase {
         int siteId = createSite(siteNameFor("fixpoint"), "");
         String host = hostFor("fixpoint");
         var first = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Ffx%20%2F");
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact&path=%2Ffx%20%2F");
         assertThat(first.statusCode()).as("the residue-bearing path is accepted").isIn(200, 302, 303);
         Row stored = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.HOSTNAME.eq(host)).first();
@@ -463,7 +463,7 @@ class DomainEditTest extends HohenheimTestBase {
             .isEqualTo("/fx");
 
         var again = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Ffx");
+            "site_id=" + siteId + "&hostname=" + host + "&match=exact&path=%2Ffx");
         assertRefused(again, ROUTE_TAKEN, "the canonical spelling of the same path");
         assertThat(domainsNamed(host))
             .as("\"/fx /\" and \"/fx\" are one route")
@@ -482,7 +482,7 @@ class DomainEditTest extends HohenheimTestBase {
         int second = createSite(siteNameFor("cross second"), "");
 
         var response = adminPostForm("/admin/domains/new",
-            "site_id=" + second + "&hostname=" + f.hostname() + "&match_type=exact");
+            "site_id=" + second + "&hostname=" + f.hostname() + "&match=exact");
         assertRefused(response, ROUTE_TAKEN_OTHER_SITE, "the same route on another enabled site");
         assertThat(response.body())
             .as("the operator is told which site holds it")
@@ -505,7 +505,7 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat((Boolean) draft.get(SiteModel.ENABLED)).as("step 2: the draft is disabled").isFalse();
 
         var domainResponse = adminPostForm("/admin/domains/new",
-            "site_id=" + draftId + "&hostname=" + f.hostname() + "&match_type=exact");
+            "site_id=" + draftId + "&hostname=" + f.hostname() + "&match=exact");
         assertThat(domainResponse.statusCode()).as("step 2: the staged duplicate is accepted")
             .isIn(200, 302, 303);
         assertThat(Models.get(SiteDomainModel.class).find()

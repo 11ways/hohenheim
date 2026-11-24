@@ -573,9 +573,11 @@ public final class SiteOperationHandlers {
             existing.put(SiteModel.UPSTREAM_KIND.getName(), stored.get(SiteModel.UPSTREAM_KIND));
             existing.put(SiteModel.SETTINGS.getName(), stored.get(SiteModel.SETTINGS));
         }
-        Map<String, Object> plain = SubmittedValueCoercion.coerceJsonOrThrow(SiteWrites.SETTINGS_FORM, values, null);
-        Object restored = FormSecrets.restore(SiteWrites.SETTINGS_FORM, plain, existing)
-            .get(SiteModel.SETTINGS.getName());
+        // The form names a settings map by its entries (the fields' input names); the site stores the stored names.
+        Map<String, Object> plain = SubmittedValueCoercion.coerceJsonOrThrow(SiteWrites.SETTINGS_FORM,
+            SiteWrites.SETTINGS_FORM.entryMaps(values), null);
+        Object restored = SiteWrites.SETTINGS_FORM.storedMaps(FormSecrets.restore(SiteWrites.SETTINGS_FORM, plain,
+            SiteWrites.SETTINGS_FORM.byEntryNames(existing))).get(SiteModel.SETTINGS.getName());
         Map<String, Object> restoredMap = RawValues.mapOrNull(restored);
         Map<String, Object> settings = restoredMap != null ? new LinkedHashMap<>(restoredMap) : null;
         if (!DevNamespaceUpstreamKind.ID.toString().equals(kind)) {

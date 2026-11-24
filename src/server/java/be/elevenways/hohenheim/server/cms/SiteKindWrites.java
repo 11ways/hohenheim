@@ -69,9 +69,6 @@ public final class SiteKindWrites {
     /** A create has no subject to key its command by: the request id alone answers the first result. */
     private static final OperationCommand CREATES = OperationCommand.perVerb().onDatasource("default");
 
-    /** Where a site's settings sit in its form, as a refusal of one names its path. */
-    private static final String SETTINGS_PATH = SiteModel.SETTINGS.getName() + ".";
-
     /** The site kinds: a site's name, switch, note and upstream trust besides its kind's settings. */
     private static final KindSettingsWrites.Family SITES = KindSettingsWrites.family("site", SiteModel.MODEL_ID,
             SiteOperations.SITE, SiteModel.ID, SiteModel.UPSTREAM_KIND, SiteModel.SETTINGS)
@@ -140,7 +137,7 @@ public final class SiteKindWrites {
             raw.put(SiteModel.ACCESS_LIST_ID.getName(), String.valueOf(input.get(ACCESS_LIST)));
         }
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS,
+        Object key = KindSettingsWrites.speaking(LINKS,
             () -> ResourceWrites.create(panel, sites(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -171,7 +168,9 @@ public final class SiteKindWrites {
         }
         // The operator's save takes its whole form: what the call left out is posted as it is stored.
         Map<String, Object> raw = new LinkedHashMap<>();
-        for (Field<?, ?> field : SITES.commonFields()) raw.put(field.getName(), input.get(field.getName()));
+        for (Field<?, ?> field : SITES.commonFields()) {
+            raw.put(field.getInputName(), input.get(field.getInputName()));
+        }
         raw.put(SiteModel.UPSTREAM_KIND.getName(), kind.id().toString());
         // A site turned away from the app kind loses its app link, or the link rule refuses the save.
         Object app = !servesApp(kind.id()) ? null : sent.contains(APP) ? input.get(APP)
@@ -186,17 +185,16 @@ public final class SiteKindWrites {
         Map<String, Object> kept = RawValues.map(site.get(SiteModel.SETTINGS));
         Map<String, Object> settings = new LinkedHashMap<>();
         for (Field<?, ?> field : kind.schema().getFields().values()) {
-            String name = field.getName();
             boolean given = kind.settings().contains(field) && sent.contains(field.getInputName());
             Object value = given ? input.get(field.getInputName())
-                : turned && !kind.settings().contains(field) ? null : kept.get(name);
-            if (value != null) settings.put(name, value);
+                : turned && !kind.settings().contains(field) ? null : kept.get(field.getName());
+            if (value != null) settings.put(field.getInputName(), value);
         }
         raw.put(SiteModel.SETTINGS.getName(), settings);
         if (turned) written.add(0, SiteModel.UPSTREAM_KIND.getName());
         Panel panel = ApiConduits.adminPanel();
-        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS, () -> ResourceWrites.update(panel,
-            sites(panel), Objects.requireNonNull(site.get(SiteModel.ID)), site, raw, caller));
+        KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.update(panel, sites(panel),
+            Objects.requireNonNull(site.get(SiteModel.ID)), site, raw, caller));
         return String.join(", ", written);
     }
 

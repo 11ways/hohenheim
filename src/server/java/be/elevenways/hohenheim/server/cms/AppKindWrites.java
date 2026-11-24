@@ -101,9 +101,6 @@ public final class AppKindWrites {
     public static final Kind DOCKER_CONTAINER = declare(DockerContainerKind.ID, DockerContainerKind.SETTINGS_SCHEMA);
     public static final Kind STATIC_SITE = declare(StaticSiteKind.ID, StaticSiteKind.SETTINGS_SCHEMA);
 
-    /** Where an app's settings sit in its form, as a refusal of one names its path. */
-    private static final String SETTINGS_PATH = InstanceModel.SETTINGS.getName() + ".";
-
     private AppKindWrites() {
     }
 
@@ -147,13 +144,13 @@ public final class AppKindWrites {
         Map<String, Object> raw = APPS.created(kind, input);
         LINKS.forEach((argument, column) -> {
             Object linked = input.get(argument);
-            if (linked != null) raw.put(column.getName(), Integer.valueOf(String.valueOf(linked)));
+            if (linked != null) raw.put(column.getInputName(), Integer.valueOf(String.valueOf(linked)));
         });
         Map<String, Object> settings = RawValues.map(raw.get(InstanceModel.SETTINGS.getName()));
         raw.put(InstanceModel.SETTINGS.getName(), KindSettingsWrites.posted(kind.schema().getFields().values(),
             settings));
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS,
+        Object key = KindSettingsWrites.speaking(LINKS,
             () -> ResourceWrites.create(panel, instances(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -172,9 +169,9 @@ public final class AppKindWrites {
         Map<String, Object> raw = new LinkedHashMap<>();
         List<String> written = new ArrayList<>();
         for (Field<?, ?> field : APPS.commonFields()) {
-            if (sent.contains(field.getName())) {
-                raw.put(field.getName(), input.get(field.getName()));
-                written.add(field.getName());
+            if (sent.contains(field.getInputName())) {
+                raw.put(field.getInputName(), input.get(field.getInputName()));
+                written.add(field.getInputName());
             }
         }
         boolean admin = HohenheimAccess.isAdmin(caller);
@@ -185,23 +182,21 @@ public final class AppKindWrites {
                 : Integer.valueOf(String.valueOf(target)));
             written.add(BACKUP_TARGET);
         }
-        // A kind change keeps only what the new kind declares: the settings schema is closed-world.
+        // The form posts only what this kind declares (its settings sub-form is closed-world); the instance resource
+        // puts the stored keys it does not declare back unless the kind changes (InstanceParts.keepUndeclaredSettings).
+        // The stored map goes by the fields' stored names, the form by their input names.
         Map<String, Object> kept = RawValues.map(app.get(InstanceModel.SETTINGS));
         Map<String, Object> settings = new LinkedHashMap<>();
-        if (turned) {
-            for (String name : kind.schema().getFields().keySet()) {
-                if (kept.containsKey(name)) settings.put(name, kept.get(name));
-            }
-        } else {
-            settings.putAll(kept);
+        for (Field<?, ?> field : kind.schema().getFields().values()) {
+            if (kept.containsKey(field.getName())) settings.put(field.getInputName(), kept.get(field.getName()));
         }
         boolean settingsSent = turned;
         for (Field<?, ?> field : kind.settings()) {
             if (!sent.contains(field.getInputName())) continue;
             // Null clears a setting by taking its key away, so its kind's default applies again, never a stored null.
             Object value = input.get(field.getInputName());
-            if (value == null) settings.remove(field.getName());
-            else settings.put(field.getName(), value);
+            if (value == null) settings.remove(field.getInputName());
+            else settings.put(field.getInputName(), value);
             written.add(field.getInputName());
             settingsSent = true;
         }
@@ -216,8 +211,8 @@ public final class AppKindWrites {
         }
         if (raw.isEmpty()) return "";
         Panel panel = admin ? ApiConduits.adminPanel() : ApiConduits.managePanel();
-        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS, () -> ResourceWrites.update(panel,
-            instances(panel), Objects.requireNonNull(app.get(InstanceModel.ID)), app, raw, caller));
+        KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.update(panel, instances(panel),
+            Objects.requireNonNull(app.get(InstanceModel.ID)), app, raw, caller));
         return String.join(", ", written);
     }
 

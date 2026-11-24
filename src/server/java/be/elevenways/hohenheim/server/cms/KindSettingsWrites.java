@@ -266,16 +266,17 @@ public final class KindSettingsWrites {
          */
         public @NonNull Map<String, Object> created(@NonNull Kind kind, OperationInput.@NonNull Values input) {
             Map<String, Object> raw = new LinkedHashMap<>();
-            raw.put(this.kindField.getName(), kind.id().toString());
+            raw.put(this.kindField.getInputName(), kind.id().toString());
             for (Field<?, ?> field : this.common) {
-                if (input.get(field.getName()) != null) raw.put(field.getName(), input.get(field.getName()));
+                Object given = input.get(field.getInputName());
+                if (given != null) raw.put(field.getInputName(), given);
             }
             Map<String, Object> settings = new LinkedHashMap<>();
             for (Field<?, ?> field : kind.settings()) {
                 Object given = input.get(field.getInputName());
-                if (given != null) settings.put(field.getName(), given);
+                if (given != null) settings.put(field.getInputName(), given);
             }
-            raw.put(this.settingsField.getName(), settings);
+            raw.put(this.settingsField.getInputName(), settings);
             return raw;
         }
 
@@ -309,7 +310,7 @@ public final class KindSettingsWrites {
          */
         private @NonNull Map<String, Object> stored(@NonNull Kind kind, @NonNull Row record) {
             Map<String, Object> values = new LinkedHashMap<>();
-            for (Field<?, ?> field : this.common) values.put(field.getName(), record.get(field.getName()));
+            for (Field<?, ?> field : this.common) values.put(field.getInputName(), record.get(field.getName()));
             Map<String, Object> settings = RawValues.map(record.get(this.settingsField.getName()));
             for (Field<?, ?> field : kind.settings()) {
                 values.put(field.getInputName(), settings.get(field.getName()));
@@ -320,22 +321,12 @@ public final class KindSettingsWrites {
 
     /**
      * @return the setting's entry as the panel derives it, or the field itself where the panel draws an editor of its
-     *     own over the field's text (a repository picked from its provider): the tool takes that text; either named
-     *     by the field's input name
+     *     own over the field's text (a repository picked from its provider): the tool takes that text
      */
     static @NonNull FormEntry entryOf(@NonNull Field<?, ?> field) {
         FormEntry derived = FieldFormEntryRegistry.INSTANCE.deriveEntry(field);
-        FormEntry entry = derived instanceof FormEntry.Embedded embedded && embedded.jsonSchema() == null
+        return derived instanceof FormEntry.Embedded embedded && embedded.jsonSchema() == null
             ? Plain.of(field) : derived;
-        return entry.named(field.getInputName());
-    }
-
-    /** @return the stored name of the field going by this input name among the fields, else the name itself */
-    static @NonNull String storedName(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String inputName) {
-        for (Field<?, ?> field : fields) {
-            if (field.getInputName().equals(inputName)) return field.getName();
-        }
-        return inputName;
     }
 
     /** @return what a change answers: the record's code and the names of the settings it wrote */
@@ -343,43 +334,21 @@ public final class KindSettingsWrites {
         return code + " changed: " + (written.isBlank() ? "nothing" : written);
     }
 
-    /** Runs a write of stored values that answers nothing, its refusals naming each field by its input name. */
-    static void speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
-                         @NonNull Runnable write) {
-        speaking(fields, prefix, Map.of(), write);
-    }
-
-    /**
-     * Runs a write of stored values that answers nothing, its refusals naming each field by its input name and each
-     * linked record's column by the argument that set it.
-     */
-    static void speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
-                         @NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Runnable write) {
-        speaking(fields, prefix, columns, () -> {
+    /** Runs a write that answers nothing, its refusals naming each linked column by the argument that set it. */
+    static void speaking(@NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Runnable write) {
+        speaking(columns, () -> {
             write.run();
             return null;
         });
     }
 
     /**
-     * Runs a write of stored values, its refusals naming each field by its input name, as the caller named it.
+     * Runs a write, its refusals naming each linked record's column by the argument that set it; the kind's own
+     * fields already go by their input names in the form.
      *
-     * @param prefix the path the fields' values sit under in the write, empty for a record's own columns
-     */
-    static <T> T speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
-                          @NonNull Supplier<T> write) {
-        return speaking(fields, prefix, Map.of(), write);
-    }
-
-    /**
-     * Runs a write of stored values, its refusals naming each field by its input name and each linked record's column
-     * by the argument that set it, as the caller named them.
-     *
-     * @param prefix  the path the fields' values sit under in the write, empty for a record's own columns
      * @param columns argument name to the record's own column the argument writes (a host's code into server_id)
      */
-    static <T> T speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
-                          @NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Supplier<T> write) {
+    static <T> T speaking(@NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Supplier<T> write) {
         try {
             return write.get();
         } catch (Violations refused) {
@@ -387,14 +356,11 @@ public final class KindSettingsWrites {
             for (Violation violation : refused.all()) {
                 String path = violation.path();
                 String fieldName = violation.fieldName();
-                Map<String, String> named = new LinkedHashMap<>();
-                for (Field<?, ?> field : fields) named.put(prefix + field.getName(), field.getInputName());
-                columns.forEach((argument, column) -> named.put(column.getName(), argument));
-                for (Map.Entry<String, String> name : named.entrySet()) {
-                    String stored = name.getKey();
+                for (Map.Entry<String, ? extends Field<?, ?>> link : columns.entrySet()) {
+                    String stored = link.getValue().getInputName();
                     if (path.equals(stored) || path.startsWith(stored + ".")) {
-                        path = name.getValue() + path.substring(stored.length());
-                        fieldName = name.getValue();
+                        path = link.getKey() + path.substring(stored.length());
+                        fieldName = link.getKey();
                         break;
                     }
                 }
@@ -406,8 +372,9 @@ public final class KindSettingsWrites {
     }
 
     /**
-     * @return the values as the panel's form posts them: a map field as its key/value editor's numbered rows of
-     *     {key, value}, the shape that editor's coercion reads (zenit-forms KeyValueField), a kept secret as itself
+     * @return the values, keyed by input name, as the panel's form posts them: a map field as its key/value editor's
+     *     numbered rows of {key, value}, the shape that editor's coercion reads (zenit-forms KeyValueField), a kept
+     *     secret as itself
      *
      * AIDEV-NOTE: zenit-forms declares no writer of its editor's rows, only the reader; until it does, this spells
      * them with the one shared key names (MapEntryFields), as the editor's own render state does.
@@ -416,7 +383,7 @@ public final class KindSettingsWrites {
                                                @NonNull Map<String, Object> settings) {
         Map<String, Object> posted = new LinkedHashMap<>(settings);
         for (Field<?, ?> field : fields) {
-            if (!(field instanceof StringMapField) || !(settings.get(field.getName()) instanceof Map<?, ?> map)) {
+            if (!(field instanceof StringMapField) || !(settings.get(field.getInputName()) instanceof Map<?, ?> map)) {
                 continue;
             }
             Map<String, Object> rows = new LinkedHashMap<>();
@@ -425,7 +392,7 @@ public final class KindSettingsWrites {
                 rows.put(String.valueOf(rows.size()), Map.of(MapEntryFields.KEY, String.valueOf(entry.getKey()),
                     MapEntryFields.VALUE, value == null ? "" : String.valueOf(value)));
             }
-            posted.put(field.getName(), rows);
+            posted.put(field.getInputName(), rows);
         }
         return posted;
     }

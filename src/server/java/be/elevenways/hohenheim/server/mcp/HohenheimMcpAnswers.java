@@ -4,7 +4,9 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
+import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.TerminalText;
@@ -12,6 +14,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.delivery.server.DeliveryOutcome;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -163,5 +166,22 @@ final class HohenheimMcpAnswers {
     /** What setting a zone's records added, changed, kept and removed, one line per name and type. */
     static @NonNull McpResponse recordsSet(@NonNull McpToolContext context, @Nullable String said) {
         return McpResponse.create().untrusted("records", said == null ? "" : said);
+    }
+
+    /**
+     * The certificate an order wrote, by its code, and the TXT records a manual DNS order waits for: published with
+     * dns_record_set, certificate_renew then finishes it.
+     */
+    static @NonNull McpResponse ordered(@NonNull McpToolContext context, @Nullable Integer certificateId) {
+        McpResponse response = McpResponse.create();
+        if (certificateId == null) return response.line("done");
+        String key = String.valueOf(certificateId);
+        String code = RecordCodes.codes(CertificateModel.MODEL_ID, List.of(key), context.access()).get(key);
+        response.line(code == null ? key : code);
+        List<String> waiting = CertificateParts.waitingDnsRecords(certificateId);
+        if (waiting.isEmpty()) return response;
+        response.untrusted("txt_records", String.join("\n", waiting));
+        return response.line(context.text().words(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("mcp_publish_then_renew")
+            .withArg("code", code == null ? key : code)));
     }
 }

@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -231,6 +232,19 @@ public final class ApiConduits {
             conduit.notFound();
         }
         return entry;
+    }
+
+    /**
+     * @return the submitted values with each field the API's callers name by its stored name moved to the entry's
+     *     input name, the name the entry's form takes it by
+     *
+     * AIDEV-NOTE: the /api/v1 wire is frozen, so it keeps accepting the stored names; a caller already using an input
+     * name is taken as it is.
+     */
+    public static @NonNull Map<String, Object> formValues(@NonNull PanelResource<Row> entry,
+                                                          @NonNull Map<String, Object> submitted) {
+        ResourceForm<Row> form = entry.form();
+        return form == null ? submitted : form.spec().byEntryNames(submitted);
     }
 
     private static @NonNull Panel registeredPanel(@NonNull String slug) {

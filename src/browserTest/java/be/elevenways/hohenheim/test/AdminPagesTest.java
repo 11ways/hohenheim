@@ -687,7 +687,7 @@ class AdminPagesTest extends HohenheimTestBase {
             navigateToApp("/admin/sites/" + suffixSite.get(SiteModel.ID));
             waitForHydration();
 
-            var field = page.locator("pl-field[data-path='settings.delay']");
+            var field = page.locator("pl-field[data-path='settings.delay_ms']");
             // Never a native number input (its decimal separator follows the browser's UI
             // locale): the typed control on a text substrate, with the unit in its suffix slot.
             assertThat(field.locator("input[type='number']").count()).isZero();

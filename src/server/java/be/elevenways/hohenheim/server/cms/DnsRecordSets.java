@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsRecordCodec;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
@@ -32,6 +31,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -304,8 +304,9 @@ public final class DnsRecordSets {
     }
 
     /**
-     * @return one line per record the caller may write (an administrator every one): name, type, TTL, the value as a
-     *     resolver prints it and what is notable about it; or the whole zone as zone-file text
+     * @return one line per record the caller may see, as the panel's record list scopes them (an administrator every
+     *     one): name, type, TTL, the value as a resolver prints it and what is notable about it; or the whole zone as
+     *     zone-file text
      * @throws DomainRefusal FORBIDDEN for zone-file text asked by someone who is no administrator
      * @throws Violations for a name or type given beside zone-file text
      */
@@ -322,13 +323,16 @@ public final class DnsRecordSets {
         }
         int zoneId = zone.get(DnsZoneModel.ID);
         var query = Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId));
+        // The records list's own read scope: names the caller answers for and records granted to them to view.
+        Criteria seen = TenantScopes.DNS_RECORDS.criteria(access);
+        if (seen != null) query = query.where(seen);
         if (input.name() != null) {
             String owner = DnsNames.normalizeOwner(input.name());
             query = query.where(DnsRecordModel.NAME.eq(owner == null ? input.name() : owner));
         }
         if (input.type() != null) query = query.where(DnsRecordModel.TYPE.eq(input.type()));
         List<Row> rows = query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).orderBy(DnsRecordModel.TYPE, SortOrder.ASC)
-            .all().stream().filter(row -> TenantWrites.mayAuthorRecord(access, row)).toList();
+            .all();
         Set<Integer> dynamic = Models.get(DnsDyndnsCredentialModel.class).find()
             .countBy(DnsDyndnsCredentialModel.RECORD_ID, rows.stream().map(row -> row.get(DnsRecordModel.ID))
                 .filter(Objects::nonNull).toList()).keySet();

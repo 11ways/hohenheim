@@ -132,17 +132,18 @@ public final class AddressWrites {
      */
     private static @NonNull Integer created(OperationInput.@NonNull Values input, @NonNull AccessContext caller) {
         Map<String, Object> raw = new LinkedHashMap<>();
-        if (input.get(SITE) != null) raw.put(SiteDomainModel.SITE_ID.getName(), String.valueOf(input.get(SITE)));
+        Object site = input.get(SITE);
+        if (site != null) raw.put(SiteDomainModel.SITE_ID.getInputName(), String.valueOf(site));
         for (Field<?, ?> field : SETTINGS) {
             Object value = input.get(field.getInputName());
-            if (value != null && !value.equals(field.getDefaultValue())) raw.put(field.getName(), value);
+            if (value != null && !value.equals(field.getDefaultValue())) raw.put(field.getInputName(), value);
         }
         if (input.get(CERTIFICATE) != null) {
-            raw.put(SiteDomainModel.CERTIFICATE_ID.getName(), String.valueOf(input.get(CERTIFICATE)));
+            raw.put(SiteDomainModel.CERTIFICATE_ID.getInputName(), String.valueOf(input.get(CERTIFICATE)));
         }
         Panel panel = panelOf(caller);
-        Object key = KindSettingsWrites.speaking(SETTINGS, "", LINKS, () -> ResourceWrites.create(panel,
-            addresses(panel), KindSettingsWrites.posted(SETTINGS, raw), caller));
+        Object key = KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.create(panel, addresses(panel),
+            KindSettingsWrites.posted(SETTINGS, raw), caller));
         return Integer.valueOf(String.valueOf(key));
     }
 
@@ -158,18 +159,17 @@ public final class AddressWrites {
         for (String name : sent) {
             Object value = input.get(name);
             if (CERTIFICATE.equals(name)) {
-                raw.put(SiteDomainModel.CERTIFICATE_ID.getName(), value == null ? null : String.valueOf(value));
+                raw.put(SiteDomainModel.CERTIFICATE_ID.getInputName(), value == null ? null : String.valueOf(value));
             } else {
-                raw.put(KindSettingsWrites.storedName(SETTINGS, name), value);
+                raw.put(name, value);
             }
         }
         String code = RecordCodes.codeUnjudged(SiteDomainModel.MODEL_ID, String.valueOf(address.get(SiteDomainModel
             .ID)));
         if (raw.isEmpty()) return KindSettingsWrites.changedLine(code, "");
         Panel panel = panelOf(caller);
-        KindSettingsWrites.speaking(SETTINGS, "", LINKS, () -> ResourceWrites.update(panel, addresses(panel),
-            Objects.requireNonNull(address.get(SiteDomainModel.ID)), address,
-            KindSettingsWrites.posted(SETTINGS, raw),
+        KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.update(panel, addresses(panel),
+            Objects.requireNonNull(address.get(SiteDomainModel.ID)), address, KindSettingsWrites.posted(SETTINGS, raw),
             caller));
         return KindSettingsWrites.changedLine(code, String.join(", ", sent));
     }

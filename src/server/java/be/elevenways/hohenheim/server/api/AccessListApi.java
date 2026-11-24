@@ -102,7 +102,7 @@ public final class AccessListApi {
             }
             try {
                 int listId = (Integer) ResourceWrites.create(panelFor(ctx), lists,
-                    FormSubmissionRawValues.fromConduit(conduit), ctx);
+                    ApiConduits.formValues(lists, FormSubmissionRawValues.fromConduit(conduit)), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(AccessListModel.class).findById(listId));
                 return ApiConduits.json(listProjection(created, true));
@@ -194,7 +194,7 @@ public final class AccessListApi {
         }
         try {
             ResourceWrites.update(panelFor(ctx), rules, rule.get(AccessRuleModel.ID), rule,
-                values, ctx);
+                ApiConduits.formValues(rules, values), ctx);
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
         } catch (DomainRefusal refused) {

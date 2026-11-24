@@ -75,7 +75,7 @@ public final class DnsZoneApi {
             }
             try {
                 int zoneId = (Integer) ResourceWrites.create(panel, zones,
-                    FormSubmissionRawValues.fromConduit(conduit), ctx);
+                    ApiConduits.formValues(zones, FormSubmissionRawValues.fromConduit(conduit)), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(DnsZoneModel.class).findById(zoneId));
                 return ApiConduits.json(projection(created));

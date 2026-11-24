@@ -132,8 +132,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
         "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
         "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
-        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place",
-        "hohenheim:rollback_release", "hohenheim:rotate_host_key",
+        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place", "hohenheim:rotate_host_key",
         "hohenheim:rotate_incus_cert", "hohenheim:route_notification_events", "hohenheim:run_schedule",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
@@ -1028,8 +1027,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
     /**
      * What a create asks is what it is judged by, a refusal names the argument that was sent, and a change writes only
-     * what it was sent: a create's memory limit decides whether its host has room, the refusal names {@code host}, and
-     * a site setting set and then cleared leaves its settings as empty as they were, its defaults still in force.
+     * what it was sent: a create's memory limit decides whether its host has room, the refusal names {@code host}, a
+     * site setting set and then cleared leaves its settings as empty as they were, its defaults still in force, and a
+     * stored key the app's kind does not declare survives a change of another setting.
      */
     @Test
     void aCreateIsJudgedByWhatItAsksAndAChangeWritesOnlyWhatItSends() throws Exception {
@@ -1119,6 +1119,21 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .where(InstanceModel.ID.eq(appId)).first().get(InstanceModel.SETTINGS)))
                 .as("step 5: the cleared command is no key at all").doesNotContainKey("command")
                 .containsEntry("memory_limit_mb", 128);
+
+            // 6. A stored key the kind does not declare survives a change of another setting: only a kind change
+            //    leaves behind what the new kind lacks.
+            Row stored = Models.get(InstanceModel.class).find().noCache().where(InstanceModel.ID.eq(appId)).first();
+            Map<String, Object> withExtra = new LinkedHashMap<>(RawValues.map(stored.get(InstanceModel.SETTINGS)));
+            withExtra.put("undeclared_note", "kept");
+            stored.set(InstanceModel.SETTINGS, withExtra);
+            Models.get(InstanceModel.class).save(stored);
+            McpHttpSession.Answer changedTag = admin.call("app_docker_container_set", Map.of("code", app, "tag", "v2"));
+            assertThat(changedTag.error()).as("step 6: " + changedTag.text()).isFalse();
+            assertThat(RawValues.map(Models.get(InstanceModel.class).find().noCache()
+                    .where(InstanceModel.ID.eq(appId)).first().get(InstanceModel.SETTINGS)))
+                .as("step 6: the undeclared key is still stored beside the change")
+                .containsEntry("undeclared_note", "kept").containsEntry("tag", "v2")
+                .containsEntry("memory_limit_mb", 128);
         } finally {
             if (appId != null) {
                 for (Row site : Models.get(SiteModel.class).find().withTrashed()
@@ -1188,8 +1203,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 1: a code of another kind names its own tool").contains("site_app_set")
                 .contains("change_kind");
             // A change sends one setting; every other stays.
-            assertThat(admin.call("site_app_set", Map.of("code", siteCode, "idle_timeout", 900)).error())
-                .as("step 1: one setting changed").isFalse();
+            McpHttpSession.Answer timed = admin.call("site_app_set", Map.of("code", siteCode, "idle_timeout", 900));
+            assertThat(timed.error()).as("step 1: one setting changed " + timed.text()).isFalse();
             Map<String, Object> settings = RawValues.map(Models.get(SiteModel.class).findById(siteId)
                 .get(SiteModel.SETTINGS));
             assertThat(String.valueOf(settings.get("idle_timeout")) + " " + settings.get("request_timeout"))
@@ -1204,8 +1219,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(admin.call("address_set", Map.of("code", addressCode, "site", siteCode)).text())
                 .as("step 2: the site is given only when creating").contains("site").contains("creating");
             McpHttpSession.Answer secured = admin.call("address_set", Map.of("code", addressCode, "hsts", true,
-                "force_https", false, "match", "exact", "exclude_from_lets_encrypt", false, "request_headers",
-                List.of(Map.of("name", "X-Shop", "value", "1"))));
+                "force_https", false, "match", "exact", "exclude_from_automatic_certificates", false,
+                "request_headers", List.of(Map.of("name", "X-Shop", "value", "1"))));
             assertThat(secured.error()).as("step 2: a change " + secured.text()).isFalse();
             assertThat(secured.text()).as("step 2: what changed, by its names for people").contains("hsts")
                 .contains("request_headers").doesNotContain("hsts_enabled").doesNotContain("custom_headers");
@@ -1248,6 +1263,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 CertificateModel.DNS_PUBLISHER_MANUAL));
             assertThat(ordered.error()).as("step 3: " + ordered.text()).isFalse();
             found(Pattern.compile("C\\d+"), ordered.text(), "step 3: the certificate's code");
+            assertThat(ordered.text()).as("step 3: the TXT records the order waits for, and what to call next")
+                .contains("_acme-challenge").contains(" TXT ").contains("certificate_renew");
             assertThat(Models.get(CertificateModel.class).find()
                     .where(CertificateModel.DOMAIN_NAMES_TEXT.eq(hostname)).count())
                 .as("step 3: ordered for the address's hostname").isEqualTo(1L);
@@ -1306,11 +1323,25 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 7: and what one makes on it next, the site as an argument")
                 .contains("address_set site=" + siteCode + " hostname=...");
 
-            // 8. delete sends the site to the trash.
+            // 8. roll_back takes a site (its release engine then answers in its own words); delete sends the site to
+            //    the trash; site_restore brings it back; trashed again, permanent removes it for good.
+            assertThat(admin.call("roll_back", Map.of("code", siteCode)).text()).as("step 8: a site is rolled back")
+                .doesNotContain("is none of them");
+            assertThat(admin.call("delete", Map.of("code", siteCode, "permanent", true)).error())
+                .as("step 8: permanent takes only a site in the trash").isTrue();
             McpHttpSession.Answer deleted = admin.call("delete", Map.of("code", siteCode));
             assertThat(deleted.error()).as("step 8: " + deleted.text()).isFalse();
             assertThat(Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first())
                 .as("step 8: in the trash").isNull();
+            McpHttpSession.Answer restored = admin.call("site_restore", Map.of("code", siteCode));
+            assertThat(restored.error()).as("step 8: restored " + restored.text()).isFalse();
+            assertThat(Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first())
+                .as("step 8: live again").isNotNull();
+            assertThat(admin.call("delete", Map.of("code", siteCode)).error()).as("step 8: trashed again").isFalse();
+            McpHttpSession.Answer purged = admin.call("delete", Map.of("code", siteCode, "permanent", true));
+            assertThat(purged.error()).as("step 8: deleted for good " + purged.text()).isFalse();
+            assertThat(Models.get(SiteModel.class).find().withTrashed().where(SiteModel.ID.eq(siteId)).first())
+                .as("step 8: gone, the trash too").isNull();
 
             // 9. A site serving a folder, with its missing page.
             McpHttpSession.Answer files = admin.call("site_static_files_set", Map.of("name", PREFIX + "files-"

@@ -75,7 +75,7 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         int siteId = site.get(SiteModel.ID);
 
         var domainResponse = adminPostForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=routed-link.example.com&match_type=exact");
+            "site_id=" + siteId + "&hostname=routed-link.example.com&match=exact");
         assertThat(domainResponse.statusCode()).as("step 1: the domain is created")
             .isIn(200, 302, 303);
         Row domain = Models.get(SiteDomainModel.class).find()

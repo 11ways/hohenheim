@@ -231,7 +231,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 2. The legitimate path: bind a new hostname to the managed site.
         assertThat(tenantPost("/manage/domains/new",
-            "site_id=" + ownSiteId + "&hostname=new.t.tenantscope.test&force_ssl=true").statusCode())
+            "site_id=" + ownSiteId + "&hostname=new.t.tenantscope.test&force_https=true").statusCode())
             .as("a tenant may bind a hostname to a site it manages").isIn(302, 303);
         Row bound = domainByHostname("new.t.tenantscope.test");
         assertThat(bound).as("the bound hostname persisted").isNotNull();
@@ -245,7 +245,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 3. Editing its own row works and keeps the frozen columns untouched.
         assertThat(httpPostEdit("/manage/domains/" + bound.get(SiteDomainModel.ID),
-            "site_id=" + ownSiteId + "&hostname=renamed.t.tenantscope.test&force_ssl=true", tenantSession, tenantCsrf)
+            "site_id=" + ownSiteId + "&hostname=renamed.t.tenantscope.test&force_https=true", tenantSession, tenantCsrf)
             .statusCode()).as("a tenant may edit its own binding").isIn(302, 303);
         Row renamed = Models.get(SiteDomainModel.class).findById(bound.get(SiteDomainModel.ID));
         assertThat((String) renamed.get(SiteDomainModel.HOSTNAME)).isEqualTo("renamed.t.tenantscope.test");
@@ -305,7 +305,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         // 1. Every frozen column at once, in one direct POST that never renders a form.
         assertThat(tenantPost("/manage/domains/new",
             "site_id=" + ownSiteId + "&hostname=forged.t.tenantscope.test"
-                + "&match_type=wildcard&listen_on=127.0.0.1&path=/carve"
+                + "&match=wildcard&listen_on=127.0.0.1&path=/carve"
                 + "&strip_path=true&certificate_id=" + foreignCertificateId).statusCode())
             .isIn(302, 303, 422);
         Row forged = domainByHostname("forged.t.tenantscope.test");

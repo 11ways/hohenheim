@@ -273,7 +273,8 @@ public class SiteDomainModel extends Model {
     public static final BooleanField EXCLUDE_FROM_LETSENCRYPT =
             SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt")
         .defaultValue(false)
-        .inputName("exclude_from_lets_encrypt")
+        // Named for what it does: the address is left out of the certificates Hohenheim orders by itself.
+        .inputName("exclude_from_automatic_certificates")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclude_from_letsencrypt"))
         .help(HohenheimMicrocopy.HELP.of("exclude_from_letsencrypt"))
         .build());
