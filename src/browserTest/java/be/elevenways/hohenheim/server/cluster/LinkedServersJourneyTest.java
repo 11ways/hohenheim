@@ -24,6 +24,9 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.orm.code.CodeGrantModel;
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
 import be.elevenways.zenit.common.orm.code.RecordCodeModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -421,6 +424,15 @@ class LinkedServersJourneyTest {
         return codes;
     }
 
+    /** @return whether a grant of the master that never came into force holds the code's number */
+    private static boolean voidGrantHolds(String code) {
+        RecordCodeBehaviour.Allocated kind = RecordCodeKinds.allocatedOf(code);
+        long number = kind.number(code);
+        return new CodeGrantModel(Models.get(LinkedServerModel.class).getResolvedDatasource()).find().noCache()
+            .where(CodeGrantModel.PREFIX.eq(kind.prefix())).where(CodeGrantModel.FIRST.lte(number))
+            .where(CodeGrantModel.LAST.gte(number)).where(CodeGrantModel.CONFIRMED_AT.isNull()).count() == 1;
+    }
+
     /** @return the key of the master's own site, made once */
     private static String masterSite() {
         SiteModel sites = Models.get(SiteModel.class);
@@ -652,8 +664,10 @@ class LinkedServersJourneyTest {
             assertThat(kuifje.ask("remove-master")).isEqualTo("removed " + LinkedServers.Removal.LEFT.token());
 
             // 9. One link is made at a time. Two joins reach Kuifje at the same instant, each with a valid code of
-            //    its own: exactly one links a master, the other is refused in words. Two adds on the master at once:
-            //    exactly one links Kuifje, the other is refused in words.
+            //    its own: exactly one links a master, the other is refused in words. A join Robbedoes never
+            //    recorded (these come from the test, not its add) leaves only void grants here: Kuifje's codes from
+            //    them live on no server Robbedoes knows. Two adds on the master at once: exactly one links Kuifje,
+            //    the other is refused in words.
             String first = codeOf(kuifje.ask("offer 1"));
             String second = codeOf(kuifje.ask("offer 2"));
             List<Object> joins = atOnce(() -> LinkCalls.join(CHILD_ADDRESS, joinBody(first)),
@@ -671,6 +685,12 @@ class LinkedServersJourneyTest {
             assertThat(refusal).as("step 9: in words").isEqualTo(english(JoinRefusal.HAS_MASTER.message()));
             assertThat(kuifje.ask("rows")).as("step 9: Kuifje holds one master")
                 .startsWith("rows Robbedoes|managed_by|").doesNotContain(";");
+            List<String> unrecorded = codesOf(kuifje);
+            assertThat(unrecorded).as("step 9: the join renumbered Kuifje").isNotEmpty();
+            for (String each : unrecorded) {
+                assertThat(voidGrantHolds(each)).as("step 9: %s lies in a void grant", each).isTrue();
+                assertThat(CodeHomes.peerOf(each)).as("step 9: %s lives on no server here", each).isNull();
+            }
             // That master's keys are the test's, not Robbedoes': removing it there finds no link here.
             assertThat(kuifje.ask("remove-master")).isEqualTo("removed " + LinkedServers.Removal.LEFT.token());
             String third = codeOf(kuifje.ask("offer 1"));

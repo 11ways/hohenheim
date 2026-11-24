@@ -56,7 +56,8 @@ Linked servers are reached on the public internet only, unless the host declares
 The join body carries `code`, the master's `name`, `base_url`, `token`, `build`, `key` (the key the managed
 server presents to the master) and `ticket` (see "One code per thing"). A join refusal answers one of `no_such_code`,
 `expired`, `too_many_tries` (429), `has_master`, `manages_others`, `busy` (409), `unreadable` (422) or `codes` (502);
-`busy` means another server is being linked there at this moment, `codes` that it could not take its code numbers
+`busy` means another link or change is under way there at this moment (the link lease, or the codes lease held past
+its wait during the join), `codes` that it could not take its code numbers
 from the master. Wrong codes from one address spend a failure budget of five tries per fifteen minutes; once it
 is spent, no code is looked at. An unknown key answers 401 and names nothing.
 
@@ -154,25 +155,30 @@ that master granted. Every allocation and every change of that fact hold the lea
 their transaction ends, so no creation ever straddles a join or a leave.
 
 - **Joining**: the managed server counts its coded records per prefix and asks for a number for each plus one spare
-  block (codes, presenting the master's `ticket` from the join body, since the master holds no row of it yet); it
-  keeps the blocks and gives every code outside them a new number, in the join's own transaction. The old spelling
-  of a renumbered code keeps naming its thing on that server. A join that took more than half the master's call
-  deadline is refused there, so the master never gives up on a join the managed server kept. Before joining, the join
-  card counts every coded thing there as getting a new code; one whose number happens to lie inside the master's
-  blocks in fact keeps it, so the card states the most that can change.
+  block, above the highest number any of its codes of that prefix holds (codes, presenting the master's `ticket`
+  from the join body, since the master holds no row of it yet); the master raises its own sequence to that number
+  first. The managed server keeps the blocks and gives every code a new number from them, in the join's own
+  transaction. The old spelling of a renumbered code keeps naming its thing on that server. A join that took more
+  than half the master's call deadline, or got no block of a prefix it asked for, is refused there, so the master
+  never gives up on a join the managed server kept. Before joining, the join card says how many things get a new
+  code (core `CodeBlocks.renumberedAtJoining`): every coded thing, exactly.
 - **More numbers**: a prefix with fewer than half a block left asks one more block: after every creation on a
   managed server the numbers left are compared with that mark in the background, and the minute check that reaches
   the master asks too. With none left and the
   master silent, a creation is refused in words ("No numbers are left for new apps; this server gets more from its
   master when that answers.") and writes nothing.
-- **A link made before codes were cluster-wide**: at its first minute check the managed server joins the numbering
-  as a join does (asks, keeps, renumbers).
+- **A link without blocks** (made before codes were cluster-wide; no such link exists): it keeps its own sequence
+  and is never renumbered unannounced; it takes part once it is joined again.
 - **Leaving**: when the link ends on the managed server, it goes back to its own sequence, raised above every number
   it holds or was granted; its codes stay.
 - **Where a code lives**: the master answers it (core `CodeHomes.peerOf`): a shared kind's thing from its record of
   that server, any other code by the grant that holds its number, else its own.
 
-A refused join leaves on the master only a grant nobody uses: those numbers are never handed out again.
+The master records a join's grant void (core `CodeGrants.grantJoining`) and puts it in force in the transaction that
+adds the joined server's row (`CodeGrants.joined`). A refused or abandoned join leaves a void grant: its numbers are
+never handed out again, and the master answers that a code among them lives on no linked server.
+A join the managed server kept while the master never recorded it (the master's add lost the answer) leaves the
+managed server's codes in such a void grant as well: the master answers that they live on no linked server.
 
 ## Removing
 

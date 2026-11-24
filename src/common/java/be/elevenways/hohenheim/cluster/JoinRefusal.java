@@ -30,7 +30,10 @@ public enum JoinRefusal {
     /** That server manages other servers itself, so it cannot get a master. */
     MANAGES_OTHERS("manages_others"),
 
-    /** Another server is being linked there at this moment; asking again shortly may succeed. */
+    /**
+     * Another server is being linked there, or the switch of where its code numbers come from held its lease past the
+     * wait; asking again shortly may succeed.
+     */
     BUSY("busy"),
 
     /** The request or its answer could not be read. */

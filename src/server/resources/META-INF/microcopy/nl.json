@@ -19935,7 +19935,7 @@
   "linked_server_join_too_many_tries": {"text": "Er kwamen te veel verkeerde koppelcodes van deze server. Wacht een kwartier en probeer opnieuw.", "scope": "violations"},
   "linked_server_join_has_master": {"text": "De server wordt al beheerd door een andere Hohenheim; een server heeft een beheerder.", "scope": "violations"},
   "linked_server_join_manages_others": {"text": "De server beheert andere servers en kan dus zelf niet beheerd worden.", "scope": "violations"},
-  "linked_server_join_busy": {"text": "Daar wordt op dit moment een andere server gekoppeld. Probeer het over een minuut opnieuw.", "scope": "violations"},
+  "linked_server_join_busy": {"text": "Daar is op dit moment een andere koppeling of wijziging bezig. Probeer het over een minuut opnieuw.", "scope": "violations"},
   "linked_server_join_unreadable": {"text": "Het antwoord van de andere server kon niet gelezen worden. Is het een Hohenheim die servers koppelt?", "scope": "violations"},
   "linked_server_join_codes": {"text": "De server kon zijn codenummers niet van deze server krijgen, dus hij is niet gekoppeld en er is niets veranderd. Controleer of hij het eigen adres van deze server kan bereiken.", "scope": "violations"},
   "linked_server_is_managed": {"text": "Deze server wordt beheerd door {$name}; een beheerde server beheert geen andere servers.", "scope": "violations"},

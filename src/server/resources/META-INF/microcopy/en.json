@@ -19935,7 +19935,7 @@
   "linked_server_join_too_many_tries": {"text": "Too many wrong join codes came from this server. Wait a quarter of an hour and try again.", "scope": "violations"},
   "linked_server_join_has_master": {"text": "The server is already managed by another Hohenheim; a server has one master.", "scope": "violations"},
   "linked_server_join_manages_others": {"text": "The server manages other servers, so it cannot be managed itself.", "scope": "violations"},
-  "linked_server_join_busy": {"text": "Another server is being linked there at this moment. Try again in a minute.", "scope": "violations"},
+  "linked_server_join_busy": {"text": "Another link or change is under way there at this moment. Try again in a minute.", "scope": "violations"},
   "linked_server_join_unreadable": {"text": "The other server's answer could not be read. Is it a Hohenheim that links servers?", "scope": "violations"},
   "linked_server_join_codes": {"text": "The server could not take its code numbers from this server, so it was not linked and nothing changed. Check that it can reach this server's own address.", "scope": "violations"},
   "linked_server_is_managed": {"text": "This server is managed by {$name}; a managed server manages no other servers.", "scope": "violations"},

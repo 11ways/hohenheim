@@ -11,7 +11,6 @@ import be.elevenways.zenit.common.orm.code.CodeBlocks;
 import be.elevenways.zenit.common.orm.code.CodeGrants;
 import be.elevenways.zenit.common.orm.code.CodeNumbering;
 import be.elevenways.zenit.common.orm.code.CodeWant;
-import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -48,10 +47,11 @@ import java.util.UUID;
  * AIDEV-NOTE: at joining the master has no row of the server yet, so the codes call presents the link key with a
  * ticket the master signed into the join body (core SignedPathTokens, sealed, valid one call deadline): it names the
  * row id the master will give that server, which is the peer every grant is recorded under (the same key the master's
- * record keeps that server under). A refused join leaves on the master only a grant nobody uses: its numbers are
- * never handed out again, so no code is ever shared. The codes call of a join runs inside the join code's
- * transaction, so on SQLite this server's writers wait for it (at most one call deadline): that is what makes the
- * join all or nothing.
+ * record keeps that server under). The two servers commit apart (the grant on the master, the join here, then the
+ * master's row of this server), so the master records a join's grant void (core CodeGrants.grantJoining) and puts it
+ * in force with that row (CodeGrants.joined): a refused join leaves a grant that names nobody, its numbers never
+ * handed out again. The codes call of a join runs inside the join code's transaction, so on SQLite this server's
+ * writers wait for it (at most one call deadline): that is what makes the join all or nothing here.
  *
  * AIDEV-NOTE: localized content: none; codes are not localized.
  *
@@ -135,18 +135,25 @@ public final class ClusterCodes {
 
     /**
      * Takes the blocks a joining server needs from its master and renumbers, inside the caller's transaction (the one
-     * that makes the master's row): a code outside them gets a new number, its old spelling keeps naming its record.
+     * that makes the master's row): every coded thing gets a new number, its old spelling keeps naming its record.
      *
      * @param master the master's row, written in the caller's transaction
      * @param key    the key this server presents to that master, as the join brought it
      * @param ticket the master's leave to grant numbers before it holds this server's row
-     * @throws DomainRefusal when the master granted nothing usable or the blocks hold too few numbers; the caller's
+     * @throws DomainRefusal when the master granted no block of a prefix it was asked for, the blocks hold too few
+     *                       numbers, or a switch held the fence for the whole wait (IN_PROGRESS); the caller's
      *                       transaction then rolls back with everything here
      */
     static void join(@NonNull Row master, @NonNull String key, @NonNull String ticket) {
         Datasource datasource = datasource();
-        List<CodeBlock> blocks = granted(master.get(LinkedServerModel.BASE_URL), key, CodeBlocks.joining(datasource),
-            ticket);
+        List<CodeWant> wants = CodeBlocks.joining(datasource);
+        List<CodeBlock> blocks = granted(master.get(LinkedServerModel.BASE_URL), key, wants, ticket);
+        for (CodeWant want : wants) {
+            if (want.wanted() > 0 && blocks.stream().noneMatch(block -> block.prefix().equals(want.prefix()))) {
+                throw new DomainRefusal(ZenitRefusalReason.SERVICE_UNAVAILABLE, "the master granted no "
+                    + want.prefix() + " numbers");
+            }
+        }
         takeIn(datasource, master, blocks, true);
     }
 
@@ -171,23 +178,17 @@ public final class ClusterCodes {
         CodeBlocks.leave(datasource);
     }
 
-    /**
-     * @return how many things on this server would get a new code if it joined a master now: every current allocated
-     *         code (CodeBlocks.joining asks one number for each, beside a spare block per kind); one whose number the
-     *         master's blocks happen to hold keeps it
-     */
+    /** @return how many things on this server get a new code if it joins a master now (core's exact count) */
     public static int renumberedAtJoin() {
-        long codes = 0;
-        for (CodeWant want : CodeBlocks.joining(datasource())) {
-            RecordCodeBehaviour.Allocated kind = RecordCodeKinds.byPrefix(want.prefix());
-            codes += want.wanted() - (kind == null ? 0 : kind.blockSize());
-        }
-        return Math.toIntExact(codes);
+        return Math.toIntExact(CodeBlocks.renumberedAtJoining(datasource()));
     }
 
     /**
-     * Asks the master for what this server wants: a server whose master granted it nothing yet (linked before codes
-     * were cluster-wide) joins the numbering as a join does; one below the mark of a prefix asks a block of it.
+     * Asks the master for what this server wants: one below the mark of a prefix asks a block of it.
+     *
+     * AIDEV-NOTE: a server whose master granted it nothing keeps its own sequence: only a join renumbers, after the
+     * join card said how many codes change. Every join since codes became cluster-wide takes its blocks in the join's
+     * own transaction, and no link was made before, so no such server exists; one takes part once joined again.
      */
     private static void refill() {
         Row master = LinkedServers.master();
@@ -199,8 +200,6 @@ public final class ClusterCodes {
         String key = master.get(LinkedServerModel.LINK_KEY);
         try {
             if (grantingMaster(datasource) == null) {
-                List<CodeBlock> blocks = granted(baseUrl, key, CodeBlocks.joining(datasource), null);
-                datasource.withTransaction(transaction -> takeIn(datasource, master, blocks, true));
                 return;
             }
             List<CodeWant> wants = new ArrayList<>();
@@ -280,13 +279,34 @@ public final class ClusterCodes {
      * @return the granted blocks
      */
     static @NonNull List<CodeBlock> grant(@NonNull String peer, @NonNull List<CodeWant> wants) {
+        return CodeGrants.grant(datasource(), peer, known(wants));
+    }
+
+    /**
+     * Grants a joining server its wants as {@link #grant} does, void until its add records it here
+     * ({@link #joined}).
+     *
+     * @param peer the row id the ticket promised that server
+     * @return the granted blocks
+     */
+    static @NonNull List<CodeBlock> grantJoining(@NonNull String peer, @NonNull List<CodeWant> wants) {
+        return CodeGrants.grantJoining(datasource(), peer, known(wants));
+    }
+
+    /** Puts the grants made for a server's join in force, in the caller's transaction: the one that adds its row. */
+    static void joined(@NonNull Row server) {
+        CodeGrants.joined(datasource(), peerKey(server));
+    }
+
+    /** @return the wants of prefixes this build declares */
+    private static @NonNull List<CodeWant> known(@NonNull List<CodeWant> wants) {
         List<CodeWant> known = new ArrayList<>(wants.size());
         for (CodeWant want : wants) {
             if (RecordCodeKinds.byPrefix(want.prefix()) != null) {
                 known.add(want);
             }
         }
-        return CodeGrants.grant(datasource(), peer, known);
+        return known;
     }
 
     // --- The wire ---
@@ -299,6 +319,7 @@ public final class ClusterCodes {
             each.put("prefix", want.prefix());
             each.put("left", want.left());
             each.put("wanted", want.wanted());
+            each.put("above", want.above());
             wire.add(each);
         }
         return wire;
@@ -313,10 +334,12 @@ public final class ClusterCodes {
         for (Object item : listed) {
             if (!(item instanceof Map<?, ?> each) || !(each.get("prefix") instanceof String prefix)
                     || !(each.get("left") instanceof Number left) || !(each.get("wanted") instanceof Number wanted)
-                    || wanted.longValue() > Integer.MAX_VALUE || left.longValue() < 0 || wanted.longValue() < 0) {
+                    || !(each.get("above") instanceof Number above) || wanted.longValue() > Integer.MAX_VALUE
+                    || left.longValue() < 0 || wanted.longValue() < 0 || above.longValue() < 0
+                    || above.longValue() > Long.MAX_VALUE - wanted.longValue()) {
                 return null;
             }
-            wants.add(new CodeWant(prefix, left.longValue(), (int) wanted.longValue()));
+            wants.add(new CodeWant(prefix, left.longValue(), (int) wanted.longValue(), above.longValue()));
         }
         return wants;
     }

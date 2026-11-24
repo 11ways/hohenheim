@@ -392,7 +392,8 @@ public final class LinkedServers {
                 });
             } catch (DomainRefusal noNumbers) {
                 Blast.log("CLUSTER: a join is refused, the code numbers were not taken -", noNumbers.getMessage());
-                return new Refused(JoinRefusal.CODES);
+                // A switch of where numbers come from held the fence past the wait: busy, as a held creation lease is.
+                return new Refused(noNumbers.is(ZenitRefusalReason.IN_PROGRESS) ? JoinRefusal.BUSY : JoinRefusal.CODES);
             }
             return switch (redeemed) {
                 case OneTimeCodes.Refused<Row> refused -> new Refused(switch (refused.why()) {
@@ -501,7 +502,11 @@ public final class LinkedServers {
         server.set(LinkedServerModel.APPS, count(joined.get("apps")));
         server.set(LinkedServerModel.SITES, count(joined.get("sites")));
         server.set(LinkedServerModel.LAST_SEEN_AT, Now.instant());
-        Models.get(LinkedServerModel.class).insert(server, Change.PLAIN);
+        // The row and the grants made for this join come into force together; a join never recorded leaves them void.
+        Models.get(LinkedServerModel.class).getResolvedDatasource().withTransaction(transaction -> {
+            Models.get(LinkedServerModel.class).insert(server, Change.PLAIN);
+            ClusterCodes.joined(server);
+        });
         // The master takes in everything that server has at once, in the background, so the add answers now.
         ClusterRecords.request(server.get(LinkedServerModel.ID));
         return server;

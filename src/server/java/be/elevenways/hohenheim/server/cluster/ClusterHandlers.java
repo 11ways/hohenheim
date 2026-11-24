@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * Answers the calls of ClusterEndpoints: join (the code is the credential), and every other call (the link key is).
@@ -182,7 +181,8 @@ public final class ClusterHandlers {
 
     /**
      * Grants a server this one manages the code numbers it wants: 401 for a key (or a ticket with it) that names no
-     * such server, 403 for this server's own master, 400 for wants that cannot be read.
+     * such server, 403 for this server's own master, 400 for wants that cannot be read or, outside a join, that name a
+     * number to lie above (only a joining server's grant is placed above its own numbers).
      */
     private static @NonNull ActionResult<Object> codes(@NonNull Conduit conduit) {
         Map<String, Object> body = bodyOf(conduit);
@@ -207,15 +207,15 @@ public final class ClusterHandlers {
             return unknownKey(conduit);
         }
         List<CodeWant> wants = body == null ? null : ClusterCodes.wantsOf(body.get("wants"));
-        if (wants == null) {
+        if (wants == null || asker != null && wants.stream().anyMatch(want -> want.above() > 0)) {
             return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
         }
         String granted = peer;
-        Supplier<List<CodeBlock>> grant = () -> ClusterCodes.grant(granted, wants);
-        // At joining no linked server exists yet to act as: the ticket is the gate, as the join code is for a join.
+        // At joining no linked server exists yet to act as: the ticket is the gate, as the join code is for a join,
+        // and the grant is void until the add records that server.
         List<CodeBlock> blocks = asker == null ? ExecutionIdentity.supplyAsSystem(HohenheimSystemPurposes.CLUSTER_JOIN,
-            grant) : ExecutionIdentity.supply(ExecutionIdentity.caller(AccessContext.detached(asker),
-            CallerChannel.ofRequest(conduit)), grant);
+            () -> ClusterCodes.grantJoining(granted, wants)) : ExecutionIdentity.supply(ExecutionIdentity.caller(
+            AccessContext.detached(asker), CallerChannel.ofRequest(conduit)), () -> ClusterCodes.grant(granted, wants));
         return new JsonResult<>(Map.of("blocks", ClusterCodes.blocksOnWire(blocks)));
     }
 
