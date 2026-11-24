@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.server.boot.CmsBoot;
 import be.elevenways.zenit.cms.server.page.CmsPanels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.ZenitModule;
+import be.elevenways.zenit.common.brand.HostProduct;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Set;
@@ -86,5 +87,9 @@ public final class HohenheimHostWiring implements ZenitModule {
         // guard, nftables setup + resync, ban-cache warmup. Before the first
         // request rather than after it, so no request escapes the ban cache.
         HohenheimSecurity.boot();
+
+        // The product this host runs, named where no brand is: the API keys page's "Hohenheim assistant" preset and
+        // its empty page ("use Hohenheim as you") read it, and Zenit stands otherwise.
+        HostProduct.SEAM.install(() -> "Hohenheim");
     }
 }

@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.application.FakeApps;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.ai.server.mcp.host.McpCoverage;
@@ -46,6 +47,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.operation.OperationRunModel;
@@ -162,9 +164,16 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         AccessContext operator = TenantConduits.operator();
         UUID operatorId = TenantConduits.operatorUser().get(UserModel.ID);
 
-        // 1. The API keys page offers the "Hohenheim assistant" preset; a key minted from it is admitted.
+        // 1. The API keys page offers the "Hohenheim assistant" preset, named by the product Hohenheim installs (never
+        //    the framework's own name); a key minted from it is admitted.
         CredentialPresets.Preset preset = server.credentialPreset(operator);
         assertThat(preset).as("step 1: the preset is offered").isNotNull();
+        CredentialPresets.Preset offered = CredentialPresets.offeredTo(operator, preset.key());
+        assertThat(offered).as("step 1: the account is offered it").isNotNull();
+        assertThat(offered.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 1: its name").isEqualTo("Hohenheim assistant");
+        assertThat(offered.description().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 1: its line").contains("work in Hohenheim for you");
         List<String> scopes = ApiKeyService.presetScopes(operator, preset);
         assertThat(scopes).as("step 1: the preset admits the server").contains(McpScopes.server("hohenheim"));
         String key = ApiKeyService.create(operator, operatorId, PREFIX + "assistant", scopes, null).plaintext();
