@@ -242,7 +242,7 @@ class InteractiveConsoleTest {
             settings.put(ConsoleKind.SETTING, consoleKind);
         }
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

@@ -4,8 +4,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -143,9 +143,9 @@ class InstanceConsoleCrashRestartTest {
             assertThat(stream).as("step 1: the console watch is open").isNotNull();
 
             // 2. Its host stops taking workloads, then the workload dies: the restart is refused by the start gate.
-            ServerModel servers = Models.get(ServerModel.class);
-            String admission = servers.findById(hostId).get(ServerModel.ADMISSION);
-            servers.find().where(ServerModel.ID.eq(hostId)).assign(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED)
+            HostModel servers = Models.get(HostModel.class);
+            String admission = servers.findById(hostId).get(HostModel.ADMISSION);
+            servers.find().where(HostModel.ID.eq(hostId)).assign(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED)
                 .bypassBehaviours().updateAll();
             try {
                 workload.running = false;
@@ -163,7 +163,7 @@ class InstanceConsoleCrashRestartTest {
                 assertThat((String) stopped.get(InstanceModel.STOPPAGE_DETAIL))
                     .as("step 3: with the refusal's own words").isNotBlank();
             } finally {
-                servers.find().where(ServerModel.ID.eq(hostId)).assign(ServerModel.ADMISSION, admission)
+                servers.find().where(HostModel.ID.eq(hostId)).assign(HostModel.ADMISSION, admission)
                     .bypassBehaviours().updateAll();
             }
         });
@@ -178,7 +178,7 @@ class InstanceConsoleCrashRestartTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         // This journey starts from a workload nobody watches: opt out of the restart default until step 2.
         row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
         Models.get(InstanceModel.class).save(row);

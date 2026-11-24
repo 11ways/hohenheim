@@ -278,7 +278,7 @@ class MigrationIntegrityTest {
      * before-remove hook is SELECT-count-then-DELETE and therefore raceable; the natural
      * durable answer is the constraint below. It is declared -- but SQLite enforces
      * foreign keys PER CONNECTION and hohenheim's control-plane URL does not set
-     * {@code ?foreign_keys=on} (the same finding ServerModel's refuseRemovalWhileOwned
+     * {@code ?foreign_keys=on} (the same finding HostModel's refuseRemovalWhileOwned
      * note records), so at runtime today the hook is the enforcement and the constraint is
      * documentation. This test switches the pragma on for its OWN connection precisely so
      * the declaration cannot silently rot before that decision is taken: the day

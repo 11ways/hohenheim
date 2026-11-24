@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.application.AppImageFollowers;
@@ -178,7 +178,7 @@ public final class InstanceStatusReconciler {
         if (!installSettled(instance)) {
             return new Outcome(instanceId, Verdict.SKIPPED, stored, null);
         }
-        int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
         Outcome[] outcome = {new Outcome(instanceId, Verdict.SKIPPED, stored, null)};
         boolean[] ran = {false};
         // Mid-operation in THIS process (a deploy keeps the record's PREVIOUS status while

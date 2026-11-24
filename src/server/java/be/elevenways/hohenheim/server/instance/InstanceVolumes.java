@@ -2,12 +2,11 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.host.DiskSpace;
-import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.hohenheim.server.util.PosixPaths;
@@ -244,10 +243,10 @@ public final class InstanceVolumes {
                                              @Nullable Long quotaBytes, boolean exclusive) {
         String hostPath = hostPathFor(instanceId, name);
         Row owner = Models.get(InstanceModel.class).findById(instanceId);
-        String serverName = ServerModel.canonicalNameOf(owner == null ? null : owner.get(InstanceModel.SERVER_ID));
+        String serverName = HostModel.canonicalNameOf(owner == null ? null : owner.get(InstanceModel.HOST_ID));
         InstanceKindHandler handler = owner == null ? null : InstanceKinds.handlerOf(owner);
         Integer ownerUid = handler == null ? null : handler.volumeOwnerUid(instanceId, serverName);
-        materialize(operationsFor(requireServer(serverName)), hostPath, quotaBytes, ownerUid);
+        materialize(operationsFor(requireHost(serverName)), hostPath, quotaBytes, ownerUid);
         return declare(instanceId, name, containerPath, quotaBytes, exclusive);
     }
 
@@ -335,7 +334,7 @@ public final class InstanceVolumes {
             return mounts;
         }
 
-        Row server = requireServer(serverName);
+        Row server = requireHost(serverName);
         VolumeOperations operations = operationsFor(server);
 
         for (Map.Entry<String, Row> mounted : rows.entrySet()) {
@@ -371,8 +370,8 @@ public final class InstanceVolumes {
             return snapshots;
         }
 
-        Row server = requireServer(serverName);
-        VolumeBackend backend = ServerModel.volumeBackendOf(server);
+        Row server = requireHost(serverName);
+        VolumeBackend backend = HostModel.volumeBackendOf(server);
 
         if (!backend.supportsSnapshot()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_no_snapshot_support")
@@ -413,7 +412,7 @@ public final class InstanceVolumes {
         if (declared.isEmpty()) {
             return archived;
         }
-        VolumeOperations operations = operationsFor(requireServer(serverName));
+        VolumeOperations operations = operationsFor(requireHost(serverName));
         for (Row volume : declared) {
             String name = volume.get(InstanceVolumeModel.NAME);
             String containerPath = volume.get(InstanceVolumeModel.CONTAINER_PATH);
@@ -444,7 +443,7 @@ public final class InstanceVolumes {
             return;
         }
         Map<String, String> mounts = mountsFor(ownerInstanceId, serverName, ownerUid);
-        VolumeOperations operations = operationsFor(requireServer(serverName));
+        VolumeOperations operations = operationsFor(requireHost(serverName));
         for (Map.Entry<String, Path> content : contents.entrySet()) {
             String hostPath = hostPathFor(ownerInstanceId, content.getKey());
             if (!mounts.containsKey(hostPath)) {
@@ -457,12 +456,12 @@ public final class InstanceVolumes {
 
     /** @return bytes free on the volume storage of {@code serverName} */
     public static long availableBytesOn(@NonNull String serverName) {
-        return operationsFor(requireServer(serverName)).availableBytes(VolumeBackends.volumeRoot());
+        return operationsFor(requireHost(serverName)).availableBytes(VolumeBackends.volumeRoot());
     }
 
     /** @return the size and free bytes of the volume storage of {@code serverName}, null when it could not answer */
     public static @Nullable DiskSpace spaceOn(@NonNull String serverName) {
-        return operationsFor(requireServer(serverName)).space(VolumeBackends.volumeRoot());
+        return operationsFor(requireHost(serverName)).space(VolumeBackends.volumeRoot());
     }
 
     /**
@@ -476,7 +475,7 @@ public final class InstanceVolumes {
         if (declared.isEmpty()) {
             return;
         }
-        VolumeOperations operations = operationsFor(requireServer(serverName));
+        VolumeOperations operations = operationsFor(requireHost(serverName));
         for (Row volume : declared) {
             String name = volume.get(InstanceVolumeModel.NAME);
             if (name != null) {
@@ -495,13 +494,13 @@ public final class InstanceVolumes {
      */
     public static boolean sameStorage(@NonNull String firstServer, @NonNull String secondServer) {
         VolumeOperations.Hosts hosts = VolumeOperations.HOSTS.require();
-        return hosts.storageOf(requireServer(firstServer)).equals(hosts.storageOf(requireServer(secondServer)));
+        return hosts.storageOf(requireHost(firstServer)).equals(hosts.storageOf(requireHost(secondServer)));
     }
 
     /** Record what each volume currently occupies; never throws, the number is advisory. */
     public static void refreshUsage(int ownerInstanceId, @NonNull String serverName) {
         try {
-            Row server = requireServer(serverName);
+            Row server = requireHost(serverName);
             VolumeOperations operations = operationsFor(server);
             for (Row volume : declaredFor(ownerInstanceId)) {
                 String name = volume.get(InstanceVolumeModel.NAME);
@@ -543,7 +542,7 @@ public final class InstanceVolumes {
             return removed;
         }
 
-        Row server = requireServer(serverName);
+        Row server = requireHost(serverName);
         VolumeOperations operations = operationsFor(server);
         InstanceVolumeModel model = Models.get(InstanceVolumeModel.class);
 
@@ -591,7 +590,7 @@ public final class InstanceVolumes {
         if (volume == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_unknown").withArg("name", name));
         }
-        Row server = requireServer(serverName);
+        Row server = requireHost(serverName);
         String hostPath = hostPathFor(ownerInstanceId, name);
         VolumeOperations operations = operationsFor(server);
         operations.destroy(hostPath);
@@ -652,11 +651,11 @@ public final class InstanceVolumes {
     }
 
     private static @NonNull VolumeOperations operationsFor(@NonNull Row server) {
-        return VolumeOperations.forServer(server);
+        return VolumeOperations.forHost(server);
     }
 
-    private static @NonNull Row requireServer(@NonNull String serverName) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+    private static @NonNull Row requireHost(@NonNull String serverName) {
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_host_unknown")
                 .withArg("name", serverName));

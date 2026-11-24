@@ -1,22 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
@@ -281,17 +266,17 @@ public final class DeleteImpact {
     }
 
     /** @return per host: why it cannot go -- it is this machine, a migration is landing on it, or records name it */
-    static @NonNull List<@Nullable Microcopy> serversInUse(@NonNull List<? extends Row> servers) {
-        List<Integer> ids = idsOf(servers, ServerModel.ID);
-        Map<Integer, Row> migrations = ServerModel.migrationsOnto(ids);
-        Map<Integer, ServerModel.References> references = ServerModel.referencesAmong(ids);
+    static @NonNull List<@Nullable Microcopy> hostsInUse(@NonNull List<? extends Row> servers) {
+        List<Integer> ids = idsOf(servers, HostModel.ID);
+        Map<Integer, Row> migrations = HostModel.migrationsOnto(ids);
+        Map<Integer, HostModel.References> references = HostModel.referencesAmong(ids);
         List<Microcopy> reasons = new ArrayList<>(servers.size());
         for (Row server : servers) {
-            Integer id = server.get(ServerModel.ID);
+            Integer id = server.get(HostModel.ID);
             Row migrating = id == null ? null : migrations.get(id);
-            ServerModel.References held = id == null ? ServerModel.References.NONE
-                : references.getOrDefault(id, ServerModel.References.NONE);
-            reasons.add(ServerParts.local(server) ? HohenheimMicrocopy.SERVER.of("delete_local")
+            HostModel.References held = id == null ? HostModel.References.NONE
+                : references.getOrDefault(id, HostModel.References.NONE);
+            reasons.add(HostParts.local(server) ? HohenheimMicrocopy.SERVER.of("delete_local")
                 : migrating != null ? HohenheimMicrocopy.SERVER.of("delete_migrating")
                     .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)))
                 : held.any() ? held.describe(HohenheimMicrocopy.SERVER.of("delete_in_use")) : null);

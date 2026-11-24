@@ -23,12 +23,12 @@ import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.instance.InstanceLiveUsageView;
 import be.elevenways.hohenheim.instance.LiveFigureView;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -105,7 +105,7 @@ public final class InstanceOverview {
     private static @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
-        int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
         String panelSlug = CmsSupport.panelSlug(conduit);
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         LocaleChain locales = conduit.getLocales();
@@ -171,7 +171,7 @@ public final class InstanceOverview {
         Row runtime = ApplicationReleases.runtimeRowOf(instance);
         List<WidgetInstance> gauges = new ArrayList<>(liveGauges(runtime, locales, resolver));
         gauges.add(AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
-            diskUsage(runtime, ServerModel.canonicalServerId(runtime.get(InstanceModel.SERVER_ID)), locales,
+            diskUsage(runtime, HostModel.canonicalHostId(runtime.get(InstanceModel.HOST_ID)), locales,
                 resolver)));
         // Each declared volume with a size limit, measured against it ("uploads: 3 GB of 10 GB"), one read.
         for (Row volume : InstanceVolumes.declaredFor(instanceId)) {
@@ -258,8 +258,8 @@ public final class InstanceOverview {
         if (!delegated) {
             facts.add(WidgetFact.link(
                 HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host").resolve(locales, resolver),
-                ServerModel.nameOf(serverId),
-                CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, serverId, RecordOverview.SLUG).toUrl()));
+                HostModel.nameOf(serverId),
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.HOSTS, serverId, RecordOverview.SLUG).toUrl()));
         }
         if (!delegated) {
             WidgetFact quota = quotaFact(instance, panelSlug, locales, resolver);
@@ -513,16 +513,16 @@ public final class InstanceOverview {
     /** The stored disk observation as a view, for the attention collector and this page. */
     static @NonNull InstanceDiskView diskViewOf(@NonNull Row instance) {
         return diskOf(instance,
-            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+            HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID)));
     }
 
     private static @NonNull InstanceDiskView diskOf(@NonNull Row instance, int serverId) {
         Long used = instance.get(InstanceModel.DISK_USED_BYTES);
         Long limit = instance.get(InstanceModel.DISK_LIMIT_BYTES);
         Instant observedAt = instance.get(InstanceModel.DISK_OBSERVED_AT);
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String runtime = server != null ? ServerModel.runtimeOf(server)
-            : ServerModel.RUNTIME_DOCKER;
+        Row server = Models.get(HostModel.class).findById(serverId);
+        String runtime = server != null ? HostModel.runtimeOf(server)
+            : HostModel.RUNTIME_DOCKER;
         boolean measured = observedAt != null && used != null;
         return new InstanceDiskView(
             measured,
@@ -612,10 +612,10 @@ public final class InstanceOverview {
                     : !asksAddress ? null
                     : delegated ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address_delegated")
                     : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address").withArg("port", port)
-                        .withArg("host", ServerModel.labelOf(claim.get(PortAllocationModel.SERVER_ID))),
+                        .withArg("host", HostModel.labelOf(claim.get(PortAllocationModel.HOST_ID))),
                 purposeOf(named, port, protocol),
                 !asksAddress || delegated ? null : CmsRoutes.detail(HohenheimSlugs.ADMIN,
-                    HohenheimSlugs.SERVERS, claim.get(PortAllocationModel.SERVER_ID)).toUrl()));
+                    HohenheimSlugs.HOSTS, claim.get(PortAllocationModel.HOST_ID)).toUrl()));
         }
         return endpoints;
     }
@@ -677,16 +677,16 @@ public final class InstanceOverview {
      * would be a reachable-looking lie, and the template says so out loud instead.
      */
     private static @NonNull String addressOf(@NonNull Row claim) {
-        Row server = Models.get(ServerModel.class)
-            .findById(claim.get(PortAllocationModel.SERVER_ID));
+        Row server = Models.get(HostModel.class)
+            .findById(claim.get(PortAllocationModel.HOST_ID));
         if (server == null) {
             return "";
         }
-        String v4 = server.get(ServerModel.PUBLIC_IPV4);
+        String v4 = server.get(HostModel.PUBLIC_IPV4);
         if (v4 != null && !v4.isBlank()) {
             return v4;
         }
-        String v6 = server.get(ServerModel.PUBLIC_IPV6);
+        String v6 = server.get(HostModel.PUBLIC_IPV6);
         return v6 != null && !v6.isBlank() ? v6 : "";
     }
 

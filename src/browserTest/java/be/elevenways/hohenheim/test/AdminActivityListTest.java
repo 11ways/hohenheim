@@ -3,26 +3,13 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
-import be.elevenways.hohenheim.model.ControllerIdentityModel;
-import be.elevenways.hohenheim.model.InstallMediaFetchModel;
-import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
-import be.elevenways.hohenheim.model.SiteSessionModel;
-import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.model.WebhookDeliveryModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.common.orm.history.HistoryDeclarations;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.hohenheim.server.host.HostProbe;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationTrace;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -59,7 +46,6 @@ import be.elevenways.zenit.test.support.EndpointConduit;
 import be.elevenways.zenit.test.support.HistoryFixtureRows;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -97,9 +83,9 @@ class AdminActivityListTest extends HohenheimTestBase {
         UUID alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor " + suffix,
             true, true);
         String zelda = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(zeldaId))
-            .origin(AccountabilityOrigin.WEB.token()), ServerModel.MODEL_ID, host(first), ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.WEB.token()), HostModel.MODEL_ID, host(first), ChangeOp.UPDATE);
         String alpha = act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(alphaId))
-            .origin(AccountabilityOrigin.WEB.token()), ServerModel.MODEL_ID, host(second), ChangeOp.UPDATE);
+            .origin(AccountabilityOrigin.WEB.token()), HostModel.MODEL_ID, host(second), ChangeOp.UPDATE);
         HttpResponse<String> response = adminGet("/admin/activity?filter.actor="
             + URLEncoder.encode(PrincipalRef.account(zeldaId).key(), StandardCharsets.UTF_8));
         assertThat(response.statusCode()).as("step 1: the actor-name filter renders").isEqualTo(200);
@@ -146,7 +132,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             "hh-principal-fragment-system-" + suffix, SystemPrincipal.INSTANCE.reference());
         for (var actor : actors.entrySet()) {
             act(HistoryFixtureRows.action(datasource()).by(actor.getValue()).origin(AccountabilityOrigin.WEB.token()),
-                ServerModel.MODEL_ID, host(actor.getKey()), ChangeOp.UPDATE);
+                HostModel.MODEL_ID, host(actor.getKey()), ChangeOp.UPDATE);
         }
         var first = adminGet("/admin/activity?filter.actor="
             + URLEncoder.encode(PrincipalRef.account(one).key(), StandardCharsets.UTF_8));
@@ -166,7 +152,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         String record = "hh-system-actor-no-account-one-" + UUID.randomUUID().toString().substring(0, 8);
         int hostId = host(record);
         String action = act(HistoryFixtureRows.action(datasource()).by(SystemPrincipal.INSTANCE.reference())
-            .legacyLabel("work wait sweep").origin(AccountabilityOrigin.SYSTEM.token()), ServerModel.MODEL_ID, hostId,
+            .legacyLabel("work wait sweep").origin(AccountabilityOrigin.SYSTEM.token()), HostModel.MODEL_ID, hostId,
             ChangeOp.UPDATE);
 
         // 1. The host preserves the core projection instead of resolving the system's id as a user.
@@ -226,12 +212,12 @@ class AdminActivityListTest extends HohenheimTestBase {
         UUID unlinkableId = TestAccounts.create("unlinkable-" + suffix + "@example.com", unlinkableActor, true,
             false);
         String operatorAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
-            ServerModel.MODEL_ID, operatorHost, ChangeOp.CREATE);
+            HostModel.MODEL_ID, operatorHost, ChangeOp.CREATE);
         String backgroundAction = act(HistoryFixtureRows.action(datasource())
                 .by(SystemPrincipal.INSTANCE.reference()).origin(AccountabilityOrigin.SYSTEM.token()),
-            ServerModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
+            HostModel.MODEL_ID, backgroundHost, ChangeOp.UPDATE);
         String narrowedAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
-            ServerModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
+            HostModel.MODEL_ID, narrowedHost, ChangeOp.UPDATE);
         String siteAction = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
             SiteModel.MODEL_ID, siteId, ChangeOp.UPDATE);
         act(HistoryFixtureRows.action(datasource()).by(PrincipalRef.account(unlinkableId))
@@ -332,7 +318,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         // Ten times the id reads as the id followed by a zero: it contains the named id.
         int widerId = hostWithId(narrowedHost * 10, "hh-activity-wider-id-host-" + suffix);
         String widerIdHost = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token()),
-            ServerModel.MODEL_ID, widerId, ChangeOp.UPDATE);
+            HostModel.MODEL_ID, widerId, ChangeOp.UPDATE);
         HttpResponse<String> narrowed = adminGet("/admin/activity?filter." + AdminActivityResource.HOST_FILTER + "="
             + narrowedHost);
         assertThat(narrowed.statusCode()).as("step 8: the record-filtered list renders").isEqualTo(200);
@@ -372,12 +358,12 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 11. Hohenheim's own operations tell what happened in their own words.
         String putOnline = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token())
-            .command(PutOnline.PUT_ONLINE.id()), ServerModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
+            .command(PutOnline.PUT_ONLINE.id()), HostModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
         assertThat(heading(putOnline, "en"))
             .as("step 11: putting something online reads as such")
             .isEqualTo("Someone not signed in put " + operatorTitle + " online");
         String protect = act(HistoryFixtureRows.action(datasource()).origin(AccountabilityOrigin.WEB.token())
-            .command(ProtectPath.OPERATION.id()), ServerModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
+            .command(ProtectPath.OPERATION.id()), HostModel.MODEL_ID, operatorHost, ChangeOp.UPDATE);
         assertThat(heading(protect, "nl"))
             .as("step 11: protecting a path reads as such, in Dutch too")
             .isEqualTo("Iemand die niet is aangemeld beveiligde " + operatorTitle);
@@ -440,16 +426,16 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(RecordGrantModel.class)))
                 .visibility())
             .as("step 1: and its record grants").isEqualTo(HistoryVisibility.INTERNAL);
-        assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(ServerModel.class))).visibility())
+        assertThat(Objects.requireNonNull(HistoryDeclarations.of(Models.get(HostModel.class))).visibility())
             .as("step 1: hosts stay listed, operators admit and edit them").isEqualTo(HistoryVisibility.LISTED);
 
         // 2. A heartbeat is bookkeeping, never activity: a probe success records no change for its host.
         String hostName = "hh-heartbeat-" + suffix;
         int hostId = host(hostName);
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         int before = RecordedChanges.of(servers, hostId).size();
         HostProbe.recordSuccess(hostName);
-        assertThat(servers.findByName(hostName).get(ServerModel.LAST_SEEN_AT))
+        assertThat(servers.findByName(hostName).get(HostModel.LAST_SEEN_AT))
             .as("step 2: the probe did record when the host was seen").isNotNull();
         assertThat(RecordedChanges.of(servers, hostId))
             .as("step 2: and recorded no change for it").hasSize(before);
@@ -533,7 +519,7 @@ class AdminActivityListTest extends HohenheimTestBase {
     // -- fixtures ---------------------------------------------------------------
 
     private static @NonNull Datasource datasource() {
-        return Models.get(ServerModel.class).getResolvedDatasource();
+        return Models.get(HostModel.class).getResolvedDatasource();
     }
 
     /**
@@ -575,26 +561,26 @@ class AdminActivityListTest extends HohenheimTestBase {
     /** A host record titled {@code name}, admitted nowhere. */
     private static int host(@NonNull String name) {
         Row host = hostRow(name);
-        Models.get(ServerModel.class).save(host);
-        return host.get(ServerModel.ID);
+        Models.get(HostModel.class).save(host);
+        return host.get(HostModel.ID);
     }
 
     /** @return {@code id}, a host stored under it: the one already there, else a new one titled {@code name} */
     private static int hostWithId(int id, @NonNull String name) {
-        if (Models.get(ServerModel.class).findById(id) == null) {
+        if (Models.get(HostModel.class).findById(id) == null) {
             Row host = hostRow(name);
-            host.set(ServerModel.ID, id);
-            Models.get(ServerModel.class).insert(host);
+            host.set(HostModel.ID, id);
+            Models.get(HostModel.class).insert(host);
         }
         return id;
     }
 
     private static @NonNull Row hostRow(@NonNull String name) {
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, name);
-        host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        host.set(ServerModel.SSH_TARGET, "operator@" + name + ".invalid");
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, name);
+        host.set(HostModel.MODE, HostModel.MODE_SSH);
+        host.set(HostModel.SSH_TARGET, "operator@" + name + ".invalid");
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
         return host;
     }
 

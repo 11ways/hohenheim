@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -79,8 +79,8 @@ class IncusSharedObjectReleaseTest extends HohenheimHttpTestBase {
     void theSweepStampsNoMarkerWhereTheControllerHoldsNothing() throws Exception {
         FakeIncusTransport daemon = new FakeIncusTransport();
         IncusClient client = new IncusClient(daemon);
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, "release-daemon");
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, "release-daemon");
 
         // 1. A daemon where this controller holds nothing: the sweep reaches it and leaves no marker behind.
         ReapIncusControllers.HostOutcome empty = ReapIncusControllers.sweepHost(host, client);

@@ -66,7 +66,7 @@ public class DatabaseEngineModel extends Model {
         .help(HohenheimMicrocopy.HELP.of("image"))
         .build());
     /** The host the engine container runs on: a {@code servers.id} FK, never a name. */
-    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
+    public static final IntegerField HOST_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
         .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
@@ -108,15 +108,15 @@ public class DatabaseEngineModel extends Model {
         });
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
-                row.set(SERVER_ID, ServerModel.localServerId());
+            if (row != null && row.get(ID) == null && row.get(HOST_ID) == null) {
+                row.set(HOST_ID, HostModel.localHostId());
             }
         });
     }
 
     /** The engine of this kind on this host, or null when the host has none yet. */
     public Row findOnHost(int serverId, String engineToken) {
-        return find().where(SERVER_ID.eq(serverId)).where(ENGINE.eq(engineToken)).first();
+        return find().where(HOST_ID.eq(serverId)).where(ENGINE.eq(engineToken)).first();
     }
 
     private static final Noun NOUN = new Noun(Map.of(

@@ -7,24 +7,20 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,13 +67,13 @@ class HostKernelTruthGateTest {
     @Test
     void tenantAcceptingHostsMustProveKernelTruthWhileOperatorOnlyHostsNeedNoLane() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "gate-incus");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.INCUS_URL, "https://192.0.2.31:8443");
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            host.set(HostModel.NAME, "gate-incus");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.INCUS_URL, "https://192.0.2.31:8443");
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(host);
             HostPins.apply(model.findByName("gate-incus"), HostTrustSlot.INCUS_TLS,
                 SERVER_PEM, "sha256:daemon");
@@ -88,7 +84,7 @@ class HostKernelTruthGateTest {
             //    host with NO lane at all still admits. Verification is required to accept
             //    tenants, never to be trusted or to hold data.
             Row operatorOnly = model.findByName("gate-incus");
-            assertThat(ServerModel.acceptsTenantWorkloads(operatorOnly))
+            assertThat(HostModel.acceptsTenantWorkloads(operatorOnly))
                 .as("step 1: a trusted-only posture accepts no tenant workloads").isFalse();
             HostAdmission.requireAdmittable(operatorOnly);
             HostAdmission.requireKernelTruth(operatorOnly);
@@ -97,7 +93,7 @@ class HostKernelTruthGateTest {
             //    name, with no re-probe needed: the record now claims something it cannot
             //    back up. The refusal names the host and says what to do about it.
             Row widened = model.findByName("gate-incus");
-            widened.set(ServerModel.POSTURE, ServerModel.POSTURE_VM_ISOLATED);
+            widened.set(HostModel.POSTURE, HostModel.POSTURE_VM_ISOLATED);
             model.save(widened);
             Row tenanted = model.findByName("gate-incus");
             assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(tenanted)))
@@ -112,9 +108,9 @@ class HostKernelTruthGateTest {
             //    existed) and placement still refuses, while the admission column is left
             //    alone -- silently cordoning a running host is not this gate's call.
             Row admitted = model.findByName("gate-incus");
-            admitted.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            admitted.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
             model.save(admitted);
-            int serverId = model.findByName("gate-incus").get(ServerModel.ID);
+            int serverId = model.findByName("gate-incus").get(HostModel.ID);
             assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
                 WorkloadIsolation.VIRTUAL_MACHINE, BUCKET)))
                 .as("step 3: an already-admitted host that cannot verify takes no NEW tenant")
@@ -122,16 +118,16 @@ class HostKernelTruthGateTest {
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key())
                             .isEqualTo("host_kernel_lane_missing")));
-            assertThat((String) model.findByName("gate-incus").get(ServerModel.ADMISSION))
+            assertThat((String) model.findByName("gate-incus").get(HostModel.ADMISSION))
                 .as("step 3: and the stored admission decision is NOT rewritten behind the"
                     + " operator's back")
-                .isEqualTo(ServerModel.ADMISSION_ADMITTED);
+                .isEqualTo(HostModel.ADMISSION_ADMITTED);
 
             // 4. A trusted lane is still only a CLAIM. Pinned and confirmed ssh, so the
             //    verifier could be built -- and the gate keeps refusing, because the last
             //    preflight never proved the kernel was reachable through it.
             Row targeted = model.findByName("gate-incus");
-            targeted.set(ServerModel.SSH_TARGET, "root@192.0.2.31");
+            targeted.set(HostModel.SSH_TARGET, "root@192.0.2.31");
             model.save(targeted);
             HostPins.apply(model.findByName("gate-incus"), HostTrustSlot.SSH, SSH_KEY,
                 HostKeys.fingerprintOf(SSH_KEY));
@@ -173,7 +169,7 @@ class HostKernelTruthGateTest {
             //    operator-only host needs no verification, so admit works again even with
             //    the failing probe still stored.
             Row narrowed = model.findByName("gate-incus");
-            narrowed.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            narrowed.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(narrowed);
             HostAdmission.requireAdmittable(model.findByName("gate-incus"));
             assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
@@ -189,12 +185,12 @@ class HostKernelTruthGateTest {
     @Test
     void aDockerHostIsGatedByItsOwnRequiredNftablesProbeAndNotByThisOne() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "gate-docker");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            host.set(HostModel.NAME, "gate-docker");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             model.save(host);
             HostFixtures.acknowledgePosture(host);
             markPreflightPassed("gate-docker", null);
@@ -203,7 +199,7 @@ class HostKernelTruthGateTest {
             //    gate passes: that battery's own REQUIRED nftables probe already proves the
             //    same kernel access, and a second gate over the same evidence is theater.
             Row docker = model.findByName("gate-docker");
-            assertThat(ServerModel.acceptsTenantWorkloads(docker))
+            assertThat(HostModel.acceptsTenantWorkloads(docker))
                 .as("step 1: this host does accept tenant workloads").isTrue();
             assertThat(HostPreflight.storedCheckStatus(docker, IncusPreflight.KERNEL_LANE_CHECK))
                 .as("step 1: and stores no incus kernel-lane verdict").isNull();
@@ -227,14 +223,14 @@ class HostKernelTruthGateTest {
     @Test
     void aPostureFlipRegatesTheChecksTheLastPreflightOnlyTreatedAsAdvisory() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "gate-posture");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.INCUS_URL, "https://192.0.2.32:8443");
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.SSH_TARGET, "root@192.0.2.32");
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            host.set(HostModel.NAME, "gate-posture");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.INCUS_URL, "https://192.0.2.32:8443");
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.SSH_TARGET, "root@192.0.2.32");
+            host.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(host);
             HostPins.apply(model.findByName("gate-posture"), HostTrustSlot.INCUS_TLS,
                 SERVER_PEM, "sha256:daemon");
@@ -250,7 +246,7 @@ class HostKernelTruthGateTest {
             storePostureReport("gate-posture", false,
                 HostPreflight.STATUS_PASS, HostPreflight.STATUS_FAIL, HostPreflight.STATUS_FAIL);
             Row probed = model.findByName("gate-posture");
-            assertThat((Boolean) probed.get(ServerModel.PREFLIGHT_OK))
+            assertThat((Boolean) probed.get(HostModel.PREFLIGHT_OK))
                 .as("step 1: the stored verdict really is a PASS -- that is the whole trap")
                 .isTrue();
             assertThat(HostPreflight.storedCheckStatus(probed, IncusPreflight.USERNS_CHECK))
@@ -260,15 +256,15 @@ class HostKernelTruthGateTest {
             // 2. POSITIVE ANCHOR: under the posture it was probed for, this host is fine.
             //    Admission passes, so nothing below is refusing a broken fixture.
             HostAdmission.requireAdmittable(probed);
-            probed.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            probed.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
             model.save(probed);
-            int serverId = model.findByName("gate-posture").get(ServerModel.ID);
+            int serverId = model.findByName("gate-posture").get(HostModel.ID);
 
             // 3. THE ESCALATION: one posture edit, nothing else. No re-probe runs -- the
             //    only caller of runAndStore is a manual row action -- so every stored
             //    verdict is still the trusted-only one.
             Row widened = model.findByName("gate-posture");
-            widened.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            widened.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             model.save(widened);
             HostFixtures.acknowledgePosture(model.findByName("gate-posture"));
             assertThat(HostPreflight.storedCheckStatus(model.findByName("gate-posture"),
@@ -303,10 +299,10 @@ class HostKernelTruthGateTest {
             //    cordoning an already-admitted production host is the availability call
             //    requireKernelTruth deliberately refuses to take, and this one inherits it.
             Row after = model.findByName("gate-posture");
-            assertThat((String) after.get(ServerModel.ADMISSION))
+            assertThat((String) after.get(HostModel.ADMISSION))
                 .as("step 6: the admission column is untouched")
-                .isEqualTo(ServerModel.ADMISSION_ADMITTED);
-            assertThat((Boolean) after.get(ServerModel.PREFLIGHT_OK))
+                .isEqualTo(HostModel.ADMISSION_ADMITTED);
+            assertThat((Boolean) after.get(HostModel.PREFLIGHT_OK))
                 .as("step 6: and so is preflight_ok -- the verdict is re-derived, never"
                     + " re-written by a gate or by a second before-validate hook")
                 .isTrue();
@@ -315,7 +311,7 @@ class HostKernelTruthGateTest {
             //    answer in that direction too: NOTHING is re-probed here, only the posture
             //    is undone, and the host admits again exactly as it did in step 2.
             Row narrowed = model.findByName("gate-posture");
-            narrowed.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            narrowed.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(narrowed);
             HostAdmission.requireAdmittable(model.findByName("gate-posture"));
             assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
@@ -331,7 +327,7 @@ class HostKernelTruthGateTest {
             //    kernel checks pass, both gates open -- so steps 4-5 were refusing this
             //    evidence and not refusing everything.
             Row rewidened = model.findByName("gate-posture");
-            rewidened.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            rewidened.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             model.save(rewidened);
             HostFixtures.acknowledgePosture(model.findByName("gate-posture"));
             storePostureReport("gate-posture", true,

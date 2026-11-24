@@ -6,23 +6,17 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
-import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,14 +54,14 @@ class HostQuarantineStickinessTest {
     @Test
     void onlyARepinLiftsAQuarantineAndNoProbeOutcomeEverDoes() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "sticky-host");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            host.set(ServerModel.SSH_TARGET, "root@192.0.2.44");
-            host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            host.set(ServerModel.PREFLIGHT_OK, true);
+            host.set(HostModel.NAME, "sticky-host");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            host.set(HostModel.MODE, HostModel.MODE_SSH);
+            host.set(HostModel.SSH_TARGET, "root@192.0.2.44");
+            host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+            host.set(HostModel.PREFLIGHT_OK, true);
             model.save(host);
             HostPins.apply(model.findByName("sticky-host"), HostTrustSlot.SSH, SSH_KEY,
                 HostKeys.fingerprintOf(SSH_KEY));
@@ -90,32 +84,32 @@ class HostQuarantineStickinessTest {
                 HostProbe.FailureKind.HOST_KEY_CHANGED,
                 "remote host identification has changed"));
             Row quarantined = model.findByName("sticky-host");
-            Instant stampedAt = quarantined.get(ServerModel.QUARANTINED_AT);
+            Instant stampedAt = quarantined.get(HostModel.QUARANTINED_AT);
             assertThat(stampedAt)
                 .as("step 2: the quarantine verdict has a column of its own").isNotNull();
-            assertThat((String) quarantined.get(ServerModel.QUARANTINE_REASON))
+            assertThat((String) quarantined.get(HostModel.QUARANTINE_REASON))
                 .as("step 2: with the reason kept beside it")
                 .contains("identification has changed");
             assertThat(HostTrustSlot.SSH.offeredOf(quarantined))
                 .as("step 2: and nothing was offered -- nobody rescanned").isEmpty();
             assertThat(HostPins.isQuarantined(quarantined, HostTrustSlot.SSH))
                 .as("step 2: the host is quarantined").isTrue();
-            assertThat((String) quarantined.get(ServerModel.ADMISSION))
+            assertThat((String) quarantined.get(HostModel.ADMISSION))
                 .as("step 2: an admitted host is downgraded")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
 
             // 3. THE DEFECT. A later probe REACHES the daemon. That clears the transient
             //    error, and nothing else: reaching a daemon says nothing about WHICH
             //    machine answered, which is the exact question the pin decides.
             HostProbe.recordSuccess("sticky-host");
             Row afterSuccess = model.findByName("sticky-host");
-            assertThat((String) afterSuccess.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) afterSuccess.get(HostModel.LAST_ERROR_KIND))
                 .as("step 3: the TRANSIENT probe verdict is cleared, as it should be")
                 .isNull();
             assertThat(HostPins.isQuarantined(afterSuccess, HostTrustSlot.SSH))
                 .as("step 3: but a successful probe does NOT clear a trust verdict")
                 .isTrue();
-            assertThat((Instant) afterSuccess.get(ServerModel.QUARANTINED_AT))
+            assertThat((Instant) afterSuccess.get(HostModel.QUARANTINED_AT))
                 .as("step 3: the stamp is untouched").isEqualTo(stampedAt);
             assertThat(catchThrowable(() ->
                     HostAdmission.requireVerifiedIdentity(afterSuccess)))
@@ -135,12 +129,12 @@ class HostQuarantineStickinessTest {
             HostProbe.recordFailure("sticky-host", HostProbe.Outcome.failure(
                 HostProbe.FailureKind.UNREACHABLE, "connection refused"));
             Row afterWeaker = model.findByName("sticky-host");
-            assertThat((String) afterWeaker.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) afterWeaker.get(HostModel.LAST_ERROR_KIND))
                 .as("step 4: the transient verdict is now the weaker one")
                 .isEqualTo(HostProbe.FailureKind.UNREACHABLE.token);
             assertThat(HostPins.isQuarantined(afterWeaker, HostTrustSlot.SSH))
                 .as("step 4: and the quarantine outlives it").isTrue();
-            assertThat((String) afterWeaker.get(ServerModel.QUARANTINE_REASON))
+            assertThat((String) afterWeaker.get(HostModel.QUARANTINE_REASON))
                 .as("step 4: the quarantine reason survives last_error being overwritten")
                 .contains("identification has changed");
 
@@ -163,7 +157,7 @@ class HostQuarantineStickinessTest {
             assertThat(HostTrustSlot.SSH.offeredOf(rescanned))
                 .as("step 6: the disagreeing rescan stored its evidence in the slot")
                 .isEqualTo(OTHER_SSH_KEY);
-            assertThat((String) rescanned.get(ServerModel.HOST_KEY))
+            assertThat((String) rescanned.get(HostModel.HOST_KEY))
                 .as("step 6: and re-pinned NOTHING").isEqualTo(SSH_KEY);
             assertThat(HostPins.isQuarantined(rescanned, HostTrustSlot.SSH))
                 .as("step 6: still quarantined, now by both markers").isTrue();
@@ -172,9 +166,9 @@ class HostQuarantineStickinessTest {
             //    lands at the bottom of the ceremony: unconfirmed, unpreflighted.
             HostPins.repin(rescanned, HostTrustSlot.SSH, HostKeys::fingerprintOf);
             Row repinned = model.findByName("sticky-host");
-            assertThat((Instant) repinned.get(ServerModel.QUARANTINED_AT))
+            assertThat((Instant) repinned.get(HostModel.QUARANTINED_AT))
                 .as("step 7: the verdict is lifted by the trust act").isNull();
-            assertThat((String) repinned.get(ServerModel.QUARANTINE_REASON))
+            assertThat((String) repinned.get(HostModel.QUARANTINE_REASON))
                 .as("step 7: reason and all").isNull();
             assertThat(HostTrustSlot.SSH.offeredOf(repinned))
                 .as("step 7: and the offer marker is consumed").isEmpty();
@@ -193,7 +187,7 @@ class HostQuarantineStickinessTest {
             Row restored = model.findByName("sticky-host");
             HostAdmission.requireBackupDestination(restored);
             HostAdmission.requireVerifiedIdentity(restored);
-            assertThat((String) restored.get(ServerModel.HOST_KEY))
+            assertThat((String) restored.get(HostModel.HOST_KEY))
                 .as("step 8: the pin is the key the machine offered").isEqualTo(OTHER_SSH_KEY);
         });
     }

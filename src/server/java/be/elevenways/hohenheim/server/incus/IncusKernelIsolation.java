@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.instance.GuestNetworkMode;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
@@ -42,7 +41,7 @@ import java.util.Map;
  * existence: a table full of rules for a tap that no longer exists is the failure mode,
  * and counting rules would report success.
  *
- * AIDEV-NOTE: the runner is obtained through {@link NftRunner#forServer} -- the same lane
+ * AIDEV-NOTE: the runner is obtained through {@link NftRunner#forHost} -- the same lane
  * HostPreflight and WorkloadNetworkPolicy use -- and NEVER falls back to the controller's
  * own nft. Running the controller's nft and calling it a verification is precisely the
  * defect NftRunner's own note names.
@@ -113,8 +112,8 @@ public final class IncusKernelIsolation {
      *
      * @throws IllegalArgumentException when the record does not declare the incus runtime
      */
-    public static @NonNull IncusKernelIsolation forServer(@NonNull Row server) {
-        return new IncusKernelIsolation(IncusClients.forServer(server), runnerFor(server));
+    public static @NonNull IncusKernelIsolation forHost(@NonNull Row server) {
+        return new IncusKernelIsolation(IncusClients.forHost(server), runnerFor(server));
     }
 
     /**
@@ -133,7 +132,7 @@ public final class IncusKernelIsolation {
         if (!IncusEndpoint.of(server).https()) {
             return new NftRunner.Sudo();
         }
-        if (!ServerModel.hasSshLane(server)) {
+        if (!HostModel.hasSshLane(server)) {
             return null;
         }
         // The lane must be TRUSTED before it is used, on the ssh slot's own terms: an
@@ -145,7 +144,7 @@ public final class IncusKernelIsolation {
         } catch (RuntimeException untrusted) {
             return null;
         }
-        return NftRunner.forServer(server);
+        return NftRunner.forHost(server);
     }
 
     /** @return whether kernel truth can be READ for this host at all */

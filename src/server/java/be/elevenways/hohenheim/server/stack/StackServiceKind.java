@@ -239,7 +239,7 @@ public final class StackServiceKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return DockerInstanceRuntime.onServer(serverName, EGRESS);
+        return DockerInstanceRuntime.onHost(serverName, EGRESS);
     }
 
     @Override

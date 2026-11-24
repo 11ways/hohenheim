@@ -1,17 +1,11 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -40,7 +34,7 @@ class AdminSourcesTest extends HohenheimTestBase {
     void theProjectedAdminSourcesKeepTheFacetsOfTheDerivedDefault() {
         // 1. The three explicit sources replaced the derived default WITH its edit link,
         //    so a picker over hosts, images or bans can still open the record.
-        for (Identifier modelId : List.of(BanModel.MODEL_ID, ServerModel.MODEL_ID, RuntimeImageModel.MODEL_ID)) {
+        for (Identifier modelId : List.of(BanModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID)) {
             RecordSource<?> source = RecordSourceRegistry.INSTANCE.requireById(modelId);
             assertThat(source.hasEditUrl())
                 .as("step 1: %s carries the edit link the derived default had", modelId)
@@ -52,10 +46,10 @@ class AdminSourcesTest extends HohenheimTestBase {
 
         // 2. And the reason they are explicit at all survives: the projection IS the rule
         //    vocabulary of HohenheimPickRules, and the bans source sorts (buckets) by created_at.
-        RecordSource<?> hosts = RecordSourceRegistry.INSTANCE.requireById(ServerModel.MODEL_ID);
+        RecordSource<?> hosts = RecordSourceRegistry.INSTANCE.requireById(HostModel.MODEL_ID);
         assertThat(names(hosts.projection()))
             .as("step 2: the host pick narrows on runtime and volume_backend")
-            .contains(ServerModel.RUNTIME.getName(), ServerModel.VOLUME_BACKEND.getName());
+            .contains(HostModel.RUNTIME.getName(), HostModel.VOLUME_BACKEND.getName());
         RecordSource<?> images = RecordSourceRegistry.INSTANCE.requireById(RuntimeImageModel.MODEL_ID);
         assertThat(names(images.projection()))
             .as("step 2: the image pick narrows on enabled and incus_image")

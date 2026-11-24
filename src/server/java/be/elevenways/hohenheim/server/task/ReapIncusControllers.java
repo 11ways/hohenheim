@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.host.HostDisk;
@@ -120,8 +120,8 @@ public class ReapIncusControllers extends ScheduledTask {
     /** Sweep every inventoried Incus host; the executor only reports. */
     public static @NonNull List<HostOutcome> sweep() {
         List<HostOutcome> outcomes = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            if (ServerModel.isIncus(server)) {
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            if (HostModel.isIncus(server)) {
                 outcomes.add(sweepHost(server));
             }
         }
@@ -130,10 +130,10 @@ public class ReapIncusControllers extends ScheduledTask {
 
     /** Stamp, classify and (when allowed) reap one host. */
     public static @NonNull HostOutcome sweepHost(@NonNull Row server) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         IncusClient incus;
         try {
-            incus = IncusClients.forServer(server);
+            incus = IncusClients.forHost(server);
         } catch (RuntimeException unreachable) {
             return unreachable(name, "could not address the daemon", unreachable);
         }
@@ -142,7 +142,7 @@ public class ReapIncusControllers extends ScheduledTask {
 
     /** {@link #sweepHost(Row)} through a client already addressing the host's daemon. */
     public static @NonNull HostOutcome sweepHost(@NonNull Row server, @NonNull IncusClient incus) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         List<IncusReaper.Candidate> plan;
         try {
             plan = IncusReaper.plan(incus.networkAcls(), incus.networks(),
@@ -185,7 +185,7 @@ public class ReapIncusControllers extends ScheduledTask {
     /** One event per host and act naming every object the reap removed; a reap that removed nothing records none. */
     private static void recordReaped(@NonNull Row server, IncusReaper.@NonNull Reaped reaped) {
         if (!reaped.removed().isEmpty()) {
-            History.event(Models.get(ServerModel.class), server.get(ServerModel.ID),
+            History.event(Models.get(HostModel.class), server.get(HostModel.ID),
                 Change.fact(HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS,
                     Map.of(HohenheimActivityAction.OBJECTS_KEY, List.copyOf(reaped.removed()))));
         }
@@ -220,9 +220,9 @@ public class ReapIncusControllers extends ScheduledTask {
      *                               operator never reads "nothing to reap" off a failure
      */
     public static IncusReaper.@NonNull Reaped reapIncludingUnstamped(@NonNull Row server) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         try {
-            IncusClient incus = IncusClients.forServer(server);
+            IncusClient incus = IncusClients.forHost(server);
             List<IncusReaper.Candidate> plan = IncusReaper.plan(incus.networkAcls(),
                 incus.networks(), ControllerIdentity.token(), Now.instant(), operatorGrace());
             if (IncusReaper.holdsOwnObjects(plan)) {
@@ -278,7 +278,7 @@ public class ReapIncusControllers extends ScheduledTask {
      * an Incus host that stops answering is visible in the admin surface rather than only
      * in a log line.
      *
-     * AIDEV-NOTE: scoped to Incus hosts by the caller ({@code ServerModel.isIncus}), and
+     * AIDEV-NOTE: scoped to Incus hosts by the caller ({@code HostModel.isIncus}), and
      * it must stay that way. The hourly Docker reconcile once iterated EVERY host row and
      * stamped every Incus host UNREACHABLE because its client factory refuses an Incus
      * host by construction -- a structural non-answer recorded as a probe verdict. Never

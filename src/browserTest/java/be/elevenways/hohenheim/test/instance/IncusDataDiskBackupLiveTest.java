@@ -4,13 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
@@ -114,10 +110,10 @@ class IncusDataDiskBackupLiveTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
-            int hostAId = Models.get(ServerModel.class).findByName(HOST_A).get(ServerModel.ID);
-            int hostBId = Models.get(ServerModel.class).findByName(HOST_B).get(ServerModel.ID);
-            IncusClient daemonA = new ServerService().incusClientFor(HOST_A);
-            IncusClient daemonB = new ServerService().incusClientFor(HOST_B);
+            int hostAId = Models.get(HostModel.class).findByName(HOST_A).get(HostModel.ID);
+            int hostBId = Models.get(HostModel.class).findByName(HOST_B).get(HostModel.ID);
+            IncusClient daemonA = new HostService().incusClientFor(HOST_A);
+            IncusClient daemonB = new HostService().incusClientFor(HOST_B);
             int vmId = vmRecord("disk-source", hostAId);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, vmId);
             String marker = "HHDISK-" + Now.millis();
@@ -159,7 +155,7 @@ class IncusDataDiskBackupLiveTest {
                     .isNull();
                 restoredId = backups.restoreToNew(backupId, "disk-restored", HOST_B).instanceId();
                 restoredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, restoredId);
-                assertThat((Object) Models.get(InstanceModel.class).findById(restoredId).get(InstanceModel.SERVER_ID))
+                assertThat((Object) Models.get(InstanceModel.class).findById(restoredId).get(InstanceModel.HOST_ID))
                     .as("step 4: the restored record lives on " + HOST_B).isEqualTo(hostBId);
                 Disk landed = diskOf(daemonB, restoredHandle);
                 assertThat(landed.volume()).as("step 4: the restored disk points at the copy's own volume")
@@ -214,10 +210,10 @@ class IncusDataDiskBackupLiveTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = new InstanceMigrations();
-            int hostAId = Models.get(ServerModel.class).findByName(HOST_A).get(ServerModel.ID);
-            int hostBId = Models.get(ServerModel.class).findByName(HOST_B).get(ServerModel.ID);
-            IncusClient daemonA = new ServerService().incusClientFor(HOST_A);
-            IncusClient daemonB = new ServerService().incusClientFor(HOST_B);
+            int hostAId = Models.get(HostModel.class).findByName(HOST_A).get(HostModel.ID);
+            int hostBId = Models.get(HostModel.class).findByName(HOST_B).get(HostModel.ID);
+            IncusClient daemonA = new HostService().incusClientFor(HOST_A);
+            IncusClient daemonB = new HostService().incusClientFor(HOST_B);
             int vmId = vmRecord("disk-mover", hostAId);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, vmId);
             String volume = handle + "-" + DEVICE;
@@ -245,7 +241,7 @@ class IncusDataDiskBackupLiveTest {
                 assertThat(daemonB.network(bridge)).as("step 3: " + HOST_B + " holds no " + bridge + " before")
                     .isNull();
                 migrations.migrateTo(vmId, hostBId);
-                assertThat((Object) Models.get(InstanceModel.class).findById(vmId).get(InstanceModel.SERVER_ID))
+                assertThat((Object) Models.get(InstanceModel.class).findById(vmId).get(InstanceModel.HOST_ID))
                     .as("step 3: the record lives on " + HOST_B).isEqualTo(hostBId);
                 Disk landed = diskOf(daemonB, handle);
                 assertThat(landed.volume()).as("step 3: the moved disk is the record's own volume there")
@@ -329,7 +325,7 @@ class IncusDataDiskBackupLiveTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", VM_IMAGE, "memory_limit_mb", 512)));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

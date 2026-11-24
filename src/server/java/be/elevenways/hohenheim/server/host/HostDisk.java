@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.IncusDefinitions;
@@ -48,13 +48,13 @@ public final class HostDisk {
      * @return the space, null when the host is unknown or could not be measured
      */
     public static @Nullable DiskSpace measure(@NonNull String serverName) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             return null;
         }
         try {
-            return ServerModel.isIncus(server)
-                ? incusSpace(new ServerService().incusClientFor(serverName))
+            return HostModel.isIncus(server)
+                ? incusSpace(new HostService().incusClientFor(serverName))
                 : InstanceVolumes.spaceOn(serverName);
         } catch (IOException | RuntimeException unanswered) {
             Blast.log("HOST DISK: could not measure", serverName, "-", unanswered.getMessage());
@@ -70,7 +70,7 @@ public final class HostDisk {
 
     /** @return the host's stored disk reading, null when it was never measured */
     public static @Nullable Reading storedOf(@NonNull Row server) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(HostFact.DISK_TOTAL.token()) instanceof Number total)
                 || !(capabilities.get(HostFact.DISK_FREE.token()) instanceof Number free)
                 || total.longValue() <= 0 || free.longValue() < 0 || free.longValue() > total.longValue()) {

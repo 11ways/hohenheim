@@ -3,11 +3,7 @@ package be.elevenways.hohenheim.server.ports;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.instance.PortPublications;
@@ -142,7 +138,7 @@ public final class SitePortClaims {
         boolean live = site != null && site.get(SiteModel.DELETED_AT) == null;
         Map<String, Object> settings = site == null ? null : RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
         List<PublishedPort> wanted = live && kind != null && settings != null ? kind.proxyPorts(settings) : List.of();
-        int serverId = ServerModel.localServerId();
+        int serverId = HostModel.localHostId();
         Set<String> keep = new HashSet<>();
         for (PublishedPort port : wanted) {
             int number = port.hostPort() == null ? 0 : port.hostPort();

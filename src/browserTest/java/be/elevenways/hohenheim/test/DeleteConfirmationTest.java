@@ -3,35 +3,10 @@ package be.elevenways.hohenheim.test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.cms.AccessListParts;
-import be.elevenways.hohenheim.server.cms.AuthProviderParts;
-import be.elevenways.hohenheim.server.cms.CertificateParts;
-import be.elevenways.hohenheim.server.cms.EnvironmentParts;
-import be.elevenways.hohenheim.server.cms.DnsOperations;
-import be.elevenways.hohenheim.server.cms.DnsPeerParts;
-import be.elevenways.hohenheim.server.cms.DnsRecordParts;
-import be.elevenways.hohenheim.server.cms.DnsZoneParts;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
-import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
-import be.elevenways.hohenheim.server.cms.ServerParts;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.cms.*;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -385,12 +360,12 @@ class DeleteConfirmationTest {
             //    count on screen, rather than orphaning every row that names the host.
             AccessContext operator = TenantConduits.operator();
             int hostId = server("delete-confirm-host");
-            Row host = Models.get(ServerModel.class).findById(hostId);
-            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, host))
+            Row host = Models.get(HostModel.class).findById(hostId);
+            assertThat(OperationPipeline.offer(HostParts.DELETE, operator, host))
                 .as("step 4: an empty host is deletable").isInstanceOf(OperationPipeline.Offer.Available.class);
 
             stack("payments", hostId);
-            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE,
+            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(HostParts.DELETE,
                     operator, host)).reason();
             assertThat(inUse).as("step 4: a host with workloads is not").isNotNull();
             assertThat(inUse.key()).isEqualTo("delete_in_use");
@@ -400,15 +375,15 @@ class DeleteConfirmationTest {
             // 5. The local host is the machine Hohenheim runs on: its delete was enforced
             //    only at submit, so the button was offered and always failed. The row is
             //    reached through the SAME must-exist derivation the SEED stage runs
-            //    (LocalServerSeeder -> ServerModel.localServerId()), so the step does not
+            //    (LocalHostSeeder -> HostModel.localHostId()), so the step does not
             //    depend on whether this class's fresh datasource copy was taken before or
             //    after another class's boot seeded it.
-            Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+            Row local = Models.get(HostModel.class).findById(HostModel.localHostId());
             assertThat(local).as("step 5: the local host row exists").isNotNull();
-            assertThat(local.get(ServerModel.NAME))
+            assertThat(local.get(HostModel.NAME))
                 .as("step 5: and it is the reserved local name")
-                .isEqualTo(ServerService.LOCAL_HOST_NAME);
-            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator,
+                .isEqualTo(HostService.LOCAL_HOST_NAME);
+            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(HostParts.DELETE, operator,
                     local)).reason())
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()
@@ -611,16 +586,16 @@ class DeleteConfirmationTest {
     }
 
     private static int server(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        Models.get(ServerModel.class).save(row);
-        return row.get(ServerModel.ID);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        Models.get(HostModel.class).save(row);
+        return row.get(HostModel.ID);
     }
 
     private static void stack(String name, int serverId) {
         Row row = Models.get(StackModel.class).createEmptyRow();
         row.set(StackModel.NAME, name);
-        row.set(StackModel.SERVER_ID, serverId);
+        row.set(StackModel.HOST_ID, serverId);
         Models.get(StackModel.class).save(row);
     }
 

@@ -66,13 +66,13 @@ final class DatabaseLinkNetworks {
      *        moved, or null when its container is already stopped or replaced
      * @throws IOException when the daemon cannot be reached or a removal fails
      */
-    static void sweepOnServer(@NonNull String handlePrefix, @NonNull String serverName,
+    static void sweepOnHost(@NonNull String handlePrefix, @NonNull String serverName,
                               int serverId, boolean everything,
                               @NonNull IntPredicate stillLive,
                               @Nullable Consumer consumer) throws IOException {
-        DockerClient docker = new ServerService().clientFor(serverName);
+        DockerClient docker = new HostService().clientFor(serverName);
         DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker,
-            WorkloadNetworkPolicy.forServer(serverName));
+            WorkloadNetworkPolicy.forHost(serverName));
         boolean removedAny = false;
         for (String network : linkNetworksOf(docker, handlePrefix)) {
             String handle = network.substring(0,

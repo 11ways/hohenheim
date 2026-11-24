@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -91,7 +91,7 @@ public final class AdminActivityResource {
     private static final TableSpec<Row> TABLE = ActivityAdmin.table().toBuilder()
         .filter(ActivityAdmin.subjectFilter(APP_FILTER, InstanceModel.MODEL_ID,
             HohenheimMicrocopy.HOHENHEIM.of("app_filter"), HohenheimMicrocopy.HOHENHEIM.of("app_filter_all")))
-        .filter(ActivityAdmin.subjectFilter(HOST_FILTER, ServerModel.MODEL_ID,
+        .filter(ActivityAdmin.subjectFilter(HOST_FILTER, HostModel.MODEL_ID,
             HohenheimMicrocopy.HOHENHEIM.of("host_filter"), HohenheimMicrocopy.HOHENHEIM.of("host_filter_all")))
         .filter(ActivityAdmin.subjectFilter(SITE_FILTER, SiteModel.MODEL_ID,
             HohenheimMicrocopy.HOHENHEIM.of("site_filter"), HohenheimMicrocopy.HOHENHEIM.of("site_filter_all")))

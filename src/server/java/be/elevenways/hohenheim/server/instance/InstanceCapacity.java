@@ -4,8 +4,8 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -14,7 +14,6 @@ import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -24,7 +23,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,7 +87,7 @@ import java.util.function.Supplier;
  * AIDEV-NOTE: every terminating path must release, and InstanceService.destroy soft-
  * deletes through save() so the remove hooks NEVER fire there. The transitions
  * {@link ChargedModel} runs for {@link #HOST_MEMORY} are therefore the whole contract:
- * create, soft-delete, restore, HOST CHANGE (an admin repointing InstanceModel.SERVER_ID
+ * create, soft-delete, restore, HOST CHANGE (an admin repointing InstanceModel.HOST_ID
  * through the CMS form -- NOT the migration handoff, which is a fenced updateAll that fires
  * no hooks at all and moves its charge explicitly through openMigrationWindow), footprint
  * change, and hard delete. A refusal later in the same charge hook (the root disk) unwinds
@@ -140,11 +138,11 @@ public final class InstanceCapacity {
      */
     public static @NonNull HostCapacityView viewOf(@NonNull Row server, int serverId) {
         Long budget = budgetMbOf(server);
-        boolean hasReading = server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> map
+        boolean hasReading = server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> map
             && map.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number;
         Instant measuredAt = HostPreflight.factMeasuredAt(server, HostPreflight.MEM_TOTAL_FACT);
         if (measuredAt == null && hasReading) {
-            measuredAt = server.get(ServerModel.PROBED_AT);
+            measuredAt = server.get(HostModel.PROBED_AT);
         }
         Integer maxAge = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
@@ -183,7 +181,7 @@ public final class InstanceCapacity {
 
     /** The host's measured total memory in MB, from the stored preflight facts. */
     private static @Nullable Long measuredMemoryMbOf(@NonNull Row server) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number bytes)) {
             return null;
         }
@@ -206,7 +204,7 @@ public final class InstanceCapacity {
         Instant measuredAt = HostPreflight.factMeasuredAt(server,
             HostPreflight.MEM_TOTAL_FACT);
         if (measuredAt == null) {
-            measuredAt = server.get(ServerModel.PROBED_AT);
+            measuredAt = server.get(HostModel.PROBED_AT);
         }
         return HostPreflight.measuredRecently(measuredAt);
     }
@@ -289,7 +287,7 @@ public final class InstanceCapacity {
     public static @Nullable Microcopy fullRefusal(int serverId, long smallestMb) {
         long free = freeMbOn(serverId);
         return fits(smallestMb, free) ? null : PlacementRefusal.FULL.text()
-            .withArg("name", ServerModel.labelOf(serverId))
+            .withArg("name", HostModel.labelOf(serverId))
             .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, free)))
             .withArg("smallest", ByteUnit.MEGABYTE.bytes(smallestMb));
     }
@@ -306,14 +304,14 @@ public final class InstanceCapacity {
 
     /** @return the cap {@link #reserve} judges a booking on this host against; unbounded without a usable reading */
     private static long limitMbOn(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
+        Row server = Models.get(HostModel.class).findById(serverId);
         Long budget = server == null ? null : budgetMbOf(server);
         return budget == null ? Long.MAX_VALUE : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId);
     }
 
     private static @NonNull Microcopy capacityReached(int serverId, long neededMb, long freeMb) {
         return HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
-            .withArg("name", ServerModel.labelOf(serverId))
+            .withArg("name", HostModel.labelOf(serverId))
             .withArg("needed", ByteUnit.MEGABYTE.bytes(neededMb))
             .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, freeMb)));
     }
@@ -453,7 +451,7 @@ public final class InstanceCapacity {
      * release a charge the local bucket never received.
      */
     static long sourceBookedOf(@Nullable Row stored) {
-        if (stored == null || stored.get(InstanceModel.SERVER_ID) == null) {
+        if (stored == null || stored.get(InstanceModel.HOST_ID) == null) {
             return 0;
         }
         return bookedOf(stored);
@@ -487,7 +485,7 @@ public final class InstanceCapacity {
 
         @Override
         public @Nullable Charge held(@NonNull Row stored) {
-            Integer serverId = stored.get(InstanceModel.SERVER_ID);
+            Integer serverId = stored.get(InstanceModel.HOST_ID);
             if (serverId == null) {
                 return null;
             }
@@ -498,7 +496,7 @@ public final class InstanceCapacity {
         @Override
         public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
                                       @NonNull Transition transition) {
-            Integer serverId = row.afterWrite(InstanceModel.SERVER_ID, stored);
+            Integer serverId = row.afterWrite(InstanceModel.HOST_ID, stored);
             Charge claim = serverId == null ? null
                 : new Charge(bucketOf(serverId), effectiveFootprintMb(row, stored), false);
             if (transition == Transition.REBOOK && stored != null) {
@@ -509,7 +507,7 @@ public final class InstanceCapacity {
 
         @Override
         public void reserve(@NonNull String bucket, long amount) {
-            InstanceCapacity.reserve(serverIdOf(bucket), amount);
+            InstanceCapacity.reserve(hostIdOf(bucket), amount);
         }
 
         @Override
@@ -563,7 +561,7 @@ public final class InstanceCapacity {
     }
 
     /** The host id behind one of this dimension's buckets -- the inverse of {@link #bucketOf}. */
-    private static int serverIdOf(@NonNull String bucket) {
+    private static int hostIdOf(@NonNull String bucket) {
         return Integer.parseInt(bucket.substring(BUCKET_PREFIX.length()));
     }
 

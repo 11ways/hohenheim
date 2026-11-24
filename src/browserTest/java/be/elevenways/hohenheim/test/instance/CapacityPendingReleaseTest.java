@@ -4,7 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.Zenit;
@@ -37,7 +37,7 @@ class CapacityPendingReleaseTest {
     @Test
     void theCreditAdmitsExactlyTheReleasingAmountOnTheDeclaredHostAndOnlyInsideTheScope() {
         Db.run(datasource, () -> {
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             int reserve = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
             // 1. A host whose budget is exactly 1000 MB, booked to the last megabyte.

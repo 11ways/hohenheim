@@ -2,16 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hawkeye.testSupport.TestStrings;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
@@ -62,13 +53,13 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
     void everyKindOfAppIsOneRowThatOpensItsOwnPage() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
         try {
-            int local = ServerModel.localServerId();
-            String host = ServerModel.nameOf(local);
+            int local = HostModel.localHostId();
+            String host = HostModel.nameOf(local);
             // System containers and virtual machines run on an Incus host only; the implicit local host is Docker.
             int incus = HostFixtures.admittedIncusHost(PREFIX + "incus");
-            cleanup.add(() -> HardDeletes.row(Models.get(ServerModel.class),
-                Models.get(ServerModel.class).findById(incus)));
-            String incusHost = ServerModel.nameOf(incus);
+            cleanup.add(() -> HardDeletes.row(Models.get(HostModel.class),
+                Models.get(HostModel.class).findById(incus)));
+            String incusHost = HostModel.nameOf(incus);
 
             // 1. One app of every kind: four kinds of website, a Docker workload with its site, a system container
             //    and a virtual machine no site serves (the machine publishing a port), a stack with two services, and
@@ -102,7 +93,7 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                 .forEach(claim -> HardDeletes.row(Models.get(PortAllocationModel.class), claim)));
 
             Row stack = row(cleanup, Models.get(StackModel.class), Map.of(StackModel.NAME.getName(), PREFIX + "stack",
-                StackModel.SERVER_ID.getName(), local, StackModel.STATUS.getName(), StackModel.STATUS_ACTIVE,
+                StackModel.HOST_ID.getName(), local, StackModel.STATUS.getName(), StackModel.STATUS_ACTIVE,
                 StackModel.ENABLED.getName(), false));
             Row web = row(cleanup, Models.get(StackServiceModel.class), Map.of(
                 StackServiceModel.STACK_ID.getName(), stack.get(StackModel.ID),
@@ -421,7 +412,7 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                                 String status, int serverId) {
         return row(cleanup, Models.get(InstanceModel.class), Map.of(InstanceModel.NAME.getName(), PREFIX + name,
             InstanceModel.KIND.getName(), kind, InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(settings),
-            InstanceModel.STATUS.getName(), status, InstanceModel.SERVER_ID.getName(), serverId));
+            InstanceModel.STATUS.getName(), status, InstanceModel.HOST_ID.getName(), serverId));
     }
 
     /**
@@ -437,7 +428,7 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             Map.of(InstanceModel.NAME.getName(), PREFIX + name, InstanceModel.KIND.getName(), kind,
                 InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(settings),
                 InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-                InstanceModel.SERVER_ID.getName(), serverId).forEach(row[0]::set);
+                InstanceModel.HOST_ID.getName(), serverId).forEach(row[0]::set);
             instances.save(row[0]);
         });
         cleanup.add(() -> OwnedInstances.inScopeUnchecked(source, owner, ownerId,

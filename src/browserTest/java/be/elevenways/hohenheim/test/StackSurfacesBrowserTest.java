@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.test;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -11,7 +10,6 @@ import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.hohenheim.server.cms.StackOperations;
-import be.elevenways.hohenheim.server.cms.StackParts;
 import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
@@ -129,7 +127,7 @@ class StackSurfacesBrowserTest extends HohenheimTestBase {
         Row row = stacks.createEmptyRow();
         row.set(StackModel.NAME, name);
         row.set(StackModel.ENABLED, false);
-        row.set(StackModel.SERVER_ID, ServerModel.localServerId());
+        row.set(StackModel.HOST_ID, HostModel.localHostId());
         row.set(StackModel.STATUS, status);
         stacks.save(row);
         return row.get(StackModel.ID);

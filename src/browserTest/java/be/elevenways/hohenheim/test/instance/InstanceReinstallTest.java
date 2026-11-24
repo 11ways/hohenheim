@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -87,7 +86,7 @@ class InstanceReinstallTest extends HohenheimHttpTestBase {
                 .where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
             templates.delete(row.get(InstanceTemplateModel.ID));
         }
-        Models.get(ServerModel.class).delete(hostId);
+        Models.get(HostModel.class).delete(hostId);
         FakeNativeDaemons.resetInstalls();
     }
 
@@ -306,7 +305,7 @@ class InstanceReinstallTest extends HohenheimHttpTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.TEMPLATE_ID, templateId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

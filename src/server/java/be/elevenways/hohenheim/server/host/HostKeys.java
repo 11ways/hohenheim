@@ -1,12 +1,10 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.DataDirectory;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
@@ -114,7 +112,7 @@ public final class HostKeys {
      */
     public static @NonNull List<String> sshArgv(@NonNull Row server,
                                                 @NonNull List<String> remoteCommand) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         String pinned = server.get(HostTrustSlot.SSH.material());
         if (pinned == null || pinned.isBlank()) {
             throw new HostTrustException(HostProbe.FailureKind.NOT_PINNED,
@@ -129,7 +127,7 @@ public final class HostKeys {
         Path identity = writeIdentity(server, privateKey);
 
         List<String> argv = pinnedArgv(alias(server), pinned,
-            server.get(ServerModel.SSH_TARGET), List.of(
+            server.get(HostModel.SSH_TARGET), List.of(
                 "-o", "IdentitiesOnly=yes",
                 "-i", identity.toString(),
                 "-o", "ConnectTimeout=10"));
@@ -266,7 +264,7 @@ public final class HostKeys {
      * @throws Violations {@code host_key_scan_failed} when nothing usable came back
      */
     public static @NonNull Offer scan(@NonNull Row server) {
-        Target target = parseTarget(server.get(ServerModel.SSH_TARGET));
+        Target target = parseTarget(server.get(HostModel.SSH_TARGET));
         // Only the pinnable families (SshKeyType.hostKeyScanTypes): every other family is one more unauthenticated
         // connection OpenSSH 9.8+ penalizes, and the scan's own next login was refused for it (daystrom, run 1958).
         List<String> argv = new ArrayList<>(List.of("ssh-keyscan", "-T", "10", "-t", SshKeyType.hostKeyScanTypes()));
@@ -317,7 +315,7 @@ public final class HostKeys {
         }
         if (best == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_scan_failed")
-                .withArg("target", String.valueOf((Object) server.get(ServerModel.SSH_TARGET)))
+                .withArg("target", String.valueOf((Object) server.get(HostModel.SSH_TARGET)))
                 .withArg("detail", failure.isEmpty() ? "no host keys offered" : failure));
         }
         return best;
@@ -350,7 +348,7 @@ public final class HostKeys {
 
     /** The known_hosts key we control, independent of how the host is addressed. */
     static @NonNull String alias(@NonNull Row server) {
-        return "hohenheim-host-" + server.get(ServerModel.ID);
+        return "hohenheim-host-" + server.get(HostModel.ID);
     }
 
     /**
@@ -405,7 +403,7 @@ public final class HostKeys {
     }
 
     private static Path writeIdentity(Row server, String privateKey) {
-        Path file = storeDirectory().resolve("id-" + server.get(ServerModel.ID));
+        Path file = storeDirectory().resolve("id-" + server.get(HostModel.ID));
         String body = privateKey.endsWith("\n") ? privateKey : privateKey + "\n";
         return writePrivateKey(file, body);
     }

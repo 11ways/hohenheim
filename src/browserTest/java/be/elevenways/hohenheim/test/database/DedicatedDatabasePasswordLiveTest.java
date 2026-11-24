@@ -4,9 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -15,8 +15,8 @@ import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -135,7 +135,7 @@ class DedicatedDatabasePasswordLiveTest {
         try {
             // 1. A dedicated, volume-backed database answering its own client with the password it was created with.
             service.create(name, engine, image, USER, OLD_PASSWORD, DATABASE, false,
-                ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.PLACEMENT_DEDICATED);
+                HostService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.PLACEMENT_DEDICATED);
             DatabaseModel databases = Models.get(DatabaseModel.class);
             int databaseId = databases.findByName(name).get(DatabaseModel.ID);
             String handle = EngineHandles.of(name);
@@ -304,7 +304,7 @@ class DedicatedDatabasePasswordLiveTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

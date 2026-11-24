@@ -54,7 +54,7 @@ public final class InstanceTemplateOperations {
         .help(HohenheimMicrocopy.HELP.of("instance_name")).build();
 
     /** The host; an operator's choice, fixed to null for everyone else (InstancePlacement decides). */
-    public static final IntegerField SERVER_ID = IntegerField.builder("serverId")
+    public static final IntegerField HOST_ID = IntegerField.builder("hostId")
         .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host"))
         .help(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host_help")).build();
 
@@ -70,12 +70,12 @@ public final class InstanceTemplateOperations {
 
     private static final FormSpec INPUT = FormSpec.builder()
         .add(NAME)
-        .add(SERVER_ID)
+        .add(HOST_ID)
         .add(PROJECT_ID)
         .add(ENVIRONMENT_ID)
         .add(Nested.of(VARIABLES).subSpec(FormSpec.builder().build()).build())
         .step(FormStep.of("details", HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("step_details"), NAME.getName(),
-            SERVER_ID.getName(),
+            HOST_ID.getName(),
             PROJECT_ID.getName(), ENVIRONMENT_ID.getName()))
         .step(new FormStep(VARIABLES, HohenheimMicrocopy.TEMPLATE_CONTENTS.of("variables"),
             HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("step_variables_lead"), List.of(VARIABLES)))
@@ -91,7 +91,7 @@ public final class InstanceTemplateOperations {
             .verb(HohenheimVerbs.CREATE_APP)
             .gate(OperationGate.open())
             .input(OperationInput.of(INPUT, CreateFromTemplate.class, values -> new CreateFromTemplate(
-                values.get(NAME), values.get(SERVER_ID), values.get(PROJECT_ID), values.get(ENVIRONMENT_ID),
+                values.get(NAME), values.get(HOST_ID), values.get(PROJECT_ID), values.get(ENVIRONMENT_ID),
                 variables(values.get(VARIABLES)))))
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
@@ -137,7 +137,7 @@ public final class InstanceTemplateOperations {
      *
      * @param variables by variable key; attribution (project, environment) is never a variable
      */
-    public record CreateFromTemplate(@Nullable String name, @Nullable Integer serverId, @Nullable Integer projectId,
+    public record CreateFromTemplate(@Nullable String name, @Nullable Integer hostId, @Nullable Integer projectId,
                                      @Nullable Integer environmentId, @NonNull Map<String, Object> variables) {
 
         public CreateFromTemplate {

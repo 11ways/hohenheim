@@ -53,7 +53,6 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DeleteImpact;
 import be.elevenways.hohenheim.server.source.GitWebhookProvisioning;
 
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
@@ -431,7 +430,7 @@ public final class InstanceOperationHandlers {
         MigrateInput input = call.input();
         Integer target = input == null ? null : input.targetServerId();
         if (target == null) {
-            throw Violations.ofField(InstanceOperations.TARGET_SERVER.getName(), null,
+            throw Violations.ofField(InstanceOperations.TARGET_HOST.getName(), null,
                 HohenheimMicrocopy.VIOLATIONS.of("migrate_target_required"));
         }
         new InstanceMigrations().migrateTo(instanceId(call), target);
@@ -548,7 +547,7 @@ public final class InstanceOperationHandlers {
      */
     private static @NonNull InputScope hostMedia(@Nullable Row instance, @NonNull FormSpec declared,
                                                  @Nullable AccessContext access) {
-        Integer serverId = instance == null ? null : instance.get(InstanceModel.SERVER_ID);
+        Integer serverId = instance == null ? null : instance.get(InstanceModel.HOST_ID);
         return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
             InstanceOperations.DRIVE_MEDIA.getName(), Select.of(InstanceOperations.DRIVE_MEDIA)
                 .options(OptionSource.of(new InstallMedia().optionsOn(serverId)))

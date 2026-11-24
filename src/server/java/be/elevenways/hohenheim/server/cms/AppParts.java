@@ -5,16 +5,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
@@ -147,7 +138,7 @@ public final class AppParts {
     /** The feed the app lists hear: every model an app's row and its health read. */
     private static final LiveFeed APPS_FEED = LiveFeed.of(AccessContext::isAccount, InstanceModel.MODEL_ID,
         SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID, StackModel.MODEL_ID, StackServiceModel.MODEL_ID,
-        ServerModel.MODEL_ID, CertificateModel.MODEL_ID, ProtectedPathModel.MODEL_ID,
+        HostModel.MODEL_ID, CertificateModel.MODEL_ID, ProtectedPathModel.MODEL_ID,
         BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID);
 
     private static PanelResource.@NonNull Builder<App> entry(@NonNull Identifier id, @NonNull String panelSlug,

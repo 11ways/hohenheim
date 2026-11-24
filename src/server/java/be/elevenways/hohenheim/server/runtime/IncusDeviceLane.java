@@ -256,7 +256,7 @@ final class IncusDeviceLane {
         if (media == null) {
             throw new IOException("Install media volume '" + mediaVolume + "' does not"
                 + " exist on pool '" + pool + "' of this host; import the ISO on this"
-                + " host first (the media surface on the server record).");
+                + " host first (the media surface on the host record).");
         }
         if (!"iso".equals(media.get("content_type"))) {
             throw new IOException("Volume '" + mediaVolume + "' on pool '" + pool

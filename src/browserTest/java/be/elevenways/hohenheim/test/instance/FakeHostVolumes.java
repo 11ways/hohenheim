@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,13 +65,13 @@ final class FakeHostVolumes implements VolumeOperations.Hosts {
     }
 
     @Override
-    public @NonNull VolumeOperations forServer(@NonNull Row server) {
-        return new Host(String.valueOf((Object) server.get(ServerModel.NAME)));
+    public @NonNull VolumeOperations forHost(@NonNull Row server) {
+        return new Host(String.valueOf((Object) server.get(HostModel.NAME)));
     }
 
     @Override
     public @NonNull String storageOf(@NonNull Row server) {
-        return String.valueOf((Object) server.get(ServerModel.NAME));
+        return String.valueOf((Object) server.get(HostModel.NAME));
     }
 
     private final class Host implements VolumeOperations {

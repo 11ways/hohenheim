@@ -4,11 +4,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -121,7 +121,7 @@ class ReleaseConvergenceSerializationTest {
      */
     @Test
     void aSecondConvergeWaitsForTheFirstAndNeverMintsARivalServingRelease() throws Exception {
-        int localServerId = Db.supply(datasource, ServerModel::localServerId);
+        int localServerId = Db.supply(datasource, HostModel::localHostId);
         int applicationId = Db.supply(datasource, () -> application("racer", "v1"));
         try {
             // 1. One release already serves; this is the row both racers will read.
@@ -237,7 +237,7 @@ class ReleaseConvergenceSerializationTest {
     @Test
     void theSweeperReclaimsEveryStrandedSecondServingRelease() {
         Db.run(datasource, () -> {
-            int localServerId = ServerModel.localServerId();
+            int localServerId = HostModel.localHostId();
             int applicationId = application("stranded", "v1");
             try {
                 ApplicationReleases.converge(applicationId, Map.of());
@@ -408,7 +408,7 @@ class ReleaseConvergenceSerializationTest {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, settingsFor(tag));
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);

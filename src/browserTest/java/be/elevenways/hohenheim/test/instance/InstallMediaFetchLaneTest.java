@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstallMediaView;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerMediaTab;
+import be.elevenways.hohenheim.server.cms.HostMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -56,22 +56,22 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedHost() {
-        host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, PREFIX + "host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(host);
+        host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, PREFIX + "host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(host);
         HostFixtures.acknowledgePosture(host);
-        hostId = host.get(ServerModel.ID);
+        hostId = host.get(HostModel.ID);
     }
 
     @AfterAll
     static void removeHost() {
         if (hostId != null) {
             // The fetch rows cascade with their host.
-            Models.get(ServerModel.class).delete(hostId);
+            Models.get(HostModel.class).delete(hostId);
             hostId = null;
         }
     }
@@ -122,7 +122,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         String settled = adminGet("/admin/servers/" + hostId + "/page/install-media").body();
         assertThat(settled).as("step 5: the ending stays listed")
             .contains("data-fetch-name=\"" + PREFIX + "iso\"");
-        InstallMediaView view = ServerMediaTab.view(host);
+        InstallMediaView view = HostMediaTab.view(host);
         assertThat(view.fetches().stream().filter(fetch -> (PREFIX + "iso").equals(fetch.name())).toList())
             .as("step 5: the view carries the fetch as settled and ready")
             .singleElement()
@@ -172,7 +172,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         // 3. An in-flight row older than any live job can run has no owner left: it reads as
         //    INTERRUPTED and no longer holds a slot of the cap.
         Row corpse = Models.get(InstallMediaFetchModel.class).createEmptyRow();
-        corpse.set(InstallMediaFetchModel.SERVER_ID, hostId);
+        corpse.set(InstallMediaFetchModel.HOST_ID, hostId);
         corpse.set(InstallMediaFetchModel.NAME, PREFIX + "corpse");
         corpse.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.DOWNLOADING.token());
         Models.get(InstallMediaFetchModel.class).save(corpse);
@@ -227,18 +227,18 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
     @Test
     void theTabsLivePartHearsItsOwnHostBehindTheTabsOwnGate() throws Exception {
         // 1. The part's feed is the fetch model and the pool, keyed by this host.
-        LiveFeed feed = ServerMediaTab.PART.feedFor(partOf(hostId));
+        LiveFeed feed = HostMediaTab.PART.feedFor(partOf(hostId));
         assertThat(feed).as("step 1: the install-media part has a feed").isNotNull();
         assertThat(feed.models()).as("step 1: over the fetch model and the pool")
             .contains(InstallMediaFetchModel.MODEL_ID);
         assertThat(feed.changeKeys(InstallMediaFetchModel.MODEL_ID, AccessContext.anonymous()))
             .as("step 1: heard for this host's fetch rows only")
-            .containsExactly(ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, hostId));
+            .containsExactly(ModelChanges.keyOf(InstallMediaFetchModel.HOST_ID, hostId));
 
         // 1b. One host has one part: another spelling of its id names no part, so hears nothing.
-        assertThat(ServerMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + ",0" + hostId + ",1"))
+        assertThat(HostMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + ",0" + hostId + ",1"))
             .as("step 1b: a zero-padded id names no part").isNull();
-        assertThat(ServerMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + "," + hostId + ",0"))
+        assertThat(HostMediaTab.PART.feedFor(HohenheimSlugs.ADMIN + "," + hostId + ",0"))
             .as("step 1b: page 0 names no part").isNull();
 
         // 2. A viewer the tab refuses never hears a fetch move.
@@ -246,18 +246,18 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             .as("step 2: an anonymous viewer may not watch").isFalse();
 
         // 3. A Docker host has no Install media tab, so no page the part could be a piece of.
-        Row docker = Models.get(ServerModel.class).createEmptyRow();
-        docker.set(ServerModel.NAME, PREFIX + "docker");
-        docker.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        docker.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        docker.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
-        Models.get(ServerModel.class).save(docker);
-        int dockerId = docker.get(ServerModel.ID);
+        Row docker = Models.get(HostModel.class).createEmptyRow();
+        docker.set(HostModel.NAME, PREFIX + "docker");
+        docker.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        docker.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        docker.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
+        Models.get(HostModel.class).save(docker);
+        int dockerId = docker.get(HostModel.ID);
         try {
             assertThat(adminGet("/admin/servers/" + dockerId + "/page/install-media").statusCode())
                 .as("step 3: a Docker host's tab is not found, so is its part").isEqualTo(404);
         } finally {
-            Models.get(ServerModel.class).delete(dockerId);
+            Models.get(HostModel.class).delete(dockerId);
         }
     }
 
@@ -297,7 +297,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
             Poll.until("step 3: the tab's live part subscribed to its host's fetch rows", Duration.ofSeconds(10),
                 () -> ChannelHub.subscriberCount(LiveChannel.CHANNEL, LiveInvalidations.topicOf(
                     InstallMediaFetchModel.MODEL_ID,
-                    ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, hostId))) > 0);
+                    ModelChanges.keyOf(InstallMediaFetchModel.HOST_ID, hostId))) > 0);
 
             // 4. The fetch finishes on the server; the open region follows it to its ending.
             release.countDown();
@@ -354,7 +354,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
                 Poll.until("step 3: the tab's live part subscribed to its host's pool", Duration.ofSeconds(10),
                     () -> ChannelHub.subscriberCount(LiveChannel.CHANNEL, LiveInvalidations.topicOf(
                         InstallMediaFetchModel.MODEL_ID,
-                        ModelChanges.keyOf(InstallMediaFetchModel.SERVER_ID, socketHostId))) > 0);
+                        ModelChanges.keyOf(InstallMediaFetchModel.HOST_ID, socketHostId))) > 0);
 
                 // 4. Upload through the tab's own form: the daemon takes the medium and the part draws it.
                 page.fill("#media-upload-name", name);
@@ -376,7 +376,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
                 assertThat(page.inputValue("#media-name"))
                     .as("step 5: the half-typed fetch form survived the update").isEqualTo("half-typed");
             } finally {
-                Models.get(ServerModel.class).delete(socketHostId);
+                Models.get(HostModel.class).delete(socketHostId);
             }
         } finally {
             Files.deleteIfExists(iso);
@@ -388,7 +388,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
     /** A DOWNLOADING row written just now, as a job would have left it; no lease is taken for it. */
     private static int inFlightRow(String name) {
         Row row = Models.get(InstallMediaFetchModel.class).createEmptyRow();
-        row.set(InstallMediaFetchModel.SERVER_ID, hostId);
+        row.set(InstallMediaFetchModel.HOST_ID, hostId);
         row.set(InstallMediaFetchModel.NAME, name);
         row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.DOWNLOADING.token());
         Models.get(InstallMediaFetchModel.class).save(row);
@@ -402,16 +402,16 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
 
     /** A host whose daemon is the fake on a unix socket, reached through the production client lane. */
     private static int socketHost(FakeIncusSocket incus) {
-        Row socketHost = Models.get(ServerModel.class).createEmptyRow();
-        socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
-        socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        socketHost.set(ServerModel.INCUS_URL, incus.url());
-        socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(socketHost);
+        Row socketHost = Models.get(HostModel.class).createEmptyRow();
+        socketHost.set(HostModel.NAME, PREFIX + "socket-host");
+        socketHost.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        socketHost.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        socketHost.set(HostModel.INCUS_URL, incus.url());
+        socketHost.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        socketHost.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(socketHost);
         HostFixtures.acknowledgePosture(socketHost);
-        return socketHost.get(ServerModel.ID);
+        return socketHost.get(HostModel.ID);
     }
 
     /** The row as the tab reads it (settling included). */

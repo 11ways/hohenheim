@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.VolumeOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceLogModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -133,7 +133,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             templates.delete(row.get(InstanceTemplateModel.ID));
         }
         if (admittedHostId != null) {
-            Models.get(ServerModel.class).delete(admittedHostId);
+            Models.get(HostModel.class).delete(admittedHostId);
         }
         if (localBefore != null) {
             localBefore.restore();
@@ -498,7 +498,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    asked the host: one it NAMES ANYWAY is refused and nothing lands; without it, placement decides.
             admittedHostId = admittedHost();
             HttpResponse<String> named = tenantPost(createUrl, "name=" + PREFIX + "created"
-                + "&serverId=" + ServerModel.localServerId() + "&" + ApiSupport.fromTemplateTransport());
+                + "&serverId=" + HostModel.localHostId() + "&" + ApiSupport.fromTemplateTransport());
             assertThat(named.statusCode()).as("step 4: a tenant-named host is refused").isEqualTo(422);
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
@@ -509,7 +509,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             Row instance = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "created")).first();
             assertThat(instance).as("step 4: the instance exists").isNotNull();
-            assertThat((Integer) instance.get(InstanceModel.SERVER_ID))
+            assertThat((Integer) instance.get(InstanceModel.HOST_ID))
                 .as("step 4: it landed on the ADMITTED host, not the one the tenant named")
                 .isEqualTo(admittedHostId);
 
@@ -593,7 +593,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             }
         }
         if (admittedHostId != null) {
-            Models.get(ServerModel.class).delete(admittedHostId);
+            Models.get(HostModel.class).delete(admittedHostId);
             admittedHostId = null;
         }
     }
@@ -896,12 +896,12 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void theDelegatedOverviewNamesNoHostAndEchoesNoDaemonError() throws Exception {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row host = servers.createEmptyRow();
-        host.set(ServerModel.NAME, PREFIX + "inventory-host-01");
-        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        host.set(HostModel.NAME, PREFIX + "inventory-host-01");
+        host.set(HostModel.MODE, HostModel.MODE_LOCAL);
         servers.save(host);
-        Integer hostId = host.get(ServerModel.ID);
+        Integer hostId = host.get(HostModel.ID);
 
         // The shape InstanceInstalls really stamps: the transport's or daemon's own text,
         // which names sockets, registries and host paths nobody vetted for a tenant.
@@ -910,7 +910,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         Model instances = Models.get(InstanceModel.class);
         Row instance = instances.findById(instanceAId);
-        instance.set(InstanceModel.SERVER_ID, hostId);
+        instance.set(InstanceModel.HOST_ID, hostId);
         instance.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_FAILED);
         instance.set(InstanceModel.INSTALL_ERROR, daemonError);
         instances.save(instance);
@@ -987,7 +987,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .contains("/admin/instances/" + instanceAId + "/page/overview");
         } finally {
             Row reset = instances.findById(instanceAId);
-            reset.set(InstanceModel.SERVER_ID, null);
+            reset.set(InstanceModel.HOST_ID, null);
             reset.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_NONE);
             reset.set(InstanceModel.INSTALL_ERROR, null);
             instances.save(reset);
@@ -997,13 +997,13 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
     /** An admitted, container-accepting host an operator would have enrolled. */
     private static int admittedHost() {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + "host");
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, PREFIX + "host");
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         // Placement will not CHOOSE a host whose memory nobody measured, so an admitted
@@ -1012,6 +1012,6 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 }

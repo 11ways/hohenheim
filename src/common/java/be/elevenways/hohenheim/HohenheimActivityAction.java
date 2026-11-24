@@ -1,20 +1,6 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -445,7 +431,7 @@ public enum HohenheimActivityAction implements ActivityAction {
                 FactShape.key(FINGERPRINT_KEY, CoreTypes.TEXT), FactShape.optionalKey(PREVIOUS_KEY, CoreTypes.TEXT));
             case HOST_IDENTITY_ROTATED -> FactShape.of(FactShape.key(LANE_KEY, CoreTypes.TEXT));
             case POSTURE_RISK_ACCEPTED -> FactShape.of(FactShape.wordedKey(POSTURE_KEY, token -> {
-                    EnumField.EnumValue posture = ServerModel.POSTURE.getValues().get(token);
+                    EnumField.EnumValue posture = HostModel.POSTURE.getValues().get(token);
                     return posture == null ? null : posture.getLabel();
                 }), FactShape.key(WARNING_VERSION_KEY, CoreTypes.INTEGER));
             case SITE_SIGNED_IN -> FactShape.of(FactShape.key(NAME_KEY, CoreTypes.TEXT),
@@ -519,7 +505,7 @@ public enum HohenheimActivityAction implements ActivityAction {
             case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED, REMOVED_ORPHAN, REAPED_CONTROLLER_OBJECTS, DRAINED,
                  QUARANTINED, HOST_KEY_PINNED, HOST_KEY_VERIFIED, HOST_KEY_REPINNED, HOST_IDENTITY_ROTATED,
                  POSTURE_RISK_ACCEPTED, ADMISSION_CORDONED, ADMISSION_UNCORDONED, ADMISSION_ADMITTED ->
-                List.of(ServerModel.MODEL_ID);
+                List.of(HostModel.MODEL_ID);
             case FORCED -> List.of(DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID);
             case MOVE_SHARED, BACKUP_DOWNLOADED -> List.of(DatabaseModel.MODEL_ID);
             case RESTORED_BACKUP -> List.of(InstanceModel.MODEL_ID, DatabaseModel.MODEL_ID);

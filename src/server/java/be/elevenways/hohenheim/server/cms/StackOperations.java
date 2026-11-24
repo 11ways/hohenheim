@@ -5,9 +5,9 @@ import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -133,7 +133,7 @@ public final class StackOperations {
             .icon(Icon.of("broom"))
             .noSubject()
             .verb(HohenheimVerbs.RECLAIM_IMAGES)
-            .noun(ServerModel.REF)
+            .noun(HostModel.REF)
             .gate(HohenheimSources.OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .command(CmsCommands.EXTERNAL)

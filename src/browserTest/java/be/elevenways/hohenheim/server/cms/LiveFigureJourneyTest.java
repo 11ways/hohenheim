@@ -7,8 +7,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.LiveFigureState;
 import be.elevenways.hohenheim.instance.LiveFigureView;
 import be.elevenways.hohenheim.instance.StatusProbe;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
@@ -284,12 +284,12 @@ class LiveFigureJourneyTest extends HohenheimTestBase {
         settings.put(StatusProbe.SETTING, StatusProbe.MINECRAFT_JAVA.token());
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         rows.add(row);
         int id = row.get(InstanceModel.ID);
         if (rows.size() <= 2) {
-            PortLedger.claim(ServerModel.localServerId(), null, port, PublishedPort.TCP, InstanceModel.MODEL_ID, id,
+            PortLedger.claim(HostModel.localHostId(), null, port, PublishedPort.TCP, InstanceModel.MODEL_ID, id,
                 "live figure journey");
         }
         return row;

@@ -5,10 +5,10 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.HostService;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -105,12 +105,12 @@ class IncusInstanceRuntimeLiveTest {
     }
 
     private static int instanceRecord(String name, Map<String, Object> settings) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        Row host = Models.get(HostModel.class).findByName(HOST);
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.HOST_ID, host.get(HostModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -121,15 +121,15 @@ class IncusInstanceRuntimeLiveTest {
             // 0. Placement itself picks this host for the incus runtime -- the only
             //    admitted incus host there is -- and refuses the docker runtime, for
             //    which no admitted host exists in this database.
-            Row host = Models.get(ServerModel.class).findByName(HOST);
-            int hostId = host.get(ServerModel.ID);
+            Row host = Models.get(HostModel.class).findByName(HOST);
+            int hostId = host.get(HostModel.ID);
             assertThat(InstancePlacement.forActor(null, null,
-                    InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_INCUS)))
+                    InstancePlacement.Workload.forRuntime(HostModel.RUNTIME_INCUS)))
                 .as("step 0: the incus runtime places on the admitted incus host")
                 .isEqualTo(hostId);
             assertThat(catchThrowable(() ->
                     InstancePlacement.chooseForOwner("",
-                        InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_DOCKER))))
+                        InstancePlacement.Workload.forRuntime(HostModel.RUNTIME_DOCKER))))
                 .as("step 0: the docker runtime cannot land on it")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -143,7 +143,7 @@ class IncusInstanceRuntimeLiveTest {
             int id = instanceRecord("incus-journey", settings);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
             Map<String, String> ownerLabels = OwnerLabels.of(InstanceModel.MODEL_ID, id);
 
             try {
@@ -249,7 +249,7 @@ class IncusInstanceRuntimeLiveTest {
             int id = instanceRecord("incus-collision", new LinkedHashMap<>(
                 Map.of("image", IMAGE, "memory_limit_mb", 128)));
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
             try {
                 // 1. A stranger already holds the name, with NO owner labels.
                 try {
@@ -301,7 +301,7 @@ class IncusInstanceRuntimeLiveTest {
         try {
             Db.run(datasource, () -> {
                 fingerprint[0] = vmHost.enrollThroughProduct(HOST + "-vm", "hohenheim-live-stats");
-                readRunningVm(new ServerService().incusClientFor(HOST + "-vm"));
+                readRunningVm(new HostService().incusClientFor(HOST + "-vm"));
             });
         } finally {
             System.out.println("=== cleanup: shared objects -> " + vmHost.releaseControllerSharedObjects());

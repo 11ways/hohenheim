@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
@@ -62,13 +62,13 @@ public final class OrphanActions {
         }
         // Resolved BEFORE the daemon is touched: an unattributable removal must be
         // refused while it is still a refusal, not discovered after the container is gone.
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_server_unknown")
                 .withArg("name", String.valueOf(serverName)));
         }
 
-        DockerClient docker = new ServerService().clientFor(serverName);
+        DockerClient docker = new HostService().clientFor(serverName);
         DockerReconciler.Finding live = reclassify(docker, kind, name);
         if (live == null) {
             // Already gone at the daemon: the finding is stale; drop it.
@@ -102,7 +102,7 @@ public final class OrphanActions {
                 .withArg("name", name + ": " + e.getMessage()));
         }
         deleteFinding(finding);
-        History.event(Models.get(ServerModel.class), server.get(ServerModel.ID),
+        History.event(Models.get(HostModel.class), server.get(HostModel.ID),
             Change.fact(HohenheimActivityAction.REMOVED_ORPHAN, Map.of(HohenheimActivityAction.KIND_KEY, kind,
                 HohenheimActivityAction.NAME_KEY, name)));
         Blast.log("DOCKER RECONCILE: operator removed orphaned", kind, name,

@@ -35,7 +35,7 @@ public class PortAllocationModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     /** The host holding the port: a {@code servers.id}, never a name string. */
-    public static final IntegerField SERVER_ID = SCHEMA.addField(
+    public static final IntegerField HOST_ID = SCHEMA.addField(
         IntegerField.builder().name("server_id").build());
 
     /** Canonical bind address: empty string means the whole-host bind (0.0.0.0 folds into it). */

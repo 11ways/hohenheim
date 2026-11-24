@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -68,7 +68,7 @@ public final class OwnedInstances {
             // Judged on a create, or an update writing the kind or the host (Row.isWritten, never what the row
             // carries: a narrow save hands its hooks the whole stored record).
             if (row == null || GeneratedRows.inSystemScope() || !context.isCreate()
-                    && !row.isWritten(InstanceModel.KIND) && !row.isWritten(InstanceModel.SERVER_ID)) {
+                    && !row.isWritten(InstanceModel.KIND) && !row.isWritten(InstanceModel.HOST_ID)) {
                 return;
             }
             // The refusal itself lives in InstanceKinds, beside the OFFER derived from the
@@ -103,18 +103,18 @@ public final class OwnedInstances {
      * onto the local daemon.
      */
     private static void requireHostRuntime(@NonNull Row row) {
-        Object declaredHost = row.get(InstanceModel.SERVER_ID.getName());
+        Object declaredHost = row.get(InstanceModel.HOST_ID.getName());
         InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (declaredHost == null || handler == null) {
             return;
         }
-        int serverId = ServerModel.canonicalServerId(declaredHost);
-        Row server = Models.get(ServerModel.class).findById(serverId);
+        int serverId = HostModel.canonicalHostId(declaredHost);
+        Row server = Models.get(HostModel.class).findById(serverId);
         if (server == null) {
             return;
         }
-        InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(serverId),
-            ServerModel.runtimeOf(server), handler.supportedRuntimes());
+        InstanceKinds.requireRuntimeMatch(HostModel.nameOf(serverId),
+            HostModel.runtimeOf(server), handler.supportedRuntimes());
     }
 
     /** A scope body that may fail the way the write it wraps fails. */
@@ -283,7 +283,7 @@ public final class OwnedInstances {
      * @throws IllegalArgumentException when the instance names a host that does not exist
      */
     public static int placementHost(@NonNull Row instance) {
-        return ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        return HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
     }
 
     /**

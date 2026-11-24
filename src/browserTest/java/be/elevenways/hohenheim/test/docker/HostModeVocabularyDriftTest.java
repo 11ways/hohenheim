@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Binds {@link HostMode} to the stored vocabulary it reads ({@link ServerModel#MODE}) and
+ * Binds {@link HostMode} to the stored vocabulary it reads ({@link HostModel#MODE}) and
  * proves an unknown mode FAILS CLOSED instead of addressing the local daemon.
  *
  * AIDEV-NOTE: the drift binding is what makes "add a mode" one edit or a red build: a value
@@ -30,7 +30,7 @@ class HostModeVocabularyDriftTest {
         Set<String> tokens = new LinkedHashSet<>();
         Arrays.stream(HostMode.values()).forEach(mode -> tokens.add(mode.token()));
         assertThat(tokens).as("step 1: HostMode covers exactly the stored mode values")
-            .containsExactlyInAnyOrderElementsOf(ServerModel.MODE.getValues().keySet());
+            .containsExactlyInAnyOrderElementsOf(HostModel.MODE.getValues().keySet());
 
         // 2. The tokens production rows carry keep parsing to the member they always meant.
         assertThat(HostMode.forToken("local")).as("step 2: 'local' is the local daemon")
@@ -49,14 +49,14 @@ class HostModeVocabularyDriftTest {
         }
 
         // 4. The local HOST NAME is its own fact, spelled once, and it is not a mode lookup.
-        assertThat(ServerService.LOCAL_HOST_NAME)
+        assertThat(HostService.LOCAL_HOST_NAME)
             .as("step 4: the implicit local host row keeps its stored name")
-            .isEqualTo(ServerModel.LOCAL_HOST_NAME)
+            .isEqualTo(HostModel.LOCAL_HOST_NAME)
             .isEqualTo("local");
 
         // 5. The stored field is BUILT from the enum: every value carries its member's facts.
         for (HostMode mode : HostMode.values()) {
-            EnumField.EnumValue value = ServerModel.MODE.getValues().get(mode.token());
+            EnumField.EnumValue value = HostModel.MODE.getValues().get(mode.token());
             assertThat(value.getDisplayName()).as("step 5: " + mode + " display name")
                 .isEqualTo(mode.displayName());
             assertThat(value.color()).as("step 5: " + mode + " color").isEqualTo(mode.color());

@@ -1,16 +1,15 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
@@ -107,14 +106,14 @@ public final class RuntimeImages {
      */
     public static @NonNull String referenceFor(@NonNull Row image, @NonNull String runtime) {
 
-        String reference = ServerModel.RUNTIME_INCUS.equals(runtime)
+        String reference = HostModel.RUNTIME_INCUS.equals(runtime)
             ? image.get(RuntimeImageModel.INCUS_IMAGE)
             : image.get(RuntimeImageModel.DOCKER_IMAGE);
 
         if (reference == null || reference.isBlank()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_no_variant")
                 .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
-                .withArg("runtime", ServerModel.runtimeLabel(runtime)));
+                .withArg("runtime", HostModel.runtimeLabel(runtime)));
         }
 
         return reference.trim();
@@ -132,7 +131,7 @@ public final class RuntimeImages {
     public static void ensurePresent(@NonNull Row image, @NonNull String serverName,
                                      @NonNull String runtime) {
 
-        if (ServerModel.RUNTIME_INCUS.equals(runtime)) {
+        if (HostModel.RUNTIME_INCUS.equals(runtime)) {
             ensureIncusImage(image, serverName);
         } else {
             ensureDockerImage(image, serverName);
@@ -144,8 +143,8 @@ public final class RuntimeImages {
     /** Build the Docker variant on the host when its daemon does not have it yet. */
     private static void ensureDockerImage(@NonNull Row image, @NonNull String serverName) {
 
-        String reference = referenceFor(image, ServerModel.RUNTIME_DOCKER);
-        DockerClient docker = new ServerService().clientFor(serverName);
+        String reference = referenceFor(image, HostModel.RUNTIME_DOCKER);
+        DockerClient docker = new HostService().clientFor(serverName);
 
         try {
             docker.inspectImage(reference);
@@ -181,7 +180,7 @@ public final class RuntimeImages {
      *
      * AIDEV-NOTE: entirely over {@link HostShell}, and NOT through {@code SandboxedBuilds}
      * like the Docker lane. A host that declares the incus runtime addresses no Docker
-     * daemon at all ({@code ServerService.transportFor} refuses by name, deliberately, so
+     * daemon at all ({@code HostService.transportFor} refuses by name, deliberately, so
      * a "docker" call for an Incus host cannot land on the controller's own daemon), so
      * there is no client to hand a build to. The context is shipped to the host and built
      * with its own docker CLI instead.
@@ -194,15 +193,15 @@ public final class RuntimeImages {
      */
     private static void ensureIncusImage(@NonNull Row image, @NonNull String serverName) {
 
-        String alias = referenceFor(image, ServerModel.RUNTIME_INCUS);
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        String alias = referenceFor(image, HostModel.RUNTIME_INCUS);
+        Row server = Models.get(HostModel.class).findByName(serverName);
 
         if (server == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_host_unknown")
                 .withArg("name", serverName));
         }
 
-        HostShell shell = HostShell.forServer(server);
+        HostShell shell = HostShell.forHost(server);
 
         HostShell.Result present = shell.run("incus image info " + HostShell.quote(alias)
             + " >/dev/null 2>&1");
@@ -220,7 +219,7 @@ public final class RuntimeImages {
                 .withArg("host", serverName));
         }
 
-        String dockerReference = referenceFor(image, ServerModel.RUNTIME_DOCKER);
+        String dockerReference = referenceFor(image, HostModel.RUNTIME_DOCKER);
         String description = String.valueOf((Object) image.get(RuntimeImageModel.NAME));
         Path context = materializeContext(image);
 
@@ -312,7 +311,7 @@ public final class RuntimeImages {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_unknown")
                 .withArg("id", String.valueOf(idOf(image))));
         }
-        referenceFor(image, ServerModel.RUNTIME_DOCKER);
+        referenceFor(image, HostModel.RUNTIME_DOCKER);
         Path context = materializeContext(image);
         try {
             Files.copy(artifact, context.resolve("app.jar"));

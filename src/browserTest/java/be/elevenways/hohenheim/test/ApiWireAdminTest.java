@@ -1,13 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
@@ -71,8 +65,8 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
         UUID operatorId = ApiWire.operatorId();
         UUID tenantId = ApiSupport.user("wire-admin-tenant@surface.test", "Wire Admin Tenant");
 
-        dockerHostId = host("wire-docker-host", ServerModel.RUNTIME_DOCKER);
-        int incusHostId = host("wire-incus-host", ServerModel.RUNTIME_INCUS);
+        dockerHostId = host("wire-docker-host", HostModel.RUNTIME_DOCKER);
+        int incusHostId = host("wire-incus-host", HostModel.RUNTIME_INCUS);
         engineId = engine("wire-pg", dockerHostId);
         heldDatabaseId = sharedDatabase("wire-held-db", "helddb", dockerHostId, engineId);
         detachedDatabaseId = sharedDatabase("wire-detached-db", "detacheddb", dockerHostId, engineId);
@@ -181,19 +175,19 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
 
     /** An admitted, acknowledged host whose preflight passed at {@link #T0}. */
     private static int host(String name, String runtime) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, runtime);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, runtime);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true, T0, null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** A shared engine row with no owned instance: the tier exists, no container does. */
@@ -202,7 +196,7 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
         row.set(DatabaseEngineModel.NAME, name);
         row.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
         row.set(DatabaseEngineModel.IMAGE, "postgres:16");
-        row.set(DatabaseEngineModel.SERVER_ID, serverId);
+        row.set(DatabaseEngineModel.HOST_ID, serverId);
         row.set(DatabaseEngineModel.ROOT_USER, "root");
         row.set(DatabaseEngineModel.ROOT_PASSWORD, "wire-root-pw");
         row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, 1024);
@@ -218,7 +212,7 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, dbName);
         row.set(DatabaseModel.DB_USER, dbName + "user");
         row.set(DatabaseModel.DB_PASSWORD, "wire-secret-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engineId);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -233,7 +227,7 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, "dedicateddb");
         row.set(DatabaseModel.DB_USER, "dedicateduser");
         row.set(DatabaseModel.DB_PASSWORD, "wire-secret-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_DEDICATED);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         Models.get(DatabaseModel.class).save(row);
@@ -244,7 +238,7 @@ class ApiWireAdminTest extends HohenheimHttpTestBase {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
         row.set(InstanceModel.CREATED_AT, T0);

@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -69,7 +69,7 @@ public final class FakeApps implements AutoCloseable {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, settingsFor(tag));
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);

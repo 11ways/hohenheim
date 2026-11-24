@@ -5,8 +5,8 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -119,7 +119,7 @@ class ArtifactSourceTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, Map.of());
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

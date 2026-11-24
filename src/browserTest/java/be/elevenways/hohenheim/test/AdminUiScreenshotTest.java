@@ -1,23 +1,13 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.cms.server.task.TaskAdmin;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
-import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -74,8 +64,8 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
     static void seedFleet() throws Exception {
         Files.createDirectories(OUT);
 
-        dockerHostId = host("orion", ServerModel.RUNTIME_DOCKER, "btrfs");
-        Integer incusHostId = host("vega", ServerModel.RUNTIME_INCUS, "none");
+        dockerHostId = host("orion", HostModel.RUNTIME_DOCKER, "btrfs");
+        Integer incusHostId = host("vega", HostModel.RUNTIME_INCUS, "none");
 
         workspaceId = instance("blog-workspace", "hohenheim:workspace", dockerHostId);
         applicationId = instance("shop-api", "hohenheim:application", dockerHostId);
@@ -103,7 +93,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
                 Row row = Models.get(InstanceModel.class).createEmptyRow();
                 row.set(InstanceModel.NAME, "shop-db-engine");
                 row.set(InstanceModel.KIND, "hohenheim:database_container");
-                row.set(InstanceModel.SERVER_ID, dockerHostId);
+                row.set(InstanceModel.HOST_ID, dockerHostId);
                 row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
                 row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
                 Models.get(InstanceModel.class).save(row);
@@ -127,7 +117,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             stack = stacks.createEmptyRow();
             stack.set(StackModel.NAME, "shop-stack");
             stack.set(StackModel.ENABLED, true);
-            stack.set(StackModel.SERVER_ID, dockerHostId);
+            stack.set(StackModel.HOST_ID, dockerHostId);
             stacks.save(stack);
         }
         stackId = stack.get(StackModel.ID);
@@ -173,20 +163,20 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
     }
 
     private static Integer host(String name, String runtime, String backend) {
-        var servers = Models.get(ServerModel.class);
-        Row existing = servers.find().where(ServerModel.NAME.eq(name)).first();
+        var servers = Models.get(HostModel.class);
+        Row existing = servers.find().where(HostModel.NAME.eq(name)).first();
         if (existing != null) {
-            return existing.get(ServerModel.ID);
+            return existing.get(HostModel.ID);
         }
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.RUNTIME, runtime);
-        row.set(ServerModel.VOLUME_BACKEND, backend);
-        row.set(ServerModel.SSH_TARGET, "root@" + name + ".internal");
-        row.set(ServerModel.PUBLIC_IPV4, "203.0.113." + (Math.abs(name.hashCode()) % 200 + 10));
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.RUNTIME, runtime);
+        row.set(HostModel.VOLUME_BACKEND, backend);
+        row.set(HostModel.SSH_TARGET, "root@" + name + ".internal");
+        row.set(HostModel.PUBLIC_IPV4, "203.0.113." + (Math.abs(name.hashCode()) % 200 + 10));
         servers.save(row);
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static Integer instance(String name, String kind, Integer serverId) {
@@ -202,7 +192,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         // A kind that cannot run without a runtime image may not be written without one

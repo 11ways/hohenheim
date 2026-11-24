@@ -1,5 +1,5 @@
 {% tag HhInstallMedia {
-    /* The live part of an Incus host's Install media tab (ServerMediaTab.PART): the stored fetches with their
+    /* The live part of an Incus host's Install media tab (HostMediaTab.PART): the stored fetches with their
        progress, and the pool's media with their delete forms. Any write to the host's fetch rows and any upload
        into its pool re-reads this part alone for the reader, so the fetch and upload forms beside it are never
        re-rendered under the operator's hands. */

@@ -3,11 +3,10 @@ package be.elevenways.hohenheim.test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -63,14 +62,14 @@ class DashboardRoleGatingTest {
                 }
             }
 
-            ServerModel servers = Models.get(ServerModel.class);
-            Row local = servers.findById(ServerModel.localServerId());
-            String admission = local.get(ServerModel.ADMISSION);
+            HostModel servers = Models.get(HostModel.class);
+            Row local = servers.findById(HostModel.localHostId());
+            String admission = local.get(HostModel.ADMISSION);
             Row certificate = errorCertificate();
             Row finding = orphanFinding();
 
             try {
-                local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+                local.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
                 servers.save(local);
 
                 // 1. A full node: the whole checklist, the host-tier attention items and
@@ -152,7 +151,7 @@ class DashboardRoleGatingTest {
                     .isNull();
             } finally {
                 roles(booted);
-                local.set(ServerModel.ADMISSION, admission);
+                local.set(HostModel.ADMISSION, admission);
                 servers.save(local);
                 Models.get(CertificateModel.class).delete(certificate);
                 Models.get(ReconcileFindingModel.class).delete(finding);

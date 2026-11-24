@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test.backup;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -96,9 +96,9 @@ class LiveControlPlaneOffHostBackupTest {
             assertThat(scan.fingerprint())
                 .as("setup: the scanned key is the one the operator read on the host itself")
                 .isEqualTo(remote.fingerprint());
-            HostKeys.confirm(Models.get(ServerModel.class).findByName(REMOTE_HOST_NAME));
-            remoteServerId = Models.get(ServerModel.class)
-                .findByName(REMOTE_HOST_NAME).get(ServerModel.ID);
+            HostKeys.confirm(Models.get(HostModel.class).findByName(REMOTE_HOST_NAME));
+            remoteServerId = Models.get(HostModel.class)
+                .findByName(REMOTE_HOST_NAME).get(HostModel.ID);
         });
     }
 
@@ -180,14 +180,14 @@ class LiveControlPlaneOffHostBackupTest {
             targetRow.set(BackupTargetModel.NAME, "control-plane-offhost");
             targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
             targetRow.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", ServerModel.registryKeyOf(remoteServerId),
+                "server", HostModel.registryKeyOf(remoteServerId),
                 "path", remoteBase));
             Models.get(BackupTargetModel.class).save(targetRow);
-            assertThat((String) Models.get(ServerModel.class).findById(remoteServerId)
-                    .get(ServerModel.ADMISSION))
+            assertThat((String) Models.get(HostModel.class).findById(remoteServerId)
+                    .get(HostModel.ADMISSION))
                 .as("step 2: the destination is a STORAGE host -- trusted and confirmed, never"
                     + " ADMITTED for placement, and it does not need to be")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
 
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "control-plane-offhost");

@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test.host;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -49,17 +49,17 @@ class LocalHostEditRefusalTest {
     @Test
     void theLocalHostOffersOnlyWhatItSavesAndRefusesTheRest() {
         Db.run(datasource, () -> {
-            PanelResource<Row> resource = ServerParts.admin();
+            PanelResource<Row> resource = HostParts.admin();
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
-            ServerModel servers = Models.get(ServerModel.class);
-            int localId = ServerModel.localServerId();
+            HostModel servers = Models.get(HostModel.class);
+            int localId = HostModel.localHostId();
             Row local = servers.findById(localId);
 
             Row remote = servers.createEmptyRow();
-            remote.set(ServerModel.NAME, "local-edit-remote");
-            remote.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            remote.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            remote.set(ServerModel.SSH_TARGET, "deploy@remote.example.test");
+            remote.set(HostModel.NAME, "local-edit-remote");
+            remote.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            remote.set(HostModel.MODE, HostModel.MODE_SSH);
+            remote.set(HostModel.SSH_TARGET, "deploy@remote.example.test");
             servers.save(remote);
 
             // 1. The local host's identity renders read-only; a remote host's stays editable.
@@ -91,23 +91,23 @@ class LocalHostEditRefusalTest {
                 .as("step 2: changing the local host's ssh target is refused")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("ssh_target");
-            assertThat((Object) servers.findById(localId).get(ServerModel.SSH_TARGET))
+            assertThat((Object) servers.findById(localId).get(HostModel.SSH_TARGET))
                 .as("step 2: and nothing was written")
                 .isNull();
 
             // 3. The editable half saves -- and a resubmitted UNCHANGED identity is no refusal.
             PartsWrites.updateRow(resource, servers.findById(localId), Map.of(
                 "name", "local",
-                "posture", ServerModel.POSTURE_DEDICATED,
+                "posture", HostModel.POSTURE_DEDICATED,
                 "public_ipv4", "203.0.113.7"), operator);
             Row saved = servers.findById(localId);
-            assertThat((String) saved.get(ServerModel.POSTURE))
+            assertThat((String) saved.get(HostModel.POSTURE))
                 .as("step 3: the local host's posture is stored")
-                .isEqualTo(ServerModel.POSTURE_DEDICATED);
-            assertThat((String) saved.get(ServerModel.PUBLIC_IPV4))
+                .isEqualTo(HostModel.POSTURE_DEDICATED);
+            assertThat((String) saved.get(HostModel.PUBLIC_IPV4))
                 .as("step 3: and so is its public address")
                 .isEqualTo("203.0.113.7");
-            assertThat((String) saved.get(ServerModel.NAME))
+            assertThat((String) saved.get(HostModel.NAME))
                 .as("step 3: its name is untouched")
                 .isEqualTo("local");
         });

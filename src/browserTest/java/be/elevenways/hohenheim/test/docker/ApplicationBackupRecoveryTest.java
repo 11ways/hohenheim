@@ -5,11 +5,11 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
@@ -29,7 +29,6 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -97,7 +96,7 @@ class ApplicationBackupRecoveryTest {
                     Row app = Models.get(InstanceModel.class).createEmptyRow();
                     app.set(InstanceModel.NAME, "backup-upload-app");
                     app.set(InstanceModel.KIND, "hohenheim:application");
-                    app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    app.set(InstanceModel.HOST_ID, HostModel.localHostId());
                     app.set(InstanceModel.RUNTIME_IMAGE_ID, image.get(RuntimeImageModel.ID));
                     app.set(InstanceModel.SETTINGS, Map.of());
                     Models.get(InstanceModel.class).save(app);
@@ -175,7 +174,7 @@ class ApplicationBackupRecoveryTest {
                     Files.delete(jar);
                     transport.hasImage = false;
                     InstanceBackups.Restored restored = backups.restoreToNew(backup, target,
-                        "recovered-upload-app", ServerModel.localServerId());
+                        "recovered-upload-app", HostModel.localHostId());
                     assertThat(restored.instanceId()).isNotEqualTo(appId);
                     assertThat(restored.complete()).isTrue();
                     assertThat(Files.readAllBytes(ArtifactDeploys.acceptedArtifact(restored.instanceId())))

@@ -7,14 +7,7 @@ import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -152,8 +145,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
     @Test
     void aWorkloadThatCannotStartSaysWhyAndWhereToFixIt() throws Exception {
-        var servers = Models.get(ServerModel.class);
-        int serverId = ServerModel.localServerId();
+        var servers = Models.get(HostModel.class);
+        int serverId = HostModel.localHostId();
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         Row instance = instance("app-journey-workload");
         try {
@@ -169,7 +162,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
             // 2. Block its host: the verdict says it cannot start, with the host's reason (the heading names it).
             Row server = servers.findById(serverId);
-            server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+            server.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
             servers.save(server);
             String blocked = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
             assertThat(blocked).as("step 2: the verdict says it cannot start")
@@ -427,7 +420,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             HostFixtures.makeLocalPlaceable(16L * 1024);
             instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
             Models.get(InstanceModel.class).save(instance);
-            PortLedger.claim(ServerModel.localServerId(), PublishedPort.LOOPBACK, port, "tcp", InstanceModel.MODEL_ID,
+            PortLedger.claim(HostModel.localHostId(), PublishedPort.LOOPBACK, port, "tcp", InstanceModel.MODEL_ID,
                 id, "app journey");
             proxy = ProxyTestSupport.startProxy();
             ServerMain.adoptProxyServer(proxy);
@@ -752,7 +745,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
             // 3. A port it holds on a host that declares no public address: the card is "Ports", and the operator
             //    reads what is missing (no bare port) and where to set it: the host's own page.
-            PortLedger.claim(ServerModel.localServerId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
+            PortLedger.claim(HostModel.localHostId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
                 "app journey");
             String ported = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(ported).as("step 3: the held port is listed under Ports")
@@ -762,11 +755,11 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("<code>25566</code>");
             assertThat(ported).as("step 3: THE ASSERTION -- with a link to where the address is set")
                 .contains("data-endpoint-fix=\"1\"").contains("Set the host's public address")
-                .contains("/admin/" + HohenheimSlugs.SERVERS + "/" + ServerModel.localServerId());
+                .contains("/admin/" + HohenheimSlugs.HOSTS + "/" + HostModel.localHostId());
 
             // 4. A port published on the loopback alone never asks for a public address: only the host reaches it.
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
-            PortLedger.claim(ServerModel.localServerId(), PublishedPort.LOOPBACK, 25567, "tcp",
+            PortLedger.claim(HostModel.localHostId(), PublishedPort.LOOPBACK, 25567, "tcp",
                 InstanceModel.MODEL_ID, id, "app journey");
             String loopback = adminGet("/admin/instances/" + id + "/page/overview").body();
             assertThat(loopback).as("step 4: the loopback port says only the host reaches it, with no fix link")
@@ -789,7 +782,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         app.set(InstanceModel.KIND, "hohenheim:application");
         app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("repository_url",
             "https://git.example.test/acme/app.git")));
-        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        app.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(app);
         int id = app.get(InstanceModel.ID);
         var builds = Models.get(BuildOperationModel.class);
@@ -835,7 +828,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         app.set(InstanceModel.KIND, "hohenheim:application");
         app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("repository_url",
             "https://git.example.test/acme/released.git")));
-        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        app.set(InstanceModel.HOST_ID, HostModel.localHostId());
         int[] release = new int[1];
         try {
             instances.save(app);
@@ -849,7 +842,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 row.set(InstanceModel.NAME, "app-journey-released");
                 row.set(InstanceModel.KIND, "hohenheim:release");
                 row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
-                row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                row.set(InstanceModel.HOST_ID, HostModel.localHostId());
                 row.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
                 instances.save(row);
                 release[0] = row.get(InstanceModel.ID);
@@ -1030,7 +1023,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         return row;
     }

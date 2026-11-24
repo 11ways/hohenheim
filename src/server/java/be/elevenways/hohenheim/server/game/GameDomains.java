@@ -5,11 +5,11 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GameDomainModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -17,7 +17,6 @@ import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -118,7 +117,7 @@ public final class GameDomains {
                 continue;
             }
             byServer.computeIfAbsent(
-                    ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID)),
+                    HostModel.canonicalHostId(proxy.get(InstanceModel.HOST_ID)),
                     key -> new ArrayList<>())
                 .add(handle);
         }
@@ -151,26 +150,26 @@ public final class GameDomains {
         // dangling pointer (the class the release-quarantine ledger exists to prevent).
         // Before/after pairing because only beforeWrite can still see the STORED values;
         // reconciling on every save would bump zone serials on each host probe.
-        ServerModel.SCHEMA.addBeforeWriteHook(context -> {
+        HostModel.SCHEMA.addBeforeWriteHook(context -> {
             Row row = context.getRow();
             if (row == null) {
                 return;
             }
-            Row stored = StoredRows.of(Models.get(ServerModel.class), row);
-            boolean changed = row.changes(ServerModel.PUBLIC_IPV4, stored)
-                || row.changes(ServerModel.PUBLIC_IPV6, stored);
+            Row stored = StoredRows.of(Models.get(HostModel.class), row);
+            boolean changed = row.changes(HostModel.PUBLIC_IPV4, stored)
+                || row.changes(HostModel.PUBLIC_IPV6, stored);
             if (changed) {
                 context.setAttribute(SERVER_ADDRESS_CHANGED, Boolean.TRUE);
             }
         });
-        ServerModel.SCHEMA.addAfterSaveHook(context -> {
+        HostModel.SCHEMA.addAfterSaveHook(context -> {
             if (!Boolean.TRUE.equals(context.getAttribute(SERVER_ADDRESS_CHANGED))) {
                 return;
             }
             Row row = context.getRow();
-            Object id = row != null ? row.get(ServerModel.ID.getName()) : null;
+            Object id = row != null ? row.get(HostModel.ID.getName()) : null;
             if (id instanceof Integer serverId) {
-                afterServerAddressChange(serverId);
+                afterHostAddressChange(serverId);
             }
         });
     }
@@ -183,18 +182,18 @@ public final class GameDomains {
      * the A/AAAA values are the host's declared addresses, so they move (or come down)
      * with the declaration.
      */
-    public static void afterServerAddressChange(int serverId) {
+    public static void afterHostAddressChange(int serverId) {
         for (Row mapping : Models.get(GameDomainModel.class).find().all()) {
             Integer proxyId = mapping.get(GameDomainModel.PROXY_INSTANCE_ID);
             if (proxyId == null) {
                 continue;
             }
             Row server = proxyServer(proxyId);
-            if (server != null && Objects.equals(server.get(ServerModel.ID), serverId)) {
+            if (server != null && Objects.equals(server.get(HostModel.ID), serverId)) {
                 reconcileDns(mapping);
             }
         }
-        GameAddresses.afterServerAddressChange(serverId);
+        GameAddresses.afterHostAddressChange(serverId);
     }
 
     // -- the authorized write funnel ------------------------------------------
@@ -226,8 +225,8 @@ public final class GameDomains {
                 HohenheimMicrocopy.VIOLATIONS.of("game_domain_same_instance"));
         }
         // Docker networks are per-host: a proxy cannot reach a backend on another server.
-        if (ServerModel.canonicalServerId(backend.get(InstanceModel.SERVER_ID))
-                != ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID))) {
+        if (HostModel.canonicalHostId(backend.get(InstanceModel.HOST_ID))
+                != HostModel.canonicalHostId(proxy.get(InstanceModel.HOST_ID))) {
             throw Violations.ofField("backend_instance_id", backendId,
                 HohenheimMicrocopy.VIOLATIONS.of("game_domain_cross_host"));
         }
@@ -603,8 +602,8 @@ public final class GameDomains {
                     String srvOwner = DnsNames.APEX.equals(relative) ? srvPrefix : srvPrefix + "." + relative;
                     desired.add(new DesiredRecord(DnsRecordModel.TYPE_SRV, srvOwner, hostname, publicPort));
                 }
-                String v4 = server != null ? server.get(ServerModel.PUBLIC_IPV4) : null;
-                String v6 = server != null ? server.get(ServerModel.PUBLIC_IPV6) : null;
+                String v4 = server != null ? server.get(HostModel.PUBLIC_IPV4) : null;
+                String v6 = server != null ? server.get(HostModel.PUBLIC_IPV6) : null;
                 if (v4 != null && !v4.isBlank()) {
                     desired.add(new DesiredRecord(DnsRecordModel.TYPE_A, relative, v4, null));
                 }
@@ -920,8 +919,8 @@ public final class GameDomains {
             return null;
         }
         try {
-            int serverId = ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID));
-            return Models.get(ServerModel.class).findById(serverId);
+            int serverId = HostModel.canonicalHostId(proxy.get(InstanceModel.HOST_ID));
+            return Models.get(HostModel.class).findById(serverId);
         } catch (IllegalArgumentException unknown) {
             return null;
         }

@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
@@ -12,15 +11,7 @@ import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -114,7 +105,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         ProxyServer proxy = null;
         List<Row> instances = new ArrayList<>();
         List<Row> sites = new ArrayList<>();
-        int local = ServerModel.localServerId();
+        int local = HostModel.localHostId();
         AttentionSubject localHost = AttentionSubject.host(local);
         try {
             // 1. A fresh install: the local host is enrolled but not admitted. Enrolment is done and names the host;
@@ -127,7 +118,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(enrol.state()).as("step 1: an enrolled host completes the enrolment step")
                 .isEqualTo(OnboardingState.DONE);
             assertThat(say(enrol.detail())).as("step 1: naming the host, never repeating the admission step")
-                .startsWith(ServerModel.nameOf(local) + ", ")
+                .startsWith(HostModel.nameOf(local) + ", ")
                 .doesNotContain("admitted");
             OnboardingStep admit = step(fresh, OnboardingStage.ADMISSION);
             AttentionItem hostItem = rootOf(AttentionCollector.collect(), localHost);
@@ -135,7 +126,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(hostItem.stage()).as("step 1: as the admission stage's condition")
                 .isEqualTo(OnboardingStage.ADMISSION);
             assertThat(say(hostItem.title())).as("step 1: a host never admitted cannot run apps yet")
-                .isEqualTo(ServerModel.nameOf(local) + " cannot run apps yet");
+                .isEqualTo(HostModel.nameOf(local) + " cannot run apps yet");
             assertThat(admit.state()).as("step 1: admission is open").isEqualTo(OnboardingState.BLOCKED);
             assertThat(say(admit.detail())).as("step 1: in the host item's words").isEqualTo(say(hostItem.detail()));
             assertThat(say(admit.action())).as("step 1: with its one action").isEqualTo("Check and admit");
@@ -190,10 +181,10 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
             // 4. Admitted, but its posture still refuses these apps (trusted only): the host is still their root,
             //    now in the gate's own words with a way to the host, and their items still fold under it.
-            Row admittedOnly = Models.get(ServerModel.class).findById(local);
-            admittedOnly.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            admittedOnly.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
-            Models.get(ServerModel.class).save(admittedOnly);
+            Row admittedOnly = Models.get(HostModel.class).findById(local);
+            admittedOnly.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+            admittedOnly.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
+            Models.get(HostModel.class).save(admittedOnly);
             AttentionItem refusing = rootOf(AttentionCollector.collect(), localHost);
             assertThat(refusing).as("step 4: an admitted host that still holds apps back is their root").isNotNull();
             assertThat(say(refusing.detail())).as("step 4: saying why in the apps' own verdict words")
@@ -201,7 +192,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                         .findById(sites.get(0).get(SiteModel.ID)))
                     .detail()));
             assertThat(say(refusing.action())).as("step 4: leading to the host")
-                    .isEqualTo("Open " + ServerModel.nameOf(local));
+                    .isEqualTo("Open " + HostModel.nameOf(local));
             DashboardAttention.Reading refused = DashboardAttention.read();
             assertThat(mine(refused.attention())).as("step 4: the apps' items fold under it").isEmpty();
             assertThat(say(step(refused, OnboardingStage.ADMISSION).heldBack()))
@@ -224,7 +215,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             // 6. Its memory reading goes stale (measured 40 days ago): the chooser refuses it,
             //    so admission is open again and its step presents the host's item, with the fresh check that clears it
             //    and the way to the host's Overview; the band does not repeat it.
-            HostPreflight.store(ServerModel.MODE_LOCAL, new HostPreflight.Report(List.of(),
+            HostPreflight.store(HostModel.MODE_LOCAL, new HostPreflight.Report(List.of(),
                 Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true,
                 Now.instant().minus(Duration.ofDays(40)), null));
             DashboardAttention.Reading stale = DashboardAttention.read();
@@ -236,7 +227,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(staleRoot.detail().key()).as("step 6: for its stale reading, in the gate's words")
                 .isEqualTo("host_capacity_unproven");
             assertThat(say(staleRoot.title())).as("step 6: an admitted host the gate refuses takes no new apps")
-                .isEqualTo(ServerModel.nameOf(local) + " takes no new apps");
+                .isEqualTo(HostModel.nameOf(local) + " takes no new apps");
             assertThat(say(reopened.detail())).as("step 6: the step presents it").isEqualTo(say(staleRoot.detail()));
             assertThat(say(reopened.action())).as("step 6: with a fresh check").isEqualTo("Check again");
             assertThat(reopened.target().toUrl()).as("step 6: leading to the host's Overview")
@@ -256,7 +247,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .filter(item -> localHost.equals(item.about())).toList();
             assertThat(hostItems).as("step 7: the host the step presented is the band's item, once").hasSize(1);
             assertThat(say(hostItems.get(0).title())).as("step 7: still saying it takes no new apps")
-                .isEqualTo(ServerModel.nameOf(local) + " takes no new apps");
+                .isEqualTo(HostModel.nameOf(local) + " takes no new apps");
             if (ControlPlaneBackups.configuredDestinationName() == null) {
                 assertThat(retired.attention().stream().map(item -> say(item.title())).toList())
                     .as("step 7: the backups the step asked for are the band's item")
@@ -265,7 +256,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             String dashboard = adminGet("/admin/dashboard").body();
             assertThat(dashboard).as("step 7: the rendered dashboard draws no checklist")
                 .doesNotContain("data-onboarding-steps")
-                .as("step 7: and the host in the band").contains(ServerModel.nameOf(local) + " takes no new apps");
+                .as("step 7: and the host in the band").contains(HostModel.nameOf(local) + " takes no new apps");
 
             // 8. The count tiles: Apps, Hosts, Certificates and Backups, each with the line saying what
             //    its count holds, only where a fact backs it.
@@ -331,7 +322,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         try {
             // Nothing holds an app back here: the local host takes new apps, so every root below is the app's own.
             HostFixtures.makeLocalPlaceable(16L * 1024);
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             Row crashed = instance(PREFIX + "crashed", local);
             crashed.set(InstanceModel.STATUS, InstanceModel.STATUS_ERROR);
             Models.get(InstanceModel.class).save(crashed);
@@ -496,7 +487,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             //    jargon), in en and nl, and its remedy is the item's action, the host page's key confirmation.
             Row phoenix = sshHost(PREFIX + "phoenix");
             hosts.add(phoenix);
-            AttentionSubject phoenixHost = AttentionSubject.host(phoenix.get(ServerModel.ID));
+            AttentionSubject phoenixHost = AttentionSubject.host(phoenix.get(HostModel.ID));
             List<AttentionItem> hostItems = new ArrayList<>();
             HostAttention.hostsTakingNoApps(hostItems);
             AttentionItem keyItem = rootOf(hostItems, phoenixHost);
@@ -510,7 +501,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .as("step 8: and in Dutch").contains("hostsleutel van " + PREFIX + "phoenix");
             assertThat(say(keyItem.action())).as("step 8: its remedy is the action").isEqualTo("Confirm its host key");
             assertThat(keyItem.target().toUrl()).as("step 8: on the host's page")
-                .isEqualTo("/admin/servers/" + phoenix.get(ServerModel.ID) + "/open");
+                .isEqualTo("/admin/servers/" + phoenix.get(HostModel.ID) + "/open");
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, forceHttps);
             ServerMain.adoptProxyServer(previous);
@@ -528,7 +519,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 HardDeletes.row(Models.get(InstanceModel.class), instance);
             }
             for (Row host : hosts) {
-                HardDeletes.row(Models.get(ServerModel.class), host);
+                HardDeletes.row(Models.get(HostModel.class), host);
             }
             captured.restore();
         }
@@ -564,7 +555,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             // 2. A stack whose services all stopped after a good deploy (STACK_HEALTH) stopped after an error, never
             //    "its last deploy failed"; one running in part says so. Both lead to the stack's services, and the
             //    stack's own verdict (its Apps row) says the same.
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             Row failed = stack(cleanup, PREFIX + "stack-failed", StackModel.STATUS_FAILED, local);
             Row degraded = stack(cleanup, PREFIX + "stack-degraded", StackModel.STATUS_DEGRADED, local);
             List<AttentionItem> stacks = new ArrayList<>();
@@ -626,7 +617,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(say(left.detail())).as("step 4: saying why it does not run")
                 .isEqualTo("It has no engine to run on");
             assertThat(say(left.note())).as("step 4: and, under it, the leftover and its host")
-                .isEqualTo("Its old engine " + leftover.get(InstanceModel.NAME) + " on " + ServerModel.nameOf(local)
+                .isEqualTo("Its old engine " + leftover.get(InstanceModel.NAME) + " on " + HostModel.nameOf(local)
                     + " could not be removed and still holds its port, memory and a copy of the data.");
             assertThat(say(left.action())).as("step 4: with the way to the database").isEqualTo("Open the database");
 
@@ -661,9 +652,9 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
     @Timeout(90)
     void aHostWithoutPerAppFirewallRulesIsTheOneRootOfWhatItRefused() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
-        int local = ServerModel.localServerId();
+        int local = HostModel.localHostId();
         AttentionSubject localHost = AttentionSubject.host(local);
-        String host = ServerModel.nameOf(local);
+        String host = HostModel.nameOf(local);
         boolean[] enforced = {false};
         WorkloadNetworkPolicy.overrideForTest(new WorkloadNetworkPolicy((args, stdin) -> {
             throw new AssertionError("the dashboard never runs nft");
@@ -864,7 +855,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         }
 
         // 2. A sentence counting things says real plurals, in en and nl, never "(s)".
-        Microcopy inUse = new ServerModel.References(1, 0, 0, 2, 1)
+        Microcopy inUse = new HostModel.References(1, 0, 0, 2, 1)
             .describe(HohenheimMicrocopy.VIOLATIONS.of("server_in_use").withArg("name", "local"));
         assertThat(say(inUse)).as("step 2: each count in its own plural")
             .isEqualTo("Host local is still used by 1 stack, 0 databases, 0 shared database engines, 2 instances "
@@ -900,7 +891,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         List<Runnable> cleanup = new ArrayList<>();
         try {
             HostFixtures.makeLocalPlaceable(16L * 1024);
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             ProxyServer proxy = startProxy();
             cleanup.add(proxy::stop);
             ServerMain.adoptProxyServer(proxy);
@@ -980,12 +971,12 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
             // 6. A host whose last check failed reads the failure's kind in words, the transport's text after it.
             Row lost = sshHost(PREFIX + "lost");
-            cleanup.add(() -> HardDeletes.row(Models.get(ServerModel.class), lost));
-            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(lost.get(ServerModel.ID)))
-                .assign(ServerModel.LAST_ERROR_KIND, "docker_absent")
-                .assign(ServerModel.LAST_ERROR, "bash: line 1: docker: command not found")
+            cleanup.add(() -> HardDeletes.row(Models.get(HostModel.class), lost));
+            Models.get(HostModel.class).find().where(HostModel.ID.eq(lost.get(HostModel.ID)))
+                .assign(HostModel.LAST_ERROR_KIND, "docker_absent")
+                .assign(HostModel.LAST_ERROR, "bash: line 1: docker: command not found")
                 .bypassBehaviours().updateAll();
-            assertThat(adminGet("/admin/servers/" + lost.get(ServerModel.ID) + "/page/overview").body())
+            assertThat(adminGet("/admin/servers/" + lost.get(HostModel.ID) + "/page/overview").body())
                 .as("step 6: the host's last error leads with its kind, the raw text as the technical line")
                 .contains("Docker not found")
                 .contains("Technically: bash: line 1: docker: command not found")
@@ -1023,7 +1014,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             // 1. A host that is not admitted, an app on it whose earlier start failed (a container name
             //    conflict, recorded with the ERROR status it stamped) and a second app on the same host.
             HostFixtures.blockLocal();
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             AttentionSubject localHost = AttentionSubject.host(local);
             Row held = instance(PREFIX + "held", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), held));
@@ -1032,7 +1023,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 "Conflict. The container name /hohenheim-held is already in use");
             Row second = instance(PREFIX + "held-2", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), second));
-            String refusal = ServerModel.nameOf(local) + " is not admitted to run apps yet. Check and admit it first.";
+            String refusal = HostModel.nameOf(local) + " is not admitted to run apps yet. Check and admit it first.";
 
             // 2. The verdict is the root's: it cannot start, because of the host, in a sentence that names no app.
             RecordHealth verdict = AppHealth.instances(false)
@@ -1138,7 +1129,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         StackModel stacks = Models.get(StackModel.class);
         Row row = stacks.createEmptyRow();
         row.set(StackModel.NAME, name);
-        row.set(StackModel.SERVER_ID, serverId);
+        row.set(StackModel.HOST_ID, serverId);
         row.set(StackModel.STATUS, status);
         row.set(StackModel.ENABLED, false);
         stacks.save(row);
@@ -1172,7 +1163,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         Row app = Models.get(InstanceModel.class).createEmptyRow();
         app.set(InstanceModel.NAME, name);
         app.set(InstanceModel.KIND, "hohenheim:application");
-        app.set(InstanceModel.SERVER_ID, serverId);
+        app.set(InstanceModel.HOST_ID, serverId);
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
         app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
         InstanceKindHandler handler = InstanceKinds.getHandler("hohenheim:application");
@@ -1222,17 +1213,17 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
     /** A remote Docker host admitted with an accepted posture whose host key nobody confirmed. */
     private static Row sshHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.SSH_TARGET, "operator@" + name + ".invalid");
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        Row saved = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.SSH_TARGET, "operator@" + name + ".invalid");
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
+        Row saved = Models.get(HostModel.class).findById(row.get(HostModel.ID));
         HostFixtures.acknowledgePosture(saved);
-        return Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
+        return Models.get(HostModel.class).findById(row.get(HostModel.ID));
     }
 
     /** @return the rendered count tile counting this, up to its end */
@@ -1267,7 +1258,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             InstanceModel.KIND.getName(), "hohenheim:docker_container",
             InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine", "command", "sleep 60")),
             InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-            InstanceModel.SERVER_ID.getName(), serverId).forEach(app::set);
+            InstanceModel.HOST_ID.getName(), serverId).forEach(app::set);
         Models.get(InstanceModel.class).save(app);
         return app;
     }

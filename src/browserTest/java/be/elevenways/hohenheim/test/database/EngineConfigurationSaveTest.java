@@ -12,8 +12,8 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -59,7 +59,7 @@ class EngineConfigurationSaveTest {
         SqlDatasource datasource = HohenheimDatabase.datasource();
         Db.run(datasource, () -> HostFixtures.makeLocalPlaceable(16384));
         new DatabaseService(datasource).insertRecord("cfgsave", ManagedDatabase.Engine.MONGO, null,
-            "cfguser", "cfgpassword-01", "cfgdb", false, ServerService.LOCAL_HOST_NAME,
+            "cfguser", "cfgpassword-01", "cfgdb", false, HostService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING);
         int[] ids = new int[2];
         EngineHost[] host = new EngineHost[1];

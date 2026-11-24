@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -77,7 +77,7 @@ class InstanceMigrationTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -126,7 +126,7 @@ class InstanceMigrationTest {
             // 2. Migrate to beta: one call moves data, snapshots and the record.
             migrations.migrateTo(id, betaId);
             Row row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 2: the record names the DESTINATION host")
                 .isEqualTo(betaId);
             assertThat((Object) row.get(InstanceModel.MIGRATE_TARGET_ID))
@@ -179,7 +179,7 @@ class InstanceMigrationTest {
             devices.attachDisk(id, "data", 2);
             devices.attachNic(id, "lan2");
             FakeNativeDaemons.volumesOf(alphaId).get(volume).data.put("marker", "on-disk");
-            FakeNativeDaemons.EXTRA_BRIDGES.remove(ServerModel.nameOf(betaId));
+            FakeNativeDaemons.EXTRA_BRIDGES.remove(HostModel.nameOf(betaId));
             assertThat(migrations.destinationsFor(id))
                 .as("step 1: the survey offers the destination: disks and NICs travel")
                 .anySatisfy(destination -> {
@@ -201,14 +201,14 @@ class InstanceMigrationTest {
                 .doesNotContainKey(volume);
             assertThat(FakeNativeDaemons.volumesOf(alphaId).get(volume).data)
                 .as("step 1b: the source disk is untouched").containsEntry("marker", "on-disk");
-            assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID))
+            assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.HOST_ID))
                 .as("step 1b: the record stays on the source").isEqualTo(alphaId);
 
             // 2. The migration carries both: the disk's contents land on the destination's own volume, the NIC rides
             //    the bridge the import ensured, and the record keeps its device rows.
             migrations.migrateTo(id, betaId);
             Row row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 2: the record names the destination host")
                 .isEqualTo(betaId);
             assertThat((String) row.get(InstanceModel.STATUS))
@@ -225,7 +225,7 @@ class InstanceMigrationTest {
             assertThat(moved.nics).as("step 2: the extra NIC travelled").containsExactly("lan2");
             assertThat(FakeNativeDaemons.EXTRA_BRIDGES)
                 .as("step 2: the destination now holds the bridge the NIC rides")
-                .contains(ServerModel.nameOf(betaId));
+                .contains(HostModel.nameOf(betaId));
             assertThat(devices.rowsFor(id)).extracting(device -> (String) device.get(InstanceDeviceModel.NAME))
                 .as("step 2: the record keeps its device rows")
                 .containsExactlyInAnyOrder("data", "lan2");
@@ -332,7 +332,7 @@ class InstanceMigrationTest {
             assertThat((Object) afterRefusal.get(InstanceModel.MIGRATE_TARGET_ID))
                 .as("step 5: the migration window never opened")
                 .isNull();
-            assertThat((Object) afterRefusal.get(InstanceModel.SERVER_ID))
+            assertThat((Object) afterRefusal.get(InstanceModel.HOST_ID))
                 .as("step 5: and the record still names the SOURCE host")
                 .isEqualTo(alphaId);
             afterRefusal.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
@@ -385,7 +385,7 @@ class InstanceMigrationTest {
             //    so the settle ROLLS BACK -- destination copy removed, one owner.
             InstanceMigrations.recoverInterrupted();
             row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 2: rollback keeps the record on the source host")
                 .isEqualTo(alphaId);
             assertThat((String) row.get(InstanceModel.STATUS))
@@ -415,7 +415,7 @@ class InstanceMigrationTest {
             //    record at a host with nothing and delete the only copy.
             InstanceMigrations.recoverInterrupted();
             row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 4: the handoff is completed onto the destination")
                 .isEqualTo(betaId);
             assertThat((String) row.get(InstanceModel.STATUS))
@@ -462,9 +462,9 @@ class InstanceMigrationTest {
 
             // 2. Cordon, then drain: the movable pair moves, the one with install media is
             //    refused BY NAME and left running; the report says INCOMPLETE.
-            Row gamma = Models.get(ServerModel.class).findById(gammaId);
-            gamma.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
-            Models.get(ServerModel.class).save(gamma);
+            Row gamma = Models.get(HostModel.class).findById(gammaId);
+            gamma.set(HostModel.ADMISSION, HostModel.ADMISSION_CORDONED);
+            Models.get(HostModel.class).save(gamma);
             InstanceMigrations.DrainReport report = migrations.drain(gammaId);
             assertThat(report.moved()).as("step 2: both movable workloads moved")
                 .hasSize(2);
@@ -490,9 +490,9 @@ class InstanceMigrationTest {
                 assertThat((String) row.get(InstanceModel.STATUS))
                     .as("step 2: a moved workload is RUNNING on its new host")
                     .isEqualTo(InstanceModel.STATUS_RUNNING);
-                assertThat(daemonOf((int) row.get(InstanceModel.SERVER_ID))
+                assertThat(daemonOf((int) row.get(InstanceModel.HOST_ID))
                         .get(handleOf(id)).running).isTrue();
-                assertThat((Object) row.get(InstanceModel.SERVER_ID))
+                assertThat((Object) row.get(InstanceModel.HOST_ID))
                     .as("step 2: and its record no longer names the drained host")
                     .isNotEqualTo(gammaId);
             }
@@ -504,7 +504,7 @@ class InstanceMigrationTest {
             assertThat(HistoryTestSupport.recordsOptional())
                 .as("step 2b: optional history must be recording or this proves nothing")
                 .isTrue();
-            String gammaName = ServerModel.nameOf(gammaId);
+            String gammaName = HostModel.nameOf(gammaId);
             for (int id : List.of(movable1, movable2)) {
                 List<RecordedChanges.Recorded> moves = RecordedChanges.withFact(Models.get(InstanceModel.class), id,
                     HohenheimActivityAction.MIGRATED);
@@ -515,7 +515,7 @@ class InstanceMigrationTest {
                     .as("step 2b: the record must name where the workload came FROM")
                     .containsEntry(HohenheimActivityAction.FROM_KEY, gammaName);
             }
-            List<RecordedChanges.Recorded> drains = RecordedChanges.withFact(Models.get(ServerModel.class), gammaId,
+            List<RecordedChanges.Recorded> drains = RecordedChanges.withFact(Models.get(HostModel.class), gammaId,
                 HohenheimActivityAction.DRAINED);
             assertThat(drains)
                 .as("step 2b: the drain itself is recorded on the host record").isNotEmpty();
@@ -583,7 +583,7 @@ class InstanceMigrationTest {
             service.deploy(mover);
             migrations.migrateTo(mover, dst);
             assertThat((Object) Models.get(InstanceModel.class).findById(mover)
-                    .get(InstanceModel.SERVER_ID))
+                    .get(InstanceModel.HOST_ID))
                 .as("step 2: the record moved").isEqualTo(dst);
             assertThat(InstanceCapacity.bookedMbOn(src))
                 .as("step 2: the SOURCE got its 128 MB back -- a drained host that keeps"
@@ -625,7 +625,7 @@ class InstanceMigrationTest {
             //    destination booking goes back and the source keeps its own.
             InstanceMigrations.recoverInterrupted();
             assertThat((Object) Models.get(InstanceModel.class).findById(crasher)
-                    .get(InstanceModel.SERVER_ID))
+                    .get(InstanceModel.HOST_ID))
                 .as("step 5: the rollback kept the record on the source").isEqualTo(src);
             assertThat(InstanceCapacity.bookedMbOn(dst))
                 .as("step 5: so the destination's window booking was handed back")
@@ -642,7 +642,7 @@ class InstanceMigrationTest {
                 .isInstanceOf(KilledController.Killed.class);
             InstanceMigrations.recoverInterrupted();
             assertThat((Object) Models.get(InstanceModel.class).findById(crasher)
-                    .get(InstanceModel.SERVER_ID))
+                    .get(InstanceModel.HOST_ID))
                 .as("step 6: the handoff completed onto the destination").isEqualTo(dst);
             assertThat(InstanceCapacity.bookedMbOn(src))
                 .as("step 6: the source released on the completed handoff").isEqualTo(0);
@@ -666,21 +666,21 @@ class InstanceMigrationTest {
                 Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
                 // 200 MB of budget, 128 of it already spent by the neighbour.
-                HostPreflight.store(ServerModel.nameOf(dst), new HostPreflight.Report(
+                HostPreflight.store(HostModel.nameOf(dst), new HostPreflight.Report(
                     List.of(new HostPreflight.Check("daemon",
                             HostPreflight.STATUS_PASS, true, "fake daemon"),
                         new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                             HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
                     Map.of("mem_total", 200L * 1024 * 1024), true, Now.instant(), null));
                 assertThat(InstanceCapacity.budgetMbOf(
-                        Models.get(ServerModel.class).findById(dst)))
+                        Models.get(HostModel.class).findById(dst)))
                     .as("step 7: the destination's budget is the shrunken reading")
                     .isEqualTo(200L);
                 assertRefusal(() -> migrations.migrateTo(last, dst), "host_capacity_reached",
                     "step 7: a migration onto a host without the memory refuses BY NAME,"
                         + " not with a 500 and not silently");
                 assertThat((Object) Models.get(InstanceModel.class).findById(last)
-                        .get(InstanceModel.SERVER_ID))
+                        .get(InstanceModel.HOST_ID))
                     .as("step 7: and the workload never left the source").isEqualTo(src);
                 assertThat((String) Models.get(InstanceModel.class).findById(last)
                         .get(InstanceModel.STATUS))
@@ -805,7 +805,7 @@ class InstanceMigrationTest {
                 .assign(InstanceModel.CAPACITY_MB, 512).updateAll();
             InstanceMigrations.recoverInterrupted();
             row = Models.get(InstanceModel.class).findById(mover);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 5: the handoff completed onto the destination").isEqualTo(dst);
             assertThat((Integer) row.get(InstanceModel.CAPACITY_MB))
                 .as("step 5: CAPACITY_MB is re-stamped to the WINDOW amount, not left at"
@@ -827,13 +827,13 @@ class InstanceMigrationTest {
             //    sentinel ON the local host row proves it: pre-fix the handoff released
             //    the hostless row's derived 128 against the local bucket and erased the
             //    sentinel's charge.
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             // The implicit local row defaults to the docker runtime; the fake kind
             // requires incus, and resolve() refuses a runtime mismatch before the
             // ledger question this step exists to ask.
-            Row localRow = Models.get(ServerModel.class).findById(localId);
-            localRow.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            Models.get(ServerModel.class).save(localRow);
+            Row localRow = Models.get(HostModel.class).findById(localId);
+            localRow.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            Models.get(HostModel.class).save(localRow);
             int sentinel = instanceRecord("win-sentinel", localId,
                 FakeNativeDaemons.FakeNativeKind.ID.toString());
             assertThat(InstanceCapacity.bookedMbOn(localId))
@@ -843,7 +843,7 @@ class InstanceMigrationTest {
             hostless.set(InstanceModel.NAME, "win-hostless");
             hostless.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
             hostless.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-            hostless.set(InstanceModel.SERVER_ID, null);
+            hostless.set(InstanceModel.HOST_ID, null);
             Models.get(InstanceModel.class).save(hostless);
             int hostlessId = hostless.get(InstanceModel.ID);
             assertThat(InstanceCapacity.bookedMbOn(localId))
@@ -860,7 +860,7 @@ class InstanceMigrationTest {
                     + " sentinel's charge survives (an unbooked release wiped it pre-fix)")
                 .isEqualTo(128);
             Row landed = Models.get(InstanceModel.class).findById(hostlessId);
-            assertThat((Object) landed.get(InstanceModel.SERVER_ID))
+            assertThat((Object) landed.get(InstanceModel.HOST_ID))
                 .as("step 7: the record moved").isEqualTo(dst);
             assertThat((Integer) landed.get(InstanceModel.CAPACITY_MB))
                 .as("step 7: and carries the window's stamp, so its future release is"

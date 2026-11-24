@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.server.docker;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -38,7 +38,7 @@ class DatabaseLinkPortRefreshTest {
     @Test
     void theWholePublishedSetIsComparedAndRecorded() throws Exception {
         APP.renewDatabase();
-        int serverId = ServerModel.localServerId();
+        int serverId = HostModel.localHostId();
 
         // 1. The deploy recorded two observed publications of one workload.
         PortLedger.recordObservedAll(serverId, "127.0.0.1", List.of(41001, 41002), "tcp",

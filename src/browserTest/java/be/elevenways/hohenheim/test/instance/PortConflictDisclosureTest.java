@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -64,7 +64,7 @@ class PortConflictDisclosureTest extends HohenheimHttpTestBase {
         RecordGrants.grant(GrantSubjectType.USER, delegateId, InstanceModel.MODEL_ID, deployerId,
             HohenheimCapabilities.POWER, true);
         // A already deployed and holds the fixed port.
-        PortLedger.claimPreallocated(ServerModel.localServerId(), "", PORT, "tcp", InstanceModel.MODEL_ID, holderId,
+        PortLedger.claimPreallocated(HostModel.localHostId(), "", PORT, "tcp", InstanceModel.MODEL_ID, holderId,
             HOLDER_NOTE);
     }
 

@@ -22,8 +22,8 @@ import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -103,8 +103,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
-import static be.elevenways.hohenheim.RawValues.trimmed;
-
 /**
  * The managed-database tier's parts: the operator's databases, their /manage twin and the shared engines (stage 4
  * contract 10). Create provisions in the background, the resource ceilings are the only columns an update writes,
@@ -165,7 +163,7 @@ public final class DatabaseParts {
         .add(DatabaseModel.MEMORY_LIMIT_MB)
         .add(DatabaseModel.CPU_LIMIT)
         // See InstanceParts: a host is enrolled deliberately, never inline.
-        .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).creatable(false).build())
+        .add(RelationPick.of(DatabaseModel.HOST_ID, HostModel.MODEL_ID).creatable(false).build())
         .add(DatabaseModel.STATUS)
         .add(DatabaseModel.FAILURE_REASON)
         // A managed database is an engine, a database name and its credentials. The image override, the
@@ -187,7 +185,7 @@ public final class DatabaseParts {
         .add(DatabaseEngineModel.MEMORY_LIMIT_MB)
         .add(DatabaseEngineModel.CPU_LIMIT)
         // See InstanceParts: a host is enrolled deliberately, never inline.
-        .add(RelationPick.of(DatabaseEngineModel.SERVER_ID, ServerModel.MODEL_ID).creatable(false).build())
+        .add(RelationPick.of(DatabaseEngineModel.HOST_ID, HostModel.MODEL_ID).creatable(false).build())
         .add(DatabaseEngineModel.STATUS)
         .add(DatabaseEngineModel.FAILURE_REASON)
         // An engine is a kind, a host and its superuser. The image override and the ceilings have defaults.
@@ -432,8 +430,8 @@ public final class DatabaseParts {
             .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("last_backup_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().hidden().build())
-            .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
-                .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.HOST_ID)
+                .relation(RelationPick.of(DatabaseModel.HOST_ID, HostModel.MODEL_ID).build()).hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).filterable().hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.ENGINE_ID)
                 .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID).build())
@@ -605,7 +603,7 @@ public final class DatabaseParts {
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_PASSWORD.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.IMAGE.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.EPHEMERAL.getName()),
-            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.SERVER_ID.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.HOST_ID.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.PLACEMENT.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.ENGINE_ID.getName()),
             // A shared record has no ceilings of its own: the container is the ENGINE's and is booked once, at the
@@ -636,7 +634,7 @@ public final class DatabaseParts {
      */
     private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(ADMIN_FORM.defaultValues());
-        values.put(DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId());
+        values.put(DatabaseModel.HOST_ID.getName(), HostModel.localHostId());
         values.put(DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_SHARED);
         return values;
     }
@@ -898,7 +896,7 @@ public final class DatabaseParts {
         List<WidgetFact> facts = new ArrayList<>();
         for (Row engine : engines) {
             Integer id = engine.get(DatabaseEngineModel.ID);
-            String host = ServerModel.canonicalNameOf(engine.get(DatabaseEngineModel.SERVER_ID));
+            String host = HostModel.canonicalNameOf(engine.get(DatabaseEngineModel.HOST_ID));
             Microcopy holds = HohenheimMicrocopy.DATABASE_LIST.of("engine_holds")
                 .withArg("databases", HohenheimCounts.of("databases", counts.getOrDefault(id, 0L)))
                 .withArg("state", Labels.inSentence(verdicts.apply(engine).state().label()));
@@ -1033,8 +1031,8 @@ public final class DatabaseParts {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(DatabaseEngineModel.NAME).filterable().subtext("engine").build())
             .column(ColumnSpec.fromField(DatabaseEngineModel.ENGINE).filterable().hidden().build())
-            .column(ColumnSpec.fromField(DatabaseEngineModel.SERVER_ID)
-                .relation(RelationPick.of(DatabaseEngineModel.SERVER_ID, ServerModel.MODEL_ID).build())
+            .column(ColumnSpec.fromField(DatabaseEngineModel.HOST_ID)
+                .relation(RelationPick.of(DatabaseEngineModel.HOST_ID, HostModel.MODEL_ID).build())
                 .build())
             .column(stateColumn())
             .column(ColumnSpec.virtual(DATABASES_COLUMN,
@@ -1099,7 +1097,7 @@ public final class DatabaseParts {
     /** The host pick defaults to the local daemon, and the superuser to the shipped word. */
     private static @NonNull Map<String, Object> engineDefaults(@NonNull AccessContext access) {
         Map<String, Object> values = new LinkedHashMap<>(ENGINE_FORM.defaultValues());
-        values.put(DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId());
+        values.put(DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId());
         values.put(DatabaseEngineModel.ROOT_USER.getName(), "root");
         return values;
     }
@@ -1111,7 +1109,7 @@ public final class DatabaseParts {
             ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.NAME.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ENGINE.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.IMAGE.getName()),
-            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.SERVER_ID.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.HOST_ID.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ROOT_USER.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseEngineModel.ROOT_PASSWORD.getName()),
             // Shown ONLY on a record that carries one.

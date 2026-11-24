@@ -10,11 +10,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.DeviceDetail;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -395,7 +391,7 @@ public final class InstanceAttachmentParts {
     /** @return whether the instance runs on a Docker daemon, the one runtime a database is injected into */
     static boolean injectsDatabases(@NonNull Row instance) {
         InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
-        return handler != null && handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
+        return handler != null && handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER);
     }
 
     /**
@@ -627,7 +623,7 @@ public final class InstanceAttachmentParts {
         }
         String kind = instance.get(InstanceModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
+        if (handler == null || !handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("instance_id", instanceId,
                 HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
         }
@@ -638,14 +634,14 @@ public final class InstanceAttachmentParts {
         if (database == null) {
             throw Violations.ofField("database_id", databaseId, HohenheimMicrocopy.VIOLATIONS.of("database_missing"));
         }
-        int databaseServer = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
-        int instanceServer = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        int databaseServer = HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID));
+        int instanceServer = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
         if (databaseServer != instanceServer) {
             throw Violations.ofField("database_id", databaseId,
                 HohenheimMicrocopy.VIOLATIONS.of("database_instance_server_mismatch")
                     .withArg("name", database.get(DatabaseModel.NAME))
-                    .withArg("server", ServerModel.nameOf(databaseServer))
-                    .withArg("instance_server", ServerModel.nameOf(instanceServer)));
+                    .withArg("server", HostModel.nameOf(databaseServer))
+                    .withArg("instance_server", HostModel.nameOf(instanceServer)));
         }
         String stored = link.get(InstanceDatabaseModel.ENV_PREFIX);
         String prefix = stored == null || stored.isEmpty() ? InstanceDatabaseModel.DEFAULT_PREFIX : stored;

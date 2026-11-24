@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.server.security;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -92,14 +91,14 @@ public final class WorkloadNetworkPolicy {
      * (the rules land in the controller's kernel), so the server name travels or the
      * policy does not get built.
      */
-    public static @NonNull WorkloadNetworkPolicy forServer(@NonNull String serverName) {
+    public static @NonNull WorkloadNetworkPolicy forHost(@NonNull String serverName) {
         WorkloadNetworkPolicy installed = override;
         if (installed != null) {
             return installed;
         }
         Row server;
         try {
-            server = Models.get(ServerModel.class).findByName(serverName);
+            server = Models.get(HostModel.class).findByName(serverName);
         } catch (RuntimeException noInventory) {
             // No server inventory in scope (a record-less caller that never touches a
             // remote host, e.g. a SHARED_BRIDGE test): there is only the local daemon,
@@ -110,7 +109,7 @@ public final class WorkloadNetworkPolicy {
         if (!HostMode.SSH.declaredBy(server)) {
             return PRODUCTION;
         }
-        return new WorkloadNetworkPolicy(NftRunner.forServer(server), ENABLED_SETTING);
+        return new WorkloadNetworkPolicy(NftRunner.forHost(server), ENABLED_SETTING);
     }
 
     /** @param policy the applier {@link #current()} returns, or null to restore production */

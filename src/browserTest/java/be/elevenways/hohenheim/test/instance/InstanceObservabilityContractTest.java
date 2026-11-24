@@ -409,7 +409,7 @@ class InstanceObservabilityContractTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

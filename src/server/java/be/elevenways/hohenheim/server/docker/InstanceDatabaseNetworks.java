@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -80,8 +80,8 @@ public final class InstanceDatabaseNetworks {
             if (instance == null || database == null) {
                 continue;
             }
-            int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
-            if (ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)) != serverId) {
+            int serverId = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
+            if (HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID)) != serverId) {
                 continue;   // cross-host pairs are refused at deploy and carry no network
             }
             byServer.computeIfAbsent(serverId, key -> new ArrayList<>())
@@ -135,13 +135,13 @@ public final class InstanceDatabaseNetworks {
                 continue;
             }
             String name = database.get(DatabaseModel.NAME);
-            int databaseServer = ServerModel.canonicalServerId(
-                database.get(DatabaseModel.SERVER_ID));
+            int databaseServer = HostModel.canonicalHostId(
+                database.get(DatabaseModel.HOST_ID));
             if (databaseServer != resolved.serverId()) {
                 throw new IOException("REFUSED to deploy instance " + instanceId
                     + ": attached database '" + name + "' runs on server '"
-                    + ServerModel.nameOf(databaseServer) + "' while the instance deploys on"
-                    + " server '" + ServerModel.nameOf(resolved.serverId())
+                    + HostModel.nameOf(databaseServer) + "' while the instance deploys on"
+                    + " server '" + HostModel.nameOf(resolved.serverId())
                     + "'. Cross-host workload-to-database links are not supported; move the"
                     + " instance or the database so both run on the same server.");
             }
@@ -276,7 +276,7 @@ public final class InstanceDatabaseNetworks {
                 if (database == null) {
                     continue;
                 }
-                if (ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID))
+                if (HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID))
                         != resolved.serverId()) {
                     skipped(instanceId, databaseId, "cross_host");
                     continue;
@@ -328,8 +328,8 @@ public final class InstanceDatabaseNetworks {
         // networks live on ITS host, never on the local fallback.
         Row owner = StoredRows.byId(Models.get(InstanceModel.class), ownerId);
         int serverId = owner != null
-            ? ServerModel.canonicalServerId(owner.get(InstanceModel.SERVER_ID))
-            : ServerModel.localServerId();
+            ? HostModel.canonicalHostId(owner.get(InstanceModel.HOST_ID))
+            : HostModel.localHostId();
         sweepFor(ownerId, everything, Set.of(serverId));
     }
 
@@ -352,7 +352,7 @@ public final class InstanceDatabaseNetworks {
                 continue;
             }
             try {
-                DatabaseLinkNetworks.sweepOnServer(prefix, ServerModel.nameOf(serverId), serverId,
+                DatabaseLinkNetworks.sweepOnHost(prefix, HostModel.nameOf(serverId), serverId,
                     everything, databaseId -> {
                         for (Row link : links.findByInstanceId(ownerId)) {
                             if (Integer.valueOf(databaseId)

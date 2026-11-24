@@ -226,9 +226,9 @@ public class InstanceModel extends Model {
         return String.valueOf((Object) instance.get(NAME));
     }
 
-    // The host FK (servers.id). Every write folds through ServerModel.canonicalServerId
+    // The host FK (servers.id). Every write folds through HostModel.canonicalHostId
     // (the beforeValidate hook below) -- never a re-spelling; null means the local daemon.
-    public static final IntegerField SERVER_ID = SCHEMA.addField(
+    public static final IntegerField HOST_ID = SCHEMA.addField(
         IntegerField.builder().name("server_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
             .group(BASICS_GROUP)
@@ -668,7 +668,7 @@ public class InstanceModel extends Model {
 
     /**
      * The destination host (servers.id) of an in-flight cold migration; null outside
-     * one. Together with {@link #SERVER_ID} this makes an interrupted migration
+     * one. Together with {@link #HOST_ID} this makes an interrupted migration
      * settleable without a scan: the record's host is the data authority until the
      * one-statement handoff repoints it, so recovery either rolls the copy on this
      * host back or completes the handoff -- never both, never neither.
@@ -857,13 +857,13 @@ public class InstanceModel extends Model {
 
     /**
      * The host relation, for relational filtering ("host name contains x" in the
-     * instance list); {@link #SERVER_ID} stays the written column.
+     * instance list); {@link #HOST_ID} stays the written column.
      */
-    public static final BelongsTo<ServerModel> SERVER =
-        SCHEMA.addRelation(BelongsTo.to(ServerModel.class)
+    public static final BelongsTo<HostModel> HOST =
+        SCHEMA.addRelation(BelongsTo.to(HostModel.class)
             .name("server")
-            .localKey(SERVER_ID)
-            .remoteKey(ServerModel.ID)
+            .localKey(HOST_ID)
+            .remoteKey(HostModel.ID)
             .build());
 
     /** The template this instance was created from; its delete refuses while a live row names it. */
@@ -908,9 +908,9 @@ public class InstanceModel extends Model {
         // at write time -- a fifth spelling of "which host" is exactly what C3 removed.
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null && row.has(SERVER_ID.getName())
-                    && row.get(SERVER_ID.getName()) != null) {
-                row.set(SERVER_ID, ServerModel.canonicalServerId(row.get(SERVER_ID.getName())));
+            if (row != null && row.has(HOST_ID.getName())
+                    && row.get(HOST_ID.getName()) != null) {
+                row.set(HOST_ID, HostModel.canonicalHostId(row.get(HOST_ID.getName())));
             }
         });
         // A delete carries only CRITERIA (row is null in the hook context), so the doomed
@@ -952,7 +952,7 @@ public class InstanceModel extends Model {
      * names can be deleted while foreign keys are enforced.
      *
      * AIDEV-NOTE: THE detach of a destroyed workload's history pointers, called by a delete
-     * hook only AFTER its refusal of live references passed (ServerModel for server_id,
+     * hook only AFTER its refusal of live references passed (HostModel for server_id,
      * InstanceCatalogGuards for template_id and runtime_image_id). A trashed row keeps
      * referencing its host, template and image, and since foreign keys are enforced
      * (zenit 8a86d3c2) that turned every host, template and image a destroyed workload ever

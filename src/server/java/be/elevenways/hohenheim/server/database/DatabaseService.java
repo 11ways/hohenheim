@@ -9,16 +9,16 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -149,7 +149,7 @@ public class DatabaseService extends DatasourceScoped {
 
     /** The engine-operations client for a host's server. */
     private ManagedDatabase managedFor(int serverId) {
-        return new ManagedDatabase(new ServerService().clientFor(serverId));
+        return new ManagedDatabase(new HostService().clientFor(serverId));
     }
 
 
@@ -185,7 +185,7 @@ public class DatabaseService extends DatasourceScoped {
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral) throws IOException {
-        return create(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL_HOST_NAME);
+        return create(name, engine, image, user, password, database, ephemeral, HostService.LOCAL_HOST_NAME);
     }
 
     /**
@@ -333,7 +333,7 @@ public class DatabaseService extends DatasourceScoped {
      */
     private void runLogical(EngineHost host, String handle, List<String> command,
                             List<String> env, String what) throws IOException {
-        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command, env,
+        DockerClient.ExecResult result = new HostService().clientFor(host.serverId()).exec(handle, command, env,
             DockerClient.LONG_OP_TIMEOUT_MS);
         if (result.exitCode() != 0) {
             throw new IOException("Could not " + what + " on engine '" + host.name() + "' (exit "
@@ -548,7 +548,7 @@ public class DatabaseService extends DatasourceScoped {
         if (handle == null) {
             return new Settlement(row, false);
         }
-        DockerClient docker = new ServerService().clientFor(host.serverId());
+        DockerClient docker = new HostService().clientFor(host.serverId());
         String storedRefused = checkRefusal(docker, handle, command, host.engine().credentialCheckEnv(stored));
         if (storedRefused == null) {
             clearPending(recordId, secrets);
@@ -734,7 +734,7 @@ public class DatabaseService extends DatasourceScoped {
     public Row createAsync(String name, ManagedDatabase.Engine engine, String image,
                            String user, String password, String database, boolean ephemeral) {
         return createAsync(name, engine, image, user, password, database, ephemeral,
-            ServerService.LOCAL_HOST_NAME);
+            HostService.LOCAL_HOST_NAME);
     }
 
     /**
@@ -865,7 +865,7 @@ public class DatabaseService extends DatasourceScoped {
         }
         String resolvedPlacement = placement == null || placement.isBlank()
             ? defaultPlacement(engine, ephemeral) : placement.trim();
-        int serverId = ServerModel.canonicalServerId(serverName);
+        int serverId = HostModel.canonicalHostId(serverName);
         Row engineRow = null;
         if (DatabaseModel.PLACEMENT_SHARED.equals(resolvedPlacement)) {
             requireNewLogicalCredentials(user, password, database);
@@ -892,7 +892,7 @@ public class DatabaseService extends DatasourceScoped {
         row.set(DatabaseModel.MEMORY_LIMIT_MB, limits.memoryMb());
         row.set(DatabaseModel.CPU_LIMIT, limits.cpus());
         row.set(DatabaseModel.STATUS, status);
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, resolvedPlacement);
         row.set(DatabaseModel.ENGINE_ID, engineRow == null ? null
             : engineRow.get(DatabaseEngineModel.ID));
@@ -912,13 +912,13 @@ public class DatabaseService extends DatasourceScoped {
                 HohenheimMicrocopy.VIOLATIONS.of("database_engine_kind_mismatch")
                     .withArg("engine", engine.token()));
         }
-        int engineServer = ServerModel.canonicalServerId(engineRow.get(DatabaseEngineModel.SERVER_ID));
+        int engineServer = HostModel.canonicalHostId(engineRow.get(DatabaseEngineModel.HOST_ID));
         if (engineServer != serverId) {
             throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
                 HohenheimMicrocopy.VIOLATIONS.of("database_engine_host_mismatch")
                     .withArg("name", String.valueOf((Object) engineRow.get(DatabaseEngineModel.NAME)))
-                    .withArg("server", ServerModel.nameOf(engineServer))
-                    .withArg("database_server", ServerModel.nameOf(serverId)));
+                    .withArg("server", HostModel.nameOf(engineServer))
+                    .withArg("database_server", HostModel.nameOf(serverId)));
         }
         DatabaseEngines.requireImageMatch(engineRow, image);
         return engineRow;
@@ -1078,7 +1078,7 @@ public class DatabaseService extends DatasourceScoped {
                 continue;
             }
             int recordId = row.get(DatabaseModel.ID);
-            Integer serverId = row.get(DatabaseModel.SERVER_ID);
+            Integer serverId = row.get(DatabaseModel.HOST_ID);
             Runnable settle = () -> {
                 Blast.log("DB: database record", recordId, "was left provisioning by a stopped controller;"
                     + " provisioning it again");
@@ -1288,7 +1288,7 @@ public class DatabaseService extends DatasourceScoped {
             row.get(DatabaseModel.DB_USER),
             row.get(DatabaseModel.DB_PASSWORD),
             Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
-            serverOf(row),
+            hostNameOf(row),
             statusOf(row),
             row.get(DatabaseModel.FAILURE_REASON),
             live.running(),
@@ -1313,7 +1313,7 @@ public class DatabaseService extends DatasourceScoped {
                 row.get(DatabaseModel.DB_NAME),
                 row.get(DatabaseModel.DB_USER),
                 Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
-                serverOf(row),
+                hostNameOf(row),
                 statusOf(row),
                 live.running(),
                 live.state(),
@@ -1425,8 +1425,8 @@ public class DatabaseService extends DatasourceScoped {
      * throws "No server with id N" on every isolated-datasource caller (destroy, backup,
      * restore). Every serverOf call site is already outside a scope, so the scope goes here.
      */
-    private String serverOf(Row row) {
-        return query(() -> ServerModel.nameOf(row.get(DatabaseModel.SERVER_ID)));
+    private String hostNameOf(Row row) {
+        return query(() -> HostModel.nameOf(row.get(DatabaseModel.HOST_ID)));
     }
 
     /** The host serving a row, resolved inside the service's scope. */
@@ -1866,7 +1866,7 @@ public class DatabaseService extends DatasourceScoped {
         String name = row.get(DatabaseModel.NAME);
         int recordId = row.get(DatabaseModel.ID);
         ManagedDatabase.Engine engine = engineOf(row);
-        int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(row.get(DatabaseModel.HOST_ID));
 
         List<Integer> stopped = new ArrayList<>();
         // The shared engine a failed move was landing on: its root password can be quoted before the switch.
@@ -2063,16 +2063,16 @@ public class DatabaseService extends DatasourceScoped {
         List<Integer> stored = new ArrayList<>();
         Set<String> tokens = new LinkedHashSet<>();
         for (Row row : candidates) {
-            stored.add(row.get(DatabaseModel.SERVER_ID));
+            stored.add(row.get(DatabaseModel.HOST_ID));
             tokens.add(Objects.requireNonNull(ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE))).token());
         }
-        Map<Integer, Integer> hosts = ServerModel.canonicalServerIds(stored);
+        Map<Integer, Integer> hosts = HostModel.canonicalHostIds(stored);
         Map<String, Row> engines = new HashMap<>();
         for (Row engine : Models.get(DatabaseEngineModel.class).find()
-                .where(DatabaseEngineModel.SERVER_ID.in(new LinkedHashSet<>(hosts.values())))
+                .where(DatabaseEngineModel.HOST_ID.in(new LinkedHashSet<>(hosts.values())))
                 .where(DatabaseEngineModel.ENGINE.in(tokens))
                 .orderBy(DatabaseEngineModel.ID, SortOrder.ASC).all()) {
-            engines.putIfAbsent(engine.get(DatabaseEngineModel.SERVER_ID) + "/" + engine.get(DatabaseEngineModel.ENGINE),
+            engines.putIfAbsent(engine.get(DatabaseEngineModel.HOST_ID) + "/" + engine.get(DatabaseEngineModel.ENGINE),
                 engine);
         }
         Map<Integer, List<Row>> held = KeyedRows.byAsked(Models.get(DatabaseModel.class).find()
@@ -2085,7 +2085,7 @@ public class DatabaseService extends DatasourceScoped {
             }
             String token = Objects.requireNonNull(ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE)))
                 .token();
-            Row existing = engines.get(hosts.get((Integer) row.get(DatabaseModel.SERVER_ID)) + "/" + token);
+            Row existing = engines.get(hosts.get((Integer) row.get(DatabaseModel.HOST_ID)) + "/" + token);
             if (existing == null) {
                 continue;
             }
@@ -2221,7 +2221,7 @@ public class DatabaseService extends DatasourceScoped {
      * AIDEV-NOTE: the long-operation bound: the fingerprint reads every row of every table, twice per move.
      */
     private String fingerprint(EngineHost host, String handle, String database) throws IOException {
-        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle,
+        DockerClient.ExecResult result = new HostService().clientFor(host.serverId()).exec(handle,
             host.engine().fingerprintCommand(host.rootUser(), database),
             host.engine().logicalEnv(host.rootPassword(), null), DockerClient.LONG_OP_TIMEOUT_MS);
         if (result.exitCode() != 0) {
@@ -2242,7 +2242,7 @@ public class DatabaseService extends DatasourceScoped {
      * @throws IOException naming the database, the engine and what it holds; nothing was switched
      */
     private boolean requireLogicalEmpty(EngineHost host, String handle, String database) throws IOException {
-        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle,
+        DockerClient.ExecResult result = new HostService().clientFor(host.serverId()).exec(handle,
             host.engine().logicalObjectsCommand(host.rootUser(), database),
             host.engine().logicalEnv(host.rootPassword(), null));
         String answer = result.stdout().trim();
@@ -2299,7 +2299,7 @@ public class DatabaseService extends DatasourceScoped {
         if (command == null) {
             return;
         }
-        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command,
+        DockerClient.ExecResult result = new HostService().clientFor(host.serverId()).exec(handle, command,
             host.engine().logicalEnv(host.rootPassword(), null));
         String answer = result.stdout().trim();
         if (result.exitCode() != 0 || !"0".equals(answer)) {

@@ -9,8 +9,8 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -408,7 +408,7 @@ class ApplicationPushPolicyTest {
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME, name);
         instance.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instance.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(instance);
         return instance.get(InstanceModel.ID);
@@ -428,7 +428,7 @@ class ApplicationPushPolicyTest {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);

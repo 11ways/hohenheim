@@ -1,5 +1,5 @@
 package be.elevenways.hohenheim.test.instance;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
@@ -748,7 +747,7 @@ class InstanceTemplatePolicyTest extends HohenheimHttpTestBase {
             Row row = instances.createEmptyRow();
             row.set(InstanceModel.NAME, PREFIX + "app-deploy-settings");
             row.set(InstanceModel.KIND, "hohenheim:application");
-            row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            row.set(InstanceModel.HOST_ID, HostModel.localHostId());
             row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
             instances.save(row);
             created[0] = row.get(InstanceModel.ID);
@@ -804,14 +803,14 @@ class InstanceTemplatePolicyTest extends HohenheimHttpTestBase {
             Row app = instances.createEmptyRow();
             app.set(InstanceModel.NAME, PREFIX + "image-app-app");
             app.set(InstanceModel.KIND, "hohenheim:application");
-            app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            app.set(InstanceModel.HOST_ID, HostModel.localHostId());
             app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
             instances.save(app);
             ids[0] = app.get(InstanceModel.ID);
             Row container = instances.createEmptyRow();
             container.set(InstanceModel.NAME, PREFIX + "image-app-container");
             container.set(InstanceModel.KIND, "hohenheim:docker_container");
-            container.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            container.set(InstanceModel.HOST_ID, HostModel.localHostId());
             container.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("command", "sleep 300")));
             instances.save(container);
             ids[1] = container.get(InstanceModel.ID);

@@ -1,13 +1,6 @@
 package be.elevenways.hohenheim.test.game;
 
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.GameDomainModel;
-import be.elevenways.hohenheim.model.InstanceFileModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -100,7 +93,7 @@ class GameDomainIntegrityTest extends HohenheimHttpTestBase {
         replicaZoneId = zone(REPLICA_ORIGIN, DnsZoneModel.ROLE_SECONDARY);
         DnsZoneStore.INSTANCE.reload();
 
-        int serverId = ServerModel.canonicalServerId(null);
+        int serverId = HostModel.canonicalHostId(null);
         PortLedger.claimPreallocated(serverId, "", 25611, "tcp",
             InstanceModel.MODEL_ID, proxyId, "game-integrity-test");
         PortLedger.claimPreallocated(serverId, "", 25612, "tcp",

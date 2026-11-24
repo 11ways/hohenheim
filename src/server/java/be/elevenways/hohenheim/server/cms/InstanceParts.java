@@ -3,8 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.zenit.cms.common.action.ActionPlacement;
-import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimPickRules;
@@ -20,13 +18,11 @@ import be.elevenways.hohenheim.server.instance.InstanceFigures;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.game.GameAddresses;
-import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -51,7 +47,6 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -88,8 +83,6 @@ import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
-import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -294,7 +287,7 @@ public final class InstanceParts {
      *
      * AIDEV-NOTE: the label and the crash policy are the two inline-editable answers, because they describe an
      * instance without moving it or changing what it runs: a rename is capacity-NEUTRAL (InstanceCapacity books memory
-     * per record, never per name). KIND is excluded because switching it NULLS IMAGE_FINGERPRINT, SERVER_ID because it
+     * per record, never per name). KIND is excluded because switching it NULLS IMAGE_FINGERPRINT, HOST_ID because it
      * REBOOKS host memory, SETTINGS because it is the dynamic sub-form.
      */
     private static ResourceForm.@NonNull Builder<Row> form(@NonNull FormSpec spec) {
@@ -444,7 +437,7 @@ public final class InstanceParts {
             // A host is admitted, preflighted and trusted before it can carry anything, so it is never created from
             // inside another record's form -- and every host is offered, judged by the kind: one the kind cannot be
             // placed on is drawn disabled with the placement gate's reason, and refused in those words on the submit.
-            .add(hostPick(InstanceModel.SERVER_ID))
+            .add(hostPick(InstanceModel.HOST_ID))
             // The runtime image only offers images to kinds that run inside one, and is SHOWN only for those kinds (the
             // showWhen below): every other kind's deploy never reads the column. It stays clearable because a shown
             // pick may still be left for InstanceDeclarations to require on the write.
@@ -454,7 +447,7 @@ public final class InstanceParts {
                     InstanceModel.KIND.getName(),
                     InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage),
                     InstanceKinds.kindsWhere(handler ->
-                        !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER))), "kind")
+                        !handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER))), "kind")
                 .build())
             // AIDEV-NOTE: deliberately NO template pick here. TEMPLATE_ID is only ever stamped by
             // InstanceTemplates.createFromTemplate, which coerces the template's variables and arms the install
@@ -503,7 +496,7 @@ public final class InstanceParts {
             // the schema-declared sections each kind adds (HohenheimFormSections). Never fold a field by hiding it
             // with visibleIn: that makes it unwritable.
             // The name and where it runs read as one line: the two answers every app has.
-            .row(InstanceModel.NAME.getName(), InstanceModel.SERVER_ID.getName())
+            .row(InstanceModel.NAME.getName(), InstanceModel.HOST_ID.getName())
             .section(FormSection.of(BACKUPS_SECTION, HohenheimMicrocopy.INSTANCE.of("backups"),
                 InstanceModel.BACKUP_TARGET_ID.getName()))
             .section(FormSection.of(CONNECT_SECTION, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
@@ -573,7 +566,7 @@ public final class InstanceParts {
     private static @Nullable Microcopy hostRefusal(@NonNull EditContext context, @NonNull HostSubject subject,
                                                    @NonNull Integer serverId) {
         Row stored = storedRecord(context);
-        if (stored != null && serverId.equals(stored.get(InstanceModel.SERVER_ID))
+        if (stored != null && serverId.equals(stored.get(InstanceModel.HOST_ID))
                 && subject.kind().equals(stored.get(InstanceModel.KIND))) {
             return null;
         }
@@ -666,8 +659,8 @@ public final class InstanceParts {
             .column(ColumnSpec.fromField(InstanceModel.NAME).filterable().subtext("kind").build())
             .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(InstanceModel.KIND).filterable().hidden().build())
-            .column(ColumnSpec.fromField(InstanceModel.SERVER_ID)
-                .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
+            .column(ColumnSpec.fromField(InstanceModel.HOST_ID)
+                .relation(RelationPick.of(InstanceModel.HOST_ID, HostModel.MODEL_ID).build()).build())
             .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
             .column(liveFigureColumn())
             .column(installStateColumn().filterable().hidden().build())
@@ -687,7 +680,7 @@ public final class InstanceParts {
                 InstanceModel.STATUS.getName(), CoreTypes.EQUALS).build())
             // Relational host filter: "the instances on daystrom" is a typed host name, riding the server.name
             // variable the declared source's vocabulary adds.
-            .filter(FilterSpec.globalLeaf(HOST_FILTER, FieldLabels.labelFor(InstanceModel.SERVER_ID), HOST_FILTER,
+            .filter(FilterSpec.globalLeaf(HOST_FILTER, FieldLabels.labelFor(InstanceModel.HOST_ID), HOST_FILTER,
                 CoreTypes.CONTAINS).build())
             .build();
     }
@@ -704,8 +697,8 @@ public final class InstanceParts {
     /** The runtime schema variables plus the relational host name the strip filter rides. */
     private static @NonNull RuleVocabulary filterVocabulary() {
         RuleVocabulary.Builder vocabulary = runtimeSchemaVocabulary();
-        vocabulary.add(RelationRules.define(InstanceModel.SERVER, ServerModel.NAME)
-            .label(FieldLabels.labelFor(InstanceModel.SERVER_ID)));
+        vocabulary.add(RelationRules.define(InstanceModel.HOST, HostModel.NAME)
+            .label(FieldLabels.labelFor(InstanceModel.HOST_ID)));
         return vocabulary.build();
     }
 
@@ -834,7 +827,7 @@ public final class InstanceParts {
         if (!refused.isEmpty()) {
             throw refused;
         }
-        save.row().set(InstanceModel.SERVER_ID, placed);
+        save.row().set(InstanceModel.HOST_ID, placed);
     }
 
     /**
@@ -847,7 +840,7 @@ public final class InstanceParts {
     private static @Nullable Integer placedHostFor(@NonNull Map<String, Object> values,
                                                    @NonNull AccessContext accessContext,
                                                    @NonNull Violations refused) {
-        Integer requested = values.get(InstanceModel.SERVER_ID.getName()) instanceof Number number
+        Integer requested = values.get(InstanceModel.HOST_ID.getName()) instanceof Number number
             ? number.intValue() : null;
         InstanceKindHandler handler = InstanceKinds.getHandler(
             values.get(InstanceModel.KIND.getName()) == null ? null
@@ -858,7 +851,7 @@ public final class InstanceParts {
         } catch (Violations placement) {
             for (Violation refusal : placement.all()) {
                 refused.addAll(Violations.ofField(
-                    InstanceModel.SERVER_ID.getName(), requested, refusal.message()));
+                    InstanceModel.HOST_ID.getName(), requested, refusal.message()));
             }
             if (placement.isEmpty()) {
                 // A refusal that names no reason is a placement bug, never a host to write.

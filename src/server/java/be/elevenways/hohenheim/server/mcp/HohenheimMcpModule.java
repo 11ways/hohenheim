@@ -11,46 +11,10 @@ import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.game.GameDomainOperations;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.SiteRedirectModel;
-import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.HohenheimHostWiring;
-import be.elevenways.hohenheim.server.cms.AccessRuleParts;
-import be.elevenways.hohenheim.server.cms.BackupTargetParts;
-import be.elevenways.hohenheim.server.cms.BuildHookParts;
-import be.elevenways.hohenheim.server.cms.CertificateOperations;
-import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
-import be.elevenways.hohenheim.server.cms.DatabaseParts;
-import be.elevenways.hohenheim.server.cms.DnsOperations;
-import be.elevenways.hohenheim.server.cms.DomainParts;
-import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
-import be.elevenways.hohenheim.server.cms.ProjectParts;
-import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
-import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
-import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
-import be.elevenways.hohenheim.server.cms.ServerParts;
-import be.elevenways.hohenheim.server.cms.SiteWrites;
-import be.elevenways.hohenheim.server.cms.SpamserviceOperations;
-import be.elevenways.hohenheim.server.cms.StackOperations;
+import be.elevenways.hohenheim.server.cms.*;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -108,7 +72,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         CertificateModel.MODEL_ID, InstanceModel.MODEL_ID, InstanceTemplateModel.MODEL_ID,
         InstanceDeviceModel.MODEL_ID, InstanceVolumeModel.MODEL_ID, InstanceDatabaseModel.MODEL_ID,
         PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, GitProviderModel.MODEL_ID,
-        ServerModel.MODEL_ID, RuntimeImageModel.MODEL_ID, BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID);
+        HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID, BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -174,7 +138,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             DatabaseDumpParts.DELETE, StackOperations.DEPLOY, StackOperations.STOP, StackOperations.ROLLBACK,
             StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES, StackOperations.DELETE_STACK,
             StackOperations.DELETE_SERVICE,
-            ServerParts.DELETE, RuntimeImageParts.DELETE, ProjectParts.DELETE, ReconcileFindingParts.REMOVE,
+            HostParts.DELETE, RuntimeImageParts.DELETE, ProjectParts.DELETE, ReconcileFindingParts.REMOVE,
             ReleasedClaimParts.LIFT, SpamserviceOperations.START, SpamserviceOperations.STOP,
             SpamserviceOperations.RESTART));
         McpToolSet.Builder set = McpToolSet.builder()
@@ -202,7 +166,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(InstanceVariableOperations.SET_VARIABLE, HohenheimMcpAnswers::variableWritten)
             .answersWith(InstanceVariableOperations.UNSET_VARIABLE, HohenheimMcpAnswers::variableWritten)
             .answersWith(InstanceVariableOperations.GENERATE_SECRET, HohenheimMcpAnswers::variableWritten);
-        for (var operation : ServerParts.lifecycleForAssistants()) {
+        for (var operation : HostParts.lifecycleForAssistants()) {
             set.answersWith(operation, HohenheimMcpAnswers::said);
         }
         tools = set.build();

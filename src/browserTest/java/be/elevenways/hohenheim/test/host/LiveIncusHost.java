@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.test.host;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
@@ -233,31 +232,31 @@ public final class LiveIncusHost {
      * unadmitted, no client identity yet (the product mints that itself).
      */
     public Row enrol(String name) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
-            row.set(ServerModel.NAME, name);
+            row.set(HostModel.NAME, name);
         }
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.INCUS_URL, this.url);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.SSH_TARGET, null);
-        row.set(ServerModel.HOST_KEY, null);
-        row.set(ServerModel.HOST_KEY_FINGERPRINT, null);
-        row.set(ServerModel.HOST_KEY_OFFERED, null);
-        row.set(ServerModel.HOST_KEY_VERIFIED, false);
-        row.set(ServerModel.INCUS_SERVER_CERT, null);
-        row.set(ServerModel.INCUS_SERVER_CERT_FINGERPRINT, null);
-        row.set(ServerModel.INCUS_SERVER_CERT_OFFERED, null);
-        row.set(ServerModel.INCUS_SERVER_CERT_VERIFIED, false);
-        row.set(ServerModel.INCUS_CLIENT_CERT, null);
-        row.set(ServerModel.INCUS_CLIENT_KEY, null);
-        row.set(ServerModel.PREFLIGHT_OK, false);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.IDENTITY_PRIVATE_KEY, null);
-        row.set(ServerModel.IDENTITY_PUBLIC_KEY, null);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        row.set(HostModel.INCUS_URL, this.url);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.SSH_TARGET, null);
+        row.set(HostModel.HOST_KEY, null);
+        row.set(HostModel.HOST_KEY_FINGERPRINT, null);
+        row.set(HostModel.HOST_KEY_OFFERED, null);
+        row.set(HostModel.HOST_KEY_VERIFIED, false);
+        row.set(HostModel.INCUS_SERVER_CERT, null);
+        row.set(HostModel.INCUS_SERVER_CERT_FINGERPRINT, null);
+        row.set(HostModel.INCUS_SERVER_CERT_OFFERED, null);
+        row.set(HostModel.INCUS_SERVER_CERT_VERIFIED, false);
+        row.set(HostModel.INCUS_CLIENT_CERT, null);
+        row.set(HostModel.INCUS_CLIENT_KEY, null);
+        row.set(HostModel.PREFLIGHT_OK, false);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.IDENTITY_PRIVATE_KEY, null);
+        row.set(HostModel.IDENTITY_PUBLIC_KEY, null);
         model.save(row);
         HostFixtures.acknowledgePosture(row);
         return model.findByName(name);
@@ -346,7 +345,7 @@ public final class LiveIncusHost {
      * bridges, including objects other live forks were about to reference.
      */
     private void sweepSharedObjects(String hostName) {
-        Row host = Models.get(ServerModel.class).findByName(hostName);
+        Row host = Models.get(HostModel.class).findByName(hostName);
         ReapIncusControllers.HostOutcome outcome = ReapIncusControllers.sweepHost(host);
         System.out.println("=== enroll sweep on " + hostName + ": "
             + (outcome.reachable()
@@ -361,7 +360,7 @@ public final class LiveIncusHost {
      */
     private void registerSharedObjects(String hostName) {
         this.mintedSharedObjects.add(new SharedObjects(
-            new ServerService().incusClientFor(hostName),
+            new HostService().incusClientFor(hostName),
             ControllerScope.scoped(""),
             IncusNetworkPolicy.aclName(),
             IncusNetworkPolicy.extraNetwork(),
@@ -646,10 +645,10 @@ public final class LiveIncusHost {
         String fingerprint = IncusTrust.fingerprintOf(
             host.get(HostTrustSlot.INCUS_TLS.clientPublic()));
         IncusTrust.scanAndPin(host);
-        Row pinned = Models.get(ServerModel.class).findByName(hostName);
+        Row pinned = Models.get(HostModel.class).findByName(hostName);
         IncusTrust.confirm(pinned);
         try {
-            IncusTrust.enrollWithToken(Models.get(ServerModel.class).findByName(hostName),
+            IncusTrust.enrollWithToken(Models.get(HostModel.class).findByName(hostName),
                 mintTrustToken(clientName));
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -674,10 +673,10 @@ public final class LiveIncusHost {
         }
         LiveLane.require(LiveLane.Need.INCUS_HOST, report.passed(),
             "incus preflight did not pass: " + report.checks());
-        Row ready = Models.get(ServerModel.class).findByName(hostName);
+        Row ready = Models.get(HostModel.class).findByName(hostName);
         HostAdmission.requireAdmittable(ready);
-        ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        Models.get(ServerModel.class).save(ready);
+        ready.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        Models.get(HostModel.class).save(ready);
     }
 
     /**
@@ -696,9 +695,9 @@ public final class LiveIncusHost {
      * @return the ssh host-key fingerprint both channels agreed on
      */
     public String enrollSshLaneThroughProduct(String hostName) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row host = model.findByName(hostName);
-        host.set(ServerModel.SSH_TARGET, this.trustTarget);
+        host.set(HostModel.SSH_TARGET, this.trustTarget);
         model.save(host);
 
         Row withTarget = model.findByName(hostName);

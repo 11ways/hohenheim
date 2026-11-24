@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.zenit.kvm.common.ScreenProtocol;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -76,7 +76,7 @@ public final class VmScreens {
         if (!InstanceModel.STATUS_RUNNING.equals(status) && !InstanceModel.STATUS_STARTING.equals(status)) {
             return null;
         }
-        String serverName = ServerModel.nameOf(instance.get(InstanceModel.SERVER_ID));
+        String serverName = HostModel.nameOf(instance.get(InstanceModel.HOST_ID));
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         ScreenSession opened;
         synchronized (LIVE) {

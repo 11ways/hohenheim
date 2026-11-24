@@ -9,10 +9,10 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
@@ -108,11 +108,11 @@ class WorkspaceDockerLiveTest {
             // The real ssh ceremony; the daemon-trust half is not needed for a docker host.
             remote.enrol(HOST);
             remote.enrollSshLaneThroughProduct(HOST);
-            Row host = Models.get(ServerModel.class).findByName(HOST);
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            host.set(ServerModel.INCUS_URL, null);
-            Models.get(ServerModel.class).save(host);
+            Row host = Models.get(HostModel.class).findByName(HOST);
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            host.set(HostModel.MODE, HostModel.MODE_SSH);
+            host.set(HostModel.INCUS_URL, null);
+            Models.get(HostModel.class).save(host);
             remote.admitThroughProduct(HOST);
         });
 
@@ -130,8 +130,8 @@ class WorkspaceDockerLiveTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, dataPath);
 
         Db.run(datasource, () -> {
-            Row server = Models.get(ServerModel.class).findByName(HOST);
-            shell = HostShell.forServer(server);
+            Row server = Models.get(HostModel.class).findByName(HOST);
+            shell = HostShell.forHost(server);
             shell.run("mkdir -p " + HostShell.quote(dataPath));
             VolumeBackends.Detection detection = VolumeBackends.runAndStore(HOST);
             LiveLane.require(LiveLane.Need.REMOTE_HOST,
@@ -196,7 +196,7 @@ class WorkspaceDockerLiveTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
-            int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
+            int hostId = Models.get(HostModel.class).findByName(HOST).get(HostModel.ID);
 
             // 1. A workspace runs and a marker is written into its home from inside.
             Map<String, Object> settings = new LinkedHashMap<>();
@@ -415,7 +415,7 @@ class WorkspaceDockerLiveTest {
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings) {
         return workspaceRecord(imageId, settings, "live-workspace-docker",
-            Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID));
+            Models.get(HostModel.class).findByName(HOST).get(HostModel.ID));
     }
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings, String name, int hostId) {
@@ -423,7 +423,7 @@ class WorkspaceDockerLiveTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

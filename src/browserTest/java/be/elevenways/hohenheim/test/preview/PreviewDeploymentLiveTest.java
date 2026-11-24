@@ -4,21 +4,14 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -98,10 +91,10 @@ class PreviewDeploymentLiveTest {
         HostFixtures.admitLocal();
         // A hosted zone covering the preview base domain, and a declared public
         // address: the preview lane materializes A records into it, attributed.
-        var servers = Models.get(be.elevenways.hohenheim.model.ServerModel.class);
+        var servers = Models.get(HostModel.class);
         Row local = servers.findById(
-            be.elevenways.hohenheim.model.ServerModel.localServerId());
-        local.set(be.elevenways.hohenheim.model.ServerModel.PUBLIC_IPV4, "192.0.2.10");
+            HostModel.localHostId());
+        local.set(HostModel.PUBLIC_IPV4, "192.0.2.10");
         servers.save(local);
         var zones = Models.get(be.elevenways.hohenheim.model.DnsZoneModel.class);
         Row zone = zones.createEmptyRow();

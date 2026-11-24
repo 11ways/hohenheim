@@ -1,10 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackDeploymentModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -47,7 +43,7 @@ class StackDeployFailureRecordTest extends HohenheimHttpTestBase {
         Row stack = stacks.createEmptyRow();
         stack.set(StackModel.NAME, STACK_NAME);
         stack.set(StackModel.ENABLED, true);
-        stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+        stack.set(StackModel.HOST_ID, HostModel.localHostId());
         stacks.save(stack);
         stackId = stack.get(StackModel.ID);
 

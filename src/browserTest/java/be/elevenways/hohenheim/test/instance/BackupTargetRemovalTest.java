@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * AIDEV-NOTE: the refusal used to count TRASHED instances, and nothing purges a trashed row,
  * so under enforced foreign keys every target a destroyed workload ever backed up to could
- * never be deleted -- the dead end ServerModel had for hosts. Daemon-free: every decision is
+ * never be deleted -- the dead end HostModel had for hosts. Daemon-free: every decision is
  * over stored record state.
  */
 class BackupTargetRemovalTest {

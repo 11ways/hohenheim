@@ -3,15 +3,15 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
@@ -158,7 +158,7 @@ public final class DatabaseInstances {
 
         /** @return the host row an engine instance runs on, null when it names no server */
         public @Nullable Row hostOf(@NonNull Row instance) {
-            return this.servers.get(instance.get(InstanceModel.SERVER_ID));
+            return this.servers.get(instance.get(InstanceModel.HOST_ID));
         }
     }
 
@@ -185,10 +185,10 @@ public final class DatabaseInstances {
             Row instance = owned.get(placement.owner().model()).get(placement.owner().id());
             if (instance != null) {
                 candidates.put(key, instance);
-                serverIds.add(instance.get(InstanceModel.SERVER_ID));
+                serverIds.add(instance.get(InstanceModel.HOST_ID));
             }
         });
-        Map<Integer, Row> servers = serverIds.isEmpty() ? new HashMap<>() : ServerModel.serversByStoredId(serverIds);
+        Map<Integer, Row> servers = serverIds.isEmpty() ? new HashMap<>() : HostModel.hostsByStoredId(serverIds);
         Map<Integer, Row> instances = new HashMap<>();
         candidates.forEach((key, instance) -> {
             if (placements.get(key).resolves(servers)) {
@@ -295,7 +295,7 @@ public final class DatabaseInstances {
      *         the engine never reports ready; the caller flips the record to failed
      */
     public static int deploy(@NonNull EngineHost host) throws IOException {
-        String serverName = ServerModel.nameOf(host.serverId());
+        String serverName = HostModel.nameOf(host.serverId());
         try {
             int instanceId = reserveEngineRow(host);
 
@@ -303,7 +303,7 @@ public final class DatabaseInstances {
             // reads them: applyToSettings merges them into the container environment.
             writeEngineEnvironment(instanceId, host);
 
-            DockerClient docker = new ServerService().clientFor(serverName);
+            DockerClient docker = new HostService().clientFor(serverName);
             if (!host.shared()) {
                 retireLegacyContainer(docker, host.name(), host.ownerId());
             }
@@ -365,7 +365,7 @@ public final class DatabaseInstances {
             }
             instance.set(InstanceModel.NAME, host.instanceName());
             instance.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-            instance.set(InstanceModel.SERVER_ID, host.serverId());
+            instance.set(InstanceModel.HOST_ID, host.serverId());
             // A managed database that dies unobserved must come back: the workloads
             // attached to it are down until it does, and there is no operator "stop"
             // story where keeping a crashed engine down is the wanted outcome.
@@ -431,7 +431,7 @@ public final class DatabaseInstances {
     public static void destroyFor(@NonNull EngineHost host, boolean removeData,
                                   UnfinishedDestroys.@NonNull Policy policy, @NonNull Runnable beforeClaim)
             throws IOException {
-        String serverName = ServerModel.nameOf(host.serverId());
+        String serverName = HostModel.nameOf(host.serverId());
         Row instance = ownedBy(host);
         if (instance != null) {
             int instanceId = instance.get(InstanceModel.ID);
@@ -457,7 +457,7 @@ public final class DatabaseInstances {
             }
         }
 
-        DockerClient docker = new ServerService().clientFor(serverName);
+        DockerClient docker = new HostService().clientFor(serverName);
         if (!host.shared()) {
             // The pre-lowering container, if this database never re-deployed after the
             // lowering: removed only when the daemon still attributes it to this record.

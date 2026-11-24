@@ -4,9 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.Operation;
@@ -22,7 +22,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Uuids;
-import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.history.ActionModel;
@@ -30,7 +29,6 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
@@ -93,7 +91,7 @@ class HostPostureAcknowledgementTest {
 
     /**
      * The sha256 of the shipped {@code server.acknowledge_body} message per locale, pinned
-     * against {@link ServerModel#POSTURE_WARNING_VERSION}. See step 1 for what to do when
+     * against {@link HostModel#POSTURE_WARNING_VERSION}. See step 1 for what to do when
      * this fails.
      */
     private static final Map<String, String> WARNING_DIGESTS = Map.of(
@@ -125,14 +123,14 @@ class HostPostureAcknowledgementTest {
     @Test
     void systemWorkCannotSignAnOperatorsPostureAcknowledgement() {
         Db.run(datasource, () -> {
-            Row host = Models.get(ServerModel.class).findById(admittedSharedHost("system-probe"));
+            Row host = Models.get(HostModel.class).findById(admittedSharedHost("system-probe"));
             Throwable refused = catchThrowable(() -> Accountability.runAs(
                 new Accountability(SystemPrincipal.ID.toString(), "zenit:system", "internal posture sweep", null, null,
                     AccountabilityOrigin.SYSTEM), () -> HostPostureAcknowledgement.record(host)));
             assertThat(refused).as("step 1: an identified system actor is still not an accepting operator")
                 .isInstanceOf(Violations.class);
-            assertThat(ServerModel.postureAcknowledged(Models.get(ServerModel.class).findById(
-                host.get(ServerModel.ID)))).as("step 1: system work leaves no acknowledgement").isFalse();
+            assertThat(HostModel.postureAcknowledged(Models.get(HostModel.class).findById(
+                host.get(HostModel.ID)))).as("step 1: system work leaves no acknowledgement").isFalse();
         });
     }
 
@@ -147,31 +145,31 @@ class HostPostureAcknowledgementTest {
             assertThat(sha256Of(shippedWarning(pinned.getKey())))
                 .as("step 1: the shipped %s risk warning no longer matches the digest pinned"
                     + " against POSTURE_WARNING_VERSION %s. If the MEANING changed, bump"
-                    + " ServerModel.POSTURE_WARNING_VERSION (every stored acknowledgement"
+                    + " HostModel.POSTURE_WARNING_VERSION (every stored acknowledgement"
                     + " goes stale and operators re-accept). If only the WORDING changed,"
                     + " re-pin the digest here.", pinned.getKey(),
-                    ServerModel.POSTURE_WARNING_VERSION)
+                    HostModel.POSTURE_WARNING_VERSION)
                 .isEqualTo(pinned.getValue());
         }
 
         Db.run(datasource, () -> {
             int hostId = admittedSharedHost("edge-1");
-            ServerModel servers = Models.get(ServerModel.class);
+            HostModel servers = Models.get(HostModel.class);
 
             // 2. Declaring the posture stores the posture AND NOTHING ELSE. This is the
             //    "a boolean hidden in settings is not sufficient" assertion: the write
             //    every path funnels through leaves no actor, no timestamp and no version.
             Row declared = servers.findById(hostId);
-            assertThat((String) declared.get(ServerModel.POSTURE))
+            assertThat((String) declared.get(HostModel.POSTURE))
                 .as("step 2: the host really does declare shared containers")
-                .isEqualTo(ServerModel.POSTURE_SHARED_CONTAINER);
-            assertThat(ServerModel.postureAcknowledged(declared))
+                .isEqualTo(HostModel.POSTURE_SHARED_CONTAINER);
+            assertThat(HostModel.postureAcknowledged(declared))
                 .as("step 2: and declaring it acknowledged NOTHING")
                 .isFalse();
             assertThat(Map.of(
-                    "posture", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_POSTURE)),
-                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(declared)),
-                    "at", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_AT))))
+                    "posture", String.valueOf((Object) declared.get(HostModel.ACKNOWLEDGED_POSTURE)),
+                    "by", String.valueOf(HostModel.ACKNOWLEDGER.read(declared)),
+                    "at", String.valueOf((Object) declared.get(HostModel.ACKNOWLEDGED_AT))))
                 .as("step 2: no acknowledgement column was written by the plain save")
                 .isEqualTo(Map.of("posture", "null", "by", "null", "at", "null"));
 
@@ -214,16 +212,16 @@ class HostPostureAcknowledgementTest {
 
             Row acknowledged = servers.findById(hostId);
             assertThat(Map.of(
-                    "posture", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_POSTURE)),
-                    "version", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION)),
-                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(acknowledged)),
-                    "label", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_BY_LABEL))))
+                    "posture", String.valueOf((Object) acknowledged.get(HostModel.ACKNOWLEDGED_POSTURE)),
+                    "version", String.valueOf((Object) acknowledged.get(HostModel.ACKNOWLEDGED_WARNING_VERSION)),
+                    "by", String.valueOf(HostModel.ACKNOWLEDGER.read(acknowledged)),
+                    "label", String.valueOf((Object) acknowledged.get(HostModel.ACKNOWLEDGED_BY_LABEL))))
                 .as("step 4: actor, warning version and the posture accepted are all on"
                     + " the RECORD -- the authority a gate can still read in a year")
-                .isEqualTo(Map.of("posture", ServerModel.POSTURE_SHARED_CONTAINER,
-                    "version", String.valueOf(ServerModel.POSTURE_WARNING_VERSION),
+                .isEqualTo(Map.of("posture", HostModel.POSTURE_SHARED_CONTAINER,
+                    "version", String.valueOf(HostModel.POSTURE_WARNING_VERSION),
                     "by", String.valueOf(PrincipalRef.account(OPERATOR_ID)), "label", "Ada Operator"));
-            assertThat((Instant) acknowledged.get(ServerModel.ACKNOWLEDGED_AT))
+            assertThat((Instant) acknowledged.get(HostModel.ACKNOWLEDGED_AT))
                 .as("step 4: with a timestamp").isNotNull();
             assertThat(OperationPipeline.offer(operation, operator, acknowledged))
                 .as("step 4: and the action stops offering itself once it is done")
@@ -237,8 +235,8 @@ class HostPostureAcknowledgementTest {
                 .hasSize(1);
             assertThat(accepted.get(0).fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED))
                 .as("step 4: naming the posture and the warning version accepted")
-                .isEqualTo(Map.of(HohenheimActivityAction.POSTURE_KEY, ServerModel.POSTURE_SHARED_CONTAINER,
-                    HohenheimActivityAction.WARNING_VERSION_KEY, ServerModel.POSTURE_WARNING_VERSION));
+                .isEqualTo(Map.of(HohenheimActivityAction.POSTURE_KEY, HostModel.POSTURE_SHARED_CONTAINER,
+                    HohenheimActivityAction.WARNING_VERSION_KEY, HostModel.POSTURE_WARNING_VERSION));
             assertThat(ActionModel.ACTOR_PRINCIPAL.read(accepted.get(0).action()))
                 .as("step 4: and it names a real actor, not system work")
                 .isEqualTo(PrincipalRef.account(OPERATOR_ID));
@@ -258,17 +256,17 @@ class HostPostureAcknowledgementTest {
             //    resource: moving the posture anywhere else erases the acknowledgement,
             //    so coming back to shared_container needs a fresh human act.
             Row moving = servers.findById(hostId);
-            moving.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            moving.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             servers.save(moving);
             Row moved = servers.findById(hostId);
-            assertThat((String) moved.get(ServerModel.ACKNOWLEDGED_POSTURE))
+            assertThat((String) moved.get(HostModel.ACKNOWLEDGED_POSTURE))
                 .as("step 6: the acknowledgement was ERASED by the posture change, not"
                     + " left lying around to be resurrected")
                 .isNull();
-            moved.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            moved.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             servers.save(moved);
             Row returned = servers.findById(hostId);
-            assertThat(ServerModel.postureAcknowledged(returned))
+            assertThat(HostModel.postureAcknowledged(returned))
                 .as("step 6: so going away and coming back does NOT restore it")
                 .isFalse();
             assertThat(keyOf(catchThrowable(() ->
@@ -286,27 +284,27 @@ class HostPostureAcknowledgementTest {
             //     wrongly granted; what was open is the away-and-back resurrection.
             Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
-            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+            assertThat(HostModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6b precondition: the host is acknowledged again")
                 .isTrue();
 
             Row partial = servers.createEmptyRow();
-            partial.set(ServerModel.ID, hostId);
-            partial.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+            partial.set(HostModel.ID, hostId);
+            partial.set(HostModel.POSTURE, HostModel.POSTURE_DEDICATED);
             servers.save(partial);
-            assertThat((String) servers.findById(hostId).get(ServerModel.ACKNOWLEDGED_POSTURE))
+            assertThat((String) servers.findById(hostId).get(HostModel.ACKNOWLEDGED_POSTURE))
                 .as("step 6b: a save staging ONLY the posture must still erase the"
                     + " acknowledgement")
                 .isNull();
-            assertThat(ServerModel.ACKNOWLEDGER.read(servers.findById(hostId)))
+            assertThat(HostModel.ACKNOWLEDGER.read(servers.findById(hostId)))
                 .as("step 6b: and erase the whole record of it, not just the posture column")
                 .isNull();
 
             Row back = servers.createEmptyRow();
-            back.set(ServerModel.ID, hostId);
-            back.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            back.set(HostModel.ID, hostId);
+            back.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             servers.save(back);
-            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+            assertThat(HostModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6b: so going away and coming back through partial saves does not"
                     + " resurrect it either")
                 .isFalse();
@@ -316,10 +314,10 @@ class HostPostureAcknowledgementTest {
             Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row unrelated = servers.createEmptyRow();
-            unrelated.set(ServerModel.ID, hostId);
-            unrelated.set(ServerModel.LAST_SEEN_AT, Now.instant());
+            unrelated.set(HostModel.ID, hostId);
+            unrelated.set(HostModel.LAST_SEEN_AT, Now.instant());
             servers.save(unrelated);
-            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+            assertThat(HostModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6c: a partial save that never stages the posture leaves the"
                     + " acknowledgement alone")
                 .isTrue();
@@ -327,12 +325,12 @@ class HostPostureAcknowledgementTest {
             // Hand step 7 the state step 6 used to leave it: unacknowledged, on the
             // shared-container posture. record() refuses an already-acknowledged host.
             Row clear = servers.createEmptyRow();
-            clear.set(ServerModel.ID, hostId);
-            clear.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+            clear.set(HostModel.ID, hostId);
+            clear.set(HostModel.POSTURE, HostModel.POSTURE_DEDICATED);
             servers.save(clear);
             Row shared = servers.createEmptyRow();
-            shared.set(ServerModel.ID, hostId);
-            shared.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            shared.set(HostModel.ID, hostId);
+            shared.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             servers.save(shared);
 
             // 7. INVALIDATOR TWO: a warning-version bump goes stale WITHOUT touching the
@@ -341,18 +339,18 @@ class HostPostureAcknowledgementTest {
             Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row current = servers.findById(hostId);
-            assertThat(ServerModel.postureAcknowledged(current))
+            assertThat(HostModel.postureAcknowledged(current))
                 .as("step 7 precondition: a fresh acknowledgement is current again")
                 .isTrue();
-            current.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
-                ServerModel.POSTURE_WARNING_VERSION - 1);
+            current.set(HostModel.ACKNOWLEDGED_WARNING_VERSION,
+                HostModel.POSTURE_WARNING_VERSION - 1);
             servers.save(current);
             Row stale = servers.findById(hostId);
-            assertThat(ServerModel.postureAcknowledged(stale))
+            assertThat(HostModel.postureAcknowledged(stale))
                 .as("step 7: an acknowledgement of an OLDER warning does not answer for"
                     + " the current one")
                 .isFalse();
-            assertThat(ServerModel.ACKNOWLEDGER.read(stale))
+            assertThat(HostModel.ACKNOWLEDGER.read(stale))
                 .as("step 7: and going stale wrote nothing -- the record of who accepted"
                     + " what is still there to read")
                 .isEqualTo(PrincipalRef.account(OPERATOR_ID));
@@ -379,21 +377,21 @@ class HostPostureAcknowledgementTest {
 
     /** An admitted docker host declaring shared containers, measured and reachable. */
     private static int admittedSharedHost(String name) {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.NAME, PREFIX + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
         servers.save(row);
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024);
         HostPreflight.store(PREFIX + name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             facts, true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static InstancePlacement.Workload workload(int memoryMb) {
@@ -403,18 +401,18 @@ class HostPostureAcknowledgementTest {
 
     private static long liveInstancesOn(int serverId) {
         return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.SERVER_ID.eq(serverId))
+            .where(InstanceModel.HOST_ID.eq(serverId))
             .where(InstanceModel.DELETED_AT.isNull()).count();
     }
 
     @SuppressWarnings("unchecked")
     private static PanelAction<Row> acknowledgeAction() {
-        for (PanelAction<Row> action : ServerParts.admin().actions()) {
+        for (PanelAction<Row> action : HostParts.admin().actions()) {
             if (Identifier.of("hohenheim", "acknowledge_posture").equals(action.id())) {
                 return action;
             }
         }
-        throw new AssertionError("acknowledge_posture placed operation not found on ServerParts");
+        throw new AssertionError("acknowledge_posture placed operation not found on HostParts");
     }
 
     private static String keyOf(Throwable thrown) {

@@ -1,13 +1,9 @@
 package be.elevenways.hohenheim.server.files;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.PinnedImages;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.*;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
@@ -82,12 +78,12 @@ public final class VolumeHelper implements AutoCloseable {
      */
     static @NonNull VolumeHelper open(int applicationId) throws IOException {
         Row application = Models.get(InstanceModel.class).findById(applicationId);
-        String serverName = ServerModel.canonicalNameOf(application == null ? null
-            : application.get(InstanceModel.SERVER_ID));
+        String serverName = HostModel.canonicalNameOf(application == null ? null
+            : application.get(InstanceModel.HOST_ID));
         Map<String, String> mounts = InstanceVolumes.mountsFor(applicationId, serverName);
         DockerClient docker;
         try {
-            docker = new ServerService().clientFor(serverName);
+            docker = new HostService().clientFor(serverName);
         } catch (RuntimeException unaddressable) {
             throw new IOException("the host " + serverName + " has no reachable Docker daemon: "
                 + unaddressable.getMessage(), unaddressable);
@@ -113,7 +109,7 @@ public final class VolumeHelper implements AutoCloseable {
         OwnerLabels.removeIfOwnedBy(docker, handle, InstanceModel.MODEL_ID, applicationId);
         docker.createContainer(handle, spec, ContainerHardening.SERVICE);
         VolumeHelper helper = new VolumeHelper(docker,
-            new DockerInstanceRuntime(docker, WorkloadNetworkPolicy.forServer(serverName)), handle, labels,
+            new DockerInstanceRuntime(docker, WorkloadNetworkPolicy.forHost(serverName)), handle, labels,
             List.copyOf(mounts.values()));
         try {
             docker.startContainer(handle);
@@ -154,7 +150,7 @@ public final class VolumeHelper implements AutoCloseable {
     /** Removes this controller's exited helpers on every Docker host; a host it cannot ask is logged, never thrown. */
     public static void removeExitedEverywhere() {
         List<String> serverNames;
-        ServerService servers = new ServerService();
+        HostService servers = new HostService();
         try {
             serverNames = servers.dockerNames();
         } catch (RuntimeException unlisted) {

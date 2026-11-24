@@ -4,8 +4,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -167,7 +167,7 @@ final class DatabaseOverview {
      * its own container's host.
      */
     static @NonNull Microcopy runsOn(@NonNull Row database) {
-        String host = ServerModel.canonicalNameOf(database.get(DatabaseModel.SERVER_ID));
+        String host = HostModel.canonicalNameOf(database.get(DatabaseModel.HOST_ID));
         if (!DatabaseModel.isShared(database)) {
             return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_dedicated").withArg("host", host);
         }

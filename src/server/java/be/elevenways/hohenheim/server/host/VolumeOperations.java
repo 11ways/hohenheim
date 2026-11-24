@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -140,25 +139,25 @@ public interface VolumeOperations {
     /** Who answers for one host's volume operations; a test installs a directory-backed one. */
     @FunctionalInterface
     interface Hosts {
-        @NonNull VolumeOperations forServer(@NonNull Row server);
+        @NonNull VolumeOperations forHost(@NonNull Row server);
 
         /** Which storage a host keeps its volumes on: two hosts answering alike name one directory tree. */
         default @NonNull String storageOf(@NonNull Row server) {
-            if (!ServerModel.hasSshLane(server)) {
+            if (!HostModel.hasSshLane(server)) {
                 return "local";
             }
-            String target = String.valueOf((Object) server.get(ServerModel.SSH_TARGET));
+            String target = String.valueOf((Object) server.get(HostModel.SSH_TARGET));
             return "ssh:" + target.substring(target.indexOf('@') + 1);
         }
     }
 
-    /** The seam behind {@link #forServer}: the host's detected backend over its shell. */
+    /** The seam behind {@link #forHost}: the host's detected backend over its shell. */
     PlatformSeam<Hosts> HOSTS = PlatformSeam.withDefault(Hosts.class,
-        server -> forBackend(ServerModel.volumeBackendOf(server), HostShell.forServer(server)));
+        server -> forBackend(HostModel.volumeBackendOf(server), HostShell.forHost(server)));
 
     /** The operations of one inventoried host. */
-    static @NonNull VolumeOperations forServer(@NonNull Row server) {
-        return HOSTS.require().forServer(server);
+    static @NonNull VolumeOperations forHost(@NonNull Row server) {
+        return HOSTS.require().forHost(server);
     }
 
     /**

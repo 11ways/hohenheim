@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test.ports;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ports.PortClaimFence;
@@ -62,7 +62,7 @@ class PortLedgerOverlapTest {
     @Test
     void everyObservedPublicationOfOneOwnerSurvives() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             int ownerId = instance("multi-publication");
 
             // 1. Two publications observed in ONE call: both claims exist.
@@ -115,7 +115,7 @@ class PortLedgerOverlapTest {
     @Test
     void aRivalIsFoundBehindTheOwnersOwnRowAndReclaimsUpdateInPlace() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             int ownerId = instance("overlap-owner");
             int rivalId = instance("overlap-rival");
 
@@ -183,10 +183,10 @@ class PortLedgerOverlapTest {
         Db.run(datasource, () -> {
             owners[0] = instance("race-whole-host");
             owners[1] = instance("race-loopback");
-            // Resolved BEFORE the race: localServerId() creates the local row on first use,
+            // Resolved BEFORE the race: localHostId() creates the local row on first use,
             // and two racers doing that at once collide on servers.name instead of on the
             // port this test is about.
-            localId[0] = ServerModel.localServerId();
+            localId[0] = HostModel.localHostId();
         });
         String[] binds = {"0.0.0.0", "127.0.0.1"};
         List<Throwable> refusals = Racers.race("two binds of one port", Duration.ofSeconds(60), 2, slot -> {
@@ -219,7 +219,7 @@ class PortLedgerOverlapTest {
         int[] localId = new int[1];
         Db.run(datasource, () -> {
             owner[0] = instance("stalled-claimant");
-            localId[0] = ServerModel.localServerId();
+            localId[0] = HostModel.localHostId();
         });
         String key = PortLedger.claimKeyOf(localId[0], "", 8471, "tcp");
         StealingDatasource stalled = new StealingDatasource(HohenheimDatabase.resolution().url());
@@ -268,7 +268,7 @@ class PortLedgerOverlapTest {
                     row.set(InstanceModel.NAME, "colliding-owner");
                     row.set(InstanceModel.KIND, "hohenheim:docker_container");
                     Models.get(InstanceModel.class).insert(row);
-                    PortLedger.claim(ServerModel.localServerId(), "", 8481, "tcp", InstanceModel.MODEL_ID,
+                    PortLedger.claim(HostModel.localHostId(), "", 8481, "tcp", InstanceModel.MODEL_ID,
                         ownerId, null);
                 });
             }
@@ -343,7 +343,7 @@ class PortLedgerOverlapTest {
 
     private static List<Row> rowsOn(int serverId, int port) {
         return Models.get(PortAllocationModel.class).find()
-            .where(PortAllocationModel.SERVER_ID.eq(serverId))
+            .where(PortAllocationModel.HOST_ID.eq(serverId))
             .and(PortAllocationModel.PORT.eq(port))
             .all();
     }

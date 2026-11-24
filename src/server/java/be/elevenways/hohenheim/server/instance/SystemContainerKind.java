@@ -3,12 +3,12 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
@@ -132,7 +132,7 @@ public final class SystemContainerKind implements InstanceKindHandler {
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
-    public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+    public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
     /** IncusInstanceRuntime implements DeviceAttachSupport; the Docker driver does not. */
     @Override
@@ -144,7 +144,7 @@ public final class SystemContainerKind implements InstanceKindHandler {
         // its own updates and dependencies), the tenant-range denies still apply.
         // The server NAME travels so the driver can read the DAEMON HOST's kernel, not
         // the controller's -- kernel truth and daemon config are independent facts here.
-        return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+        return new IncusInstanceRuntime(new HostService().incusClientFor(serverName),
             Egress.OPEN, IncusWorkloadType.CONTAINER, serverName);
     }
 

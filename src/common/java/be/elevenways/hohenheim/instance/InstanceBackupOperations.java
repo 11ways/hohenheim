@@ -47,7 +47,7 @@ public final class InstanceBackupOperations {
      * Restores the backup as a NEW instance on the host the operator picks, or the one placement picks when none is;
      * a tenant's lands on its instance's own host. The source keeps running, so it confirms without a typed phrase.
      *
-     * AIDEV-NOTE: the host pick reuses the create forms' own field (InstanceTemplateOperations.SERVER_ID, whose help
+     * AIDEV-NOTE: the host pick reuses the create forms' own field (InstanceTemplateOperations.HOST_ID, whose help
      * says what blank means). Restoring onto ANOTHER host is the recovery for a dead one, so blank never means "the
      * source host" for an operator: the server scopes the pick to the placement gate's verdict per host, and offers a
      * tenant no pick at all.
@@ -60,8 +60,8 @@ public final class InstanceBackupOperations {
             .one(BACKUP)
             .verb(HohenheimVerbs.RESTORE_TO_NEW)
             .gate(OperationGate.open())
-            .input(OperationInput.of(FormSpec.builder().add(InstanceTemplateOperations.SERVER_ID).build(),
-                RestoreInput.class, values -> new RestoreInput(values.get(InstanceTemplateOperations.SERVER_ID))))
+            .input(OperationInput.of(FormSpec.builder().add(InstanceTemplateOperations.HOST_ID).build(),
+                RestoreInput.class, values -> new RestoreInput(values.get(InstanceTemplateOperations.HOST_ID))))
             .result(Restored.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
@@ -71,7 +71,7 @@ public final class InstanceBackupOperations {
             .register();
 
     /** Where a restore lands: a host, or null to let placement pick one. */
-    public record RestoreInput(@Nullable Integer serverId) {
+    public record RestoreInput(@Nullable Integer hostId) {
     }
 
     /**

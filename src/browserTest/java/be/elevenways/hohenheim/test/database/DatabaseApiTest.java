@@ -1,11 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -119,9 +115,9 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
         for (Row row : engines.find().where(DatabaseEngineModel.NAME.startsWith(PREFIX)).all()) {
             engines.delete(row.get(DatabaseEngineModel.ID));
         }
-        Model servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
-            servers.delete(row.get(ServerModel.ID));
+        Model servers = Models.get(HostModel.class);
+        for (Row row : servers.find().where(HostModel.NAME.startsWith(PREFIX)).all()) {
+            servers.delete(row.get(HostModel.ID));
         }
     }
 
@@ -237,20 +233,20 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
     // -- fixtures -------------------------------------------------------------
 
     private static int host(String name) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** A shared engine ROW with no owned instance: the tier exists, no container does. */
@@ -260,7 +256,7 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
         row.set(DatabaseEngineModel.NAME, name);
         row.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
         row.set(DatabaseEngineModel.IMAGE, "postgres:16");
-        row.set(DatabaseEngineModel.SERVER_ID, serverId);
+        row.set(DatabaseEngineModel.HOST_ID, serverId);
         row.set(DatabaseEngineModel.ROOT_USER, "root");
         row.set(DatabaseEngineModel.ROOT_PASSWORD, PREFIX + "root-pw");
         row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, 1024);
@@ -279,7 +275,7 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_PASSWORD, PREFIX + "secret-pw");
         // What a drifted password change leaves: a secret no surface may carry either.
         row.set(DatabaseModel.PENDING_PASSWORD, PREFIX + "pending-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engineId);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -292,7 +288,7 @@ class DatabaseApiTest extends HohenheimHttpTestBase {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
         instances.save(row);

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -65,9 +65,9 @@ class SiteFormApplicabilityJourneyTest extends HohenheimHttpTestBase {
     @Test
     void aKindNoHostRunsSaysWhatItNeedsAndStaysChoosable() {
         String incusOnly = InstanceKinds.kindsWhere(handler -> handler.supportedRuntimes()
-            .equals(Set.of(ServerModel.RUNTIME_INCUS))).getFirst();
-        boolean incusInventoried = !Models.get(ServerModel.class).find()
-            .where(ServerModel.RUNTIME.eq(ServerModel.RUNTIME_INCUS)).all().isEmpty();
+            .equals(Set.of(HostModel.RUNTIME_INCUS))).getFirst();
+        boolean incusInventoried = !Models.get(HostModel.class).find()
+            .where(HostModel.RUNTIME.eq(HostModel.RUNTIME_INCUS)).all().isEmpty();
 
         // 1. While no Incus host exists, an Incus-only card says it needs one (the test database is shared, so the
         //    expectation reads it rather than assuming); it stays choosable, the host pick being the gate.
@@ -77,21 +77,21 @@ class SiteFormApplicabilityJourneyTest extends HohenheimHttpTestBase {
             .as("step 1: says it needs an Incus host exactly while none exists").isEqualTo(!incusInventoried);
 
         // 2. Once an Incus host is inventoried (admitted or not), the card is the kind's own again.
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, "applicability-incus");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        host.set(ServerModel.SSH_TARGET, "operator@applicability-incus.invalid");
-        host.set(ServerModel.INCUS_URL, "https://applicability-incus.invalid:8443");
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, "applicability-incus");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.MODE, HostModel.MODE_SSH);
+        host.set(HostModel.SSH_TARGET, "operator@applicability-incus.invalid");
+        host.set(HostModel.INCUS_URL, "https://applicability-incus.invalid:8443");
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        Models.get(HostModel.class).save(host);
         FieldOption<String> after = option(InstanceKinds.placeableOptions(), incusOnly);
         assertThat(after.description() == null || !"kind_needs_runtime_host".equals(after.description().key()))
             .as("step 2: an inventoried Incus host lifts the note").isTrue();
 
         // 3. A Docker kind always reads as itself: the local host runs Docker.
         String dockerKind = InstanceKinds.kindsWhere(InstanceKindHandler::supportsSiteUpstream).stream()
-            .filter(kind -> InstanceKinds.getHandler(kind).supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER))
+            .filter(kind -> InstanceKinds.getHandler(kind).supportedRuntimes().contains(HostModel.RUNTIME_DOCKER))
             .findFirst().orElseThrow();
         FieldOption<String> docker = option(InstanceKinds.placeableOptions(), dockerKind);
         assertThat(docker.description() == null || !docker.description().key().startsWith("kind_needs"))
@@ -106,7 +106,7 @@ class SiteFormApplicabilityJourneyTest extends HohenheimHttpTestBase {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/app", "tag", "1",
             "container_port", 8080)));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);

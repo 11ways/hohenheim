@@ -1,17 +1,8 @@
 package be.elevenways.hohenheim.test.game;
 
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.GameDomainModel;
-import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
-import be.elevenways.hohenheim.model.InstanceFileModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -128,7 +119,7 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
         // The proxy's PUBLIC pre-allocated port (what a public-exposure deploy claims
         // BEFORE create). DNS generation deliberately rides ONLY a public claim: a
         // loopback port would make every generated row a dangling pointer.
-        PortLedger.claimPreallocated(ServerModel.canonicalServerId(null), "", 25599,
+        PortLedger.claimPreallocated(HostModel.canonicalHostId(null), "", 25599,
             "tcp", InstanceModel.MODEL_ID, proxyId, "game-domain-test");
     }
 
@@ -183,7 +174,7 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
         // 2. The accepted mapping materializes attributed, immutable config, DNS and secret.
         materializationGeneratesAttributedConfigDnsAndSecret(mappingId);
         // 3. Its A/AAAA rows ride the server's declared address and nothing else.
-        aRecordsRideTheServerAddressAuthorityAndOnlyIt(mappingId);
+        aRecordsRideTheHostAddressAuthorityAndOnlyIt(mappingId);
         // 4. Deleting it (and its domain row) removes exactly its own output.
         cleanupRemovesOnlyItsOwnOutput(mappingId);
     }
@@ -326,16 +317,16 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
             .isEqualTo(1);
     }
 
-    private void aRecordsRideTheServerAddressAuthorityAndOnlyIt(int mappingId) {
+    private void aRecordsRideTheHostAddressAuthorityAndOnlyIt(int mappingId) {
         var records = Models.get(DnsRecordModel.class);
-        var servers = Models.get(ServerModel.class);
-        int serverId = ServerModel.canonicalServerId(null);
+        var servers = Models.get(HostModel.class);
+        int serverId = HostModel.canonicalHostId(null);
 
         // 1. No address declared: the SRV exists (public port), NO A/AAAA is generated
         //    -- an A record pointing at an address nothing declared would be the
         //    reports-success shape by name.
         assertThat(generatedRow(DnsRecordModel.TYPE_A))
-            .as("step 1: no A row without a declared server address")
+            .as("step 1: no A row without a declared host address")
             .isNull();
 
         // 2. A hand-authored A row at the SAME owner name, BEFORE any generation: the
@@ -351,17 +342,17 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
 
         // 3. An invalid declared address is REFUSED on the model funnel itself.
         Row server = servers.findById(serverId);
-        server.set(ServerModel.PUBLIC_IPV4, "not-an-address");
+        server.set(HostModel.PUBLIC_IPV4, "not-an-address");
         Throwable invalid = catchThrowable(() -> servers.save(server));
         assertThat(invalid)
-            .as("step 3: a non-literal server address is refused")
+            .as("step 3: a non-literal host address is refused")
             .isInstanceOf(Violations.class);
 
         // 4. Declaring real addresses generates the A and AAAA rows: attributed to the
         //    mapping, owner name = the mapped host, values = the DECLARED addresses.
         Row declare = servers.findById(serverId);
-        declare.set(ServerModel.PUBLIC_IPV4, "192.0.2.10");
-        declare.set(ServerModel.PUBLIC_IPV6, "2001:db8::10");
+        declare.set(HostModel.PUBLIC_IPV4, "192.0.2.10");
+        declare.set(HostModel.PUBLIC_IPV6, "2001:db8::10");
         servers.save(declare);
         Row a = generatedRow(DnsRecordModel.TYPE_A);
         assertThat(a).as("step 4: the generated A row exists").isNotNull();
@@ -381,7 +372,7 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
         //    (a stale A record is a dangling pointer); the hand-authored row is
         //    untouched either way.
         Row move = servers.findById(serverId);
-        move.set(ServerModel.PUBLIC_IPV4, "192.0.2.20");
+        move.set(HostModel.PUBLIC_IPV4, "192.0.2.20");
         servers.save(move);
         assertThat((String) generatedRow(DnsRecordModel.TYPE_A).get(DnsRecordModel.VALUE))
             .as("step 5: the generated A row moved with the host address")
@@ -396,7 +387,7 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, proxyId);
         PortLedger.recordObserved(serverId, "127.0.0.1", 25599, "tcp",
             InstanceModel.MODEL_ID, proxyId, "game-domain-test");
-        GameDomains.afterServerAddressChange(serverId);
+        GameDomains.afterHostAddressChange(serverId);
         assertThat(generatedSrvRow())
             .as("step 6: a loopback-published proxy generates NO SRV row")
             .isNull();
@@ -413,8 +404,8 @@ class GameDomainAuthorityTest extends HohenheimHttpTestBase {
         PortLedger.claimPreallocated(serverId, "", 25599, "tcp",
             InstanceModel.MODEL_ID, proxyId, "game-domain-test");
         Row clear = servers.findById(serverId);
-        clear.set(ServerModel.PUBLIC_IPV4, null);
-        clear.set(ServerModel.PUBLIC_IPV6, null);
+        clear.set(HostModel.PUBLIC_IPV4, null);
+        clear.set(HostModel.PUBLIC_IPV6, null);
         servers.save(clear);
         assertThat(generatedSrvRow())
             .as("step 7: the SRV row returns with the public claim")

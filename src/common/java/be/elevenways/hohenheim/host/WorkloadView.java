@@ -8,7 +8,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * One workload holding this host: the same population
- * {@code ServerModel.refuseRemovalWhileOwned} counts, so drain/cordon/delete refusals are
+ * {@code HostModel.refuseRemovalWhileOwned} counts, so drain/cordon/delete refusals are
  * legible BEFORE they fire.
  *
  * @param tier        which population the workload belongs to

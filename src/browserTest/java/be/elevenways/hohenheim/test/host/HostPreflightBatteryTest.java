@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
@@ -59,12 +59,12 @@ class HostPreflightBatteryTest {
     @Test
     void aHostWhoseKernelProbeFailedOnceIsAdmittedAfterAPassingRun() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "battery-a");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            host.set(HostModel.NAME, "battery-a");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(host);
 
             // 1. The probe container's exec FAILS: container_kernel is a required FAIL.

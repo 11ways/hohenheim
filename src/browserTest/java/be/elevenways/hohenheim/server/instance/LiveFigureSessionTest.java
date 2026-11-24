@@ -5,9 +5,9 @@ import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.instance.LiveFigureState;
 import be.elevenways.hohenheim.instance.LiveFigureView;
 import be.elevenways.hohenheim.instance.StatusProbe;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -263,7 +263,7 @@ class LiveFigureSessionTest extends HohenheimTestBase {
 
             // 3. A host whose server row is gone is never probed on the controller's own loopback, where the same
             //    port number belongs to another workload: nothing answers there.
-            PublishedPortProbe gone = PublishedPortProbe.forServer(Integer.MAX_VALUE);
+            PublishedPortProbe gone = PublishedPortProbe.forHost(Integer.MAX_VALUE);
             assertThat(gone.accepts(server.port())).as("step 3: a missing host accepts nothing").isFalse();
             assertThat(gone.exchange(server.port(), MinecraftStatusPing.request(server.port()),
                     MinecraftStatusPing::complete, MinecraftStatusPing.MAX_ANSWER, InstanceFigures.PROBE_WAIT))
@@ -407,7 +407,7 @@ class LiveFigureSessionTest extends HohenheimTestBase {
         settings.put(StatusProbe.SETTING, StatusProbe.MINECRAFT_JAVA.token());
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         rows.add(row);
         return row;

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.host;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.WordedState;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -16,7 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: an ADMITTED host the gate still refuses (a stale memory reading, a posture, a check that no longer
  * passes) is {@link #REFUSING}, never {@link #TAKING}: Starfleet's local host once read "Takes new apps"
  * while placement refused it. This enum is the ONE declaration of the host's state badge: each stored
- * {@link ServerModel#ADMISSION} value is derived from the standing that carries its token, so a stored "blocked" and
+ * {@link HostModel#ADMISSION} value is derived from the standing that carries its token, so a stored "blocked" and
  * a waiting host can never wear two colours.
  *
  * AIDEV-NOTE: the host attention item's title is a fact on the member, so a never-admitted host and an admitted one
@@ -31,7 +31,7 @@ public enum HostStanding implements WordedState {
     // Declaration order is the order the dashboard's Hosts tile tallies them in ("1 takes new apps, 1 waiting").
 
     /** Admitted, and the gate places new apps here. */
-    TAKING("taking", ServerModel.ADMISSION_ADMITTED, HohenheimMicrocopy.HOST_ADMISSION.of("admitted"),
+    TAKING("taking", HostModel.ADMISSION_ADMITTED, HohenheimMicrocopy.HOST_ADMISSION.of("admitted"),
         BadgeVariant.SUCCESS, "circle-check", null,
         HohenheimMicrocopy.ATTENTION_TITLE.of("host_holds_apps_back"),
         HohenheimMicrocopy.HOST_ADMISSION.of("tally_taking")),
@@ -43,13 +43,13 @@ public enum HostStanding implements WordedState {
         HohenheimMicrocopy.HOST_ADMISSION.of("tally_refusing")),
 
     /** Not admitted yet: waiting for Check and admit. */
-    WAITING("waiting", ServerModel.ADMISSION_BLOCKED, HohenheimMicrocopy.HOST_ADMISSION.of("blocked"),
+    WAITING("waiting", HostModel.ADMISSION_BLOCKED, HohenheimMicrocopy.HOST_ADMISSION.of("blocked"),
         BadgeVariant.WARNING, "hourglass-half", AttentionSeverity.WARNING,
         HohenheimMicrocopy.ATTENTION_TITLE.of("host_not_admitted"),
         HohenheimMicrocopy.HOST_ADMISSION.of("tally_waiting")),
 
     /** Cordoned on purpose: what runs here keeps running. */
-    PAUSED("paused", ServerModel.ADMISSION_CORDONED, HohenheimMicrocopy.HOST_ADMISSION.of("cordoned"),
+    PAUSED("paused", HostModel.ADMISSION_CORDONED, HohenheimMicrocopy.HOST_ADMISSION.of("cordoned"),
         BadgeVariant.SECONDARY, "circle-pause", null,
         HohenheimMicrocopy.ATTENTION_TITLE.of("host_takes_no_new_apps"),
         HohenheimMicrocopy.HOST_ADMISSION.of("tally_paused"));

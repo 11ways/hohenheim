@@ -2,11 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.BackupStatus;
-import be.elevenways.hohenheim.model.DatabaseDumpModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.cms.DatabaseAttention;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DumpOverCap;
@@ -149,7 +145,7 @@ class DatabaseBackupAttentionTest {
         row.set(DatabaseModel.ENGINE, "postgres");
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         row.set(DatabaseModel.EPHEMERAL, ephemeral);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         Models.get(DatabaseModel.class).save(row);
         int id = row.get(DatabaseModel.ID);
         EngineHandles.plant(id, name, "postgres", engineStatus);

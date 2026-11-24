@@ -4,12 +4,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.host.VolumeBackend;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -118,7 +117,7 @@ class VolumeBackendProbeTest {
     @DisplayName("the controller's own root is probed for real and stored on the host row")
     void theLocalHostIsProbedAndStored() {
 
-        Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        Row local = Models.get(HostModel.class).findById(HostModel.localHostId());
         assertThat(local).as("the local host row exists").isNotNull();
 
         // 1. A REAL probe of a real path: whatever this machine runs, the probe answers a
@@ -132,15 +131,15 @@ class VolumeBackendProbeTest {
         // 2. Storing it makes the answer readable without re-probing, which is what
         //    placement depends on. It is bookkeeping of the check that probed it, so it writes no history: one
         //    Check again is one row on the host's Recent card, the report's.
-        int changes = RecordedChanges.of(Models.get(ServerModel.class), local.get(ServerModel.ID)).size();
+        int changes = RecordedChanges.of(Models.get(HostModel.class), local.get(HostModel.ID)).size();
         VolumeBackends.store(local, detection);
-        assertThat(RecordedChanges.of(Models.get(ServerModel.class), local.get(ServerModel.ID)))
+        assertThat(RecordedChanges.of(Models.get(HostModel.class), local.get(HostModel.ID)))
             .as("step 2: storing the finding recorded no history change").hasSize(changes);
-        Row reread = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        assertThat(ServerModel.volumeBackendOf(reread))
+        Row reread = Models.get(HostModel.class).findById(HostModel.localHostId());
+        assertThat(HostModel.volumeBackendOf(reread))
             .as("step 2: the stored token reads back as the same member")
             .isEqualTo(detection.backend());
-        assertThat(reread.get(ServerModel.VOLUME_PROBED_AT))
+        assertThat(reread.get(HostModel.VOLUME_PROBED_AT))
             .as("step 2: and a never-probed host stays distinguishable from a probed one")
             .isNotNull();
     }

@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.server.api;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.zenit.common.Zenit;
@@ -52,8 +52,8 @@ public final class HostApi {
                 return null;
             }
             List<Map<String, Object>> hosts = new ArrayList<>();
-            for (Row server : Models.get(ServerModel.class).find()
-                    .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
+            for (Row server : Models.get(HostModel.class).find()
+                    .orderBy(HostModel.ID, SortOrder.ASC).all()) {
                 hosts.add(projection(server));
             }
             return ApiConduits.json(Map.of("hosts", hosts));
@@ -63,9 +63,9 @@ public final class HostApi {
             if (ApiConduits.requireAdminKey(conduit) == null) {
                 return null;
             }
-            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
+            Integer serverId = conduit.getParameter(HohenheimEndpoints.HOST_ID);
             Row server = serverId == null ? null
-                : Models.get(ServerModel.class).findById(serverId);
+                : Models.get(HostModel.class).findById(serverId);
             if (server == null) {
                 conduit.notFound();
                 return null;
@@ -80,16 +80,16 @@ public final class HostApi {
 
     /** One host: who it is, whether it takes placement, and its memory ledger. */
     static @NonNull Map<String, Object> projection(@NonNull Row server) {
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         HostCapacityView capacity = serverId == null ? null
             : InstanceCapacity.viewOf(server, serverId);
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("id", serverId);
-        entry.put("name", server.get(ServerModel.NAME));
-        entry.put("runtime", String.valueOf((Object) server.get(ServerModel.RUNTIME)));
-        entry.put("mode", String.valueOf((Object) server.get(ServerModel.MODE)));
-        entry.put("admission", String.valueOf((Object) server.get(ServerModel.ADMISSION)));
-        entry.put("preflight_ok", Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
+        entry.put("name", server.get(HostModel.NAME));
+        entry.put("runtime", String.valueOf((Object) server.get(HostModel.RUNTIME)));
+        entry.put("mode", String.valueOf((Object) server.get(HostModel.MODE)));
+        entry.put("admission", String.valueOf((Object) server.get(HostModel.ADMISSION)));
+        entry.put("preflight_ok", Boolean.TRUE.equals(server.get(HostModel.PREFLIGHT_OK)));
         if (capacity == null) {
             return entry;
         }
@@ -118,7 +118,7 @@ public final class HostApi {
     private static @NonNull List<Map<String, Object>> workloadsOn(int serverId) {
         List<Map<String, Object>> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .where(InstanceModel.HOST_ID.eq(serverId))
                 .orderBy(InstanceModel.ID, SortOrder.ASC).all()) {
             Integer instanceId = instance.get(InstanceModel.ID);
             Map<String, Object> entry = new LinkedHashMap<>();

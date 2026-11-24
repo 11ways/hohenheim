@@ -44,7 +44,7 @@ final class NftChains {
      * unisolated until the next verifier sweep. nft has no conditional delete, so every
      * mutation of one table (apply, chain removal, table removal) runs under this lock.
      * Static and keyed by {@link NftRunner#kernel()}, because appliers are built per call
-     * ({@code WorkloadNetworkPolicy.forServer}) and two instances aimed at one host must still
+     * ({@code WorkloadNetworkPolicy.forHost}) and two instances aimed at one host must still
      * exclude each other. It serializes this JVM only; two controllers never share a table.
      */
     private static final ConcurrentHashMap<String, ReentrantLock> TABLE_LOCKS =

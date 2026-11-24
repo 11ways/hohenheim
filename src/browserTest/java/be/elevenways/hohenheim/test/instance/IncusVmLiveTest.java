@@ -8,14 +8,14 @@ import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
@@ -132,9 +132,9 @@ class IncusVmLiveTest {
     @Test
     void cloudInitVmJourneyWithQuotedDevicesAndVerifiedReclaim() {
         Db.run(datasource, () -> {
-            Row host = Models.get(ServerModel.class).findByName(HOST);
-            int hostId = host.get(ServerModel.ID);
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            Row host = Models.get(HostModel.class).findByName(HOST);
+            int hostId = host.get(HostModel.ID);
+            IncusClient incus = new HostService().incusClientFor(HOST);
             InstanceService service = new InstanceService();
             InstanceDevices devices = new InstanceDevices(service);
 
@@ -291,8 +291,8 @@ class IncusVmLiveTest {
                 //     never removes the filters, leaving chains that name a DEAD tap while
                 //     the restarted VM's new tap matches nothing. The daemon's config and
                 //     its ACL both read back perfectly in that state.
-                IncusKernelIsolation kernel = IncusKernelIsolation.forServer(
-                    Models.get(ServerModel.class).findByName(HOST));
+                IncusKernelIsolation kernel = IncusKernelIsolation.forHost(
+                    Models.get(HostModel.class).findByName(HOST));
                 assertThat(kernel.available())
                     .as("step 7c: this host's kernel is readable, so the VM tier's"
                         + " isolation is verified and not merely configured")
@@ -484,9 +484,9 @@ class IncusVmLiveTest {
     @Test
     void aDeclaredRootDiskIsTheSizeTheGuestActuallyGets() {
         Db.run(datasource, () -> {
-            Row host = Models.get(ServerModel.class).findByName(HOST);
-            int hostId = host.get(ServerModel.ID);
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            Row host = Models.get(HostModel.class).findByName(HOST);
+            int hostId = host.get(HostModel.ID);
+            IncusClient incus = new HostService().incusClientFor(HOST);
             InstanceService service = new InstanceService();
 
             String diskBucket = OwnerBudget.DISK_GB.bucketOf("");
@@ -499,7 +499,7 @@ class IncusVmLiveTest {
             row.set(InstanceModel.KIND, "hohenheim:vm");
             row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
                 "image", VM_IMAGE, "memory_limit_mb", 512, "root_disk_gb", 6)));
-            row.set(InstanceModel.SERVER_ID, hostId);
+            row.set(InstanceModel.HOST_ID, hostId);
             Models.get(InstanceModel.class).save(row);
             int id = row.get(InstanceModel.ID);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
@@ -647,7 +647,7 @@ class IncusVmLiveTest {
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", PEER_IMAGE, "memory_limit_mb", 128)));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

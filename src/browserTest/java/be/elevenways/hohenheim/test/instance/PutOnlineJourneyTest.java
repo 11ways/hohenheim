@@ -3,11 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -222,7 +218,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         Map<String, Object> form = new LinkedHashMap<>();
         form.put("name", PREFIX + "shop-app");
         form.put(PutOnline.HOSTNAME.getName(), "shop." + PREFIX + "test");
-        form.put("serverId", hostId);
+        form.put("hostId", hostId);
         form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_AUTOMATIC);
         form.put("variables", Map.of());
         OperationResult<?> answer = OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_ONLINE,
@@ -263,12 +259,12 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(appLine.key()).as("step 3a: the app step says what was made, and where").isEqualTo("done_app");
         assertThat(List.of(String.valueOf(appLine.args().get("what")), String.valueOf(appLine.args().get("host"))))
             .as("step 3a: the template's name and the host it runs on")
-            .containsExactly(PREFIX + "shop", ServerModel.canonicalNameOf(app.get(InstanceModel.SERVER_ID)));
+            .containsExactly(PREFIX + "shop", HostModel.canonicalNameOf(app.get(InstanceModel.HOST_ID)));
         assertThat(run.stepDetail(3)).as("step 3a: the skipped certificate step left no line").isNull();
         String runPage = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "/run/" + run.id()).body();
         assertThat(runPage).as("step 3a: the run page draws the app step's line under it")
             .contains("data-cms-run-step-detail")
-            .contains(PREFIX + "shop, on " + ServerModel.canonicalNameOf(app.get(InstanceModel.SERVER_ID)))
+            .contains(PREFIX + "shop, on " + HostModel.canonicalNameOf(app.get(InstanceModel.HOST_ID)))
             .contains("Answers at shop." + PREFIX + "test");
         assertThat(runPage).as("step 3a: and offers putting something else online, at the chooser")
             .contains("data-cms-operation-run-another")
@@ -379,7 +375,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             form.put(InstanceModel.NAME.getName(), PREFIX + "git-app");
             form.put(PutOnline.HOSTNAME.getName(), "git." + PREFIX + "test");
             form.put(InstanceModel.KIND.getName(), "hohenheim:application");
-            form.put("serverId", ServerModel.localServerId());
+            form.put("hostId", HostModel.localHostId());
             // The env map posts as the key/value editor submits it: indexed rows.
             form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url",
                 "https://git.example.test/acme/app.git", "branch", "main", "environment_variables",
@@ -413,7 +409,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         //    A tenant never names a host, so the form carries none.
         form.put(InstanceModel.NAME.getName(), PREFIX + "tenant-git-app");
         form.remove(PutOnline.HOSTNAME.getName());
-        form.remove("serverId");
+        form.remove("hostId");
         assertThat(catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(OperationRequest.of(
                 PutOnline.PUT_WORKLOAD_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(tenant).form(form))))
             .as("step 4: a tenant is refused in the request").isNotNull();
@@ -460,17 +456,17 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(InstanceModel.NAME.getName(), PREFIX + "vm");
         form.put(InstanceModel.KIND.getName(), "hohenheim:vm");
-        form.put("serverId", ServerModel.localServerId());
+        form.put("hostId", HostModel.localHostId());
         form.put(InstanceModel.SETTINGS.getName(), Map.of("image", "images:alpine/3.22/cloud"));
         Throwable wrongHost = catchThrowableOfType(Violations.class, () -> OperationPipeline.invoke(
             OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
                 .caller(operator).form(form)));
         assertThat(wrongHost).as("step 3: the local Docker host is refused").isNotNull();
         assertThat(((Violations) wrongHost).all().stream().map(Violation::fieldName).toList())
-            .as("step 3: on the host field").contains("serverId");
+            .as("step 3: on the host field").contains("hostId");
 
         // 4. On the Incus host one run makes the machine and starts it: no website and no certificate step.
-        form.put("serverId", hostId);
+        form.put("hostId", hostId);
         OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,
                 CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 4");
         assertThat(run.journey())
@@ -482,7 +478,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(vm).as("step 4: the machine exists (%s)", run.outcome()).isNotNull();
         assertThat(String.valueOf((Object) vm.get(InstanceModel.KIND))).as("step 4: as a virtual machine")
             .isEqualTo("hohenheim:vm");
-        assertThat((Object) vm.get(InstanceModel.SERVER_ID)).as("step 4: on the host given").isEqualTo(hostId);
+        assertThat((Object) vm.get(InstanceModel.HOST_ID)).as("step 4: on the host given").isEqualTo(hostId);
         assertThat(Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(vm.get(InstanceModel.ID)))
             .first()).as("step 4: and no website").isNull();
         // Posted without its typed name, the verb answers with its confirmation page and acts on nothing.
@@ -495,7 +491,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         //    is named, so the refusal is the kind's alone.
         form.put(InstanceModel.NAME.getName(), PREFIX + "not-a-machine");
         form.put(InstanceModel.KIND.getName(), "hohenheim:docker_container");
-        form.remove("serverId");
+        form.remove("hostId");
         form.put(InstanceModel.SETTINGS.getName(), Map.of("image", "alpine"));
         DomainRefusal notAMachine = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
             OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
@@ -513,15 +509,15 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
 
     @Test
     void theHttpsStepSummarizesWhatWillBeCreatedAndWhetherTheAddressPointsHere() {
-        var servers = Models.get(ServerModel.class);
-        Row local = servers.findById(ServerModel.localServerId());
-        String declared = local.get(ServerModel.PUBLIC_IPV4);
+        var servers = Models.get(HostModel.class);
+        Row local = servers.findById(HostModel.localHostId());
+        String declared = local.get(HostModel.PUBLIC_IPV4);
         FormSpec form = PutOnline.PUT_ADDRESS_ONLINE.input().form();
         StepSummary summary = form.steps().stream().filter(step -> step.id().equals("https")).findFirst()
             .map(FormStep::summary).orElseThrow();
         try (OutboundFixture here = OutboundFixture.route(PREFIX + "here.test", 9);
              OutboundFixture elsewhere = OutboundFixture.route(PREFIX + "elsewhere.test", 9)) {
-            local.set(ServerModel.PUBLIC_IPV4, here.publicAddress().getHostAddress());
+            local.set(HostModel.PUBLIC_IPV4, here.publicAddress().getHostAddress());
             servers.save(local);
 
             // 1. An address that points here: the summary names what it serves, its name and address, and says so.
@@ -552,8 +548,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             assertThat(nowhere.get(nowhere.size() - 1).value().key()).as("step 3: it does not resolve")
                 .isEqualTo("reach_unresolved");
         } finally {
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, declared);
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, declared);
             servers.save(local);
         }
     }

@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
@@ -85,7 +85,7 @@ class IncusPublishedPortsLiveTest {
     @Test
     void aHostPortReachesTheGuestThroughTheAclAndDestroyFreesIt() {
         Db.run(datasource, () -> {
-            int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
+            int hostId = Models.get(HostModel.class).findByName(HOST).get(HostModel.ID);
             InstanceService service = new InstanceService();
             int id = vmRecord(hostId);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
@@ -131,7 +131,7 @@ class IncusPublishedPortsLiveTest {
         row.set(InstanceModel.NAME, "ports-live-vm");
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

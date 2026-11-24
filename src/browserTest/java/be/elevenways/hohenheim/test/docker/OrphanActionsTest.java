@@ -4,11 +4,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OrphanActions;
@@ -64,7 +64,7 @@ class OrphanActionsTest {
         LiveLane.requireImage(docker, TestImages.ALPINE);
 
         Db.run(datasource, () -> {
-            ServerModel.localServerId();
+            HostModel.localHostId();
             String orphanName = "hohenheim-instance-987654";
             String ownedName = "hohenheim-instance-owned-probe";
             try {
@@ -93,8 +93,8 @@ class OrphanActionsTest {
                 assertThat(HistoryTestSupport.recordsOptional())
                     .as("step 2b: optional history must be recording or this proves nothing")
                     .isTrue();
-                List<RecordedChanges.Recorded> removals = RecordedChanges.withFact(Models.get(ServerModel.class),
-                    ServerModel.localServerId(), HohenheimActivityAction.REMOVED_ORPHAN);
+                List<RecordedChanges.Recorded> removals = RecordedChanges.withFact(Models.get(HostModel.class),
+                    HostModel.localHostId(), HohenheimActivityAction.REMOVED_ORPHAN);
                 assertThat(removals)
                     .as("step 2b: the daemon-side removal is recorded on the host record")
                     .isNotEmpty();

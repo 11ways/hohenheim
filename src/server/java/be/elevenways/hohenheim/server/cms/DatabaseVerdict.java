@@ -322,7 +322,7 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
         if (server == null) {
             return true;
         }
-        HostState state = ServerParts.statusCellOf(server).state();
+        HostState state = HostParts.statusCellOf(server).state();
         return switch (state) {
             case ERROR -> true;
             case QUARANTINED, SILENT, NEVER_PROBED, OK -> false;

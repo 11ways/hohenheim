@@ -2,11 +2,10 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ports.PortHolders;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -102,14 +101,14 @@ public final class PortPublications {
             Integer id = claim.get(PortAllocationModel.ID);
             Integer port = claim.get(PortAllocationModel.PORT);
             if (id == null || port == null || taken.contains(id) || PortLedger.isReleasing(claim)
-                    || !Objects.equals(claim.get(PortAllocationModel.SERVER_ID), resolved.serverId())
+                    || !Objects.equals(claim.get(PortAllocationModel.HOST_ID), resolved.serverId())
                     || !publication.protocol().equals(claim.get(PortAllocationModel.PROTOCOL))
                     || !publication.ledgerBindAddress().equals(claim.get(PortAllocationModel.HOST_IP))) {
                 continue;
             }
             taken.add(id);
             boolean live = InstanceModel.SERVABLE_STATUSES.contains(resolved.row().get(InstanceModel.STATUS));
-            if (!live && isLocalServer(resolved.serverId())
+            if (!live && isLocalHost(resolved.serverId())
                     && !PortProbe.isFree(publication.ledgerBindAddress(), port, publication.protocol())) {
                 Blast.log("PORTS: host port", port, "of instance", resolved.row().get(InstanceModel.ID),
                     "was taken while it was down; the daemon picks a new one");
@@ -172,7 +171,7 @@ public final class PortPublications {
             }
             Integer port = claim.get(PortAllocationModel.PORT);
             boolean matches = reusable == null
-                && Objects.equals(claim.get(PortAllocationModel.SERVER_ID), serverId)
+                && Objects.equals(claim.get(PortAllocationModel.HOST_ID), serverId)
                 && protocol.equals(claim.get(PortAllocationModel.PROTOCOL))
                 && bind.equals(claim.get(PortAllocationModel.HOST_IP))
                 && (publication.declaredHostPort() == null
@@ -190,7 +189,7 @@ public final class PortPublications {
             return publication.withPreallocatedPort(port);
         }
 
-        boolean localHost = isLocalServer(serverId);
+        boolean localHost = isLocalHost(serverId);
         if (publication.declaredHostPort() != null) {
             int port = publication.declaredHostPort();
             claimOrRefuse(serverId, bind, port, protocol, instanceId, localHost);
@@ -346,8 +345,8 @@ public final class PortPublications {
                 .withArg("holder", holder));
     }
 
-    private static boolean isLocalServer(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
+    private static boolean isLocalHost(int serverId) {
+        Row server = Models.get(HostModel.class).findById(serverId);
         return HostMode.LOCAL.declaredBy(server);
     }
 

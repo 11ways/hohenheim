@@ -3,13 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.cluster.LinkRole;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.LinkedServerCodeModel;
-import be.elevenways.hohenheim.model.LinkedServerModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.MachineName;
 import be.elevenways.hohenheim.server.cluster.ClusterRecords;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
@@ -195,7 +189,7 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
                 new SharedRow("1", null, "kuifje-blog", "{}"), new SharedRow("2", null, "kuifje-shop", "{}")),
             DnsZoneModel.MODEL_ID, List.of(new SharedRow("1", null, "kuifje.example.test", "{}")),
             InstanceModel.MODEL_ID, apps,
-            ServerModel.MODEL_ID, List.of(new SharedRow("1", null, "kuifje-host", "{}")),
+            HostModel.MODEL_ID, List.of(new SharedRow("1", null, "kuifje-host", "{}")),
             InstanceTemplateModel.MODEL_ID, List.of(new SharedRow("1", null, "WordPress", "{}")))));
         try {
             // 1. The list shows every server's own counts: this server's read now, Kuifje's as it last said.

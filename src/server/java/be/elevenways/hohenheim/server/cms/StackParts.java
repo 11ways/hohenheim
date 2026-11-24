@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -90,7 +90,7 @@ public final class StackParts {
     /** The list's quick-add entry; the host rides along as a preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
         .of(StackModel.NAME.getName())
-        .presets(StackModel.SERVER_ID.getName());
+        .presets(StackModel.HOST_ID.getName());
 
     private StackParts() {
     }
@@ -101,7 +101,7 @@ public final class StackParts {
             .add(StackModel.NAME)
             .add(StackModel.ENABLED)
             // See InstanceResource: a host is enrolled deliberately, never inline.
-            .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).creatable(false).build())
+            .add(RelationPick.of(StackModel.HOST_ID, HostModel.MODEL_ID).creatable(false).build())
             .add(StackModel.REGISTRY_SERVER)
             .add(StackModel.REGISTRY_USER)
             .add(StackModel.REGISTRY_PASSWORD)
@@ -111,8 +111,8 @@ public final class StackParts {
             // The name becomes network/container/volume name segments, so it is copied often.
             .column(ColumnSpec.fromField(StackModel.NAME).filterable().subtext("description").copyable().build())
             .column(ColumnSpec.fromField(StackModel.DESCRIPTION).hidden().build())
-            .column(ColumnSpec.fromField(StackModel.SERVER_ID)
-                .relation(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
+            .column(ColumnSpec.fromField(StackModel.HOST_ID)
+                .relation(RelationPick.of(StackModel.HOST_ID, HostModel.MODEL_ID).build()).build())
             // A FAILED stack names WHY under its badge: the newest deployment's error, so the operator never has to
             // open the Deployments tab to learn what to fix.
             .column(ColumnSpec.fromField(StackModel.STATUS).filterable().subtext(LAST_FAILURE_COLUMN).build())
@@ -148,14 +148,14 @@ public final class StackParts {
                 // The server pick defaults to the local daemon (ensuring its row exists for the picker).
                 .createDefaults((access, panel) -> {
                     Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
-                    values.put(StackModel.SERVER_ID.getName(), ServerModel.localServerId());
+                    values.put(StackModel.HOST_ID.getName(), HostModel.localHostId());
                     return Map.copyOf(values);
                 })
                 // AIDEV-NOTE: a stack created from the quick-add bar is INERT -- enabled defaults off, so nothing is
                 // deployed until an operator opens the record and arms it. That is what makes a one-field bar safe on
                 // a resource whose enable switch arms a boot-time deploy. Its host is the local daemon, as on the form.
                 .quickCreate(QUICK_CREATE)
-                .quickCreatePresets(access -> Map.of(StackModel.SERVER_ID.getName(), ServerModel.localServerId()))
+                .quickCreatePresets(access -> Map.of(StackModel.HOST_ID.getName(), HostModel.localHostId()))
                 // AIDEV-NOTE: the description only. ENABLED arms a boot-time deploy (StackInstances), so one click
                 // would start containers; NAME is embedded in every container, network and volume name, so a rename
                 // is gated behind a LIVE Docker round-trip that can refuse or be unverifiable -- a cell that can answer
@@ -537,8 +537,8 @@ public final class StackParts {
     private static void validPorts(@NonNull Map<String, Object> submitted, int stackId, @Nullable Integer existingId) {
         Set<String> claimed = new HashSet<>();
         Row stack = Models.get(StackModel.class).findById(stackId);
-        Integer stackServer = stack != null ? stack.get(StackModel.SERVER_ID) : null;
-        int serverId = stackServer != null ? stackServer : ServerModel.localServerId();
+        Integer stackServer = stack != null ? stack.get(StackModel.HOST_ID) : null;
+        int serverId = stackServer != null ? stackServer : HostModel.localHostId();
         int index = -1;
         for (Row port : recordsOf(submitted, StackServiceModel.PORTS.getName())) {
             index++;
@@ -600,8 +600,8 @@ public final class StackParts {
     private static @Nullable String declaringSibling(int serverId, @Nullable Integer existingId,
                                                      @NonNull String claimKey) {
         for (Row stack : Models.get(StackModel.class).find().all()) {
-            Integer stackServer = stack.get(StackModel.SERVER_ID);
-            if ((stackServer != null ? stackServer : ServerModel.localServerId()) != serverId) {
+            Integer stackServer = stack.get(StackModel.HOST_ID);
+            if ((stackServer != null ? stackServer : HostModel.localHostId()) != serverId) {
                 continue;
             }
             for (Row service : Models.get(StackServiceModel.class).findByStackId(stack.get(StackModel.ID))) {

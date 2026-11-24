@@ -8,9 +8,8 @@ import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.Zenit;
 import java.time.Duration;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -27,7 +26,6 @@ import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -142,7 +140,7 @@ class ContainerHardeningTest {
         "configfs", "pstore", "hugetlbfs", "ramfs", "binfmt_misc", "nsfs");
 
     // AIDEV-NOTE: the class-wide netns override is for the paths that resolve their
-    // applier through WorkloadNetworkPolicy.forServer (the site tier's deploy AND its
+    // applier through WorkloadNetworkPolicy.forHost (the site tier's deploy AND its
     // destroyFor teardown) -- without it every PRIVATE-posture step refuses on a
     // developer machine. Methods that build a runtime by hand keep their own local
     // PrivateNetns; the two coexist (the local one never touches the override).
@@ -271,7 +269,7 @@ class ContainerHardeningTest {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);
@@ -284,7 +282,7 @@ class ContainerHardeningTest {
             Row stack = stackModel.createEmptyRow();
             stack.set(StackModel.NAME, stackName);
             stack.set(StackModel.ENABLED, true);
-            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+            stack.set(StackModel.HOST_ID, HostModel.localHostId());
             stackModel.save(stack);
             ids[0] = stack.get(StackModel.ID);
 

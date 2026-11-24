@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -43,20 +43,20 @@ class InstanceStatsPageTest extends HohenheimHttpTestBase {
      */
     @BeforeAll
     static void seed() {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row incus = servers.createEmptyRow();
-        incus.set(ServerModel.NAME, PREFIX + "incus");
-        incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        incus.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        incus.set(HostModel.NAME, PREFIX + "incus");
+        incus.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        incus.set(HostModel.MODE, HostModel.MODE_LOCAL);
         servers.save(incus);
-        incusHostId = incus.get(ServerModel.ID);
+        incusHostId = incus.get(HostModel.ID);
 
         incusInstanceId = instance(PREFIX + "vm", "hohenheim:system_container", incusHostId,
             InstanceModel.STATUS_RUNNING);
         dockerInstanceId = instance(PREFIX + "web", "hohenheim:docker_container",
-            ServerModel.localServerId(), InstanceModel.STATUS_RUNNING);
+            HostModel.localHostId(), InstanceModel.STATUS_RUNNING);
         stoppedInstanceId = instance(PREFIX + "off", "hohenheim:docker_container",
-            ServerModel.localServerId(), InstanceModel.STATUS_STOPPED);
+            HostModel.localHostId(), InstanceModel.STATUS_STOPPED);
     }
 
     @AfterAll
@@ -67,7 +67,7 @@ class InstanceStatsPageTest extends HohenheimHttpTestBase {
             }
         }
         if (incusHostId != null) {
-            Models.get(ServerModel.class).delete(incusHostId);
+            Models.get(HostModel.class).delete(incusHostId);
         }
     }
 
@@ -76,7 +76,7 @@ class InstanceStatsPageTest extends HohenheimHttpTestBase {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         row.set(InstanceModel.STATUS, status);
         instances.save(row);

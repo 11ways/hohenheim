@@ -7,8 +7,8 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -91,24 +91,24 @@ class HostKeyPinningTest {
     @Test
     void aChangedHostKeyFailsClosedQuarantinesAndNeedsAnExplicitRepin() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             servers.add("edge-pinned", "nobody@127.0.0.1:" + sshd.port());
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.findByName("edge-pinned");
 
             // 1. Enrollment mints the host's OWN client key; the private half is stored
             //    encrypted and the public half is what an operator installs remotely.
             assertThat(HostKeys.ensureIdentity(host))
                 .as("step 1: enrollment generates a per-host client key").isTrue();
-            assertThat((String) host.get(ServerModel.IDENTITY_PUBLIC_KEY))
+            assertThat((String) host.get(HostModel.IDENTITY_PUBLIC_KEY))
                 .as("step 1: and the public half is an ed25519 line to install")
                 .startsWith("ssh-ed25519 ");
-            assertThat((String) host.get(ServerModel.IDENTITY_PRIVATE_KEY))
+            assertThat((String) host.get(HostModel.IDENTITY_PRIVATE_KEY))
                 .as("step 1: with a private half held for this host only")
                 .contains("OPENSSH PRIVATE KEY");
 
             // 2. An UNPINNED remote host is not connectable at all: fail closed, typed.
-            ServerService.Summary unpinned = servers.probeAndStore("edge-pinned");
+            HostService.Summary unpinned = servers.probeAndStore("edge-pinned");
             assertThat(unpinned.reachable()).as("step 2: an unpinned host is not reached").isFalse();
             assertThat(unpinned.errorKind())
                 .as("step 2: and the refusal is our own, typed, not an ssh guess")
@@ -123,13 +123,13 @@ class HostKeyPinningTest {
                 .as("step 3: and it is the real fingerprint of the running sshd's key")
                 .isEqualTo(sshd.hostKeyFingerprint());
             Row pinned = model.findByName("edge-pinned");
-            assertThat((Boolean) pinned.get(ServerModel.HOST_KEY_VERIFIED))
+            assertThat((Boolean) pinned.get(HostModel.HOST_KEY_VERIFIED))
                 .as("step 3: a scanned pin is UNVERIFIED until a human compares it")
                 .isFalse();
 
             // 4. An unconfirmed pin cannot be admitted, even with a passing preflight.
-            pinned.set(ServerModel.PREFLIGHT_OK, true);
-            pinned.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            pinned.set(HostModel.PREFLIGHT_OK, true);
+            pinned.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
             model.save(pinned);
             HostFixtures.acknowledgePosture(pinned);
             assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(pinned)))
@@ -141,13 +141,13 @@ class HostKeyPinningTest {
             // 5. The operator confirms out of band; only then may the host be admitted.
             HostKeys.confirm(pinned);
             HostAdmission.requireAdmittable(pinned);
-            pinned.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            pinned.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
             model.save(pinned);
 
             // 6. A REAL connection over the pinned lane: host-key verification passes and
             //    the run dies at authentication instead -- proof the pin is being used and
             //    accepted by the actual ssh client, not merely stored.
-            ServerService.Summary connected = servers.probeAndStore("edge-pinned");
+            HostService.Summary connected = servers.probeAndStore("edge-pinned");
             assertThat(connected.errorKind())
                 .as("step 6: the pinned key verifies; the failure is authentication")
                 .isEqualTo("ssh_auth");
@@ -156,9 +156,9 @@ class HostKeyPinningTest {
                 .containsIgnoringCase("permission denied");
 
             // 7. The host's key CHANGES underneath us. The connection must fail closed.
-            String pinnedKey = pinned.get(ServerModel.HOST_KEY);
+            String pinnedKey = pinned.get(HostModel.HOST_KEY);
             sshd.regenerateHostKey();
-            ServerService.Summary changed = servers.probeAndStore("edge-pinned");
+            HostService.Summary changed = servers.probeAndStore("edge-pinned");
             assertThat(changed.errorKind())
                 .as("step 7: a changed host key is the typed host_key_changed failure")
                 .isEqualTo("host_key_changed");
@@ -169,12 +169,12 @@ class HostKeyPinningTest {
             // 8. The failure QUARANTINES: an admitted host stops receiving workloads and
             //    the pin is untouched -- nothing re-accepted the new key.
             Row quarantined = model.findByName("edge-pinned");
-            assertThat((String) quarantined.get(ServerModel.ADMISSION))
+            assertThat((String) quarantined.get(HostModel.ADMISSION))
                 .as("step 8: an admitted host whose identity broke is blocked")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
-            assertThat((Boolean) quarantined.get(ServerModel.PREFLIGHT_OK))
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
+            assertThat((Boolean) quarantined.get(HostModel.PREFLIGHT_OK))
                 .as("step 8: and its preflight verdict is dropped").isFalse();
-            assertThat((String) quarantined.get(ServerModel.HOST_KEY))
+            assertThat((String) quarantined.get(HostModel.HOST_KEY))
                 .as("step 8: the pin is UNCHANGED -- no silent self-healing")
                 .isEqualTo(pinnedKey);
 
@@ -186,9 +186,9 @@ class HostKeyPinningTest {
                 .as("step 9: naming the key the host now offers")
                 .isEqualTo(sshd.hostKeyFingerprint());
             Row afterRescan = model.findByName("edge-pinned");
-            assertThat((String) afterRescan.get(ServerModel.HOST_KEY))
+            assertThat((String) afterRescan.get(HostModel.HOST_KEY))
                 .as("step 9: and STILL nothing re-pinned it").isEqualTo(pinnedKey);
-            assertThat((String) afterRescan.get(ServerModel.HOST_KEY_OFFERED))
+            assertThat((String) afterRescan.get(HostModel.HOST_KEY_OFFERED))
                 .as("step 9: the offered key is kept as evidence for the re-pin ceremony")
                 .isNotNull();
 
@@ -196,19 +196,19 @@ class HostKeyPinningTest {
             //     BOTTOM of the ceremony: unconfirmed, unpreflighted, unadmitted.
             HostKeys.repin(afterRescan);
             Row repinned = model.findByName("edge-pinned");
-            assertThat((String) repinned.get(ServerModel.HOST_KEY_FINGERPRINT))
+            assertThat((String) repinned.get(HostModel.HOST_KEY_FINGERPRINT))
                 .as("step 10: the re-pin adopts the offered key")
                 .isEqualTo(sshd.hostKeyFingerprint());
-            assertThat((Boolean) repinned.get(ServerModel.HOST_KEY_VERIFIED))
+            assertThat((Boolean) repinned.get(HostModel.HOST_KEY_VERIFIED))
                 .as("step 10: a re-pinned key is unconfirmed again").isFalse();
-            assertThat((Boolean) repinned.get(ServerModel.PREFLIGHT_OK))
+            assertThat((Boolean) repinned.get(HostModel.PREFLIGHT_OK))
                 .as("step 10: and unpreflighted again").isFalse();
             assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(repinned)))
                 .as("step 10: so it cannot be admitted without walking the ceremony again")
                 .isInstanceOf(Violations.class);
 
             // 11. With the new pin in place the real ssh lane works again.
-            ServerService.Summary reconnected = servers.probeAndStore("edge-pinned");
+            HostService.Summary reconnected = servers.probeAndStore("edge-pinned");
             assertThat(reconnected.errorKind())
                 .as("step 11: the re-pinned key verifies and the run reaches auth again: %s",
                     reconnected.errorDetail())
@@ -222,9 +222,9 @@ class HostKeyPinningTest {
     @Test
     void refusalsAreTypedAndTargetsParseIntoRealSshArguments() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             servers.add("edge-nokey", "deploy@127.0.0.1:" + sshd.port());
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.findByName("edge-nokey");
 
             // 1. No pin AND no identity: the pin is checked first and the refusal says so.

@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.RecordStatus;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
@@ -126,7 +126,7 @@ class IncusCommunityAppLiveTest {
                 "community-gotify", null, Map.of(), null);
             String handle = track(ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
             InstanceService service = new InstanceService();
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
 
             try {
                 assertThat((String) Models.get(InstanceModel.class).findById(id)
@@ -222,7 +222,7 @@ class IncusCommunityAppLiveTest {
                 "community-adguard", null, Map.of(), null);
             String handle = track(ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
             InstanceService service = new InstanceService();
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
 
             try {
                 // 1. The second unmodified app installs from its pinned script.
@@ -339,7 +339,7 @@ class IncusCommunityAppLiveTest {
             .as("positive anchor: this test really created instances to sweep for")
             .isNotEmpty();
         Db.run(datasource, () -> {
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
             try {
                 assertThat(incus.instances())
                     .as("no instance created by this test survives at the daemon")

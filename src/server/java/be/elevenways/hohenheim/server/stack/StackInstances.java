@@ -1,16 +1,16 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -169,8 +169,8 @@ public final class StackInstances {
                     || ownedByStack(stackId).isEmpty()) {
                 continue;
             }
-            byServer.computeIfAbsent(ServerModel.canonicalServerId(
-                    stack.get(StackModel.SERVER_ID)), key -> new ArrayList<>())
+            byServer.computeIfAbsent(HostModel.canonicalHostId(
+                    stack.get(StackModel.HOST_ID)), key -> new ArrayList<>())
                 .add(networkHandle(name));
         }
         return byServer;
@@ -198,8 +198,8 @@ public final class StackInstances {
             throw new IOException("Service '" + service.name() + "' of stack '" + spec.name()
                 + "' no longer exists; nothing owns the instance it would create");
         }
-        int serverId = ServerModel.canonicalServerId(
-            ServerModel.canonicalServerId(spec.serverName()));
+        int serverId = HostModel.canonicalHostId(
+            HostModel.canonicalHostId(spec.serverName()));
         try {
             int instanceId = OwnedInstances.inScope(SOURCE, StackServiceModel.MODEL_ID,
                 serviceId, () -> {
@@ -214,7 +214,7 @@ public final class StackInstances {
                         InstanceVariables.detachEnvironment(settings);
                     instance.set(InstanceModel.NAME, spec.name() + "-" + service.name());
                     instance.set(InstanceModel.KIND, StackServiceKind.ID.toString());
-                    instance.set(InstanceModel.SERVER_ID, serverId);
+                    instance.set(InstanceModel.HOST_ID, serverId);
                     // The compose restart policy lowers onto the instance tier's CRASH
                     // policy, which is strictly better: it has flap protection and it
                     // re-runs the whole fenced deploy instead of letting the daemon
@@ -354,7 +354,7 @@ public final class StackInstances {
 
     /** A driver over one host, used for the network half (no instance record involved). */
     static @NonNull DockerInstanceRuntime runtimeFor(@NonNull String serverName) {
-        return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
+        return DockerInstanceRuntime.onHost(serverName, Egress.OPEN);
     }
 
     // -- volumes ---------------------------------------------------------------
@@ -380,7 +380,7 @@ public final class StackInstances {
             throws IOException {
         List<StackSpec> specs = new ArrayList<>(alsoDeclared);
         specs.add(spec);
-        return StackVolumes.purge(new ServerService().clientFor(spec.serverName()),
+        return StackVolumes.purge(new HostService().clientFor(spec.serverName()),
             spec.stackId(), spec.name(), StackVolumes.declaredBy(spec.stackId(), spec.name(), specs));
     }
 
@@ -400,7 +400,7 @@ public final class StackInstances {
     private static void retireLegacyContainer(@NonNull StackSpec spec, @NonNull String service,
                                               int serviceId) {
         try {
-            DockerClient docker = new ServerService().clientFor(spec.serverName());
+            DockerClient docker = new HostService().clientFor(spec.serverName());
             boolean removed = OwnerLabels.removeIfOwnedBy(docker,
                 legacyContainerName(spec.name(), service), StackModel.MODEL_ID, spec.stackId());
             if (removed) {
@@ -426,7 +426,7 @@ public final class StackInstances {
     static void retireLegacyNetwork(@NonNull StackSpec spec) {
         String name = networkHandle(spec.name());
         try {
-            DockerClient docker = new ServerService().clientFor(spec.serverName());
+            DockerClient docker = new HostService().clientFor(spec.serverName());
             Map<String, Object> existing = docker.findNetworkByName(name);
             if (existing == null) {
                 return;
@@ -437,7 +437,7 @@ public final class StackInstances {
             if (!OwnerLabels.matches(owner, StackModel.MODEL_ID, spec.stackId())) {
                 return;   // adopted or foreign: we never remove what we did not create
             }
-            WorkloadNetworkPolicy.forServer(spec.serverName()).remove(name);
+            WorkloadNetworkPolicy.forHost(spec.serverName()).remove(name);
             docker.removeNetwork(name);
             Blast.log("STACK: retired the pre-lowering shared network", name);
         } catch (IOException e) {

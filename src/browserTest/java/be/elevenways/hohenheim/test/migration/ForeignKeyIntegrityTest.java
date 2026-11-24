@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.cli.ForeignKeyOrphansCommand;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
@@ -64,18 +64,18 @@ class ForeignKeyIntegrityTest {
         // 2. A host a shared database ENGINE still lives on is refused by name: the engine
         //    used to be missing from the count, so this delete reached the constraint and
         //    failed as a raw "FOREIGN KEY constraint failed".
-        Row server = Models.get(ServerModel.class).createEmptyRow();
-        server.set(ServerModel.NAME, SERVER);
-        server.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        server.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        server.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(server);
-        int serverId = server.get(ServerModel.ID);
+        Row server = Models.get(HostModel.class).createEmptyRow();
+        server.set(HostModel.NAME, SERVER);
+        server.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        server.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        server.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        server.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(server);
+        int serverId = server.get(HostModel.ID);
         Row engine = Models.get(DatabaseEngineModel.class).createEmptyRow();
         engine.set(DatabaseEngineModel.NAME, "postgres-" + SERVER);
         engine.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
-        engine.set(DatabaseEngineModel.SERVER_ID, serverId);
+        engine.set(DatabaseEngineModel.HOST_ID, serverId);
         engine.set(DatabaseEngineModel.ROOT_USER, "root");
         engine.set(DatabaseEngineModel.ROOT_PASSWORD, "fk-root-password");
         engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -83,19 +83,19 @@ class ForeignKeyIntegrityTest {
         int engineId = engine.get(DatabaseEngineModel.ID);
 
         Violations refused = catchThrowableOfType(
-            () -> Models.get(ServerModel.class).delete(serverId), Violations.class);
+            () -> Models.get(HostModel.class).delete(serverId), Violations.class);
         assertThat((Throwable) refused)
             .as("step 2: the delete is a named refusal, not a constraint error").isNotNull();
         assertThat(refused.all().get(0).message().key())
             .as("step 2: the refusal is server_in_use").isEqualTo("server_in_use");
         assertThat(refused.all().get(0).message().args().get("engines"))
             .as("step 2: and it counts the engine, as a counted phrase").isEqualTo(HohenheimCounts.of("engines", 1L));
-        assertThat(Models.get(ServerModel.class).findById(serverId))
+        assertThat(Models.get(HostModel.class).findById(serverId))
             .as("step 2: the host survives the refused delete").isNotNull();
 
         Models.get(DatabaseEngineModel.class).delete(engineId);
-        Models.get(ServerModel.class).delete(serverId);
-        assertThat(Models.get(ServerModel.class).findById(serverId))
+        Models.get(HostModel.class).delete(serverId);
+        assertThat(Models.get(HostModel.class).findById(serverId))
             .as("step 2: with nothing referencing it, the host goes").isNull();
 
         // 3. An orphan written the way production wrote them before enforcement (a

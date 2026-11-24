@@ -7,8 +7,8 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.MigrationTargetView;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -52,7 +52,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
             ActionPlacement.PAGE, (request, serverId) -> CmsActionResult.refreshWithToast(
                 HohenheimMicrocopy.INSTANCE.of("migrated_toast")
                     .withArg("name", request.subject().get(InstanceModel.NAME))
-                    .withArg("host", ServerModel.nameOf(serverId))))
+                    .withArg("host", HostModel.nameOf(serverId))))
         .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate"),
             HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_here"), HohenheimMicrocopy.INSTANCE_MIGRATE.of("cold_note"),
             ActionStyle.DESTRUCTIVE))
@@ -60,9 +60,9 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
         // exactly the two hosts it involves.
         .confirmationBody((instance, input) -> HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_confirm")
             .withArg("name", instance.get(InstanceModel.NAME))
-            .withArg("from", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)))
-            .withArg("to", ServerModel.nameOf(destination(input))))
-        .transport(InstanceOperations.TARGET_SERVER.getName())
+            .withArg("from", HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)))
+            .withArg("to", HostModel.nameOf(destination(input))))
+        .transport(InstanceOperations.TARGET_HOST.getName())
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
@@ -103,7 +103,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_MIGRATE, name));
         vars.put("instanceName", name);
         vars.put("instanceId", instanceId);
-        vars.put("sourceHost", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
+        vars.put("sourceHost", HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)));
         vars.put("operable", operable);
         vars.put("status", instance.get(InstanceModel.STATUS));
         vars.put("targets", this.targetsFor(request, instance, operable));
@@ -136,13 +136,13 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
     /** The migrate form preset with one destination; null when the operation withholds a form. */
     private @Nullable PageFormState formFor(@NonNull PanelRequest request, @NonNull Row instance, int serverId) {
         PageActions.Opened opened = PageActions.open(request, this, instance, MIGRATE.id(),
-            Map.of(InstanceOperations.TARGET_SERVER.getName(), serverId));
+            Map.of(InstanceOperations.TARGET_HOST.getName(), serverId));
         return opened instanceof PageActions.Form form ? form.state() : null;
     }
 
     /** @return the destination the form opens with, -1 when it names none */
     private static int destination(@NonNull Map<String, Object> input) {
-        Object value = input.get(InstanceOperations.TARGET_SERVER.getName());
+        Object value = input.get(InstanceOperations.TARGET_HOST.getName());
         return RawValues.intOr(value, -1);
     }
 

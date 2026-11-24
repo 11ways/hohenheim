@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
@@ -131,7 +131,7 @@ public class VerifyIncusIsolation extends ScheduledTask {
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                 .all()) {
-            Object raw = instance.get(InstanceModel.SERVER_ID);
+            Object raw = instance.get(InstanceModel.HOST_ID);
             if (raw instanceof Number serverId) {
                 byServer.computeIfAbsent(serverId.intValue(), key -> new ArrayList<>())
                     .add(instance);
@@ -140,8 +140,8 @@ public class VerifyIncusIsolation extends ScheduledTask {
 
         List<HostOutcome> outcomes = new ArrayList<>();
         for (Map.Entry<Integer, List<Row>> entry : byServer.entrySet()) {
-            Row server = Models.get(ServerModel.class).findById(entry.getKey());
-            if (server == null || !ServerModel.isIncus(server)) {
+            Row server = Models.get(HostModel.class).findById(entry.getKey());
+            if (server == null || !HostModel.isIncus(server)) {
                 continue;
             }
             outcomes.add(sweepHost(server, entry.getValue()));
@@ -151,10 +151,10 @@ public class VerifyIncusIsolation extends ScheduledTask {
 
     private static @NonNull HostOutcome sweepHost(@NonNull Row server,
                                                   @NonNull List<Row> instances) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         IncusKernelIsolation isolation;
         try {
-            isolation = IncusKernelIsolation.forServer(server);
+            isolation = IncusKernelIsolation.forHost(server);
         } catch (RuntimeException unreachable) {
             return new HostOutcome(name, false, List.of(), List.of(), List.of(),
                 List.of(String.valueOf(unreachable.getMessage())));

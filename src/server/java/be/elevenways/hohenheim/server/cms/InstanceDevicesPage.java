@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.DeviceDetail;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -186,11 +186,11 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             ? HohenheimMicrocopy.INSTANCE_DEVICE.of("media_drive_empty")
             : HohenheimMicrocopy.INSTANCE_DEVICE.of("media_in_drive").withArg("media", String.join(", ", inDrive)))
             .asString(conduit));
-        Integer serverId = instance.get(InstanceModel.SERVER_ID);
+        Integer serverId = instance.get(InstanceModel.HOST_ID);
         vars.put("mediaHostTarget", mediaSection && serverId != null
-            ? CmsRoutes.subpage(panel, HohenheimSlugs.SERVERS, serverId, HohenheimSlugs.Tab.INSTALL_MEDIA) : null);
+            ? CmsRoutes.subpage(panel, HohenheimSlugs.HOSTS, serverId, HohenheimSlugs.Tab.INSTALL_MEDIA) : null);
         vars.put("mediaHostLabel", mediaSection && serverId != null
-            ? HohenheimMicrocopy.INSTANCE_DEVICE.of("manage_media").withArg("host", ServerModel.labelOf(serverId))
+            ? HohenheimMicrocopy.INSTANCE_DEVICE.of("manage_media").withArg("host", HostModel.labelOf(serverId))
                 .asString(conduit) : "");
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEVICES, vars);

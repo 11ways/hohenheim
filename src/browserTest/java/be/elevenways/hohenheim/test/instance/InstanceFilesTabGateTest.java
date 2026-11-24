@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -46,16 +46,16 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         dockerInstanceId = instance("files-docker", "hohenheim:docker_container",
-            ServerModel.localServerId());
+            HostModel.localHostId());
 
         // An Incus host and an Incus workload: the runtime with no file lane.
-        var servers = Models.get(ServerModel.class);
+        var servers = Models.get(HostModel.class);
         Row incusHost = servers.createEmptyRow();
-        incusHost.set(ServerModel.NAME, "files-incus-host");
-        incusHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        incusHost.set(ServerModel.SSH_TARGET, "nobody@files-incus-host.invalid");
+        incusHost.set(HostModel.NAME, "files-incus-host");
+        incusHost.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        incusHost.set(HostModel.SSH_TARGET, "nobody@files-incus-host.invalid");
         servers.save(incusHost);
-        int incusHostId = servers.findByName("files-incus-host").get(ServerModel.ID);
+        int incusHostId = servers.findByName("files-incus-host").get(HostModel.ID);
         incusInstanceId = instance("files-incus", "hohenheim:system_container", incusHostId);
 
         consoleSession = delegate("files-console@hohenheim.local", HohenheimCapabilities.CONSOLE);
@@ -69,7 +69,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         instances.save(row);
         return row.get(InstanceModel.ID);
     }
@@ -184,7 +184,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
      */
     @Test
     void anApplicationsFilesAreItsServingReleases() throws Exception {
-        int applicationId = instance("files-app", ApplicationKind.ID.toString(), ServerModel.localServerId());
+        int applicationId = instance("files-app", ApplicationKind.ID.toString(), HostModel.localHostId());
         String page = "/admin/instances/" + applicationId + "/page/files";
 
         // 1. THE DEFECT: the tab resolved the application's own runtime, which refuses, so the page was a 422.
@@ -200,7 +200,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             Row release = Models.get(InstanceModel.class).createEmptyRow();
             release.set(InstanceModel.NAME, "files-app-release");
             release.set(InstanceModel.KIND, ReleaseKind.ID.toString());
-            release.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            release.set(InstanceModel.HOST_ID, HostModel.localHostId());
             release.set(InstanceModel.SETTINGS, Map.of("image", "alpine",
                 ApplicationReleases.VOLUME_MOUNTS, Map.of("/srv/files-app-data", "/data")));
             release.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);

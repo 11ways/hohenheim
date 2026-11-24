@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -48,9 +48,9 @@ class DomainsListJourneyTest extends HohenheimTestBase {
         String here = "here-" + suffix + ".test";
         String elsewhere = "away-" + suffix + ".test";
         String covered = "covered-" + suffix + ".test";
-        var servers = Models.get(ServerModel.class);
-        Row local = servers.findById(ServerModel.localServerId());
-        String declared = local.get(ServerModel.PUBLIC_IPV4);
+        var servers = Models.get(HostModel.class);
+        Row local = servers.findById(HostModel.localHostId());
+        String declared = local.get(HostModel.PUBLIC_IPV4);
         String moved = "moved-" + suffix + ".test";
         String caughtPattern = "*.pattern-" + suffix + ".test";
         try (OutboundFixture pointsHere = OutboundFixture.route(here, 9);
@@ -58,7 +58,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
              OutboundFixture caught = OutboundFixture.route(
                  Objects.requireNonNull(HostnameReach.sampleOf(caughtPattern)), 9);
              OutboundFixture movedName = OutboundFixture.route(moved, 9)) {
-            local.set(ServerModel.PUBLIC_IPV4, pointsHere.publicAddress().getHostAddress());
+            local.set(HostModel.PUBLIC_IPV4, pointsHere.publicAddress().getHostAddress());
             servers.save(local);
 
             Row site = site("addresses-" + suffix);
@@ -236,8 +236,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             Row movedRow = domain(site, moved, false);
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: the name points elsewhere").isEqualTo("points_elsewhere");
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, movedName.publicAddress().getHostAddress());
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, movedName.publicAddress().getHostAddress());
             servers.save(local);
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: the remembered answer stands until it is checked again").isEqualTo("points_elsewhere");
@@ -259,8 +259,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                     && !address.toLowerCase(Locale.ROOT).startsWith("fe80:"))
                 .findFirst().orElse(null);
             assertThat(held).as("step 11: this machine holds an address besides loopback").isNotNull();
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, null);
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, null);
             servers.save(local);
             String heldName = "held-" + suffix + ".test";
             try (OutboundFixture heldFixture = OutboundFixture.routeResolved(heldName,
@@ -270,8 +270,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                     .isEqualTo("points_here");
             }
         } finally {
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, declared);
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, declared);
             servers.save(local);
         }
     }

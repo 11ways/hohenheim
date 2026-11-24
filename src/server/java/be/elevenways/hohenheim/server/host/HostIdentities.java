@@ -2,9 +2,8 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
@@ -66,7 +65,7 @@ public final class HostIdentities {
     public static void rotate(@NonNull Row server, @NonNull HostTrustSlot slot, @NonNull String scratchPrefix,
                               @NonNull String privateName, @NonNull String publicName, boolean trimPublic,
                               @NonNull Minter minter) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         Path directory = null;
         try {
             directory = Files.createTempDirectory(scratchPrefix);
@@ -82,7 +81,7 @@ public final class HostIdentities {
             String publicKey = trimPublic ? publicText.trim() : publicText;
             server.set(slot.clientPrivate(), privateKey);
             server.set(slot.clientPublic(), publicKey);
-            Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_IDENTITY_ROTATED,
+            Models.get(HostModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_IDENTITY_ROTATED,
                 Map.of(HohenheimActivityAction.LANE_KEY, slot.name())));
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
         } catch (IOException e) {

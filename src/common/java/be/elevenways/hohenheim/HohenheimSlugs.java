@@ -76,7 +76,8 @@ public final class HohenheimSlugs {
     public static final String RELEASED_CLAIMS = "released-claims";
     public static final String RELEASES = "releases";
     public static final String RUNTIME_IMAGES = "runtime-images";
-    public static final String SERVERS = "servers";
+    /** The hosts list; its address keeps the stored slug "servers" until panel slugs can move with their old address. */
+    public static final String HOSTS = "servers";
     public static final String SITES = "sites";
     public static final String SPAMSERVICE = "spamservice";
     public static final String SPAMSERVICE_CLIENTS = "spamservice-clients";

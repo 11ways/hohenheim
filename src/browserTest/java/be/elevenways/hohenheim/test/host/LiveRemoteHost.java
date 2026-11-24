@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -108,22 +108,22 @@ public final class LiveRemoteHost {
      * the BOTTOM of the trust ceremony: no pin, unconfirmed, unadmitted.
      */
     public Row enrol(String name) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
-            row.set(ServerModel.NAME, name);
+            row.set(HostModel.NAME, name);
         }
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.SSH_TARGET, this.target);
-        row.set(ServerModel.HOST_KEY, null);
-        row.set(ServerModel.HOST_KEY_FINGERPRINT, null);
-        row.set(ServerModel.HOST_KEY_OFFERED, null);
-        row.set(ServerModel.HOST_KEY_VERIFIED, false);
-        row.set(ServerModel.PREFLIGHT_OK, false);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.IDENTITY_PRIVATE_KEY, this.identityPrivateKey);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.SSH_TARGET, this.target);
+        row.set(HostModel.HOST_KEY, null);
+        row.set(HostModel.HOST_KEY_FINGERPRINT, null);
+        row.set(HostModel.HOST_KEY_OFFERED, null);
+        row.set(HostModel.HOST_KEY_VERIFIED, false);
+        row.set(HostModel.PREFLIGHT_OK, false);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.IDENTITY_PRIVATE_KEY, this.identityPrivateKey);
         model.save(row);
         HostFixtures.acknowledgePosture(row);
         return model.findByName(name);

@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.orm.PendingDeletes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -90,12 +89,12 @@ public final class DatabaseEngineGuards {
                     HohenheimMicrocopy.VIOLATIONS.of("database_engine_kind_mismatch")
                         .withArg("engine", String.valueOf(kind)));
             }
-            Object server = row.get(DatabaseModel.SERVER_ID);
-            if (server != null && !server.equals(engine.get(DatabaseEngineModel.SERVER_ID))) {
+            Object server = row.get(DatabaseModel.HOST_ID);
+            if (server != null && !server.equals(engine.get(DatabaseEngineModel.HOST_ID))) {
                 throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
                     HohenheimMicrocopy.VIOLATIONS.of("database_engine_host_mismatch")
                         .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
-                        .withArg("server", String.valueOf(engine.get(DatabaseEngineModel.SERVER_ID)))
+                        .withArg("server", String.valueOf(engine.get(DatabaseEngineModel.HOST_ID)))
                         .withArg("database_server", String.valueOf(server)));
             }
         });

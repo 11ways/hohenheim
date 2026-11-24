@@ -5,10 +5,10 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
@@ -129,10 +129,10 @@ class IncusColdMigrationLiveTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = new InstanceMigrations();
-            int hostAId = Models.get(ServerModel.class).findByName(HOST_A)
-                .get(ServerModel.ID);
-            int hostBId = Models.get(ServerModel.class).findByName(HOST_B)
-                .get(ServerModel.ID);
+            int hostAId = Models.get(HostModel.class).findByName(HOST_A)
+                .get(HostModel.ID);
+            int hostBId = Models.get(HostModel.class).findByName(HOST_B)
+                .get(HostModel.ID);
             int vmId = vmRecord("mig-mover", hostAId);
             int peerId = peerRecord("mig-peer", hostBId);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, vmId);
@@ -169,7 +169,7 @@ class IncusColdMigrationLiveTest {
                 //    destination BEFORE the drain, which created the ACL there through
                 //    the ordinary create() path. Own token only, so a foreign ACL is
                 //    never touched.
-                IncusClient daemonB = new ServerService().incusClientFor(HOST_B);
+                IncusClient daemonB = new HostService().incusClientFor(HOST_B);
                 String isolationAcl = IncusNetworkPolicy.aclName();
                 try {
                     if (daemonB.networkAcl(isolationAcl) != null) {
@@ -185,7 +185,7 @@ class IncusColdMigrationLiveTest {
 
                 // 4. Cordon the source, then DRAIN it through the cold-migration
                 //    policy: the one live record on it moves, the drain is complete.
-                setAdmission(hostAId, ServerModel.ADMISSION_CORDONED);
+                setAdmission(hostAId, HostModel.ADMISSION_CORDONED);
                 InstanceMigrations.DrainReport report = migrations.drain(hostAId);
                 assertThat(report.moved())
                     .as("step 4: the drain moved exactly our workload")
@@ -200,7 +200,7 @@ class IncusColdMigrationLiveTest {
 
                 // 5. The record names the NEW host and the workload runs there.
                 Row row = Models.get(InstanceModel.class).findById(vmId);
-                assertThat((Object) row.get(InstanceModel.SERVER_ID))
+                assertThat((Object) row.get(InstanceModel.HOST_ID))
                     .as("step 5: the record names " + HOST_B)
                     .isEqualTo(hostBId);
                 assertThat((Object) row.get(InstanceModel.MIGRATE_TARGET_ID))
@@ -269,8 +269,8 @@ class IncusColdMigrationLiveTest {
                     .as("step 8: nightstrom's kernel carries rules naming the live tap "
                         + tap + " -- ruleset:\n" + nft)
                     .contains(tap);
-                Row hostB = Models.get(ServerModel.class).findByName(HOST_B);
-                IncusKernelIsolation kernel = IncusKernelIsolation.forServer(hostB);
+                Row hostB = Models.get(HostModel.class).findByName(HOST_B);
+                IncusKernelIsolation kernel = IncusKernelIsolation.forHost(hostB);
                 assertThat(kernel.available())
                     .as("step 8: the kernel-truth lane is AVAILABLE on the destination"
                         + " (enrolled ssh admin lane)")
@@ -308,11 +308,11 @@ class IncusColdMigrationLiveTest {
                         assertThat(violations.all()).anySatisfy(violation ->
                             assertThat(violation.message().key())
                                 .isEqualTo("host_not_admitted")));
-                setAdmission(hostAId, ServerModel.ADMISSION_ADMITTED);
+                setAdmission(hostAId, HostModel.ADMISSION_ADMITTED);
                 restoredId = backups.restoreToNew(backupId, "mig-restored", HOST_A).instanceId();
                 restoredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, restoredId);
                 Row restored = Models.get(InstanceModel.class).findById(restoredId);
-                assertThat((Object) restored.get(InstanceModel.SERVER_ID))
+                assertThat((Object) restored.get(InstanceModel.HOST_ID))
                     .as("step 10: the restored instance lives on the DIFFERENT host"
                         + " the operator named")
                     .isEqualTo(hostAId);
@@ -354,7 +354,7 @@ class IncusColdMigrationLiveTest {
                 //     removed from the real daemon and exactly ONE host holds it.
                 InstanceMigrations.recoverInterrupted();
                 Row settled = Models.get(InstanceModel.class).findById(restoredId);
-                assertThat((Object) settled.get(InstanceModel.SERVER_ID))
+                assertThat((Object) settled.get(InstanceModel.HOST_ID))
                     .as("step 12: rollback keeps the record on " + HOST_A)
                     .isEqualTo(hostAId);
                 assertThat((String) settled.get(InstanceModel.STATUS))
@@ -401,7 +401,7 @@ class IncusColdMigrationLiveTest {
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", VM_IMAGE, "memory_limit_mb", 512, RootDisk.SETTING, VM_ROOT_DISK_GB)));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -412,18 +412,18 @@ class IncusColdMigrationLiveTest {
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", PEER_IMAGE, "memory_limit_mb", 128)));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
 
     private static void setAdmission(int serverId, String admission) {
-        Row row = Models.get(ServerModel.class).findById(serverId);
-        if (ServerModel.ADMISSION_ADMITTED.equals(admission)) {
+        Row row = Models.get(HostModel.class).findById(serverId);
+        if (HostModel.ADMISSION_ADMITTED.equals(admission)) {
             HostAdmission.requireAdmittable(row);
         }
-        row.set(ServerModel.ADMISSION, admission);
-        Models.get(ServerModel.class).save(row);
+        row.set(HostModel.ADMISSION, admission);
+        Models.get(HostModel.class).save(row);
     }
 
     /** A filesystem backup target on the controller + one COMPLETE backup of the VM. */

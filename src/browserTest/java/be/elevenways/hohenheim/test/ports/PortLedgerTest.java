@@ -5,29 +5,19 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.testsupport.thread.Racers;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.List;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -77,26 +67,26 @@ class PortLedgerTest {
     @Test
     void localHostSpellingsResolveToOneClaimSet() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             // 1. Every legacy spelling of the local daemon is THE local server.
-            assertThat(ServerModel.canonicalServerId(""))
-                .as("step 1: blank resolves to the local server").isEqualTo(localId);
-            assertThat(ServerModel.canonicalServerId(null))
-                .as("step 1: null resolves to the local server").isEqualTo(localId);
-            assertThat(ServerModel.canonicalServerId("local"))
-                .as("step 1: 'local' resolves to the local server").isEqualTo(localId);
-            assertThat(ServerModel.canonicalServerId("hohenheim:local"))
-                .as("step 1: the legacy registry key resolves to the local server")
+            assertThat(HostModel.canonicalHostId(""))
+                .as("step 1: blank resolves to the local host").isEqualTo(localId);
+            assertThat(HostModel.canonicalHostId(null))
+                .as("step 1: null resolves to the local host").isEqualTo(localId);
+            assertThat(HostModel.canonicalHostId("local"))
+                .as("step 1: 'local' resolves to the local host").isEqualTo(localId);
+            assertThat(HostModel.canonicalHostId("hohenheim:local"))
+                .as("step 1: the legacy registry key resolves to the local host")
                 .isEqualTo(localId);
-            assertThat(ServerModel.canonicalServerId("hohenheim:" + localId))
-                .as("step 1: the id registry key resolves to the local server")
+            assertThat(HostModel.canonicalHostId("hohenheim:" + localId))
+                .as("step 1: the id registry key resolves to the local host")
                 .isEqualTo(localId);
             // 2. Consequently the claim keys coincide: one machine, one claim set.
-            assertThat(PortLedger.claimKeyOf(ServerModel.canonicalServerId(""), "0.0.0.0", 8301, null))
+            assertThat(PortLedger.claimKeyOf(HostModel.canonicalHostId(""), "0.0.0.0", 8301, null))
                 .as("step 2: '' and 'local' spell ONE claim key")
-                .isEqualTo(PortLedger.claimKeyOf(ServerModel.canonicalServerId("local"), "", 8301, "tcp"));
+                .isEqualTo(PortLedger.claimKeyOf(HostModel.canonicalHostId("local"), "", 8301, "tcp"));
             // 3. An unknown name refuses loudly instead of minting a fourth spelling.
-            assertThatThrownBy(() -> ServerModel.canonicalServerId("no-such-host"))
+            assertThatThrownBy(() -> HostModel.canonicalHostId("no-such-host"))
                 .as("step 3: unknown names are refused")
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no-such-host");
@@ -112,7 +102,7 @@ class PortLedgerTest {
     @Test
     void claimConflictNamesTheHolderAndOnlyObservedReleaseFreesTheTuple() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             Row db = Models.get(DatabaseModel.class).createEmptyRow();
             db.set(DatabaseModel.NAME, "claimdb");
             db.set(DatabaseModel.ENGINE, "postgres");
@@ -168,7 +158,7 @@ class PortLedgerTest {
     @Test
     void wholeHostAndSpecificAddressClaimsOfOnePortExcludeEachOther() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
 
             // 1. A loopback-specific claim (what a docker publication looks like).
             PortLedger.claim(localId, "127.0.0.1", 8320, "tcp", null, null, "docker publication");
@@ -205,7 +195,7 @@ class PortLedgerTest {
     @Test
     void recordAfterLearnsRelearnsReportsAndReleasesWithTheRecord() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             Row db = Models.get(DatabaseModel.class).createEmptyRow();
             db.set(DatabaseModel.NAME, "recordafter");
             db.set(DatabaseModel.ENGINE, "postgres");
@@ -299,7 +289,7 @@ class PortLedgerTest {
     @Test
     void deletingAnInstanceParksItsClaimsInReleasing() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             // 1. An instance record owning one observed loopback port.
             Row instance = Models.get(InstanceModel.class).createEmptyRow();
             instance.set(InstanceModel.NAME, "hook-check");
@@ -340,7 +330,7 @@ class PortLedgerTest {
     void preallocatedClaimsAreStableReservationsAndTheLedgerArbitratesRaces()
             throws Exception {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             Row one = Models.get(InstanceModel.class).createEmptyRow();
             one.set(InstanceModel.NAME, "prealloc-one");
             one.set(InstanceModel.KIND, "hohenheim:docker_container");
@@ -393,13 +383,13 @@ class PortLedgerTest {
         // The loser's refusal is its outcome: the ledger's PortConflict, or whatever else it threw.
         List<Throwable> refusals = Racers.race("two claims of one preallocated port", Duration.ofSeconds(60), 2,
             slot -> {
-                Db.run(datasource, () -> PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
+                Db.run(datasource, () -> PortLedger.claimPreallocated(HostModel.localHostId(), "", 8351,
                     "udp", InstanceModel.MODEL_ID, ids[slot], null));
                 return null;
             }).failures();
         Db.run(datasource, () -> {
             List<Row> rows = Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(ServerModel.localServerId()))
+                .where(PortAllocationModel.HOST_ID.eq(HostModel.localHostId()))
                 .and(PortAllocationModel.PORT.eq(8351))
                 .all();
             assertThat(rows)

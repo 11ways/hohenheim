@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -273,7 +273,7 @@ public record StackSpec(
         return new StackSpec(
             stackId,
             stack.get(StackModel.NAME),
-            ServerModel.nameOf(stack.get(StackModel.SERVER_ID)),
+            HostModel.nameOf(stack.get(StackModel.HOST_ID)),
             Texts.blankAsNull(stack.get(StackModel.REGISTRY_SERVER)),
             Texts.blankAsNull(stack.get(StackModel.REGISTRY_USER)),
             Texts.blankAsNull(stack.get(StackModel.REGISTRY_PASSWORD)),

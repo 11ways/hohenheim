@@ -2,11 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -301,7 +297,7 @@ class BuildDeployReadsJourneyTest extends HohenheimTestBase {
             InstanceModel.KIND.getName(), "hohenheim:docker_container",
             InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine")),
             InstanceModel.STATUS.getName(), status,
-            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+            InstanceModel.HOST_ID.getName(), HostModel.localHostId()));
     }
 
     /** A succeeded workspace build of {@code app} from commit {@code sha}, finished at {@code finished}. */

@@ -9,13 +9,7 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.HostAttention;
@@ -25,10 +19,10 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Evidence;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Finding;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
@@ -373,7 +367,7 @@ class DockerReconcilerTest {
     // -- persistence + attention ----------------------------------------------
 
     @Test
-    void storeReplacesPerServerAndAttentionSurfacesOnlyAlarms() {
+    void storeReplacesPerHostAndAttentionSurfacesOnlyAlarms() {
         Db.run(datasource, () -> {
             // 1. First sweep of "local": an orphan, a collision, and quiet buckets.
             DockerReconciler.store("local", List.of(
@@ -450,12 +444,12 @@ class DockerReconcilerTest {
     @Test
     void releasingClaimsAreFreedOnlyWhenObservedFreeAndOnlyByTheObserver() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
-            Row edge = Models.get(ServerModel.class).createEmptyRow();
-            edge.set(ServerModel.NAME, "sweep-edge");
-            edge.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            Models.get(ServerModel.class).save(edge);
-            Integer edgeId = edge.get(ServerModel.ID);
+            int localId = HostModel.localHostId();
+            Row edge = Models.get(HostModel.class).createEmptyRow();
+            edge.set(HostModel.NAME, "sweep-edge");
+            edge.set(HostModel.MODE, HostModel.MODE_SSH);
+            Models.get(HostModel.class).save(edge);
+            Integer edgeId = edge.get(HostModel.ID);
 
             // 1. Two owning records, so the claims can be PARKED through the real funnel
             //    (releaseOwner = the unverified release): three local claims + two remote
@@ -575,12 +569,12 @@ class DockerReconcilerTest {
     @Test
     void theDockerSweepNeverProbesOrRestampsAnIncusHost() {
         Db.run(datasource, () -> {
-            Row incus = Models.get(ServerModel.class).createEmptyRow();
-            incus.set(ServerModel.NAME, "sweep-incus");
-            incus.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            Models.get(ServerModel.class).save(incus);
-            Integer incusId = incus.get(ServerModel.ID);
+            Row incus = Models.get(HostModel.class).createEmptyRow();
+            incus.set(HostModel.NAME, "sweep-incus");
+            incus.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            incus.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            Models.get(HostModel.class).save(incus);
+            Integer incusId = incus.get(HostModel.ID);
             // The verdict a contradicted identity leaves behind, written through the
             // PRODUCTION path so the quarantine stamp lands the way it really does.
             HostProbe.recordFailure("sweep-incus", HostProbe.Outcome.failure(
@@ -588,10 +582,10 @@ class DockerReconcilerTest {
 
             // 1. The Docker host inventory names the docker hosts and ONLY those --
             //    a fix that simply swept nothing would pass everything below.
-            ServerService servers = new ServerService(datasource);
+            HostService servers = new HostService(datasource);
             assertThat(servers.dockerNames())
                 .as("step 1: the docker host inventory keeps the docker hosts")
-                .contains(ServerService.LOCAL_HOST_NAME)
+                .contains(HostService.LOCAL_HOST_NAME)
                 .doesNotContain("sweep-incus");
 
             // 2. A full sweep leaves the incus host's stored verdict exactly as it was.
@@ -600,22 +594,22 @@ class DockerReconcilerTest {
                 .as("step 2: the sweep visited the docker host and skipped the incus one")
                 .doesNotContain("sweep-incus");
 
-            Row after = Models.get(ServerModel.class).findById(incusId);
-            assertThat((String) after.get(ServerModel.LAST_ERROR_KIND))
+            Row after = Models.get(HostModel.class).findById(incusId);
+            assertThat((String) after.get(HostModel.LAST_ERROR_KIND))
                 .as("step 2: the docker sweep must not restamp an incus host's typed"
                     + " verdict (this is the quarantine token; only a repin clears it)")
                 .isEqualTo(HostProbe.FailureKind.HOST_KEY_CHANGED.token);
-            assertThat((String) after.get(ServerModel.LAST_ERROR))
+            assertThat((String) after.get(HostModel.LAST_ERROR))
                 .as("step 2: the incus host's real last error survives the docker sweep")
                 .isEqualTo("incus tls identity changed");
-            assertThat((Object) after.get(ServerModel.LAST_SEEN_AT))
+            assertThat((Object) after.get(HostModel.LAST_SEEN_AT))
                 .as("step 2: the docker sweep never claims to have SEEN an incus host")
                 .isNull();
 
             // 3. The quarantine itself is still in force, and it lives in its OWN column
             //    now -- so even a sweep that did restamp the transient verdict could no
             //    longer erase it.
-            assertThat((Object) after.get(ServerModel.QUARANTINED_AT))
+            assertThat((Object) after.get(HostModel.QUARANTINED_AT))
                 .as("step 3: the quarantine stamp survives the sweep").isNotNull();
             assertThat(HostPins.isQuarantined(after, HostTrustSlot.transportOf(after)))
                 .as("step 3: the incus host is still quarantined after the sweep")
@@ -630,20 +624,20 @@ class DockerReconcilerTest {
             assertThat(outcome.reachable())
                 .as("step 4: there is no daemon behind this record, so the probe fails")
                 .isFalse();
-            Row probed = Models.get(ServerModel.class).findById(incusId);
+            Row probed = Models.get(HostModel.class).findById(incusId);
             // Asserted as a CHANGE, not as "not null": step 2 left a verdict on this row,
             // so a not-null assertion here passed with the recording removed entirely --
             // it was vacuous, and this is the strengthened form.
-            assertThat((String) probed.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) probed.get(HostModel.LAST_ERROR_KIND))
                 .as("step 4: the incus sweep records its OWN typed verdict, replacing the"
                     + " stale one -- this is a real probe of this host, unlike the docker"
                     + " sweep's structural refusal")
                 .isNotNull()
                 .isNotEqualTo(HostProbe.FailureKind.HOST_KEY_CHANGED.token);
-            assertThat((String) probed.get(ServerModel.LAST_ERROR))
+            assertThat((String) probed.get(HostModel.LAST_ERROR))
                 .as("step 4: and the stored detail is the probe's, not the stale text")
                 .isNotEqualTo("incus tls identity changed");
-            assertThat((Object) probed.get(ServerModel.LAST_SEEN_AT))
+            assertThat((Object) probed.get(HostModel.LAST_SEEN_AT))
                 .as("step 4: and it never claims to have SEEN a host that did not answer")
                 .isNull();
             assertThat(HostPins.isQuarantined(probed, HostTrustSlot.transportOf(probed)))
@@ -679,7 +673,7 @@ class DockerReconcilerTest {
                 // 2. Sweep the real daemon: the planted orphan is found and stored.
                 List<Finding> findings;
                 try {
-                    findings = DockerReconciler.sweepServer("local", docker);
+                    findings = DockerReconciler.sweepHost("local", docker);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

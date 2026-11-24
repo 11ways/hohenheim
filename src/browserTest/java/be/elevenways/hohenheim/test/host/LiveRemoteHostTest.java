@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -101,14 +101,14 @@ class LiveRemoteHostTest {
     @Test
     void theTrustCeremonyEndsAtARealRemoteDaemonAndAMismatchFailsClosed() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
-            ServerModel model = Models.get(ServerModel.class);
+            HostService servers = new HostService();
+            HostModel model = Models.get(HostModel.class);
             Row host = remote.enrol(HOST);
             try {
                 // 1. An UNPINNED remote host is not connectable at all: no scan has
                 //    happened, so there is nothing to verify against and the refusal is
                 //    ours, typed, before any packet leaves the machine.
-                ServerService.Summary unpinned = servers.probeAndStore(HOST);
+                HostService.Summary unpinned = servers.probeAndStore(HOST);
                 assertThat(unpinned.reachable())
                     .as("step 1: an unpinned real host is not reached").isFalse();
                 assertThat(unpinned.errorKind())
@@ -127,10 +127,10 @@ class LiveRemoteHostTest {
                 // 3. A SCANNED pin is UNVERIFIED: a scan proves what the wire said, not
                 //    who said it, so admission is refused by name.
                 Row pinned = model.findByName(HOST);
-                assertThat((Boolean) pinned.get(ServerModel.HOST_KEY_VERIFIED))
+                assertThat((Boolean) pinned.get(HostModel.HOST_KEY_VERIFIED))
                     .as("step 3: a scanned pin is unverified until a human compares it")
                     .isFalse();
-                pinned.set(ServerModel.PREFLIGHT_OK, true);
+                pinned.set(HostModel.PREFLIGHT_OK, true);
                 model.save(pinned);
                 assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(pinned)))
                     .as("step 3: admit refuses while the fingerprint is unconfirmed")
@@ -143,12 +143,12 @@ class LiveRemoteHostTest {
                 //    the host be admitted.
                 HostKeys.confirm(pinned);
                 HostAdmission.requireAdmittable(pinned);
-                pinned.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+                pinned.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
                 model.save(pinned);
 
                 // 5. A REAL Docker daemon on ANOTHER machine, reached over the pinned
                 //    lane. The facts must be the REMOTE machine's, not this one's.
-                ServerService.Summary reached = servers.probeAndStore(HOST);
+                HostService.Summary reached = servers.probeAndStore(HOST);
                 assertThat(reached.reachable())
                     .as("step 5: the remote daemon is reached over the pinned lane (%s)",
                         reached.errorDetail())
@@ -164,24 +164,24 @@ class LiveRemoteHostTest {
                     .as("step 5: the daemon is the REMOTE machine's, not this workstation's")
                     .isNotEqualTo(daemonId(new DockerClient()));
                 Row seen = model.findByName(HOST);
-                assertThat((Object) seen.get(ServerModel.LAST_SEEN_AT))
+                assertThat((Object) seen.get(HostModel.LAST_SEEN_AT))
                     .as("step 5: and the contact is durably recorded").isNotNull();
-                assertThat((String) seen.get(ServerModel.LAST_ERROR_KIND))
+                assertThat((String) seen.get(HostModel.LAST_ERROR_KIND))
                     .as("step 5: with no stale error kind left behind").isNull();
 
                 // 6. The pin now names a DIFFERENT real ed25519 key. The connection must
                 //    fail CLOSED, and the failure must classify as host_key_changed --
                 //    NOT as timeout, which is what a classifier reading the ssh argv's
                 //    own ConnectTimeout=10 used to answer for every remote failure.
-                String realPin = seen.get(ServerModel.HOST_KEY);
+                String realPin = seen.get(HostModel.HOST_KEY);
                 String foreignPin = foreignHostKeyLine();
                 assertThat(foreignPin).as("step 6: the decoy really is a different key")
                     .isNotEqualTo(realPin);
-                seen.set(ServerModel.HOST_KEY, foreignPin);
-                seen.set(ServerModel.HOST_KEY_FINGERPRINT, HostKeys.fingerprintOf(foreignPin));
+                seen.set(HostModel.HOST_KEY, foreignPin);
+                seen.set(HostModel.HOST_KEY_FINGERPRINT, HostKeys.fingerprintOf(foreignPin));
                 model.save(seen);
 
-                ServerService.Summary changed = servers.probeAndStore(HOST);
+                HostService.Summary changed = servers.probeAndStore(HOST);
                 assertThat(changed.reachable())
                     .as("step 6: a pin that does not match the offer reaches nothing")
                     .isFalse();
@@ -195,12 +195,12 @@ class LiveRemoteHostTest {
 
                 // 7. The failure QUARANTINES the host and re-pins NOTHING.
                 Row quarantined = model.findByName(HOST);
-                assertThat((String) quarantined.get(ServerModel.ADMISSION))
+                assertThat((String) quarantined.get(HostModel.ADMISSION))
                     .as("step 7: an admitted host whose identity broke is blocked")
-                    .isEqualTo(ServerModel.ADMISSION_BLOCKED);
-                assertThat((Boolean) quarantined.get(ServerModel.PREFLIGHT_OK))
+                    .isEqualTo(HostModel.ADMISSION_BLOCKED);
+                assertThat((Boolean) quarantined.get(HostModel.PREFLIGHT_OK))
                     .as("step 7: its preflight verdict is dropped").isFalse();
-                assertThat((String) quarantined.get(ServerModel.HOST_KEY))
+                assertThat((String) quarantined.get(HostModel.HOST_KEY))
                     .as("step 7: and the pin is untouched -- no silent self-healing")
                     .isEqualTo(foreignPin);
 
@@ -213,9 +213,9 @@ class LiveRemoteHostTest {
                     .as("step 8: naming the key the real host actually offers")
                     .isEqualTo(remote.fingerprint());
                 Row afterRescan = model.findByName(HOST);
-                assertThat((String) afterRescan.get(ServerModel.HOST_KEY))
+                assertThat((String) afterRescan.get(HostModel.HOST_KEY))
                     .as("step 8: and STILL nothing re-pinned it").isEqualTo(foreignPin);
-                assertThat((String) afterRescan.get(ServerModel.HOST_KEY_OFFERED))
+                assertThat((String) afterRescan.get(HostModel.HOST_KEY_OFFERED))
                     .as("step 8: the offered key is kept for the re-pin ceremony")
                     .isEqualTo(realPin);
 
@@ -223,17 +223,17 @@ class LiveRemoteHostTest {
                 //    BOTTOM of the ceremony.
                 HostKeys.repin(afterRescan);
                 Row repinned = model.findByName(HOST);
-                assertThat((String) repinned.get(ServerModel.HOST_KEY_FINGERPRINT))
+                assertThat((String) repinned.get(HostModel.HOST_KEY_FINGERPRINT))
                     .as("step 9: the re-pin adopts the key the real host offered")
                     .isEqualTo(remote.fingerprint());
-                assertThat((Boolean) repinned.get(ServerModel.HOST_KEY_VERIFIED))
+                assertThat((Boolean) repinned.get(HostModel.HOST_KEY_VERIFIED))
                     .as("step 9: a re-pinned key is unconfirmed again").isFalse();
                 assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(repinned)))
                     .as("step 9: so it cannot be admitted without walking the ceremony")
                     .isInstanceOf(Violations.class);
 
                 // 10. With the correct pin restored the real daemon is reachable again.
-                ServerService.Summary recovered = servers.probeAndStore(HOST);
+                HostService.Summary recovered = servers.probeAndStore(HOST);
                 assertThat(recovered.reachable())
                     .as("step 10: the re-pinned lane reaches the daemon again (%s)",
                         recovered.errorDetail())
@@ -253,13 +253,13 @@ class LiveRemoteHostTest {
     @Test
     void thePreflightBatteryReadsTheRemoteHostsOwnKernelAndNftables() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             Row host = remote.enrol(HOST);
             Integer originalPids = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
             try {
                 HostKeys.scanAndPin(host);
-                Row pinned = Models.get(ServerModel.class).findByName(HOST);
+                Row pinned = Models.get(HostModel.class).findByName(HOST);
                 HostKeys.confirm(pinned);
                 Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 149);
@@ -324,12 +324,12 @@ class LiveRemoteHostTest {
                 assertThat(report.passed())
                     .as("step 5: every required check passed: %s", failedChecks(report))
                     .isTrue();
-                Row stored = Models.get(ServerModel.class).findByName(HOST);
-                assertThat((Boolean) stored.get(ServerModel.PREFLIGHT_OK))
+                Row stored = Models.get(HostModel.class).findByName(HOST);
+                assertThat((Boolean) stored.get(HostModel.PREFLIGHT_OK))
                     .as("step 5: and the stored verdict says so").isTrue();
-                assertThat((Object) stored.get(ServerModel.PROBED_AT))
+                assertThat((Object) stored.get(HostModel.PROBED_AT))
                     .as("step 5: with a probe timestamp").isNotNull();
-                assertThat(stored.get(ServerModel.CAPABILITIES))
+                assertThat(stored.get(HostModel.CAPABILITIES))
                     .as("step 5: and the remote facts on the record")
                     .isInstanceOfSatisfying(Map.class, map ->
                         assertThat((Map<?, ?>) map.get("checks")).isNotEmpty());

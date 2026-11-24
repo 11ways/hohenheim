@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.PreflightStatus;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
@@ -57,18 +57,18 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
         PanelAction<Row> check = action("check_host");
 
         // 1. The two old buttons are gone; the one verb is offered as "Check and admit" to a host waiting for it.
-        assertThat(ServerLifecycleActions.placed()).as("step 1: Preflight and Admit no longer exist")
+        assertThat(HostLifecycleActions.placed()).as("step 1: Preflight and Admit no longer exist")
             .noneMatch(action -> action.id().equals(HohenheimIds.id("admit_server"))
                 || action.id().equals(HohenheimIds.id("preflight_server")));
         assertThat(check.labelFor(host).key()).as("step 1: offered as check-and-admit").isEqualTo("check_and_admit");
 
         // 1b. Never checked, its volume storage reads as not checked yet: no "None" finding and no advice to mount a
         //     filesystem nobody has looked for.
-        assertThat((String) Models.get(ServerModel.class).findById(host.get(ServerModel.ID))
-                .get(ServerModel.VOLUME_BACKEND))
+        assertThat((String) Models.get(HostModel.class).findById(host.get(HostModel.ID))
+                .get(HostModel.VOLUME_BACKEND))
             .as("step 1b: a new host's volume storage is stored not checked").isEqualTo("unchecked");
-        String newHostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS,
-            host.get(ServerModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
+        String newHostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.HOSTS,
+            host.get(HostModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
         assertThat(newHostPage).as("step 1b: the host page says once that it was not checked yet, in its verdict")
             .contains("Never checked yet")
             .doesNotContain("Volume storage not checked yet")
@@ -88,13 +88,13 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
                         .as("step 2: the failed check by its words, never its code")
                         .anySatisfy(named -> assertThat(((Microcopy) named).key()).isEqualTo("check_daemon"));
                 }));
-        Row stored = Models.get(ServerModel.class).findById(host.get(ServerModel.ID));
-        assertThat((String) stored.get(ServerModel.ADMISSION)).as("step 2: still waiting")
-            .isEqualTo(ServerModel.ADMISSION_BLOCKED);
-        assertThat(stored.get(ServerModel.PROBED_AT)).as("step 2: the report was stored").isNotNull();
+        Row stored = Models.get(HostModel.class).findById(host.get(HostModel.ID));
+        assertThat((String) stored.get(HostModel.ADMISSION)).as("step 2: still waiting")
+            .isEqualTo(HostModel.ADMISSION_BLOCKED);
+        assertThat(stored.get(HostModel.PROBED_AT)).as("step 2: the report was stored").isNotNull();
 
         // 3. The host page lists the failed required check first under Must pass, with how to fix it.
-        HostPreflightReportView report = ServerOverviewState.preflightReport(stored);
+        HostPreflightReportView report = HostOverviewState.preflightReport(stored);
         assertThat(report.mustPass()).as("step 3: the failed check leads Must pass").isNotEmpty();
         PreflightCheckView first = report.mustPass().get(0);
         assertThat(first.name()).as("step 3: the unreachable daemon leads").isEqualTo("daemon");
@@ -103,7 +103,7 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
         assertThat(first.fix().key()).isEqualTo("fix_daemon");
         assertThat(first.detail().key()).as("step 3: what it found is a worded finding, never a probe token")
             .isEqualTo(PreflightFinding.DAEMON_UNREACHABLE.copy().key());
-        Microcopy failure = HostProbe.FailureKind.labelOf(stored.get(ServerModel.LAST_ERROR_KIND));
+        Microcopy failure = HostProbe.FailureKind.labelOf(stored.get(HostModel.LAST_ERROR_KIND));
         assertThat(failure.isLiteral()).as("step 3: the probe failure is one this build words").isFalse();
         assertThat(say(first.detail(), EN)).as("step 3: led by the probe failure in words")
             .startsWith(say(failure, EN) + ": ");
@@ -117,18 +117,18 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
 
         // 3b. The volume probe could not read the host either: its finding says it could not check and why, never a
         //     "None" with advice to mount a filesystem the host may well have.
-        assertThat((String) stored.get(ServerModel.VOLUME_BACKEND)).as("step 3b: the probe could not check")
+        assertThat((String) stored.get(HostModel.VOLUME_BACKEND)).as("step 3b: the probe could not check")
             .isEqualTo("unchecked");
-        assertThat((String) stored.get(ServerModel.VOLUME_BACKEND_DETAIL)).as("step 3b: and keeps why")
+        assertThat((String) stored.get(HostModel.VOLUME_BACKEND_DETAIL)).as("step 3b: and keeps why")
             .isNotBlank();
-        String hostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS,
-            stored.get(ServerModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
+        String hostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.HOSTS,
+            stored.get(HostModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
         assertThat(hostPage).as("step 3b: the host page says the volume storage could not be checked")
             .contains("Volume storage not checked")
             .doesNotContain("Mount a btrfs filesystem");
 
         // 4. An admitted host is only checked again: its verb says so, and checking never changes admission there.
-        stored.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        stored.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
         assertThat(check.labelFor(stored).key()).as("step 4: an admitted host is checked again")
             .isEqualTo("check_again");
     }
@@ -137,11 +137,11 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
     void eachHostIsOfferedTheTrustVerbsOfItsOwnLanesOnly() {
         Row docker = sshHost("lanes-docker");
         Row incus = sshHost("lanes-incus");
-        incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        incus.set(ServerModel.INCUS_URL, "https://lanes-incus.invalid:8443");
-        Models.get(ServerModel.class).save(incus);
-        incus = Models.get(ServerModel.class).findById(incus.get(ServerModel.ID));
-        Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        incus.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        incus.set(HostModel.INCUS_URL, "https://lanes-incus.invalid:8443");
+        Models.get(HostModel.class).save(incus);
+        incus = Models.get(HostModel.class).findById(incus.get(HostModel.ID));
+        Row local = Models.get(HostModel.class).findById(HostModel.localHostId());
 
         // 1. An SSH host is offered the host-key scan, and none of the Incus verbs.
         assertThat(offer("scan_host_key", docker)).as("step 1: an SSH host scans its host key")
@@ -164,8 +164,8 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
 
     @SuppressWarnings("unchecked")
     private static OperationPipeline.Offer offer(String id, Row host) {
-        PanelAction<Row> placed = Stream.concat(ServerLifecycleActions.placed().stream(),
-                ServerTrustActions.placed().stream())
+        PanelAction<Row> placed = Stream.concat(HostLifecycleActions.placed().stream(),
+                HostTrustActions.placed().stream())
             .filter(action -> action.id().equals(HohenheimIds.id(id))).findFirst().orElseThrow();
         return OperationPipeline.offer((Operation<Row, ?, ?>) placed.operation(), TenantConduits.operator(), host);
     }
@@ -205,20 +205,20 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
     }
 
     private static PanelAction<Row> action(String id) {
-        return ServerLifecycleActions.placed().stream()
+        return HostLifecycleActions.placed().stream()
             .filter(action -> action.id().equals(HohenheimIds.id(id)))
             .findFirst().orElseThrow();
     }
 
     private static Row sshHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.SSH_TARGET, "operator@" + name + ".invalid");
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        Models.get(ServerModel.class).save(row);
-        return Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.SSH_TARGET, "operator@" + name + ".invalid");
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        Models.get(HostModel.class).save(row);
+        return Models.get(HostModel.class).findById(row.get(HostModel.ID));
     }
 
     private static String catalog(String language) throws IOException {

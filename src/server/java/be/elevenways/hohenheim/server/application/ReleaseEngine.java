@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -11,7 +12,6 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
@@ -19,9 +19,9 @@ import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -327,8 +327,8 @@ public final class ReleaseEngine {
             }
 
             if (protecting && specEquals(desired, ApplicationReleases.storedSettings(serving))
-                    && serverId == ServerModel.canonicalServerId(
-                        serving.get(InstanceModel.SERVER_ID))) {
+                    && serverId == HostModel.canonicalHostId(
+                        serving.get(InstanceModel.HOST_ID))) {
                 try {
                     requireHealthy(oldLive, desired, serverId);
                 } catch (RuntimeException unhealthy) {
@@ -422,7 +422,7 @@ public final class ReleaseEngine {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_serving_release"));
             }
             Map<String, Object> desired = ApplicationReleases.storedSettings(target);
-            int serverId = ServerModel.canonicalServerId(target.get(InstanceModel.SERVER_ID));
+            int serverId = HostModel.canonicalHostId(target.get(InstanceModel.HOST_ID));
             String specFingerprint = trimmed(desired.get("source_fingerprint"));
             String ownerFingerprint =
                 trimmed(ApplicationReleases.storedSettings(serving).get("source_fingerprint"));
@@ -444,9 +444,9 @@ public final class ReleaseEngine {
                 }
                 step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
                     + " (image " + trimmed(desired.get(InstanceKindFields.IMAGE)) + ")");
-                DockerClient docker = serverId == ServerModel.localServerId()
+                DockerClient docker = serverId == HostModel.localHostId()
                     ? new DockerClient()
-                    : new ServerService().clientFor(ServerModel.nameOf(serverId));
+                    : new HostService().clientFor(HostModel.nameOf(serverId));
                 return gatedSwap(docker, op, applicationId, serving.get(InstanceModel.NAME), serverId,
                     serving, desired);
             });
@@ -596,7 +596,7 @@ public final class ReleaseEngine {
      */
     private static void snapshotVolumes(@NonNull Row op, int applicationId, int serverId) {
         List<String> snapshots = InstanceVolumes.snapshotAll(applicationId,
-            ServerModel.nameOf(serverId), "predeploy");
+            HostModel.nameOf(serverId), "predeploy");
         if (!snapshots.isEmpty()) {
             step(op, "pre-deploy snapshot of " + snapshots.size() + " volume(s): "
                 + String.join(", ", snapshots));
@@ -788,8 +788,8 @@ public final class ReleaseEngine {
         try {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving != null) {
-                int serverId = ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID));
-                BuildArtifacts.pruneSuperseded(new ServerService().clientFor(serverId),
+                int serverId = HostModel.canonicalHostId(serving.get(InstanceModel.HOST_ID));
+                BuildArtifacts.pruneSuperseded(new HostService().clientFor(serverId),
                     InstanceModel.MODEL_ID.toString(), applicationId, servingImage);
             }
         } catch (RuntimeException e) {
@@ -928,7 +928,7 @@ public final class ReleaseEngine {
             }
             // Trashed included: a destroyed candidate still names the host its op ran on.
             Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-            Integer serverId = instance != null ? instance.get(InstanceModel.SERVER_ID) : null;
+            Integer serverId = instance != null ? instance.get(InstanceModel.HOST_ID) : null;
             if (serverId != null) {
                 return serverId;
             }
@@ -1028,7 +1028,7 @@ public final class ReleaseEngine {
         if (!status.running() || status.workloadDead() || status.publishedPort() == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_published_port"));
         }
-        probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forServer(serverId));
+        probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forHost(serverId));
     }
 
     /**
@@ -1132,7 +1132,7 @@ public final class ReleaseEngine {
         instance.set(InstanceModel.CRASH_POLICY, trimmed(persisted.remove("crash_policy")));
         Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
         instance.set(InstanceModel.SETTINGS, persisted);
-        instance.set(InstanceModel.SERVER_ID, serverId);
+        instance.set(InstanceModel.HOST_ID, serverId);
         instance.set(InstanceModel.RUNTIME_ROLE, role);
         Models.get(InstanceModel.class).save(instance);
         int instanceId = instance.get(InstanceModel.ID);

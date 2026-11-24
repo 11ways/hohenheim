@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -17,7 +18,6 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -29,8 +29,8 @@ import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ImageIds;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
@@ -269,7 +269,7 @@ public final class InstanceBackups {
         // storage inside the same capture window (decided round r2r); an application's own lane already carries
         // its declarations and their contents, so it is not captured twice.
         List<InstanceVolumes.Archived> hostVolumes = new ArrayList<>();
-        String serverName = ServerModel.nameOf(resolved.serverId());
+        String serverName = HostModel.nameOf(resolved.serverId());
         String payload;
         if (nativeSupport != null) {
             // -- capture phase (native lane: LIVE, crash-consistent) ------------
@@ -598,7 +598,7 @@ public final class InstanceBackups {
                 "instance " + sourceId + " has no template a tenant restore could be bound to");
         }
         InstanceTemplates.requireSelectable(template, ctx);
-        return new TenantRestore(ctx, ServerModel.canonicalServerId(source.get(InstanceModel.SERVER_ID)),
+        return new TenantRestore(ctx, HostModel.canonicalHostId(source.get(InstanceModel.HOST_ID)),
             source.get(InstanceModel.ENVIRONMENT_ID), templateId);
     }
 
@@ -629,12 +629,12 @@ public final class InstanceBackups {
             }
         }
         List<Destination> destinations = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            Integer serverId = server.get(ServerModel.ID);
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            Integer serverId = server.get(HostModel.ID);
             if (serverId == null) {
                 continue;
             }
-            destinations.add(new Destination(serverId, String.valueOf((Object) server.get(ServerModel.NAME)),
+            destinations.add(new Destination(serverId, String.valueOf((Object) server.get(HostModel.NAME)),
                 kind == null ? HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kindId)
                     : destinationRefusal(serverId, kind, Map.of(), installMedia)));
         }
@@ -663,7 +663,7 @@ public final class InstanceBackups {
         }
         List<String> absent = new InstallMedia().absentOn(serverId, installMedia);
         return absent.isEmpty() ? null : HohenheimMicrocopy.VIOLATIONS.of("restore_install_media_missing")
-            .withArg("media", String.join(", ", absent)).withArg("host", ServerModel.labelOf(serverId));
+            .withArg("media", String.join(", ", absent)).withArg("host", HostModel.labelOf(serverId));
     }
 
     /**
@@ -763,7 +763,7 @@ public final class InstanceBackups {
             Map<String, Object> settings = InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
                 manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind())));
             int serverId = serverSpelling != null
-                ? ServerModel.canonicalServerId(serverSpelling)
+                ? HostModel.canonicalHostId(serverSpelling)
                 : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
                     InstancePlacement.Workload.imported(restoredKind, settings), null);
             // A fixed host port the target host already holds (the original beside it) becomes one it picks.
@@ -804,7 +804,7 @@ public final class InstanceBackups {
                 ? newName : manifest.instanceName() + "-restored-" + stamp);
             record.set(InstanceModel.KIND, manifest.kind());
             record.set(InstanceModel.SETTINGS, ports.settings());
-            record.set(InstanceModel.SERVER_ID, serverId);
+            record.set(InstanceModel.HOST_ID, serverId);
             record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
                 ? profile.crashPolicy() : InstanceModel.CRASH_NONE);
@@ -873,8 +873,8 @@ public final class InstanceBackups {
                     staging.resolve("application"));
                 ArtifactDeploys.restoreSource(newId,
                     applicationFiles.get(manifest.application().artifact().file()));
-                int serverId = record.get(InstanceModel.SERVER_ID);
-                DockerClient docker = new ServerService().clientFor(serverId);
+                int serverId = record.get(InstanceModel.HOST_ID);
+                DockerClient docker = new HostService().clientFor(serverId);
                 this.instances.leases().requireFence(serverId);
                 docker.loadImage(applicationFiles.get(manifest.application().image().file()));
                 if (!manifest.imageId().equals(docker.inspectImage(manifest.imageId()).get("Id"))) {
@@ -940,7 +940,7 @@ public final class InstanceBackups {
             // An ordinary destroy keeps host volumes (a soft-deleted record's data survives it); these were made by
             // this restore alone, so they go with it.
             if (record != null && !InstanceVolumes.declaredFor(newId).isEmpty()) {
-                InstanceVolumes.destroyAll(newId, ServerModel.nameOf(record.get(InstanceModel.SERVER_ID)));
+                InstanceVolumes.destroyAll(newId, HostModel.nameOf(record.get(InstanceModel.HOST_ID)));
             }
             // After the destroy, never before: the destroy asks for a capability the creator's manage implies. When
             // the destroy fails the record stays, held in error and charged to its creator, who keeps the grant that
@@ -1123,7 +1123,7 @@ public final class InstanceBackups {
         requireRematerialized(profile, newId);
         // Host volumes land on the host's volume storage BEFORE the workload: an import validates its directory
         // devices against the paths, and a created container binds them.
-        String serverName = ServerModel.nameOf(resolved.serverId());
+        String serverName = HostModel.nameOf(resolved.serverId());
         InstanceVolumes.restoreAll(newId, serverName,
             BackupArchive.extractHostVolumes(opened, staging.resolve("host-volumes")),
             resolved.handler().volumeOwnerUid(newId, serverName));
@@ -1303,7 +1303,7 @@ public final class InstanceBackups {
             throw new IOException("Serving application has no immutable runtime image identity");
         }
         Path imageTar = applicationDirectory.resolve("runtime-image.tar");
-        new ServerService().clientFor(serving.serverId())
+        new HostService().clientFor(serving.serverId())
             .saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
         files.put(BackupArchive.APPLICATION_PREFIX + "artifact.jar", artifact);
         files.put(BackupArchive.APPLICATION_PREFIX + "runtime-image.tar", imageTar);

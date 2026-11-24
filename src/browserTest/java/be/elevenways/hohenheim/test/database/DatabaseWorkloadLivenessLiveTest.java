@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -74,7 +74,7 @@ class DatabaseWorkloadLivenessLiveTest {
         String name = "livenessdb" + System.nanoTime();
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME,
+                "appuser", "secret123", "appdb", true, HostService.LOCAL_HOST_NAME,
                 ResourceLimits.of(MEMORY_LIMIT_MB, null));
             String container = EngineHandles.of(name);
 

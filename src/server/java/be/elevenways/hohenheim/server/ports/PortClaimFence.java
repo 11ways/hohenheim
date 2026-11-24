@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.ports;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
@@ -49,7 +49,7 @@ public final class PortClaimFence implements PortLedger.ClaimExclusion {
     public void exclusively(int serverId, PortLedger.@NonNull ClaimWrite body) {
         Commands.on(Models.get(PortAllocationModel.class).getResolvedDatasource()).ephemeral()
             .serializeOn(keyFor(serverId))
-            .fence(Models.get(ServerModel.class), ServerModel.PORT_CLAIM_FENCE, serverId)
+            .fence(Models.get(HostModel.class), HostModel.PORT_CLAIM_FENCE, serverId)
             .run(() -> {
                 body.write();
                 return null;

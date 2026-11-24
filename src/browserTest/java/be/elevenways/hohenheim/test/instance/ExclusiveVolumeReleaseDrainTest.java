@@ -5,10 +5,10 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -180,7 +180,7 @@ class ExclusiveVolumeReleaseDrainTest {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, settingsFor(tag));
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);
@@ -201,9 +201,9 @@ class ExclusiveVolumeReleaseDrainTest {
     }
 
     private static void setBackend(VolumeBackend backend) {
-        Row server = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        server.set(ServerModel.VOLUME_BACKEND, backend.token());
-        Models.get(ServerModel.class).save(server);
+        Row server = Models.get(HostModel.class).findById(HostModel.localHostId());
+        server.set(HostModel.VOLUME_BACKEND, backend.token());
+        Models.get(HostModel.class).save(server);
     }
 
     private static Row latestOp(int applicationId) {

@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.instance.HungWorkloads;
@@ -124,14 +124,14 @@ class HungWorkloadsTest {
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME, name);
         instance.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instance.set(InstanceModel.SETTINGS, settings);
         instance.set(InstanceModel.CRASH_POLICY, crashPolicy);
         Models.get(InstanceModel.class).save(instance);
         int id = instance.get(InstanceModel.ID);
         Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING).updateAll();
-        PortLedger.recordObserved(ServerModel.localServerId(), "127.0.0.1", port, "tcp", InstanceModel.MODEL_ID, id,
+        PortLedger.recordObserved(HostModel.localHostId(), "127.0.0.1", port, "tcp", InstanceModel.MODEL_ID, id,
             "hung workload test");
         // A site only routes, and so only reaches its workload, through a domain with a hostname.
         ProxyTestSupport.addDomain(ProxyTestSupport.setupInstanceSite("Site " + name, name, id),

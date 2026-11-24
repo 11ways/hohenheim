@@ -208,7 +208,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
+        return DockerInstanceRuntime.onHost(serverName, Egress.OPEN);
     }
 
     @Override

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -29,7 +29,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
 
     /**
      * The driver for this kind on the named host (THE canonical server name,
-     * {@code ServerModel.nameOf(canonicalServerId(...))} -- never a re-spelling).
+     * {@code HostModel.nameOf(canonicalHostId(...))} -- never a re-spelling).
      */
     @NonNull InstanceRuntime runtimeFor(@NonNull String serverName);
 
@@ -128,7 +128,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
-     * The host runtimes ({@code ServerModel.RUNTIME_*}) records of this kind can run on.
+     * The host runtimes ({@code HostModel.RUNTIME_*}) records of this kind can run on.
      * Placement only offers matching hosts, and a mismatched deploy refuses at client
      * construction -- a Docker-only kind can never land on an Incus daemon or vice versa.
      *
@@ -138,7 +138,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * reason it is a declaration here and not a table in the picker.
      */
     default @NonNull Set<String> supportedRuntimes() {
-        return Set.of(ServerModel.RUNTIME_DOCKER);
+        return Set.of(HostModel.RUNTIME_DOCKER);
     }
 
     /**
@@ -157,8 +157,8 @@ public interface InstanceKindHandler extends InstanceKindInfo {
             return null;
         }
         return switch (hostRuntime) {
-            case ServerModel.RUNTIME_DOCKER -> DockerInstanceRuntime.class;
-            case ServerModel.RUNTIME_INCUS -> IncusInstanceRuntime.class;
+            case HostModel.RUNTIME_DOCKER -> DockerInstanceRuntime.class;
+            case HostModel.RUNTIME_INCUS -> IncusInstanceRuntime.class;
             default -> null;
         };
     }

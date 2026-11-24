@@ -1,14 +1,8 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -362,14 +356,14 @@ class AdminListPresentationTest extends HohenheimHttpTestBase {
         site("wavea-alpha-site", "wavea-alpha-slug");
         site("wavea-beta-site", "wavea-beta-slug");
 
-        var servers = Models.get(ServerModel.class);
-        if (servers.find().where(ServerModel.NAME.eq("wavea-host")).first() == null) {
+        var servers = Models.get(HostModel.class);
+        if (servers.find().where(HostModel.NAME.eq("wavea-host")).first() == null) {
             Row row = servers.createEmptyRow();
-            row.set(ServerModel.NAME, "wavea-host");
-            row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            row.set(ServerModel.SSH_TARGET, "root@wavea-host.test");
-            row.set(ServerModel.PUBLIC_IPV4, "198.51.100.44");
+            row.set(HostModel.NAME, "wavea-host");
+            row.set(HostModel.MODE, HostModel.MODE_SSH);
+            row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            row.set(HostModel.SSH_TARGET, "root@wavea-host.test");
+            row.set(HostModel.PUBLIC_IPV4, "198.51.100.44");
             servers.save(row);
         }
 

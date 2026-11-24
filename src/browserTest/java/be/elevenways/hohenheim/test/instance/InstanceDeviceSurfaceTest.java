@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
@@ -12,11 +13,9 @@ import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
-import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -94,15 +93,15 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     static void registerKind() {
         FakeDeviceDaemon.Kind.register();
 
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, NAME_PREFIX + "host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, NAME_PREFIX + "host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(host);
         HostFixtures.acknowledgePosture(host);
-        hostId = host.get(ServerModel.ID);
+        hostId = host.get(HostModel.ID);
 
         tenantId = ApiSupport.user("devsurf-tenant@surface.test", "Device Surface Tenant");
         tenantKey = ApiKeyService.create(tenantId, NAME_PREFIX + "key",
@@ -121,7 +120,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     @AfterAll
     static void removeHost() {
         if (hostId != null) {
-            Models.get(ServerModel.class).delete(hostId);
+            Models.get(HostModel.class).delete(hostId);
             hostId = null;
         }
     }
@@ -156,7 +155,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
         if (FakeDeviceDaemon.Kind.ID.toString().equals(kind)) {
-            row.set(InstanceModel.SERVER_ID, hostId);
+            row.set(InstanceModel.HOST_ID, hostId);
         }
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
@@ -172,7 +171,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeDeviceDaemon.Kind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);

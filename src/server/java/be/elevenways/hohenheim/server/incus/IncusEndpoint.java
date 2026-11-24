@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -18,7 +18,7 @@ public record IncusEndpoint(boolean https, @NonNull String host, int port,
     public static final int DEFAULT_PORT = 8443;
 
     public static @NonNull IncusEndpoint of(@NonNull Row server) {
-        return parse(server.get(ServerModel.INCUS_URL));
+        return parse(server.get(HostModel.INCUS_URL));
     }
 
     /**

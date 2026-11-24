@@ -237,7 +237,7 @@ those citations are history, not files you will find.
   hand-written `execute(sql)`. Its `down()` undoes its `up()`.
 - Default records are the `Seeder` SPI's job (SEED boot stage), never an
   INSERT in the migration -- `SpamserviceInstallationSeeder`, `RuntimeImageSeeder` and
-  `LocalServerSeeder` are the examples.
+  `LocalHostSeeder` are the examples.
 
 ## Conventions
 

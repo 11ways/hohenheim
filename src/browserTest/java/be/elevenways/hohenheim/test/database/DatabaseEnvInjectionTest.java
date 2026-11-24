@@ -8,9 +8,9 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -67,7 +67,7 @@ class DatabaseEnvInjectionTest {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
         instances.save(row);
         return row.get(InstanceModel.ID);
@@ -82,7 +82,7 @@ class DatabaseEnvInjectionTest {
         row.set(DatabaseModel.DB_PASSWORD, "s3cret");
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.STATUS, status);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         databases.save(row);
         Integer id = row.get(DatabaseModel.ID);
         // The engine's address IS its owned instance's handle since the lowering, so a
@@ -317,7 +317,7 @@ class DatabaseEnvInjectionTest {
         row.set(DatabaseEngineModel.ENGINE, engineToken);
         row.set(DatabaseEngineModel.ROOT_USER, "root");
         row.set(DatabaseEngineModel.ROOT_PASSWORD, "rootsecret");
-        row.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseEngineModel.HOST_ID, HostModel.localHostId());
         row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         engines.save(row);
         return row;
@@ -334,7 +334,7 @@ class DatabaseEnvInjectionTest {
         row.set(DatabaseModel.DB_PASSWORD, "s3cret");
         row.set(DatabaseModel.DB_NAME, databaseName);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engineId);
         databases.save(row);

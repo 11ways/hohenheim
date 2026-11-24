@@ -4,9 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -92,7 +92,7 @@ class QuotaDriftReconcileTest {
                 HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
             for (Integer id : this.hosts) {
-                Models.get(ServerModel.class).delete(id);
+                Models.get(HostModel.class).delete(id);
             }
         });
         this.instances.clear();
@@ -205,15 +205,15 @@ class QuotaDriftReconcileTest {
     // -- helpers --------------------------------------------------------------
 
     private int host(String name, long memoryMb) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         this.hosts.add(id);
         HostPreflight.store(PREFIX + name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
@@ -232,7 +232,7 @@ class QuotaDriftReconcileTest {
             settings.put("memory_limit_mb", memoryMb);
         }
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         return row;
     }
 

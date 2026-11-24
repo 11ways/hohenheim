@@ -80,7 +80,7 @@ public class BackupTargetModel extends Model {
         // a config-page delete must never silently convert it to non-restorable. A dead
         // target is a config row -- REPAIR it (edit its settings) rather than deleting
         // it out from under its rows. Schema hook, so it runs on EVERY delete path
-        // (admin resource, model.delete, criteria delete) -- the ServerModel rule.
+        // (admin resource, model.delete, criteria delete) -- the HostModel rule.
         SCHEMA.addBeforeRemoveHook(BackupTargetModel::refuseRemovalWhileReferenced);
     }
 
@@ -89,7 +89,7 @@ public class BackupTargetModel extends Model {
      * as its destination, or that the control-plane backup setting names; once the refusal
      * passed, detach the trashed instances and FAILED backups that still point at it.
      *
-     * AIDEV-NOTE: a TRASHED instance does not refuse the removal (the ServerModel lesson,
+     * AIDEV-NOTE: a TRASHED instance does not refuse the removal (the HostModel lesson,
      * 2026-09-24). Counting it made every target a destroyed workload ever backed up to
      * permanently undeletable under enforced foreign keys: nothing purges a trashed row. Its
      * backup_target_id is a DESTINATION for future backups, and a trashed instance takes

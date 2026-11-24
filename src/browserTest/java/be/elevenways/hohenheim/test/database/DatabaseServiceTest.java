@@ -10,16 +10,16 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,7 +44,6 @@ import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Integration test for {@link DatabaseService}: create persists + provisions, backup resolves
@@ -95,7 +94,7 @@ class DatabaseServiceTest {
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
                 PG_IMAGE, "appuser", "secret123", "appdb",
-                true, ServerService.LOCAL_HOST_NAME, ResourceLimits.of(256, 1.0));   // ephemeral: tmpfs, no btrfs I/O
+                true, HostService.LOCAL_HOST_NAME, ResourceLimits.of(256, 1.0));   // ephemeral: tmpfs, no btrfs I/O
             assertThat(conn.port()).isGreaterThan(0);
 
             // create() persisted exactly one record with the right config.
@@ -103,8 +102,8 @@ class DatabaseServiceTest {
             assertThat(all).hasSize(1);
             assertThat((String) all.get(0).get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
-            assertThat((Integer) all.get(0).get(DatabaseModel.SERVER_ID))
-                .isEqualTo(ServerModel.localServerId());   // default host
+            assertThat((Integer) all.get(0).get(DatabaseModel.HOST_ID))
+                .isEqualTo(HostModel.localHostId());   // default host
             assertThat((Integer) all.get(0).get(DatabaseModel.MEMORY_LIMIT_MB)).isEqualTo(256);
             assertThat((Double) all.get(0).get(DatabaseModel.CPU_LIMIT)).isEqualTo(1.0);
 
@@ -345,12 +344,12 @@ class DatabaseServiceTest {
         String name = "ledger" + System.nanoTime();
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
-                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME);
+                PG_IMAGE, "appuser", "secret123", "appdb", true, HostService.LOCAL_HOST_NAME);
 
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
                 Integer instanceId = DatabaseInstances.owned(recordId).get(InstanceModel.ID);
-                String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
+                String key = PortLedger.claimKeyOf(HostModel.localHostId(),
                     conn.host(), conn.port(), "tcp");
                 // 1. The published port is a ledger claim owned by the engine INSTANCE
                 //    (the record-after write InstanceService.deploy does for every kind).
@@ -360,7 +359,7 @@ class DatabaseServiceTest {
                     .as("step 1: the claim names the engine instance as owner").isTrue();
                 // 2. It is therefore visible to EVERY other authority: a stack declaring
                 //    the same host port now collides instead of silently double-booking.
-                assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
+                assertThatThrownBy(() -> PortLedger.claim(HostModel.localHostId(), "0.0.0.0",
                         conn.port(), "tcp", null, null, "a rival stack service"))
                     .as("step 2: another authority is refused the same port")
                     .isInstanceOf(PortLedger.PortConflict.class);
@@ -368,7 +367,7 @@ class DatabaseServiceTest {
 
             service.destroy(name, true);
             Db.run(datasource, () -> assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(
-                    ServerModel.localServerId(), conn.host(), conn.port(), "tcp")))
+                    HostModel.localHostId(), conn.host(), conn.port(), "tcp")))
                 .as("step 3: destroying the database released its port").isNull());
         } finally {
             try {
@@ -407,7 +406,7 @@ class DatabaseServiceTest {
         try {
             // 1. Provision for real; the OWNED INSTANCE holds the ledger claim now.
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
-                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME);
+                PG_IMAGE, "appuser", "secret123", "appdb", true, HostService.LOCAL_HOST_NAME);
             int[] instanceId = new int[1];
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
@@ -423,14 +422,14 @@ class DatabaseServiceTest {
 
             // 2. Move the engine onto a host nothing can build a daemon connection for.
             Db.run(datasource, () -> {
-                Row phantom = Models.get(ServerModel.class).createEmptyRow();
-                phantom.set(ServerModel.NAME, "c6-phantom-" + System.nanoTime());
-                phantom.set(ServerModel.MODE, ServerModel.MODE_SSH);
-                phantom.set(ServerModel.SSH_TARGET, "nobody@phantom.invalid");
-                Models.get(ServerModel.class).save(phantom);
+                Row phantom = Models.get(HostModel.class).createEmptyRow();
+                phantom.set(HostModel.NAME, "c6-phantom-" + System.nanoTime());
+                phantom.set(HostModel.MODE, HostModel.MODE_SSH);
+                phantom.set(HostModel.SSH_TARGET, "nobody@phantom.invalid");
+                Models.get(HostModel.class).save(phantom);
                 // Through the OWNING tier's system scope: the generated-only guard
                 // refuses any other write to this kind, fixtures included.
-                moveEngineTo(instanceId[0], phantom.get(ServerModel.ID));
+                moveEngineTo(instanceId[0], phantom.get(HostModel.ID));
             });
 
             // 3. A destroy through it REFUSES instead of lying.
@@ -453,7 +452,7 @@ class DatabaseServiceTest {
                     .isEqualTo("secret123");
                 assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId[0]))
                     .as("step 4: the port claim survives").hasSize(1);
-                assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
+                assertThatThrownBy(() -> PortLedger.claim(HostModel.localHostId(), "0.0.0.0",
                         conn.port(), "tcp", null, null, "a rival stack service"))
                     .as("step 4: and still refuses a rival the same port")
                     .isInstanceOf(PortLedger.PortConflict.class);
@@ -465,7 +464,7 @@ class DatabaseServiceTest {
             // 5. Point the engine back at the reachable host: the VERIFIED destroy then
             //    succeeds completely -- record gone, container gone, ledger empty.
             Db.run(datasource, () -> {
-                moveEngineTo(instanceId[0], ServerModel.localServerId());
+                moveEngineTo(instanceId[0], HostModel.localHostId());
             });
             Db.run(datasource, () -> {
                 try {
@@ -507,7 +506,7 @@ class DatabaseServiceTest {
         be.elevenways.hohenheim.server.instance.OwnedInstances.inScopeUnchecked(
             DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, () -> {
                 Row row = Models.get(InstanceModel.class).findById(instanceId);
-                row.set(InstanceModel.SERVER_ID, serverId);
+                row.set(InstanceModel.HOST_ID, serverId);
                 Models.get(InstanceModel.class).save(row);
             });
     }

@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -96,7 +96,7 @@ class InstanceApiTest extends HohenheimHttpTestBase {
             }
             // The admitted host goes too: left behind, it is a placement candidate for every later class.
             if (hostId != null) {
-                Models.get(ServerModel.class).delete(hostId);
+                Models.get(HostModel.class).delete(hostId);
             }
         } finally {
             FakeDockerDaemon.restore();
@@ -112,19 +112,19 @@ class InstanceApiTest extends HohenheimHttpTestBase {
      * gate's words exactly as the select draws it disabled.
      */
     private static int host(String name) {
-        var servers = Models.get(ServerModel.class);
-        Row existing = servers.find().where(ServerModel.NAME.eq(name)).first();
+        var servers = Models.get(HostModel.class);
+        Row existing = servers.find().where(HostModel.NAME.eq(name)).first();
         if (existing != null) {
-            return existing.get(ServerModel.ID);
+            return existing.get(HostModel.ID);
         }
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.VOLUME_BACKEND, "btrfs");
-        row.set(ServerModel.SSH_TARGET, "root@" + name + ".test");
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.VOLUME_BACKEND, "btrfs");
+        row.set(HostModel.SSH_TARGET, "root@" + name + ".test");
         servers.save(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         HostFixtures.admitDockerHost(id, 16384);
         return id;
     }
@@ -198,7 +198,7 @@ class InstanceApiTest extends HohenheimHttpTestBase {
         assertThat(GitSourceSchema.autoDeploys(InstanceModel.settingsOf(row)))
             .as("step 1: a source created without auto_deploy deploys on push, as one made through the form does")
             .isTrue();
-        assertThat((Object) row.get(InstanceModel.SERVER_ID))
+        assertThat((Object) row.get(InstanceModel.HOST_ID))
             .as("step 1: an operator's explicit host is honoured verbatim").isEqualTo(hostId);
         assertThat((Object) row.get(InstanceModel.TEMPLATE_ID))
             .as("step 1: nothing links it to a template -- that is the other lane").isNull();

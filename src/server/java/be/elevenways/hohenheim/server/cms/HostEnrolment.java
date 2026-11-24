@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
@@ -81,8 +81,8 @@ public final class HostEnrolment {
     public static final Ceremony LIVE = new Ceremony() {
         @Override
         public void mintIdentities(@NonNull Row server) {
-            for (ServerTrustActions.TrustLane lane : ServerTrustActions.TRUST_LANES) {
-                ServerTrustActions.ensureLaneIdentity(server, lane);
+            for (HostTrustActions.TrustLane lane : HostTrustActions.TRUST_LANES) {
+                HostTrustActions.ensureLaneIdentity(server, lane);
             }
         }
 
@@ -126,7 +126,7 @@ public final class HostEnrolment {
 
     private static @NonNull Outcome run(@NonNull Object serverId, @Nullable String token, boolean mint) {
         requireOutsideTransaction();
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row server = servers.findById(serverId);
         if (server == null) {
             return Outcome.COMPLETE;
@@ -152,7 +152,7 @@ public final class HostEnrolment {
                     // daemon whose certificate contradicts the pin would defeat the ceremony.
                     return failed(serverId, HostProbe.FailureKind.HOST_KEY_CHANGED,
                         HohenheimMicrocopy.VIOLATIONS.of("incus_cert_mismatch")
-                            .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
+                            .withArg("name", String.valueOf((Object) server.get(HostModel.NAME)))
                             .withArg("pinned", String.valueOf(scan.previous()))
                             .withArg("offered", scan.fingerprint()));
                 }
@@ -172,7 +172,7 @@ public final class HostEnrolment {
                 HandlerSupport.violationMessage(refused));
         }
         // The enrolment PROVED the daemon answers this client as trusted: that is a contact.
-        HostProbe.recordSuccess(String.valueOf((Object) server.get(ServerModel.NAME)));
+        HostProbe.recordSuccess(String.valueOf((Object) server.get(HostModel.NAME)));
         return Outcome.COMPLETE;
     }
 
@@ -188,15 +188,15 @@ public final class HostEnrolment {
      */
     private static @NonNull Outcome failed(@NonNull Object serverId, HostProbe.@NonNull FailureKind kind,
                                            @NonNull Microcopy reason) {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row server = servers.findById(serverId);
-        String name = server != null ? String.valueOf((Object) server.get(ServerModel.NAME)) : "?";
+        String name = server != null ? String.valueOf((Object) server.get(HostModel.NAME)) : "?";
         Microcopy failure = HohenheimMicrocopy.SERVER.of("enrolment_incomplete")
             .withArg("name", name)
             .withArg("reason", reason);
         if (server != null) {
-            server.set(ServerModel.LAST_ERROR_KIND, kind.token);
-            server.set(ServerModel.LAST_ERROR, HohenheimViolations.textOf(reason));
+            server.set(HostModel.LAST_ERROR_KIND, kind.token);
+            server.set(HostModel.LAST_ERROR, HohenheimViolations.textOf(reason));
             servers.save(server);
         }
         Blast.slog("hohenheim.host.enrolment_incomplete",
@@ -210,7 +210,7 @@ public final class HostEnrolment {
      * @throws IllegalStateException when called inside a transaction on the host model's datasource
      */
     private static void requireOutsideTransaction() {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         if (!servers.resolvesDatasource()) {
             return;
         }

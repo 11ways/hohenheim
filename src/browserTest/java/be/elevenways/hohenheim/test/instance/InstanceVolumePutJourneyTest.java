@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -76,7 +76,7 @@ class InstanceVolumePutJourneyTest extends HohenheimHttpTestBase {
         Row app = Models.get(InstanceModel.class).createEmptyRow();
         app.set(InstanceModel.NAME, PREFIX + "app");
         app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        app.set(InstanceModel.HOST_ID, HostModel.localHostId());
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", "fake/app");
         settings.put("tag", "v1");
@@ -126,7 +126,7 @@ class InstanceVolumePutJourneyTest extends HohenheimHttpTestBase {
     void aFilePutBeforeTheFirstDeployIsInTheVolumeTheReleaseMounts() throws Exception {
         String volumes = "/api/v1/instances/" + appId + "/volumes";
         String hostPath = InstanceVolumes.hostPathFor(appId, "data");
-        String server = ServerModel.nameOf(ServerModel.localServerId());
+        String server = HostModel.nameOf(HostModel.localHostId());
         FakeHostVolumes hosts = FakeHostVolumes.install();
         // Two exited helpers a failed removal left behind: one of this app's, one of another app's.
         String leftover = ControllerScope.kindPrefix(ControllerScope.KIND_FILES) + appId + "-0";

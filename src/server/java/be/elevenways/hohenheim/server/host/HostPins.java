@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -47,7 +47,7 @@ public final class HostPins {
      * AIDEV-NOTE: the record-wide half was {@code last_error_kind = host_key_changed}
      * until 2026-08-07, and that was the defect: the same column is the last TRANSIENT
      * probe outcome, so {@code recordSuccess} and every weaker {@code recordFailure} wiped
-     * a security verdict. {@link ServerModel#QUARANTINED_AT} is written by the quarantine
+     * a security verdict. {@link HostModel#QUARANTINED_AT} is written by the quarantine
      * path and cleared by the repin ceremony, and by nothing else.
      *
      * AIDEV-NOTE: the OFFER half is per-slot, the quarantine stamp is
@@ -63,7 +63,7 @@ public final class HostPins {
         if (!slot.offeredOf(server).isBlank()) {
             return true;
         }
-        return server.get(ServerModel.QUARANTINED_AT) != null;
+        return server.get(HostModel.QUARANTINED_AT) != null;
     }
 
     /** Quarantine of the host's PRIMARY transport slot. */
@@ -81,9 +81,9 @@ public final class HostPins {
                                                      @NonNull HostTrustSlot slot,
                                                      @NonNull String offeredMaterial,
                                                      @NonNull String offeredFingerprint) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         String pinned = server.get(slot.material());
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
 
         if (pinned == null || pinned.isBlank()) {
             server.set(slot.material(), offeredMaterial);
@@ -130,11 +130,11 @@ public final class HostPins {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_not_pinned"));
         }
         server.set(slot.verified(), true);
-        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_VERIFIED, Map.of(
+        Models.get(HostModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_VERIFIED, Map.of(
             HohenheimActivityAction.LANE_KEY, slot.name(),
             HohenheimActivityAction.FINGERPRINT_KEY, String.valueOf((Object) server.get(slot.fingerprint())))));
         Blast.slog("hohenheim.host.key_verified", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
+            "server", String.valueOf((Object) server.get(HostModel.NAME)),
             "lane", slot.name(),
             "fingerprint", String.valueOf((Object) server.get(slot.fingerprint()))));
     }
@@ -159,22 +159,22 @@ public final class HostPins {
         server.set(slot.pinnedAt(), Now.instant());
         server.set(slot.verified(), false);
         server.set(slot.offered(), null);
-        server.set(ServerModel.PREFLIGHT_OK, false);
-        server.set(ServerModel.LAST_ERROR_KIND, null);
-        server.set(ServerModel.LAST_ERROR, null);
+        server.set(HostModel.PREFLIGHT_OK, false);
+        server.set(HostModel.LAST_ERROR_KIND, null);
+        server.set(HostModel.LAST_ERROR, null);
         // THE one act that lifts a quarantine, and the reason it is an act: an
         // operator adopted the material the machine now presents, on purpose.
-        server.set(ServerModel.QUARANTINED_AT, null);
-        server.set(ServerModel.QUARANTINE_REASON, null);
+        server.set(HostModel.QUARANTINED_AT, null);
+        server.set(HostModel.QUARANTINE_REASON, null);
         Map<String, Object> repinned = new LinkedHashMap<>();
         repinned.put(HohenheimActivityAction.LANE_KEY, slot.name());
         repinned.put(HohenheimActivityAction.FINGERPRINT_KEY, fingerprint);
         if (previous != null) {
             repinned.put(HohenheimActivityAction.PREVIOUS_KEY, previous);
         }
-        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_REPINNED, repinned));
+        Models.get(HostModel.class).save(server, Change.fact(HohenheimActivityAction.HOST_KEY_REPINNED, repinned));
         Blast.slog("hohenheim.host.key_repinned", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
+            "server", String.valueOf((Object) server.get(HostModel.NAME)),
             "lane", slot.name(),
             "previous", String.valueOf(previous), "fingerprint", fingerprint));
     }

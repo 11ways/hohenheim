@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.instance.StarterTemplate;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -11,7 +12,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -118,7 +118,7 @@ public final class InstanceTemplateParts {
         if (InstanceAttachmentParts.databasesServed()) {
             tab.sectionWhen(HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES, (template, access) -> {
                 InstanceKindHandler kind = kindOf(template);
-                return kind != null && kind.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
+                return kind != null && kind.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER);
             });
         }
         for (String section : sections) {

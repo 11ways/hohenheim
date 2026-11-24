@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -19,12 +19,12 @@ class SurfaceFixtureIsolationTest extends HohenheimHttpTestBase {
         Row provider = providers.createEmptyRow();
         provider.set(SiteAuthProviderModel.NAME, "foreign-surface-provider");
         providers.save(provider);
-        var hosts = Models.get(ServerModel.class);
+        var hosts = Models.get(HostModel.class);
         Row host = hosts.createEmptyRow();
-        host.set(ServerModel.NAME, "foreign-surface-host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        host.set(ServerModel.SSH_TARGET, "operator@surface.capture.test");
+        host.set(HostModel.NAME, "foreign-surface-host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        host.set(HostModel.MODE, HostModel.MODE_SSH);
+        host.set(HostModel.SSH_TARGET, "operator@surface.capture.test");
         hosts.save(host);
         String previousSession = sessionToken;
 
@@ -32,7 +32,7 @@ class SurfaceFixtureIsolationTest extends HohenheimHttpTestBase {
         freshSeededDatabase();
         assertThat(providers.find().count()).as("step 2: no foreign provider choices survive").isZero();
         assertThat(hosts.find().all()).as("step 2: only the seeded local host survives")
-            .hasSize(1).allMatch(row -> row.get(ServerModel.ID).equals(ServerModel.localServerId()));
+            .hasSize(1).allMatch(row -> row.get(HostModel.ID).equals(HostModel.localHostId()));
         var images = Models.get(RuntimeImageModel.class);
         long builtins = images.find().where(RuntimeImageModel.BUILTIN.eq(true)).count();
         assertThat(builtins).as("step 2: process-wide boot does not omit this database's seeds").isPositive();

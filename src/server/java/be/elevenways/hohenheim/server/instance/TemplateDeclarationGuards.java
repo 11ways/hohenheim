@@ -1,13 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates.VolumeDeclaration;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -106,7 +100,7 @@ public final class TemplateDeclarationGuards {
                 HohenheimMicrocopy.VIOLATIONS.of("template_missing"));
         String kind = template.get(InstanceTemplateModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
+        if (handler == null || !handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("template_id", templateId,
                 HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
         }

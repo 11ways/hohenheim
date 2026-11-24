@@ -53,7 +53,7 @@ public final class SandboxedBuilds {
      *        must land in THAT host's kernel, so the name travels with the client
      */
     public SandboxedBuilds(@NonNull DockerClient docker, @NonNull String serverName) {
-        this(docker, WorkloadNetworkPolicy.forServer(serverName), () -> {});
+        this(docker, WorkloadNetworkPolicy.forHost(serverName), () -> {});
     }
 
     public SandboxedBuilds(@NonNull DockerClient docker, @NonNull WorkloadNetworkPolicy policy,

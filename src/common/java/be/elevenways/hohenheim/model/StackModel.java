@@ -83,7 +83,7 @@ public class StackModel extends Model {
         .build());
 
     /** The host this stack deploys to: a {@code servers.id} FK, never a name string. */
-    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
+    public static final IntegerField HOST_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
         .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
@@ -138,8 +138,8 @@ public class StackModel extends Model {
         // the port ledger's claim keys total (a null host would split the claim set).
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
-                row.set(SERVER_ID, ServerModel.localServerId());
+            if (row != null && row.get(ID) == null && row.get(HOST_ID) == null) {
+                row.set(HOST_ID, HostModel.localHostId());
             }
         });
         // AIDEV-NOTE: a stack save can MOVE the stack to another host, and the port

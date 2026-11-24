@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,17 +22,17 @@ public final class IncusClients {
      * @throws IllegalArgumentException when the record does not declare the incus runtime
      * @throws HostKeys.HostTrustException when the https lane is unpinned or identity-less
      */
-    public static @NonNull IncusClient forServer(@NonNull Row server) {
-        if (!ServerModel.isIncus(server)) {
-            throw new IllegalArgumentException("Host '" + server.get(ServerModel.NAME)
-                + "' declares the " + ServerModel.runtimeOf(server)
+    public static @NonNull IncusClient forHost(@NonNull Row server) {
+        if (!HostModel.isIncus(server)) {
+            throw new IllegalArgumentException("Host '" + server.get(HostModel.NAME)
+                + "' declares the " + HostModel.runtimeOf(server)
                 + " runtime; it has no Incus daemon to address");
         }
         IncusEndpoint endpoint = IncusEndpoint.of(server);
         if (!endpoint.https()) {
             return new IncusClient(new UnixIncusTransport(endpoint.socketPath()));
         }
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         String pinned = server.get(HostTrustSlot.INCUS_TLS.material());
         if (pinned == null || pinned.isBlank()) {
             throw new HostKeys.HostTrustException(HostProbe.FailureKind.NOT_PINNED,

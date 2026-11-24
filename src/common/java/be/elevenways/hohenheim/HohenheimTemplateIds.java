@@ -39,7 +39,7 @@ public final class HohenheimTemplateIds {
     public static final Identifier INSTANCE_SCHEDULE_STEPS = Identifier.of("hohenheim", "cms/instance-schedule-steps");
     public static final Identifier INSTANCE_SHELL = Identifier.of("hohenheim", "cms/instance-shell");
     public static final Identifier INSTANCE_STATS = Identifier.of("hohenheim", "cms/instance-stats");
-    public static final Identifier SERVER_MEDIA = Identifier.of("hohenheim", "cms/server-media");
+    public static final Identifier HOST_MEDIA = Identifier.of("hohenheim", "cms/server-media");
     public static final Identifier SITE_DEV_SESSIONS = Identifier.of("hohenheim", "cms/site-dev-sessions");
     public static final Identifier SPAMSERVICE_OVERVIEW = Identifier.of("hohenheim", "cms/spamservice-overview");
     public static final Identifier SPAMSERVICE_REPUTATION = Identifier.of("hohenheim", "cms/spamservice-reputation");

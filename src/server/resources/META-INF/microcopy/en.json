@@ -24,7 +24,7 @@
     "scope": "violations"
   },
   "database_instance_server_mismatch": {
-    "text": "Database '{$name}' runs on {$server} while the instance runs on {$instance_server}; a link network only exists on the daemon both share",
+    "text": "Database '{$name}' runs on {$server} while the app runs on {$instance_server}; a link network only exists on the daemon both share",
     "scope": "violations"
   },
   "database_name_required": {
@@ -8757,7 +8757,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Runs the image of the version this app serves, instead of an image of its own. After every deploy or rollback of the app this container is stopped and started again on that version, unless you stopped it yourself. Until the switch it keeps running the old version, also while a command before the deploy changes the database. A failed deploy leaves it on the old version; a rollback puts it on the older version and undoes no database change. Stopping the app does not stop this container. It is given {$seconds} seconds to stop. The app must be on the same server and have the same owner. Leave Container image and Image tag empty; the container keeps its own command, variables, limits and volumes.",
+      "text": "Runs the image of the version this app serves, instead of an image of its own. After every deploy or rollback of the app this container is stopped and started again on that version, unless you stopped it yourself. Until the switch it keeps running the old version, also while a command before the deploy changes the database. A failed deploy leaves it on the old version; a rollback puts it on the older version and undoes no database change. Stopping the app does not stop this container. It is given {$seconds} seconds to stop. The app must be on the same host and have the same owner. Leave Container image and Image tag empty; the container keeps its own command, variables, limits and volumes.",
       "scope": "help"
     },
     {
@@ -8810,7 +8810,7 @@
     "scope": "violations"
   },
   "image_from_app_other_server": {
-    "text": "{$app} runs on another server. A container can only take the image of an app on its own server.",
+    "text": "{$app} runs on another host. A container can only take the image of an app on its own host.",
     "scope": "violations"
   },
   "image_from_app_not_deployed": {
@@ -8818,7 +8818,7 @@
     "scope": "violations"
   },
   "app_server_change_has_followers": {
-    "text": "This app cannot go to another server while these containers take their image from it: {$containers}. Clear \"Image from app\" on them first.",
+    "text": "This app cannot go to another host while these containers take their image from it: {$containers}. Clear \"Image from app\" on them first.",
     "scope": "violations"
   },
   "app_kind_change_has_followers": {
@@ -8830,7 +8830,7 @@
     "scope": "violations"
   },
   "migrate_follows_app": {
-    "text": "{$name} takes its image from {$app} and can only run on that app's server.",
+    "text": "{$name} takes its image from {$app} and can only run on that app's host.",
     "scope": "violations"
   },
   "restore_follows_app": {
@@ -13943,7 +13943,7 @@
     "scope": "violations"
   },
   "template_database_host_mismatch": {
-    "text": "Database '{$name}' was placed on {$server} but the instance runs on {$instance_server}; it could never reach it",
+    "text": "Database '{$name}' was placed on {$server} but the app runs on {$instance_server}; it could never reach it",
     "scope": "violations"
   },
   "last_axfr": {
@@ -15558,7 +15558,7 @@
   "settings.hohenheim.ssl.letsencrypt_staging.label": "Let's Encrypt staging",
   "settings.hohenheim.ssl.letsencrypt_staging.help": "Uses the Let's Encrypt staging server instead of production.",
   "settings.hohenheim.stacks.reclaim_images.label": "Reclaim images",
-  "settings.hohenheim.stacks.reclaim_images.help": "Periodically removes superseded images of the repositories managed stacks declare, on every server that hosts a stack, never touching an image referenced outside those repositories or by any container, and never touching volumes.",
+  "settings.hohenheim.stacks.reclaim_images.help": "Periodically removes superseded images of the repositories managed stacks declare, on every host that runs a stack, never touching an image referenced outside those repositories or by any container, and never touching volumes.",
   "settings.hohenheim.stacks.reclaim_min_age_hours.label": "Minimum image age",
   "settings.hohenheim.stacks.reclaim_min_age_hours.help": "Images whose build stamp is more recent than this many hours are kept, protecting freshly built images; minimum 1.",
   "settings.hohenheim.stacks.reclaim_untracked.label": "Reclaim untracked images",

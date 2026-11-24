@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -167,7 +167,7 @@ final class FakeDeviceDaemon {
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
         /** Its runtime really does implement DeviceAttachSupport, so it declares it. */
         @Override public boolean supportsDevices() { return true; }

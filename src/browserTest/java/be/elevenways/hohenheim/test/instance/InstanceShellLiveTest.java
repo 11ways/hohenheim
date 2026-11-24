@@ -4,15 +4,12 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.*;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
@@ -549,7 +546,7 @@ class InstanceShellLiveTest {
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
         @Override public @NonNull Set<String> supportedRuntimes() {
-            return Set.of(be.elevenways.hohenheim.model.ServerModel.RUNTIME_DOCKER);
+            return Set.of(HostModel.RUNTIME_DOCKER);
         }
 
         @Override public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
@@ -559,9 +556,9 @@ class InstanceShellLiveTest {
         /** The SAME constructor the workspace kind uses, streaming lane and all. */
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             return new DockerInstanceRuntime(servers.clientFor(serverName),
-                WorkloadNetworkPolicy.forServer(serverName),
+                WorkloadNetworkPolicy.forHost(serverName),
                 NetworkPosture.PRIVATE, Egress.OPEN, servers.transportFor(serverName));
         }
 

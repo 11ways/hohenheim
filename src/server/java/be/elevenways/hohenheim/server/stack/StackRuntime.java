@@ -1,18 +1,17 @@
 package be.elevenways.hohenheim.server.stack;
-
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.UnfinishedDestroys;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -91,7 +90,7 @@ public class StackRuntime {
     private final @Nullable Datasource datasource;
 
     private StackRuntime() {
-        ServerService servers = new ServerService();
+        HostService servers = new HostService();
         this.clientFor = servers::clientFor;
         this.datasource = null;
     }
@@ -495,7 +494,7 @@ public class StackRuntime {
      */
     public @NonNull Map<String, DockerReclaim.Outcome> reclaimImages(@NonNull Duration minimumAge,
                                                                     boolean includeUnattributed) {
-        Map<String, Set<String>> referencesByServer = scoped(this::declaredImagesByServer);
+        Map<String, Set<String>> referencesByServer = scoped(this::declaredImagesByHost);
         Map<String, DockerReclaim.Outcome> outcomes = new LinkedHashMap<>();
         Instant now = Now.instant();
 
@@ -520,20 +519,20 @@ public class StackRuntime {
     /** Whether any stack on this server is currently deploying (or rolling back). */
     private boolean deployInFlightOn(@NonNull String serverName) {
         return scoped(() -> !Models.get(StackModel.class).find()
-            .where(StackModel.SERVER_ID.eq(ServerModel.canonicalServerId(serverName)))
+            .where(StackModel.HOST_ID.eq(HostModel.canonicalHostId(serverName)))
             .where(StackModel.STATUS.eq(StackModel.STATUS_DEPLOYING))
             .all().isEmpty());
     }
 
     /** Every image reference declared by a stack service, grouped by the stack's server. */
-    private @NonNull Map<String, Set<String>> declaredImagesByServer() {
+    private @NonNull Map<String, Set<String>> declaredImagesByHost() {
         Map<String, Set<String>> byServer = new LinkedHashMap<>();
         for (Row stack : Models.get(StackModel.class).find().all()) {
             // AIDEV-NOTE: the pre-FK version keyed on the raw server_name STRING and
             // SKIPPED blank/null ones, so a "local by omission" stack's image references
             // never entered the keep set beside an explicit "local" stack's -- the
             // two-spellings bug class. The canonical FK folds them into one host.
-            String serverName = ServerModel.nameOf(stack.get(StackModel.SERVER_ID));
+            String serverName = HostModel.nameOf(stack.get(StackModel.HOST_ID));
             Set<String> references = byServer.computeIfAbsent(serverName, key -> new LinkedHashSet<>());
             for (Row service : Models.get(StackServiceModel.class)
                     .findByStackId(stack.get(StackModel.ID))) {

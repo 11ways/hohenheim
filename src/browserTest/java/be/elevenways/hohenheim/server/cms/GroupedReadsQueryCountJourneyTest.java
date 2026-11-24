@@ -5,26 +5,7 @@ import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackDeploymentModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
@@ -164,7 +145,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             //    host's shared engine already holds, and that shared record itself. The host's engine is the first
             //    mysql engine on the local host, the one moveRefusals finds.
             Row hostEngine = Objects.requireNonNull(Models.get(DatabaseEngineModel.class).find().noCache()
-                .where(DatabaseEngineModel.SERVER_ID.eq(ServerModel.localServerId()))
+                .where(DatabaseEngineModel.HOST_ID.eq(HostModel.localHostId()))
                 .where(DatabaseEngineModel.ENGINE.eq("mysql"))
                 .orderBy(DatabaseEngineModel.ID, SortOrder.ASC).first(), "the host's shared engine");
             Row taken = dedicated(cleanup, "mvtaken");
@@ -272,7 +253,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void theServerAndAuthProviderDeletesReadOncePerPage() {
+    void theHostAndAuthProviderDeletesReadOncePerPage() {
         List<Runnable> cleanup = new ArrayList<>();
         try {
             Map<String, Integer> serverReads = Map.of("stacks", 1, "managed_databases", 1, "database_engines", 1,
@@ -283,7 +264,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             //    migration read.
             List<Row> servers = new ArrayList<>();
             servers.add(server(cleanup, "host0", 1));
-            Measured one = measure(ServerParts.DELETE, Models.get(ServerModel.class), ServerModel.ID, servers,
+            Measured one = measure(HostParts.DELETE, Models.get(HostModel.class), HostModel.ID, servers,
                 serverTables);
             assertThat(one.statements()).as("step 1: one host").isEqualTo(serverReads);
             assertThat(one.offers()).as("step 1: a host a stack names is dead")
@@ -293,7 +274,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             for (int i = 1; i < 4; i++) {
                 servers.add(server(cleanup, "host" + i, i - 1));
             }
-            Measured page = measure(ServerParts.DELETE, Models.get(ServerModel.class), ServerModel.ID, servers,
+            Measured page = measure(HostParts.DELETE, Models.get(HostModel.class), HostModel.ID, servers,
                 serverTables);
             assertThat(page.statements()).as("step 2: four hosts").isEqualTo(serverReads);
             assertThat(page.offers().get(1)).as("step 2: an empty host is deletable")
@@ -373,7 +354,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             List<Row> stacks = new ArrayList<>();
             for (int i = 0; i < 4; i++) {
                 Row stack = row(cleanup, Models.get(StackModel.class), Map.of(StackModel.NAME.getName(),
-                    PREFIX + "stack" + i, StackModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                    PREFIX + "stack" + i, StackModel.HOST_ID.getName(), HostModel.localHostId(),
                     StackModel.STATUS.getName(), StackModel.STATUS_ACTIVE, StackModel.ENABLED.getName(), false));
                 if (i % 2 == 0) {
                     row(cleanup, Models.get(StackDeploymentModel.class), Map.of(
@@ -1059,7 +1040,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
         return row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
             DatabaseEngineModel.NAME.getName(), PREFIX + name, DatabaseEngineModel.ENGINE.getName(), "mysql",
             DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
-            DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+            DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId(),
             DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
     }
 
@@ -1070,7 +1051,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             DatabaseModel.DB_NAME.getName(), name.replace("-", "") + "db",
             DatabaseModel.DB_USER.getName(), name.replace("-", "") + "user",
             DatabaseModel.DB_PASSWORD.getName(), name + "-secret-password",
-            DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+            DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
             DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
     }
 
@@ -1118,7 +1099,7 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             InstanceModel.KIND.getName(), "hohenheim:docker_container",
             InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine")),
             InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+            InstanceModel.HOST_ID.getName(), HostModel.localHostId()));
     }
 
     private static Row environment(List<Runnable> cleanup, Row project, String name, int variables) {
@@ -1149,11 +1130,11 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
     /** A remote host carrying {@code stacks} stacks. */
     private static Row server(List<Runnable> cleanup, String name, int stacks) {
         int id = HostFixtures.admittedDockerHost(PREFIX + name, 4096);
-        Row server = Models.get(ServerModel.class).findById(id);
-        cleanup.add(() -> HardDeletes.byId(Models.get(ServerModel.class), id));
+        Row server = Models.get(HostModel.class).findById(id);
+        cleanup.add(() -> HardDeletes.byId(Models.get(HostModel.class), id));
         for (int i = 0; i < stacks; i++) {
             row(cleanup, Models.get(StackModel.class), Map.of(StackModel.NAME.getName(), PREFIX + name + "-stack" + i,
-                StackModel.SERVER_ID.getName(), id, StackModel.STATUS.getName(), StackModel.STATUS_STOPPED,
+                StackModel.HOST_ID.getName(), id, StackModel.STATUS.getName(), StackModel.STATUS_STOPPED,
                 StackModel.ENABLED.getName(), false));
         }
         return server;

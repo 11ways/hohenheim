@@ -2,10 +2,10 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.instance.ImageOrigin;
@@ -114,7 +114,7 @@ public final class InstanceTemplateCapture {
         }
         settings.put(InstanceKindFields.IMAGE, alias);
         settings.put(ImageOrigin.SETTING, ImageOrigin.PREPARED.key());
-        String host = ServerModel.nameOf(resolved.serverId());
+        String host = HostModel.nameOf(resolved.serverId());
 
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();

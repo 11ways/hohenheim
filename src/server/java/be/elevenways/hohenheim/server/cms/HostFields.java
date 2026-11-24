@@ -31,8 +31,8 @@ public final class HostFields {
      * engine kind, so its id selects a host as surely as the host's own).
      */
     private static final Map<Identifier, List<Field<?, ?>>> BY_MODEL = Map.of(
-        InstanceModel.MODEL_ID, List.of(InstanceModel.SERVER_ID, InstanceModel.MIGRATE_TARGET_ID),
-        DatabaseModel.MODEL_ID, List.of(DatabaseModel.SERVER_ID, DatabaseModel.ENGINE_ID));
+        InstanceModel.MODEL_ID, List.of(InstanceModel.HOST_ID, InstanceModel.MIGRATE_TARGET_ID),
+        DatabaseModel.MODEL_ID, List.of(DatabaseModel.HOST_ID, DatabaseModel.ENGINE_ID));
 
     private HostFields() {
     }

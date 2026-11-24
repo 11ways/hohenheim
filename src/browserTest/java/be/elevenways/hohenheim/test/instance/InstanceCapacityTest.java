@@ -4,8 +4,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
@@ -19,18 +19,15 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -87,7 +84,7 @@ class InstanceCapacityTest {
                 HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
             for (Integer id : this.hosts) {
-                Models.get(ServerModel.class).delete(id);
+                Models.get(HostModel.class).delete(id);
             }
         });
         this.instances.clear();
@@ -95,15 +92,15 @@ class InstanceCapacityTest {
     }
 
     private int host(String name, Long memoryMb, Instant probedAt) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         this.hosts.add(id);
         Map<String, Object> facts = new LinkedHashMap<>();
         if (memoryMb != null) {
@@ -125,7 +122,7 @@ class InstanceCapacityTest {
             settings.put("memory_limit_mb", memoryMb);
         }
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         return row;
     }
 
@@ -197,7 +194,7 @@ class InstanceCapacityTest {
             //    nothing implemented. The real lane is asserted against the real
             //    InstanceMigrations in InstanceMigrationTest -- never re-title this step.
             Row moved = Models.get(InstanceModel.class).findById(id);
-            moved.set(InstanceModel.SERVER_ID, beta);
+            moved.set(InstanceModel.HOST_ID, beta);
             Models.get(InstanceModel.class).save(moved);
             assertThat(InstanceCapacity.bookedMbOn(alpha))
                 .as("step 4: the host it left got its 256 MB back").isEqualTo(512);
@@ -349,7 +346,7 @@ class InstanceCapacityTest {
             //    null is the same fact both sides read.
             int blind = host("unmeasured", null, Now.instant());
             assertThat(InstanceCapacity.budgetMbOf(
-                    Models.get(ServerModel.class).findById(blind)))
+                    Models.get(HostModel.class).findById(blind)))
                 .as("step 3: an unmeasured host has NO budget, not an unlimited one")
                 .isNull();
             int blindWorkload = save(newWorkload(blind, "blind", 128));
@@ -366,7 +363,7 @@ class InstanceCapacityTest {
             //    and capacity is the first gate that reads one back for a decision.
             int stale = host("stale", 4096L, Now.instant().minus(Duration.ofDays(30)));
             assertThat(InstanceCapacity.budgetMbOf(
-                    Models.get(ServerModel.class).findById(stale)))
+                    Models.get(HostModel.class).findById(stale)))
                 .as("step 4: a month-old reading yields NO budget")
                 .isNull();
 
@@ -378,7 +375,7 @@ class InstanceCapacityTest {
                 HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS, 0);
             try {
                 assertThat(InstanceCapacity.budgetMbOf(
-                        Models.get(ServerModel.class).findById(stale)))
+                        Models.get(HostModel.class).findById(stale)))
                     .as("step 5: with no bound the old reading is the budget again")
                     .isEqualTo(4096L);
                 save(newWorkload(stale, "stale-w", 4096));

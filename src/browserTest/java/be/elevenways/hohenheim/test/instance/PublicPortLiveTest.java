@@ -7,14 +7,13 @@ import be.elevenways.hohenheim.test.FreePorts;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -281,7 +280,7 @@ class PublicPortLiveTest {
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             InstanceService service = new InstanceService();
             Map<String, Object> first = new LinkedHashMap<>();
             first.put("image", "nginx");
@@ -312,7 +311,7 @@ class PublicPortLiveTest {
                     .as("step 2: the refusal names the holding instance")
                     .contains("port-fixed-winner");
                 List<Row> rows = Models.get(PortAllocationModel.class).find()
-                    .where(PortAllocationModel.SERVER_ID.eq(localId))
+                    .where(PortAllocationModel.HOST_ID.eq(localId))
                     .and(PortAllocationModel.PORT.eq(fixedPort))
                     .all();
                 assertThat(rows)

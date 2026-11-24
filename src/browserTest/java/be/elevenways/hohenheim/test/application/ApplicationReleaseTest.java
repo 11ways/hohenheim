@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -242,7 +242,7 @@ class ApplicationReleaseTest {
     void aFullHostStillUpdatesRollsBackAndDeploysForwardAgain() {
         Integer savedReserve = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
         Double savedRatio = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
-        int host = ServerModel.localServerId();
+        int host = HostModel.localHostId();
         Db.run(datasource, () -> {
             int applicationId = FakeApps.application("full", "v1");
             try {
@@ -255,7 +255,7 @@ class ApplicationReleaseTest {
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
                 long booked = InstanceCapacity.bookedMbOn(host);
                 HostFixtures.makeLocalPlaceable(booked + 1);
-                assertThat(InstanceCapacity.budgetMbOf(Models.get(ServerModel.class).findById(host)))
+                assertThat(InstanceCapacity.budgetMbOf(Models.get(HostModel.class).findById(host)))
                     .as("step 1: the host's budget leaves one megabyte free").isEqualTo(booked + 1);
 
                 // 2. An update still lands: the candidate is admitted against the release it replaces.

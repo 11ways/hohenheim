@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
@@ -61,7 +62,6 @@ import be.elevenways.zenit.server.operation.InputScope;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.game.GameAddresses;
@@ -276,7 +276,7 @@ final class PutOnlineHandlers {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "a chosen port is no port", PutOnline.PORTS,
                 unspelled.all().getFirst().message());
         }
-        return serviceRefusal(access, input.game_address(), input.serverId(), ports,
+        return serviceRefusal(access, input.game_address(), input.hostId(), ports,
             port -> PutOnline.PORTS + "." + port.name());
     }
 
@@ -441,7 +441,7 @@ final class PutOnlineHandlers {
         } catch (DomainRefusal refused) {
             return refused;
         }
-        return serviceRefusal(access, input.game_address(), input.serverId(), List.copyOf(ports.keySet()),
+        return serviceRefusal(access, input.game_address(), input.hostId(), List.copyOf(ports.keySet()),
             ports::get);
     }
 
@@ -589,7 +589,7 @@ final class PutOnlineHandlers {
             return;
         }
         int instanceId = instance.get(InstanceModel.ID);
-        int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
         List<PortPublication> wanted = new ArrayList<>();
         for (PublishedPort port : ports) {
             wanted.add(PortPublication.of(port));
@@ -626,7 +626,7 @@ final class PutOnlineHandlers {
      */
     private static @NonNull Integer putWorkloadOnline(@NonNull OperationCall<Void, PutOnline.Workload> call) {
         PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
-        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
+        Row instance = createOfKind(call, input.name(), input.hostId(), input.kind(), input.settings(), null);
         return goLive(call, instance, input.hostname(), input.httpsAnswer());
     }
 
@@ -639,7 +639,7 @@ final class PutOnlineHandlers {
             @NonNull OperationCall<Void, PutOnline.WorkloadService> call) {
         PutOnline.WorkloadService input = Objects.requireNonNull(call.input(), "put online has its input");
         List<PublishedPort> ports = List.copyOf(servicePorts(input).keySet());
-        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
+        Row instance = createOfKind(call, input.name(), input.hostId(), input.kind(), input.settings(), null);
         int instanceId = instance.get(InstanceModel.ID);
         publishPorts(call, instance, ports);
         gameAddressStep(call, instanceId, input.game_address());
@@ -662,7 +662,7 @@ final class PutOnlineHandlers {
             throw refusedAs("app", Violations.ofField(InstanceOperations.INSTALL_MEDIA.getName(), media,
                 HohenheimMicrocopy.VIOLATIONS.of("install_media_needs_empty_vm")));
         }
-        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(),
+        Row instance = createOfKind(call, input.name(), input.hostId(), input.kind(), input.settings(),
             media == null ? null : placed -> new InstallMedia().requireOn(placed, media));
         int instanceId = instance.get(InstanceModel.ID);
         if (media != null) {
@@ -720,7 +720,7 @@ final class PutOnlineHandlers {
             instance.set(InstanceModel.NAME, name);
             instance.set(InstanceModel.KIND, kindId);
             instance.set(InstanceModel.SETTINGS, settings);
-            instance.set(InstanceModel.SERVER_ID, placed);
+            instance.set(InstanceModel.HOST_ID, placed);
             Models.get(InstanceModel.class).save(instance);
         } catch (Violations refused) {
             throw refusedAs("app", refused);
@@ -752,7 +752,7 @@ final class PutOnlineHandlers {
         PutOnline.FromRepository input = Objects.requireNonNull(call.input(), "a repository deploy has its input");
         Row site = call.subject();
         int siteId = site.get(SiteModel.ID);
-        Row app = placedOfKind(call, site.get(SiteModel.NAME), input.serverId(), input.kind(), input.settings(), null);
+        Row app = placedOfKind(call, site.get(SiteModel.NAME), input.hostId(), input.kind(), input.settings(), null);
         appStepDone(call, input.kind(), app);
         int appId = app.get(InstanceModel.ID);
         String[] folder = new String[1];
@@ -1046,6 +1046,6 @@ final class PutOnlineHandlers {
     /** @param what the template's name, or the kind's label for an app made from a kind's own settings */
     private static @NonNull Microcopy appDone(@NonNull Microcopy what, @NonNull Row instance) {
         return done("app").withArg("what", what)
-            .withArg("host", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
+            .withArg("host", HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)));
     }
 }

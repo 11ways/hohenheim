@@ -1,14 +1,7 @@
 package be.elevenways.hohenheim.test.wordpress;
 
 import be.elevenways.hohenheim.instance.ReadinessKind;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -71,7 +64,7 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
             // swept only once the pool settled.
             assertThat(DatabaseService.awaitProvisioningIdle(Duration.ofSeconds(60)))
                 .as("the provisioning pool settled before the sweep").isTrue();
-            for (Row row : databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all()) {
+            for (Row row : databases.find().where(DatabaseModel.HOST_ID.eq(hostId)).all()) {
                 Integer id = row.get(DatabaseModel.ID);
                 for (Row link : links.findByDatabaseId(id)) {
                     links.delete(link.get(InstanceDatabaseModel.ID));
@@ -81,21 +74,21 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
             // tier's system scope; the instance rows created from the template are plain.
             GeneratedRows.sweeping(() -> {
                 for (Row instance : instances.find()
-                        .where(InstanceModel.SERVER_ID.eq(hostId)).all()) {
+                        .where(InstanceModel.HOST_ID.eq(hostId)).all()) {
                     InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
                 }
             });
-            for (Row row : databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all()) {
+            for (Row row : databases.find().where(DatabaseModel.HOST_ID.eq(hostId)).all()) {
                 databases.delete(row.get(DatabaseModel.ID));
             }
             // The shared engine the declared database was allocated on goes LAST among the
             // host's rows: it refuses while a database still names it, and the host refuses
             // (server_in_use, engines=1) while the engine is there.
             Model engines = Models.get(DatabaseEngineModel.class);
-            for (Row engine : engines.find().where(DatabaseEngineModel.SERVER_ID.eq(hostId)).all()) {
+            for (Row engine : engines.find().where(DatabaseEngineModel.HOST_ID.eq(hostId)).all()) {
                 engines.delete(engine.get(DatabaseEngineModel.ID));
             }
-            Models.get(ServerModel.class).delete(hostId);
+            Models.get(HostModel.class).delete(hostId);
         }
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
@@ -253,7 +246,7 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
             .as("step 3: named after the instance and the prefix")
             .isEqualTo("wp-seed-any-media-wordpress-db");
         assertThat((String) database.get(DatabaseModel.ENGINE)).isEqualTo(DatabaseModel.ENGINE_MYSQL);
-        assertThat((Integer) database.get(DatabaseModel.SERVER_ID))
+        assertThat((Integer) database.get(DatabaseModel.HOST_ID))
             .as("step 3: on the instance's own host").isEqualTo(hostId);
         assertThat((String) database.get(DatabaseModel.DB_USER)).isNotBlank();
         assertThat((String) database.get(DatabaseModel.DB_PASSWORD)).isNotBlank();
@@ -306,20 +299,20 @@ class WordPressTemplateSeedTest extends HohenheimHttpTestBase {
     }
 
     private static int admittedHost() {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + "host");
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, PREFIX + "host");
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true,
             Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static String violationKeys(Throwable thrown) {

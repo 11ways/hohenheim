@@ -5,8 +5,8 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -144,19 +144,19 @@ class InstanceResizeTest {
     }
 
     private int host() {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + "host");
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + "host");
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 65536L * 1024 * 1024),
             true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private Row workload(String name, Integer memoryMb, String status) {
@@ -164,7 +164,7 @@ class InstanceResizeTest {
         row.set(InstanceModel.NAME, PREFIX + name);
         row.set(InstanceModel.KIND, DOCKER_KIND);
         row.set(InstanceModel.SETTINGS, limits(memoryMb, null));
-        row.set(InstanceModel.SERVER_ID, this.host);
+        row.set(InstanceModel.HOST_ID, this.host);
         row.set(InstanceModel.STATUS, status);
         return row;
     }

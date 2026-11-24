@@ -131,13 +131,13 @@ public final class InstanceBackupOperationHandlers {
             }
         }
         return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
-            InstanceTemplateOperations.SERVER_ID.getName(),
-            Select.of(InstanceTemplateOperations.SERVER_ID).options(OptionSource.of(options)).build())));
+            InstanceTemplateOperations.HOST_ID.getName(),
+            Select.of(InstanceTemplateOperations.HOST_ID).options(OptionSource.of(options)).build())));
     }
 
     /** Restores to a new instance; the run leads to it and its step says what did not come back. */
     private static @NonNull Restored restore(@NonNull OperationCall<Row, RestoreInput> call) {
-        Integer serverId = call.input() == null ? null : call.input().serverId();
+        Integer serverId = call.input() == null ? null : call.input().hostId();
         InstanceBackups.Restored outcome = new InstanceBackups().restoreToNew(
             call.subject().get(InstanceBackupModel.ID), null, serverId);
         Row created = Models.get(InstanceModel.class).findById(outcome.instanceId());

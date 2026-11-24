@@ -6,13 +6,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
 import be.elevenways.hohenheim.app.AppProtection;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -380,7 +374,7 @@ final class AppOverview {
             return what;
         }
         String where = HohenheimMicrocopy.APP_OVERVIEW.of("on_host").withArg("host",
-                ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)))
+                HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)))
             .asString(conduit);
         return what.isEmpty() ? where : what + " · " + where;
     }

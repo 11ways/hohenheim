@@ -4,9 +4,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -142,12 +142,12 @@ public final class InstanceMigrations {
         Resolved resolved = this.instances.resolve(instanceId);
         boolean sourceTransportable = hasTransport(resolved.runtime());
         List<Destination> destinations = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            Integer serverId = server.get(ServerModel.ID);
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            Integer serverId = server.get(HostModel.ID);
             if (serverId == null || serverId == resolved.serverId()) {
                 continue;
             }
-            String name = String.valueOf((Object) server.get(ServerModel.NAME));
+            String name = String.valueOf((Object) server.get(HostModel.NAME));
             Microcopy refusal = refusalFor(serverId, name, resolved, sourceTransportable);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
@@ -296,7 +296,7 @@ public final class InstanceMigrations {
             throw Violations.ofForm(placement);
         }
 
-        String targetName = ServerModel.nameOf(targetServerId);
+        String targetName = HostModel.nameOf(targetServerId);
         // The named-refusal funnel: an unaddressable destination (unpinned SSH host)
         // answers instance_host_unreachable, never a raw HostTrustException 500.
         InstanceRuntime targetRuntime = InstanceService.runtimeFor(resolved.handler(),
@@ -389,7 +389,7 @@ public final class InstanceMigrations {
             Files.createDirectories(staging);
             long size = transport.exportFromSource(staging);
             // The declared host-directory volumes travel beside either transport, through the host's volume storage.
-            String sourceName = ServerModel.nameOf(resolved.serverId());
+            String sourceName = HostModel.nameOf(resolved.serverId());
             boolean carryHostVolumes = !InstanceVolumes.sameStorage(sourceName, targetName);
             List<InstanceVolumes.Archived> hostVolumes = carryHostVolumes
                 ? InstanceVolumes.archiveAll(instanceId, sourceName,
@@ -425,7 +425,7 @@ public final class InstanceMigrations {
             resolved.runtime().destroy(handle);
             if (resolved.liveStatus().state() != ContainerState.ABSENT) {
                 throw new IOException("Source copy of '" + handle + "' still exists on '"
-                    + ServerModel.nameOf(resolved.serverId())
+                    + HostModel.nameOf(resolved.serverId())
                     + "' after its removal was accepted");
             }
             this.checkpoint.accept("source_destroyed");
@@ -455,8 +455,8 @@ public final class InstanceMigrations {
                 Row row = Models.get(InstanceModel.class).findById(instanceId);
                 if (row != null && InstanceModel.STATUS_STOPPED
                         .equals(row.get(InstanceModel.STATUS))
-                        && resolved.serverId() == ServerModel.canonicalServerId(
-                            row.get(InstanceModel.SERVER_ID))) {
+                        && resolved.serverId() == HostModel.canonicalHostId(
+                            row.get(InstanceModel.HOST_ID))) {
                     redeployBestEffort(instanceId);
                 }
             }
@@ -469,8 +469,8 @@ public final class InstanceMigrations {
         }
 
         Blast.log("MIGRATE: moved", handle, "from",
-            ServerModel.nameOf(resolved.serverId()), "to", targetName);
-        recordMigration(instanceId, ServerModel.nameOf(resolved.serverId()), targetName);
+            HostModel.nameOf(resolved.serverId()), "to", targetName);
+        recordMigration(instanceId, HostModel.nameOf(resolved.serverId()), targetName);
         if (wasRunning) {
             TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
@@ -498,12 +498,12 @@ public final class InstanceMigrations {
         if (TenantWrites.isTenantOriginated()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("migrate_operator_only"));
         }
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        if (server == null || !ServerModel.ADMISSION_CORDONED
-                .equals(server.get(ServerModel.ADMISSION))) {
+        Row server = Models.get(HostModel.class).findById(serverId);
+        if (server == null || !HostModel.ADMISSION_CORDONED
+                .equals(server.get(HostModel.ADMISSION))) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("drain_requires_cordon")
                 .withArg("name", server != null
-                    ? String.valueOf((Object) server.get(ServerModel.NAME))
+                    ? String.valueOf((Object) server.get(HostModel.NAME))
                     : String.valueOf(serverId)));
         }
         List<DrainEntry> moved = new ArrayList<>();
@@ -513,18 +513,18 @@ public final class InstanceMigrations {
             String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
             try {
                 int target = migrate(id);
-                moved.add(new DrainEntry(id, name, ServerModel.nameOf(target)));
+                moved.add(new DrainEntry(id, name, HostModel.nameOf(target)));
             } catch (Violations refusal) {
                 refused.add(new DrainEntry(id, name, refusal.getMessage()));
             }
         }
         boolean complete = instancesOn(serverId).isEmpty();
-        Blast.log("DRAIN:", ServerModel.nameOf(serverId), "moved", moved.size(),
+        Blast.log("DRAIN:", HostModel.nameOf(serverId), "moved", moved.size(),
             "refused", refused.size(), complete ? "- host holds none" : "- INCOMPLETE");
         // The drain itself is an operator act on the HOST, distinct from the per-instance
         // rows recordMigration wrote: an incomplete drain must be as answerable as a
         // complete one, so this is recorded on both outcomes.
-        History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.DRAINED, Map.of(
+        History.event(Models.get(HostModel.class), serverId, Change.fact(HohenheimActivityAction.DRAINED, Map.of(
             HohenheimActivityAction.MOVED_KEY, moved.size(), HohenheimActivityAction.REFUSED_KEY, refused.size(),
             HohenheimActivityAction.COMPLETE_KEY, complete)));
         return new DrainReport(moved, refused, complete);
@@ -546,11 +546,11 @@ public final class InstanceMigrations {
 
     private static @NonNull List<Row> instancesOn(int serverId) {
         var query = Models.get(InstanceModel.class).find();
-        if (serverId == ServerModel.localServerId()) {
+        if (serverId == HostModel.localHostId()) {
             query = query.where(Criteria.or(
-                InstanceModel.SERVER_ID.isNull(), InstanceModel.SERVER_ID.eq(serverId)));
+                InstanceModel.HOST_ID.isNull(), InstanceModel.HOST_ID.eq(serverId)));
         } else {
-            query = query.where(InstanceModel.SERVER_ID.eq(serverId));
+            query = query.where(InstanceModel.HOST_ID.eq(serverId));
         }
         return query.all();
     }
@@ -578,7 +578,7 @@ public final class InstanceMigrations {
         InstanceMigrations migrations = new InstanceMigrations();
         for (Row row : stuck) {
             int id = row.get(InstanceModel.ID);
-            Integer serverId = row.get(InstanceModel.SERVER_ID);
+            Integer serverId = row.get(InstanceModel.HOST_ID);
             try {
                 // The same borrowed-lease discipline InstanceService.recoverInterrupted
                 // documents: settle() drives the SOURCE host, so an unguarded sweep
@@ -627,7 +627,7 @@ public final class InstanceMigrations {
             // it cannot have been moved by this lane; nothing daemon-side to settle.
             return true;
         }
-        String targetName = ServerModel.nameOf(targetId);
+        String targetName = HostModel.nameOf(targetId);
         // Same funnel as the submit lane: a thrown Violations reaches settle's callers
         // as the loud "settling failed" log line instead of a raw HostTrustException.
         InstanceRuntime targetRuntime = InstanceService.runtimeFor(resolved.handler(),
@@ -653,7 +653,7 @@ public final class InstanceMigrations {
             try {
                 if (targetClaim == WorkloadClaim.OURS) {
                     removeMigrationCopy(targetRuntime, resolved, targetName);
-                } else if (!InstanceVolumes.sameStorage(ServerModel.nameOf(resolved.serverId()), targetName)) {
+                } else if (!InstanceVolumes.sameStorage(HostModel.nameOf(resolved.serverId()), targetName)) {
                     InstanceVolumes.removeFrom(instanceId, targetName);
                 }
             } catch (IOException | RuntimeException undeletable) {
@@ -674,10 +674,10 @@ public final class InstanceMigrations {
             // have left: tenant data on the old host.
             this.instances.leases().requireFence(targetId);
             try {
-                removeRemnants(resolved.runtime(), resolved, ServerModel.nameOf(resolved.serverId()), targetName);
+                removeRemnants(resolved.runtime(), resolved, HostModel.nameOf(resolved.serverId()), targetName);
             } catch (IOException undeletable) {
                 Blast.log("MIGRATE: completing", handle, "could not remove the source's remnants on",
-                    ServerModel.nameOf(resolved.serverId()), ":", undeletable.getMessage());
+                    HostModel.nameOf(resolved.serverId()), ":", undeletable.getMessage());
                 return false;
             }
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
@@ -875,7 +875,7 @@ public final class InstanceMigrations {
     static void removeMigrationCopy(@NonNull InstanceRuntime runtime, @NonNull Resolved resolved,
                                     @NonNull String serverName) throws IOException {
         runtime.destroy(resolved.spec().handle());
-        removeRemnants(runtime, resolved, serverName, ServerModel.nameOf(resolved.serverId()));
+        removeRemnants(runtime, resolved, serverName, HostModel.nameOf(resolved.serverId()));
     }
 
     /**

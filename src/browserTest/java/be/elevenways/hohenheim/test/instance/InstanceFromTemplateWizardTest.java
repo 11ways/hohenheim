@@ -1,11 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -79,7 +75,7 @@ class InstanceFromTemplateWizardTest extends HohenheimHttpTestBase {
             variables.delete(row.get(InstanceTemplateVariableModel.ID));
         }
         Models.get(InstanceTemplateModel.class).delete(templateId);
-        Models.get(ServerModel.class).delete(hostId);
+        Models.get(HostModel.class).delete(hostId);
     }
 
     @Test

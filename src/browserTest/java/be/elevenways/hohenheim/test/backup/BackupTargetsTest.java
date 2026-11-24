@@ -6,12 +6,11 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.host.Sshd;
 import be.elevenways.zenit.common.Zenit;
@@ -133,12 +132,12 @@ class BackupTargetsTest {
         Path file = payload("ssh-artifact");
 
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             servers.add("backup-host", sshd.target());
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.findByName("backup-host");
             HostKeys.ensureIdentity(host);
-            String publicKey = host.get(ServerModel.IDENTITY_PUBLIC_KEY);
+            String publicKey = host.get(HostModel.IDENTITY_PUBLIC_KEY);
             run(() -> {
                 sshd.authorize(publicKey);
                 return null;
@@ -148,7 +147,7 @@ class BackupTargetsTest {
             targetRow.set(BackupTargetModel.NAME, "sshbox");
             targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
             targetRow.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", ServerModel.registryKeyOf(host.get(ServerModel.ID)),
+                "server", HostModel.registryKeyOf(host.get(HostModel.ID)),
                 "path", remoteBase.toString()));
             Models.get(BackupTargetModel.class).save(targetRow);
 
@@ -163,7 +162,7 @@ class BackupTargetsTest {
             //    who never compared digests has verified nothing.
             HostKeys.scanAndPin(host);
             Row pinned = model.findByName("backup-host");
-            assertThat((String) pinned.get(ServerModel.HOST_KEY_FINGERPRINT))
+            assertThat((String) pinned.get(HostModel.HOST_KEY_FINGERPRINT))
                 .as("step 2: the pin is the running sshd's real key")
                 .isEqualTo(sshd.hostKeyFingerprint());
             assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(targetRow)))
@@ -251,7 +250,7 @@ class BackupTargetsTest {
                 blockedRow.set(BackupTargetModel.NAME, "sshbox-blocked");
                 blockedRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
                 blockedRow.set(BackupTargetModel.SETTINGS, Map.of(
-                    "server", ServerModel.registryKeyOf(host.get(ServerModel.ID)),
+                    "server", HostModel.registryKeyOf(host.get(HostModel.ID)),
                     "path", blocked.resolve("sub").toString()));
                 Models.get(BackupTargetModel.class).save(blockedRow);
                 BackupTarget blockedTarget = BackupTargetKinds.targetOf(blockedRow);
@@ -268,7 +267,7 @@ class BackupTargetsTest {
             //    evidence. The destination is refused by NAME while the artifact it holds
             //    is untouched -- backups do not silently continue to a machine whose
             //    identity we can no longer reconcile.
-            pinned.set(ServerModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
+            pinned.set(HostModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
             model.save(pinned);
             assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(targetRow)))
                 .as("step 6: a quarantined destination is refused")
@@ -283,7 +282,7 @@ class BackupTargetsTest {
 
             // 7. Clearing the quarantine restores exactly the behaviour of step 3, so the
             //    refusal above measured the quarantine and nothing else.
-            pinned.set(ServerModel.HOST_KEY_OFFERED, null);
+            pinned.set(HostModel.HOST_KEY_OFFERED, null);
             model.save(pinned);
             assertThat(run(() -> target.exists("instance-9/b.hib")))
                 .as("step 7: the same fixture works again once the quarantine clears")
@@ -298,9 +297,9 @@ class BackupTargetsTest {
                 .as("step 8: a changed host key fails closed instead of trusting on first use")
                 .isInstanceOfSatisfying(IOException.class, failure ->
                     assertThat(failure.getMessage()).contains("Host key verification failed"));
-            assertThat((String) model.findByName("backup-host").get(ServerModel.HOST_KEY))
+            assertThat((String) model.findByName("backup-host").get(HostModel.HOST_KEY))
                 .as("step 8: and nothing re-pinned the new key")
-                .isEqualTo((String) pinned.get(ServerModel.HOST_KEY));
+                .isEqualTo((String) pinned.get(HostModel.HOST_KEY));
 
             // 9. A non-ssh host is not a backup destination at all: the local daemon has
             //    no wire identity to pin, and pretending otherwise would sell a
@@ -309,7 +308,7 @@ class BackupTargetsTest {
             localTarget.set(BackupTargetModel.NAME, "not-really-off-host");
             localTarget.set(BackupTargetModel.KIND, "hohenheim:ssh");
             localTarget.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", ServerModel.registryKeyOf(ServerModel.localServerId()),
+                "server", HostModel.registryKeyOf(HostModel.localHostId()),
                 "path", remoteBase.toString()));
             Models.get(BackupTargetModel.class).save(localTarget);
             assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(localTarget)))

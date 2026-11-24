@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -78,9 +78,9 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
         }
         Models.get(DatabaseEngineModel.class).find()
             .where(DatabaseEngineModel.NAME.startsWith(PREFIX)).delete();
-        Model servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
-            servers.delete(row.get(ServerModel.ID));
+        Model servers = Models.get(HostModel.class);
+        for (Row row : servers.find().where(HostModel.NAME.startsWith(PREFIX)).all()) {
+            servers.delete(row.get(HostModel.ID));
         }
     }
 
@@ -182,20 +182,20 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
     }
 
     private static int host(String name, long memTotalBytes) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", memTotalBytes), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static int database(String name, Integer serverId) {
@@ -206,7 +206,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.DB_USER, "appuser");
         row.set(DatabaseModel.DB_PASSWORD, "s3cr3t-partial-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.MEMORY_LIMIT_MB, 1024);
         row.set(DatabaseModel.CPU_LIMIT, 1.5);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -223,7 +223,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
         row.set(DatabaseEngineModel.ENGINE, "mysql");
         row.set(DatabaseEngineModel.ROOT_USER, "root");
         row.set(DatabaseEngineModel.ROOT_PASSWORD, "rootsecret");
-        row.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseEngineModel.HOST_ID, HostModel.localHostId());
         row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, 3072);
         row.set(DatabaseEngineModel.CPU_LIMIT, 2.0);
         row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);

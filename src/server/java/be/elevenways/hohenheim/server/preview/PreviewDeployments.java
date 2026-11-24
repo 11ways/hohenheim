@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.preview.PreviewOperations;
@@ -314,7 +314,7 @@ public final class PreviewDeployments {
             // 2. Sandboxed, digest-pinned build of the preview's image.
             // Previews build against the local daemon, so the policy targets "local".
             SandboxedBuilds.Result build = new SandboxedBuilds(new DockerClient(),
-                ServerModel.LOCAL_HOST_NAME)
+                HostModel.LOCAL_HOST_NAME)
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
                     BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
                     SourceBuildDetail.buildContext(siteSettings, checkout.toPath()),
@@ -639,7 +639,7 @@ public final class PreviewDeployments {
                 instance.set(InstanceModel.NAME, "preview-" + hostname);
                 instance.set(InstanceModel.KIND,
                     be.elevenways.hohenheim.server.docker.ReleaseKind.ID.toString());
-                instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
                 instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             }
             int freshInstanceId = persistInstance(instance, desired);
@@ -715,9 +715,9 @@ public final class PreviewDeployments {
         var records = Models.get(DnsRecordModel.class);
         List<Row> owned = generatedDnsOf(previewId);
         Row zone = GameDomains.zoneFor(hostname);
-        Row server = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        String v4 = server != null ? trimmed(server.get(ServerModel.PUBLIC_IPV4)) : "";
-        String v6 = server != null ? trimmed(server.get(ServerModel.PUBLIC_IPV6)) : "";
+        Row server = Models.get(HostModel.class).findById(HostModel.localHostId());
+        String v4 = server != null ? trimmed(server.get(HostModel.PUBLIC_IPV4)) : "";
+        String v6 = server != null ? trimmed(server.get(HostModel.PUBLIC_IPV6)) : "";
         Set<Integer> touchedZones = new LinkedHashSet<>();
         for (Row row : owned) {
             touchedZones.add(row.get(DnsRecordModel.ZONE_ID));

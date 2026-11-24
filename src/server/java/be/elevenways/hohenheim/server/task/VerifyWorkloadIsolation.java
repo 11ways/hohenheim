@@ -3,13 +3,13 @@ package be.elevenways.hohenheim.server.task;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -179,8 +179,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
 
         List<HostOutcome> outcomes = new ArrayList<>();
         for (Integer serverId : allKeys(inventory, inventoryErrors)) {
-            Row server = Models.get(ServerModel.class).findById(serverId);
-            if (server != null && ServerModel.isIncus(server)) {
+            Row server = Models.get(HostModel.class).findById(serverId);
+            if (server != null && HostModel.isIncus(server)) {
                 continue;   // the Incus tier has its own kernel-truth sweep
             }
             outcomes.add(sweepHost(serverId,
@@ -194,8 +194,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
 
     private static @NonNull HostOutcome sweepHost(int serverId, @NonNull List<Expected> expected,
                                                   @NonNull List<String> inventoryErrors) {
-        String name = ServerModel.nameOf(serverId);
-        WorkloadNetworkPolicy policy = WorkloadNetworkPolicy.forServer(name);
+        String name = HostModel.nameOf(serverId);
+        WorkloadNetworkPolicy policy = WorkloadNetworkPolicy.forHost(name);
         if (!policy.isEnabled()) {
             // The pre-enforcement decision: deploys refuse, running workloads keep
             // working, and the sweep says ON THE RECORD that it cannot verify them.
@@ -208,7 +208,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         }
         DockerClient docker;
         try {
-            docker = new ServerService().clientFor(name);
+            docker = new HostService().clientFor(name);
         } catch (RuntimeException unreachable) {
             List<String> errors = new ArrayList<>(inventoryErrors);
             errors.add("no Docker client for this host: " + unreachable.getMessage());
@@ -310,10 +310,10 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             }
             InstanceKindHandler handler = InstanceKinds.handlerOf(row);
             if (handler == null
-                    || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
+                    || !handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER)) {
                 continue;   // unknown kinds fail their own lanes; Incus has its own sweep
             }
-            int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
+            int serverId = HostModel.canonicalHostId(row.get(InstanceModel.HOST_ID));
             InstanceService.Resolved resolved;
             try {
                 resolved = new InstanceService().resolve(id);
@@ -383,7 +383,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
      */
     private static @NonNull String severLink(int serverId, @NonNull String network)
             throws IOException {
-        DockerClient docker = new ServerService().clientFor(ServerModel.nameOf(serverId));
+        DockerClient docker = new HostService().clientFor(HostModel.nameOf(serverId));
         Map<String, Object> inspect = docker.inspectNetwork(network);
         List<String> members = new ArrayList<>();
         if (inspect.get("Containers") instanceof Map<?, ?> attached) {

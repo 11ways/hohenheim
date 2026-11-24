@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test.stack;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -117,7 +117,7 @@ class StackInstancesTest {
             Row stack = model.createEmptyRow();
             stack.set(StackModel.NAME, name);
             stack.set(StackModel.ENABLED, true);
-            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+            stack.set(StackModel.HOST_ID, HostModel.localHostId());
             model.save(stack);
             id[0] = stack.get(StackModel.ID);
         });
@@ -342,7 +342,7 @@ class StackInstancesTest {
 
         // 1. Before the deploy, NOTHING holds the port -- the save no longer claims it.
         Db.run(datasource, () -> assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(
-            ServerModel.localServerId(), "127.0.0.1", hostPort, "tcp")))
+            HostModel.localHostId(), "127.0.0.1", hostPort, "tcp")))
             .as("step 1: a save claims no port; the deploy does")
             .isNull());
 
@@ -400,7 +400,7 @@ class StackInstancesTest {
         // 6. Verified destroy releases the claim fully.
         runtime.destroy(stackId, true);
         Db.run(datasource, () -> assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(
-            ServerModel.localServerId(), "127.0.0.1", hostPort, "tcp")))
+            HostModel.localHostId(), "127.0.0.1", hostPort, "tcp")))
             .as("step 6: destroy released the claim, so the port is reusable")
             .isNull());
     }

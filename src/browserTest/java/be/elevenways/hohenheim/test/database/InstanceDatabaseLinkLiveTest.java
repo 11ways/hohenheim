@@ -8,25 +8,24 @@ import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import java.time.Duration;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -131,9 +130,9 @@ class InstanceDatabaseLinkLiveTest {
         String instanceHandle = null;
         try {
             service.create(dbA, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "unused", PASSWORD_A, "0", true, ServerService.LOCAL_HOST_NAME);
+                "unused", PASSWORD_A, "0", true, HostService.LOCAL_HOST_NAME);
             service.create(dbB, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "unused", PASSWORD_B, "0", true, ServerService.LOCAL_HOST_NAME);
+                "unused", PASSWORD_B, "0", true, HostService.LOCAL_HOST_NAME);
             int idA = databaseId(dbA);
             int idB = databaseId(dbB);
             String engineA = EngineHandles.of(dbA);
@@ -327,7 +326,7 @@ class InstanceDatabaseLinkLiveTest {
         settings.put("container_port", 8080);
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, settings);
         instances.save(row);
         return row.get(InstanceModel.ID);

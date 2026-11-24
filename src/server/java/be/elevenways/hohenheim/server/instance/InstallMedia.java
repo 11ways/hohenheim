@@ -5,10 +5,10 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
@@ -84,7 +84,7 @@ public final class InstallMedia {
      * loopback admin port, another host's LAN service) is the controller's network
      * reached on someone's say-so; a stolen operator session must not turn this form into
      * that. An ISO on a private mirror has a lane already: the operator uploads it
-     * (SERVERS_MEDIA_UPLOAD), which moves bytes the operator holds and reaches nothing.
+     * (HOST_MEDIA_UPLOAD), which moves bytes the operator holds and reaches nothing.
      */
     private static final PinnedFetcher FETCHER = PinnedFetcher.builder(OutboundUrlGuard.PUBLIC_INTERNET)
         .connectTimeout(Duration.ofSeconds(30))
@@ -97,13 +97,13 @@ public final class InstallMedia {
     /** One listed medium: the volume name plus its daemon-reported description. */
     public record Medium(@NonNull String name, @Nullable String description) {}
 
-    private final @NonNull ServerService servers;
+    private final @NonNull HostService servers;
 
     public InstallMedia() {
-        this(new ServerService());
+        this(new HostService());
     }
 
-    InstallMedia(@NonNull ServerService servers) {
+    InstallMedia(@NonNull HostService servers) {
         this.servers = servers;
     }
 
@@ -132,8 +132,8 @@ public final class InstallMedia {
      *         tab names why)
      */
     public @NonNull List<FieldOption<String>> optionsOn(@Nullable Integer serverId) {
-        Row server = serverId == null ? null : Models.get(ServerModel.class).findById(serverId);
-        if (server == null || !ServerModel.isIncus(server)) {
+        Row server = serverId == null ? null : Models.get(HostModel.class).findById(serverId);
+        if (server == null || !HostModel.isIncus(server)) {
             return List.of();
         }
         try {
@@ -149,14 +149,14 @@ public final class InstallMedia {
      */
     public @NonNull List<FieldOption<String>> optionsEverywhere() {
         List<FieldOption<String>> options = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            if (!ServerModel.isIncus(server)) {
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            if (!HostModel.isIncus(server)) {
                 continue;
             }
             try {
-                options.addAll(options(this.listFor(server), String.valueOf((Object) server.get(ServerModel.NAME))));
+                options.addAll(options(this.listFor(server), String.valueOf((Object) server.get(HostModel.NAME))));
             } catch (IOException unreadable) {
-                Blast.log("INSTALL_MEDIA: media of", server.get(ServerModel.NAME), "unreadable:",
+                Blast.log("INSTALL_MEDIA: media of", server.get(HostModel.NAME), "unreadable:",
                     unreadable.getMessage());
             }
         }
@@ -169,7 +169,7 @@ public final class InstallMedia {
      */
     public static @NonNull Microcopy noneReason(@Nullable Integer serverId) {
         return serverId == null ? HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none_anywhere")
-            : HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none").withArg("host", ServerModel.labelOf(serverId));
+            : HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none").withArg("host", HostModel.labelOf(serverId));
     }
 
     /**
@@ -181,7 +181,7 @@ public final class InstallMedia {
         if (!this.absentOn(serverId, List.of(name)).isEmpty()) {
             throw Violations.ofField(InstanceOperations.INSTALL_MEDIA.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("install_media_not_on_host").withArg("media", name)
-                    .withArg("host", ServerModel.labelOf(serverId)));
+                    .withArg("host", HostModel.labelOf(serverId)));
         }
     }
 
@@ -238,7 +238,7 @@ public final class InstallMedia {
             requireAbsent(incus, IncusInstanceRuntime.managedPoolNameOf(incus), name);
         } catch (IOException e) {
             Blast.log("MEDIA: checking", name, "on",
-                server.get(ServerModel.NAME), "failed -", e.getMessage());
+                server.get(HostModel.NAME), "failed -", e.getMessage());
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_failed")
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
@@ -301,7 +301,7 @@ public final class InstallMedia {
             requirePresent(incus, pool, name);
         } catch (IOException e) {
             Blast.log("MEDIA: importing", name, "onto",
-                server.get(ServerModel.NAME), "failed -", e.getMessage());
+                server.get(HostModel.NAME), "failed -", e.getMessage());
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_failed")
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
@@ -337,13 +337,13 @@ public final class InstallMedia {
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         // The fetch that brought it in no longer says anything true: "Available" would name a deleted volume.
-        InstallMediaFetches.forgetEnded(server.get(ServerModel.ID), name);
+        InstallMediaFetches.forgetEnded(server.get(HostModel.ID), name);
     }
 
     /** Names of instances ON THIS HOST whose cdrom rows reference the medium. */
     static @NonNull List<String> referencingInstances(@NonNull Row server,
                                                       @NonNull String name) {
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         List<String> holders = new ArrayList<>();
         for (Row device : Models.get(InstanceDeviceModel.class).find()
                 .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
@@ -354,8 +354,8 @@ public final class InstallMedia {
             if (instance == null) {
                 continue;
             }
-            int instanceHost = ServerModel.canonicalServerId(
-                instance.get(InstanceModel.SERVER_ID));
+            int instanceHost = HostModel.canonicalHostId(
+                instance.get(InstanceModel.HOST_ID));
             if (serverId != null && serverId == instanceHost) {
                 holders.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
             }
@@ -433,12 +433,12 @@ public final class InstallMedia {
     }
 
     private @NonNull IncusClient clientOf(@NonNull Row server) throws IOException {
-        if (!ServerModel.isIncus(server)) {
-            throw new IOException("Host '" + server.get(ServerModel.NAME)
+        if (!HostModel.isIncus(server)) {
+            throw new IOException("Host '" + server.get(HostModel.NAME)
                 + "' is not an Incus host; install media is an Incus capability");
         }
         try {
-            return this.servers.incusClientFor(server.get(ServerModel.NAME));
+            return this.servers.incusClientFor(server.get(HostModel.NAME));
         } catch (HostKeys.HostTrustException refused) {
             // Client CONSTRUCTION refusals (no pinned certificate yet) are named
             // facts about the host, not page failures -- fold them onto the

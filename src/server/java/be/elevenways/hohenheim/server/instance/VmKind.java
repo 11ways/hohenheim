@@ -5,15 +5,15 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
@@ -195,7 +195,7 @@ public final class VmKind implements InstanceKindHandler {
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
-    public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+    public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
     /** IncusInstanceRuntime implements DeviceAttachSupport; the Docker driver does not. */
     @Override
@@ -241,7 +241,7 @@ public final class VmKind implements InstanceKindHandler {
         // own updates; the tenant-range denies still apply on every NIC.
         // The server NAME travels so the driver can read the DAEMON HOST's kernel, not
         // the controller's -- kernel truth and daemon config are independent facts here.
-        return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+        return new IncusInstanceRuntime(new HostService().incusClientFor(serverName),
             Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE, serverName, lanParentOf(serverName));
     }
 
@@ -278,7 +278,7 @@ public final class VmKind implements InstanceKindHandler {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("vm_lan_no_parent").withArg("name", serverName));
         }
         try {
-            IncusLanParent.admit(new ServerService().incusClientFor(serverName), parent);
+            IncusLanParent.admit(new HostService().incusClientFor(serverName), parent);
         } catch (IOException | RuntimeException unusable) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("vm_lan_parent_unusable")
                 .withArg("name", serverName).withArg("parent", parent));
@@ -287,8 +287,8 @@ public final class VmKind implements InstanceKindHandler {
 
     /** @return the host's declared LAN parent, or null when it declares none */
     private static @Nullable String lanParentOf(@NonNull String serverName) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
-        String parent = server == null ? null : server.get(ServerModel.LAN_PARENT);
+        Row server = Models.get(HostModel.class).findByName(serverName);
+        String parent = server == null ? null : server.get(HostModel.LAN_PARENT);
         return parent == null || parent.isBlank() ? null : parent.trim();
     }
 
@@ -353,7 +353,7 @@ public final class VmKind implements InstanceKindHandler {
         String image = settings.get(IMAGE.getName()) != null
             ? String.valueOf(settings.get(IMAGE.getName())).trim() : "";
         try {
-            new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+            new IncusInstanceRuntime(new HostService().incusClientFor(serverName),
                 Egress.OPEN, type, serverName)
                 .requirePreparedImagePresent(image, origin, false);
         } catch (IOException absent) {

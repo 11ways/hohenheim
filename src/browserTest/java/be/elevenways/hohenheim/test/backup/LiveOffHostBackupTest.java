@@ -8,9 +8,9 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -122,9 +122,9 @@ class LiveOffHostBackupTest {
             assertThat(scan.fingerprint())
                 .as("setup: the scanned key is the one the operator read on the host itself")
                 .isEqualTo(remote.fingerprint());
-            HostKeys.confirm(Models.get(ServerModel.class).findByName(REMOTE_HOST_NAME));
-            remoteServerId = Models.get(ServerModel.class)
-                .findByName(REMOTE_HOST_NAME).get(ServerModel.ID);
+            HostKeys.confirm(Models.get(HostModel.class).findByName(REMOTE_HOST_NAME));
+            remoteServerId = Models.get(HostModel.class)
+                .findByName(REMOTE_HOST_NAME).get(HostModel.ID);
         });
 
         netns = PrivateNetns.installEnforcing();
@@ -171,14 +171,14 @@ class LiveOffHostBackupTest {
             targetRow.set(BackupTargetModel.NAME, "offhost");
             targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
             targetRow.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", ServerModel.registryKeyOf(remoteServerId),
+                "server", HostModel.registryKeyOf(remoteServerId),
                 "path", remoteBase));
             Models.get(BackupTargetModel.class).save(targetRow);
-            assertThat((String) Models.get(ServerModel.class).findById(remoteServerId)
-                    .get(ServerModel.ADMISSION))
+            assertThat((String) Models.get(HostModel.class).findById(remoteServerId)
+                    .get(HostModel.ADMISSION))
                 .as("step 1: the destination is a STORAGE host -- never admitted for"
                     + " placement, and it does not need to be")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
             BackupTarget target = BackupTargetKinds.targetOf(targetRow);
             run(() -> {
                 target.healthCheck();
@@ -249,7 +249,7 @@ class LiveOffHostBackupTest {
                 // 6. Restore to a NEW instance, reading the bytes back from the other
                 //    machine and re-verifying them before anything is created.
                 newId = backups.restoreToNew(backupId, "offhost-clone",
-                    Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID)).instanceId();
+                    Models.get(InstanceModel.class).findById(id).get(InstanceModel.HOST_ID)).instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 6: the restore produced a NEW instance")
                     .isNotEqualTo(id);
@@ -266,10 +266,10 @@ class LiveOffHostBackupTest {
                 //    exchange must die at verification, and exists() must say so by
                 //    RAISING. Answering "absent" for a host it never reached is the
                 //    retention sweep deleting a row whose artifact is fine.
-                ServerModel serverModel = Models.get(ServerModel.class);
+                HostModel serverModel = Models.get(HostModel.class);
                 Row destination = serverModel.findById(remoteServerId);
-                String realPin = destination.get(ServerModel.HOST_KEY);
-                destination.set(ServerModel.HOST_KEY, run(
+                String realPin = destination.get(HostModel.HOST_KEY);
+                destination.set(HostModel.HOST_KEY, run(
                     LiveOffHostBackupTest::foreignHostKeyLine));
                 serverModel.save(destination);
                 assertThat(catchThrowable(() -> target.exists(key)))
@@ -281,15 +281,15 @@ class LiveOffHostBackupTest {
                 // 7b. QUARANTINE, against the real machine: with the true pin back in
                 //     place but an offered key on record, the destination is refused by
                 //     NAME before a single byte is exchanged.
-                destination.set(ServerModel.HOST_KEY, realPin);
-                destination.set(ServerModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
+                destination.set(HostModel.HOST_KEY, realPin);
+                destination.set(HostModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
                 serverModel.save(destination);
                 assertThat(catchThrowable(() -> target.exists(key)))
                     .as("step 7b: a quarantined destination host is refused by name")
                     .isInstanceOfSatisfying(Violations.class, violations ->
                         assertThat(violations.all()).anySatisfy(violation ->
                             assertThat(violation.message().key()).isEqualTo("host_quarantined")));
-                destination.set(ServerModel.HOST_KEY_OFFERED, null);
+                destination.set(HostModel.HOST_KEY_OFFERED, null);
                 serverModel.save(destination);
 
                 // 8. exists() answers about the REMOTE, and delete really removes it

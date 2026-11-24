@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -125,7 +124,7 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport, VolumeS
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, image.get(RuntimeImageModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

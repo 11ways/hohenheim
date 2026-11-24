@@ -4,7 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -21,7 +21,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.SystemPrincipal;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -183,7 +182,7 @@ class DatabaseProvisionPoolTest {
         row.set(DatabaseModel.DB_PASSWORD, "s3cr3t-pool-record-pw");
         row.set(DatabaseModel.EPHEMERAL, true);
         row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_DEDICATED);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
         databases.save(row);
         return row;

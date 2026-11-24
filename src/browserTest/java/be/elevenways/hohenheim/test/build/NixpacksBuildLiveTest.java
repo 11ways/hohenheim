@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.build.BuildQuota;
@@ -301,7 +301,7 @@ class NixpacksBuildLiveTest {
         Row application = Models.get(InstanceModel.class).createEmptyRow();
         application.set(InstanceModel.NAME, name);
         application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.HOST_ID, HostModel.localHostId());
         application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         Models.get(InstanceModel.class).save(application);
         return application.get(InstanceModel.ID);
@@ -310,7 +310,7 @@ class NixpacksBuildLiveTest {
     private static SandboxedBuilds.Result nixpacksBuild(DockerClient docker, int ownerId,
                                                         Path context) {
         String tag = "hohenheim-buildtest-nixpacks-" + System.nanoTime() + ":latest";
-        return new SandboxedBuilds(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), () -> {})
+        return new SandboxedBuilds(docker, WorkloadNetworkPolicy.forHost(HostModel.MODE_LOCAL), () -> {})
             .run(new BuildRequest(InstanceModel.MODEL_ID, ownerId,
                 BuildOperationModel.KIND_NIXPACKS, context, null, tag, Map.of(),
                 "test-ref", null, new BuildQuota(2.0, 2048, 4096L * 1024 * 1024,

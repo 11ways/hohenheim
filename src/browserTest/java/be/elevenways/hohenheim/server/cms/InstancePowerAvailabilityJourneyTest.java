@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -32,14 +32,14 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
 
     @Test
     void anInstanceItsHostRefusesOffersItsVerbsDeadWithTheReason() {
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, "power-availability-host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        host.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        host.set(ServerModel.SSH_TARGET, "operator@power-availability-host.invalid");
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        Models.get(ServerModel.class).save(host);
-        Row instance = instance("power-availability", host.get(ServerModel.ID));
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, "power-availability-host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        host.set(HostModel.MODE, HostModel.MODE_SSH);
+        host.set(HostModel.SSH_TARGET, "operator@power-availability-host.invalid");
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        Models.get(HostModel.class).save(host);
+        Row instance = instance("power-availability", host.get(HostModel.ID));
 
         // 1. The host is not admitted: the one reason source names it.
         Microcopy refusal = OwnedInstances.placementRefusal(instance);
@@ -74,11 +74,11 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
         var local = HostFixtures.captureLocal();
         try {
             HostFixtures.makeLocalPlaceable(16L * 1024);
-            Row localHost = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-            localHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-            Models.get(ServerModel.class).save(localHost);
-            HostFixtures.acknowledgePosture(Models.get(ServerModel.class).findById(ServerModel.localServerId()));
-            instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            Row localHost = Models.get(HostModel.class).findById(HostModel.localHostId());
+            localHost.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+            Models.get(HostModel.class).save(localHost);
+            HostFixtures.acknowledgePosture(Models.get(HostModel.class).findById(HostModel.localHostId()));
+            instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Models.get(InstanceModel.class).save(instance);
             Row placed = Models.get(InstanceModel.class).findById(instance.get(InstanceModel.ID));
             assertThat(OwnedInstances.placementRefusal(placed)).as("step 4: an admitted host refuses nothing").isNull();
@@ -98,7 +98,7 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimHttpTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
     }

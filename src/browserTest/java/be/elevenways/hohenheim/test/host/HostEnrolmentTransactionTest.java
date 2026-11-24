@@ -4,10 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.cms.HostEnrolment;
-import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
@@ -64,9 +63,9 @@ class HostEnrolmentTransactionTest {
     @Test
     void aFailedCeremonyIsRecordedOnTheCommittedHostAndNeverRunsInsideATransaction() {
         Db.run(datasource, () -> {
-            PanelResource<Row> resource = ServerParts.admin();
+            PanelResource<Row> resource = HostParts.admin();
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
-            ServerModel servers = Models.get(ServerModel.class);
+            HostModel servers = Models.get(HostModel.class);
 
             // 1. The resource owns its write envelope: the framework must NOT wrap its
             //    create/update in the rollback transaction that used to swallow the row.
@@ -92,15 +91,15 @@ class HostEnrolmentTransactionTest {
             assertThat(refusing.insideTransaction)
                 .as("step 2: no ceremony step ran inside a write transaction")
                 .containsOnly(false);
-            assertThat((String) created.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) created.get(HostModel.LAST_ERROR_KIND))
                 .as("step 2: the refusal is recorded as a typed failure on the host")
                 .isEqualTo(HostProbe.FailureKind.UNTRUSTED.token);
-            assertThat((String) created.get(ServerModel.LAST_ERROR))
+            assertThat((String) created.get(HostModel.LAST_ERROR))
                 .as("step 2: with the daemon's own reason, which the Overview renders")
                 .contains("token already spent");
-            assertThat((String) created.get(ServerModel.ADMISSION))
+            assertThat((String) created.get(HostModel.ADMISSION))
                 .as("step 2: the host stays blocked -- nothing was admitted by a half ceremony")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
             assertThat(storedText(created))
                 .as("step 2: the one-use token is never stored anywhere on the row")
                 .doesNotContain(TOKEN);
@@ -118,10 +117,10 @@ class HostEnrolmentTransactionTest {
             assertThat(accepting.steps)
                 .as("step 3: an update spends the token without re-minting identities")
                 .containsExactly("pin", "enroll:fresh-token");
-            assertThat((String) retried.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) retried.get(HostModel.LAST_ERROR_KIND))
                 .as("step 3: a completed enrolment clears the recorded failure")
                 .isNull();
-            assertThat(retried.get(ServerModel.LAST_SEEN_AT))
+            assertThat(retried.get(HostModel.LAST_SEEN_AT))
                 .as("step 3: and counts as a contact, because the daemon answered trusted")
                 .isNotNull();
 
@@ -132,17 +131,17 @@ class HostEnrolmentTransactionTest {
                 dockerId = resource.writes().rowWriter(ResourceVerb.CREATE)
                         .write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                     "name", "enrol-keyless",
-                    "runtime", ServerModel.RUNTIME_DOCKER,
+                    "runtime", HostModel.RUNTIME_DOCKER,
                     "ssh_target", "deploy@keyless.example.test"), operator));
             }
             Row keylessRow = servers.findById(dockerId);
             assertThat(keylessRow).as("step 4: the docker host row survives a failed mint").isNotNull();
-            assertThat((String) keylessRow.get(ServerModel.LAST_ERROR_KIND))
+            assertThat((String) keylessRow.get(HostModel.LAST_ERROR_KIND))
                 .as("step 4: recorded as a missing identity")
                 .isEqualTo(HostProbe.FailureKind.NO_IDENTITY.token);
-            assertThat(keylessRow.get(ServerModel.MODE))
+            assertThat(keylessRow.get(HostModel.MODE))
                 .as("step 4: phase one still staged the docker transport")
-                .isEqualTo(ServerModel.MODE_SSH);
+                .isEqualTo(HostModel.MODE_SSH);
 
             // 5. A token on a host it can never enrol on is refused BEFORE phase one writes.
             RecordingCeremony untouched = new RecordingCeremony(false, true);
@@ -150,7 +149,7 @@ class HostEnrolmentTransactionTest {
                 assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.CREATE)
                         .write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                         "name", "enrol-wrong-lane",
-                        "runtime", ServerModel.RUNTIME_DOCKER,
+                        "runtime", HostModel.RUNTIME_DOCKER,
                         "ssh_target", "deploy@wrong.example.test",
                          "incus_trust_token", TOKEN), operator)))
                     .as("step 5: a trust token on a docker host is refused")
@@ -174,7 +173,7 @@ class HostEnrolmentTransactionTest {
     /** Every stored column of the host as one text, table-stored sub-schemas skipped. */
     private static @NonNull String storedText(@NonNull Row row) {
         StringBuilder text = new StringBuilder();
-        for (Field<?, ?> field : ServerModel.SCHEMA.getFields().values()) {
+        for (Field<?, ?> field : HostModel.SCHEMA.getFields().values()) {
             if (field instanceof SchemaField schema && schema.isTableStored()) {
                 continue;
             }
@@ -186,7 +185,7 @@ class HostEnrolmentTransactionTest {
     private static @NonNull Map<String, Object> incusHost(@NonNull String name, @NonNull String token) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("name", name);
-        values.put("runtime", ServerModel.RUNTIME_INCUS);
+        values.put("runtime", HostModel.RUNTIME_INCUS);
         values.put("incus_url", "https://" + name + ".example.test:8443");
         values.put("incus_trust_token", token);
         return Map.copyOf(values);
@@ -225,7 +224,7 @@ class HostEnrolmentTransactionTest {
             this.record("enroll:" + token);
             if (!this.acceptToken) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("incus_enroll_failed")
-                    .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
+                    .withArg("name", String.valueOf((Object) server.get(HostModel.NAME)))
                     .withArg("detail", "token already spent"));
             }
         }

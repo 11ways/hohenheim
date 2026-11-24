@@ -7,13 +7,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.app.DashboardStat;
 import be.elevenways.hohenheim.host.WorkloadView;
-import be.elevenways.hohenheim.model.BackupStatus;
-import be.elevenways.hohenheim.model.DatabaseDumpModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -21,7 +15,6 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.database.DumpTargetFixture;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
@@ -86,12 +79,12 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 InstanceModel.KIND.getName(), "hohenheim:docker_container",
                 InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine")),
                 InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-                InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+                InstanceModel.HOST_ID.getName(), HostModel.localHostId()));
             row(cleanup, Models.get(InstanceDatabaseModel.class), Map.of(
                 InstanceDatabaseModel.INSTANCE_ID.getName(), app.get(InstanceModel.ID),
                 InstanceDatabaseModel.DATABASE_ID.getName(), shop.get(DatabaseModel.ID),
                 InstanceDatabaseModel.ENV_PREFIX.getName(), "DB"));
-            String host = ServerModel.nameOf(ServerModel.localServerId());
+            String host = HostModel.nameOf(HostModel.localHostId());
 
             // 2. Before any dump: where it runs, who uses it, "Never" for the persistent one, and the temporary one
             //    is "Not backed up".
@@ -183,14 +176,14 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             Row engine = row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
                 DatabaseEngineModel.NAME.getName(), PREFIX + "engine", DatabaseEngineModel.ENGINE.getName(), "mysql",
                 DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
-                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(), PREFIX + "shared",
                 DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(),
                 DatabaseModel.PLACEMENT_SHARED, DatabaseModel.ENGINE_ID.getName(), engine.get(DatabaseEngineModel.ID),
                 DatabaseModel.DB_NAME.getName(), "shareddb", DatabaseModel.DB_USER.getName(), "shareduser",
                 DatabaseModel.DB_PASSWORD.getName(), "engine-secret-password",
-                DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             String withEngine = adminGet("/admin/" + HohenheimSlugs.DATABASES).body();
             int card = withEngine.indexOf("data-cms-list-card");
@@ -306,14 +299,14 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 DatabaseEngineModel.NAME.getName(), PREFIX + "shared-engine",
                 DatabaseEngineModel.ENGINE.getName(), "mysql",
                 DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
-                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             Row shared = row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(),
                 PREFIX + "shared-shop", DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(),
                 DatabaseModel.PLACEMENT_SHARED, DatabaseModel.ENGINE_ID.getName(), engine.get(DatabaseEngineModel.ID),
                 DatabaseModel.DB_NAME.getName(), "d12shop", DatabaseModel.DB_USER.getName(), "d12shop",
                 DatabaseModel.DB_PASSWORD.getName(), "engine-secret-password",
-                DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             String engineHandle = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), PREFIX
                     + "shared-engine",
@@ -333,8 +326,8 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
                 .isNull();
             // The host's Workloads card names the engine once, booked at the memory its owned instance holds in the
             // ledger; the instance it runs as is not listed beside it (once: dbengine-mongo-local and mongo-local).
-            List<WorkloadView> workloads = ServerOverviewState.workloadsOf(HohenheimSlugs.ADMIN,
-                ServerModel.localServerId());
+            List<WorkloadView> workloads = HostOverviewState.workloadsOf(HohenheimSlugs.ADMIN,
+                HostModel.localHostId());
             assertThat(workloads).as("step 1: the engine is listed once, as the engine")
                 .filteredOn(view -> view.name().equals(PREFIX + "shared-engine")).singleElement()
                 .satisfies(view -> {
@@ -475,7 +468,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             InstanceModel.KIND.getName(), "hohenheim:docker_container",
             InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine")),
             InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+            InstanceModel.HOST_ID.getName(), HostModel.localHostId()));
         row(cleanup, Models.get(InstanceDatabaseModel.class), Map.of(
             InstanceDatabaseModel.INSTANCE_ID.getName(), app.get(InstanceModel.ID),
             InstanceDatabaseModel.DATABASE_ID.getName(), database.get(DatabaseModel.ID),

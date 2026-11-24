@@ -24,7 +24,7 @@
     "scope": "violations"
   },
   "database_instance_server_mismatch": {
-    "text": "Databank '{$name}' loopt op {$server} terwijl de instantie op {$instance_server} loopt; een linknetwerk bestaat enkel op de daemon die ze delen",
+    "text": "Databank '{$name}' loopt op {$server} terwijl de app op {$instance_server} loopt; een linknetwerk bestaat enkel op de daemon die ze delen",
     "scope": "violations"
   },
   "database_name_required": {
@@ -8757,7 +8757,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Draait de image van de versie die deze app aanbiedt, in plaats van een eigen image. Na elke uitrol of terugrol van de app wordt deze container gestopt en op die versie opnieuw gestart, tenzij u hem zelf stopte. Tot de omschakeling blijft hij de oude versie draaien, ook terwijl een opdracht voor de uitrol de database wijzigt. Een mislukte uitrol laat hem op de oude versie; een terugrol zet hem op de oudere versie en draait geen wijziging in de database terug. De app stoppen stopt deze container niet. Hij krijgt {$seconds} seconden om te stoppen. De app moet op dezelfde server staan en dezelfde eigenaar hebben. Laat Container-image en Image-tag leeg; de container houdt zijn eigen opdracht, variabelen, limieten en volumes.",
+      "text": "Draait de image van de versie die deze app aanbiedt, in plaats van een eigen image. Na elke uitrol of terugrol van de app wordt deze container gestopt en op die versie opnieuw gestart, tenzij u hem zelf stopte. Tot de omschakeling blijft hij de oude versie draaien, ook terwijl een opdracht voor de uitrol de database wijzigt. Een mislukte uitrol laat hem op de oude versie; een terugrol zet hem op de oudere versie en draait geen wijziging in de database terug. De app stoppen stopt deze container niet. Hij krijgt {$seconds} seconden om te stoppen. De app moet op dezelfde host staan en dezelfde eigenaar hebben. Laat Container-image en Image-tag leeg; de container houdt zijn eigen opdracht, variabelen, limieten en volumes.",
       "scope": "help"
     },
     {
@@ -8810,7 +8810,7 @@
     "scope": "violations"
   },
   "image_from_app_other_server": {
-    "text": "{$app} draait op een andere server. Een container kan alleen de image nemen van een app op dezelfde server.",
+    "text": "{$app} draait op een andere host. Een container kan alleen de image nemen van een app op dezelfde host.",
     "scope": "violations"
   },
   "image_from_app_not_deployed": {
@@ -8818,7 +8818,7 @@
     "scope": "violations"
   },
   "app_server_change_has_followers": {
-    "text": "Deze app kan niet naar een andere server zolang deze containers er hun image van nemen: {$containers}. Maak bij hen eerst \"Image van app\" leeg.",
+    "text": "Deze app kan niet naar een andere host zolang deze containers er hun image van nemen: {$containers}. Maak bij hen eerst \"Image van app\" leeg.",
     "scope": "violations"
   },
   "app_kind_change_has_followers": {
@@ -8830,7 +8830,7 @@
     "scope": "violations"
   },
   "migrate_follows_app": {
-    "text": "{$name} neemt zijn image van {$app} en kan alleen op de server van die app draaien.",
+    "text": "{$name} neemt zijn image van {$app} en kan alleen op de host van die app draaien.",
     "scope": "violations"
   },
   "restore_follows_app": {
@@ -11717,7 +11717,7 @@
       "scope": "project"
     },
     {
-      "text": "De machines waarop je apps draaien.",
+      "text": "De machines waarop uw apps draaien.",
       "scope": "server"
     },
     {
@@ -13943,7 +13943,7 @@
     "scope": "violations"
   },
   "template_database_host_mismatch": {
-    "text": "Databank '{$name}' werd op {$server} geplaatst maar de instantie draait op {$instance_server}; ze zou die nooit bereiken",
+    "text": "Databank '{$name}' werd op {$server} geplaatst maar de app draait op {$instance_server}; ze zou die nooit bereiken",
     "scope": "violations"
   },
   "last_axfr": {
@@ -15558,7 +15558,7 @@
   "settings.hohenheim.ssl.letsencrypt_staging.label": "Let's Encrypt-staging",
   "settings.hohenheim.ssl.letsencrypt_staging.help": "Gebruikt de stagingserver van Let's Encrypt in plaats van productie.",
   "settings.hohenheim.stacks.reclaim_images.label": "Images opruimen",
-  "settings.hohenheim.stacks.reclaim_images.help": "Verwijdert periodiek vervangen images van de repository's die beheerde stacks declareren, op elke server met een stack, zonder ooit een image aan te raken waarnaar buiten die repository's of door een container verwezen wordt, en zonder ooit volumes aan te raken.",
+  "settings.hohenheim.stacks.reclaim_images.help": "Verwijdert periodiek vervangen images van de repository's die beheerde stacks declareren, op elke host met een stack, zonder ooit een image aan te raken waarnaar buiten die repository's of door een container verwezen wordt, en zonder ooit volumes aan te raken.",
   "settings.hohenheim.stacks.reclaim_min_age_hours.label": "Minimale imageleeftijd",
   "settings.hohenheim.stacks.reclaim_min_age_hours.help": "Images waarvan de buildstempel recenter is dan dit aantal uur blijven bewaard, zodat vers gebouwde images beschermd zijn; minimaal 1.",
   "settings.hohenheim.stacks.reclaim_untracked.label": "Ongetagde images opruimen",

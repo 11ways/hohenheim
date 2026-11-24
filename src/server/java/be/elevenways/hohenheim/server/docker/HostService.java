@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The multi-server inventory: persists Docker hosts ({@link ServerModel}) and builds a
+ * The multi-server inventory: persists Docker hosts ({@link HostModel}) and builds a
  * {@link DockerClient} for each. The implicit {@code local} host is ensured to exist; remote hosts
  * are reached over SSH.
  *
@@ -39,36 +39,36 @@ import java.util.Objects;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class ServerService extends DatasourceScoped {
+public class HostService extends DatasourceScoped {
 
     /**
      * The NAME of the implicit local host row -- a host name, never a mode.
      *
-     * AIDEV-NOTE: {@link ServerModel#LOCAL_HOST_NAME} is its one home; it is spelled like
+     * AIDEV-NOTE: {@link HostModel#LOCAL_HOST_NAME} is its one home; it is spelled like
      * {@link HostMode#LOCAL}'s token because production rows carry it that way, but the
      * two answer different questions: compare a host NAME against this, and read a MODE
      * through {@link HostMode#of}.
      */
-    public static final String LOCAL_HOST_NAME = ServerModel.LOCAL_HOST_NAME;
+    public static final String LOCAL_HOST_NAME = HostModel.LOCAL_HOST_NAME;
 
     // Short deadline for an explicit reachability probe so a down remote can't hang long.
     private static final long PING_TIMEOUT_MS = 8000;
 
-    public ServerService() {
+    public HostService() {
         super(null);
     }
 
-    public ServerService(Datasource datasource) {
+    public HostService(Datasource datasource) {
         super(datasource);
     }
 
-    private static ServerModel model() {
-        return Models.get(ServerModel.class);
+    private static HostModel model() {
+        return Models.get(HostModel.class);
     }
 
     /** Ensure the implicit local host has a record (idempotent; delegates to THE derivation). */
     public void ensureLocal() {
-        exec(ServerModel::localServerId);
+        exec(HostModel::localHostId);
     }
 
     /** A server with its LIVE reachability and host resource snapshot (explicit probes only). */
@@ -91,7 +91,7 @@ public class ServerService extends DatasourceScoped {
         if (row == null) {
             return null;
         }
-        HostProbe.Outcome outcome = ServerModel.isIncus(row) ? probeIncus(row) : probe(row);
+        HostProbe.Outcome outcome = HostModel.isIncus(row) ? probeIncus(row) : probe(row);
         if (outcome.reachable()) {
             DiskSpace disk = HostDisk.measure(name);
             exec(() -> HostProbe.recordSuccess(name, outcome.info(), disk));
@@ -105,7 +105,7 @@ public class ServerService extends DatasourceScoped {
     public List<String> names() {
         List<String> names = new ArrayList<>();
         for (Row row : query(() -> model().find().all())) {
-            names.add(row.get(ServerModel.NAME));
+            names.add(row.get(HostModel.NAME));
         }
         return names;
     }
@@ -124,8 +124,8 @@ public class ServerService extends DatasourceScoped {
     public List<String> dockerNames() {
         List<String> names = new ArrayList<>();
         for (Row row : query(() -> model().find().all())) {
-            if (!ServerModel.isIncus(row)) {
-                names.add(row.get(ServerModel.NAME));
+            if (!HostModel.isIncus(row)) {
+                names.add(row.get(HostModel.NAME));
             }
         }
         return names;
@@ -136,7 +136,7 @@ public class ServerService extends DatasourceScoped {
      * included, so a local row declaring the incus runtime is refused rather than aimed at this machine's daemon.
      */
     public DockerClient clientFor(int serverId) {
-        return clientFor(query(() -> ServerModel.nameOf(serverId)));
+        return clientFor(query(() -> HostModel.nameOf(serverId)));
     }
 
     /** A DockerClient for the named server (local socket or remote over SSH). */
@@ -174,42 +174,42 @@ public class ServerService extends DatasourceScoped {
     /** @return the stored SSH target for a named remote server, or null for unknown/local */
     public String sshTarget(String name) {
         Row row = query(() -> model().findByName(name));
-        return row != null ? row.get(ServerModel.SSH_TARGET) : null;
+        return row != null ? row.get(HostModel.SSH_TARGET) : null;
     }
 
     /** Register (or update) a remote SSH server. */
     public void add(String name, String sshTarget) {
         exec(() -> {
-            ServerModel model = model();
+            HostModel model = model();
             Row row = model.findByName(name);
             if (row == null) {
                 row = model.createEmptyRow();
-                row.set(ServerModel.NAME, name);
+                row.set(HostModel.NAME, name);
             }
-            row.set(ServerModel.MODE, HostMode.SSH.token());
-            row.set(ServerModel.SSH_TARGET, sshTarget);
+            row.set(HostModel.MODE, HostMode.SSH.token());
+            row.set(HostModel.SSH_TARGET, sshTarget);
             model.save(row);
         });
     }
 
     /**
      * Remove a server; the implicit local host (the machine itself) cannot be removed.
-     * ServerModel's beforeRemove hook REFUSES the delete while live stacks, databases
+     * HostModel's beforeRemove hook REFUSES the delete while live stacks, databases
      * or instances still reference the host -- on every delete path, not just this one.
      */
     public void remove(String name) {
         if (LOCAL_HOST_NAME.equals(name)) {
             return;
         }
-        exec(() -> model().find().where(ServerModel.NAME.eq(name)).delete());
+        exec(() -> model().find().where(HostModel.NAME.eq(name)).delete());
     }
 
     private static DockerTransport transportFor(Row row) {
         // A host that declares the incus runtime addresses NO Docker daemon: falling
         // through to the local unix socket here would aim every "docker" call for that
         // host at THIS machine's daemon -- a wrong-host operation, not an error.
-        if (ServerModel.isIncus(row)) {
-            throw new IllegalArgumentException("Host '" + row.get(ServerModel.NAME)
+        if (HostModel.isIncus(row)) {
+            throw new IllegalArgumentException("Host '" + row.get(HostModel.NAME)
                 + "' declares the incus runtime; it has no Docker daemon to address");
         }
         // An unknown or missing mode is REFUSED by HostMode.of: it used to fall through
@@ -241,7 +241,7 @@ public class ServerService extends DatasourceScoped {
      */
     private static HostProbe.Outcome probeIncus(Row row) {
         try {
-            IncusClient client = IncusClients.forServer(row);
+            IncusClient client = IncusClients.forHost(row);
             Map<String, Object> server = client.server();
             if (!"trusted".equals(server.get("auth"))) {
                 return HostProbe.Outcome.failure(HostProbe.FailureKind.UNTRUSTED,
@@ -282,15 +282,15 @@ public class ServerService extends DatasourceScoped {
         if (row == null) {
             throw new IllegalArgumentException("No server named '" + name + "'");
         }
-        return IncusClients.forServer(row);
+        return IncusClients.forHost(row);
     }
 
     private static Summary summaryOf(Row row, HostProbe.Outcome outcome) {
-        String target = row.get(ServerModel.SSH_TARGET);
+        String target = row.get(HostModel.SSH_TARGET);
         Map<String, Object> info = Objects.requireNonNullElse(outcome.info(), Map.of());
         return new Summary(
-            row.get(ServerModel.NAME),
-            row.get(ServerModel.MODE),
+            row.get(HostModel.NAME),
+            row.get(HostModel.MODE),
             target != null ? target : "",
             outcome.reachable(),
             RawValues.intOr(info.get("NCPU"), 0),

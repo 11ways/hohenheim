@@ -94,7 +94,7 @@ final class BackupLaneFixture {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

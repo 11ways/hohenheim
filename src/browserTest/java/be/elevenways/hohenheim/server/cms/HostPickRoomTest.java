@@ -4,7 +4,7 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostStanding;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
@@ -65,15 +65,15 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
     @AfterAll
     static void cleanUp() {
         InstanceCapacity.release(full, filled);
-        HardDeletes.row(Models.get(ServerModel.class), server(full));
-        HardDeletes.row(Models.get(ServerModel.class), server(roomy));
+        HardDeletes.row(Models.get(HostModel.class), server(full));
+        HardDeletes.row(Models.get(HostModel.class), server(roomy));
     }
 
     @Test
     void aFullHostShowsItsMetersAndIsRefusedInTheWhereStep() {
         // 1. A measured host is offered with its standing as its line and its booked memory as its first meter: the
         //    full host's bar is all but full, the roomy one's empty.
-        FieldOption<Integer> fullOption = ServerParts.hostOption(server(full));
+        FieldOption<Integer> fullOption = HostParts.hostOption(server(full));
         assertThat(fullOption.meters()).as("step 1: a measured host without a disk reading carries one meter")
             .hasSize(1);
         OptionMeter meter = fullOption.meters().get(0);
@@ -82,15 +82,15 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
         assertThat(Objects.requireNonNull(fullOption.description()).key())
             .as("step 1: the line is the standing alone, the memory moved into the meter")
             .isNotEqualTo("host_option_facts");
-        assertThat(ServerParts.hostOption(server(roomy)).meters().get(0).perMille())
+        assertThat(HostParts.hostOption(server(roomy)).meters().get(0).perMille())
             .as("step 1: an empty host's bar is empty").isZero();
 
         // 1b. A host with a fresh disk reading carries its disk as the second meter, in the Hosts list's words.
         long gib = 1024L * 1024 * 1024;
         Row measured = server(roomy);
         HostDisk.record(measured, new DiskSpace(80 * gib, 60 * gib), Now.instant());
-        Models.get(ServerModel.class).save(measured);
-        List<OptionMeter> meters = ServerParts.hostOption(server(roomy)).meters();
+        Models.get(HostModel.class).save(measured);
+        List<OptionMeter> meters = HostParts.hostOption(server(roomy)).meters();
         assertThat(meters).as("step 1b: memory, then disk").hasSize(2);
         assertThat(meters.get(1).perMille()).as("step 1b: 20 of 80 GiB used").isEqualTo(250);
         assertThat(meters.get(1).text().key()).as("step 1b: in the Hosts list's disk words, named")
@@ -109,7 +109,7 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
             .isEqualTo(size(ByteUnit.MEGABYTE.bytes(3), "nl") + " vrij van " + size(budget, "nl"));
         LocaleChain english = LocaleChain.ofTags("en");
         MessageResolver resolver = Zenit.getMessageResolver();
-        assertThat(ServerOverviewState.capacityFacts(ledger, english, resolver).stream().map(fact -> fact.label())
+        assertThat(HostOverviewState.capacityFacts(ledger, english, resolver).stream().map(fact -> fact.label())
             .toList()).as("step 1c: Booked and Bookable, no Budget fact repeating its figure").containsExactly(
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("booked").resolve(english, resolver),
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(english, resolver));
@@ -117,7 +117,7 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
         // 2. The kind-led Where step judges the full host by the run's own booking rule at the kind's default memory:
         //    refused, naming the host, what is needed and what is free.
         SiblingJudgement<?, Integer> judged = Objects.requireNonNull(
-            InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID).judgement());
+            InstanceParts.hostPick(InstanceTemplateOperations.HOST_ID).judgement());
         EditContext create = EditContext.of(TenantConduits.operator());
         Map<String, String> container = Map.of("kind", CONTAINER);
         Microcopy refusal = judged.refusal(create, container, full);
@@ -161,12 +161,12 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
     private static String bookableFact(HostCapacityView ledger, String tag) {
         LocaleChain locales = LocaleChain.ofTags(tag);
         String label = HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(locales, Zenit.getMessageResolver());
-        return ServerOverviewState.capacityFacts(ledger, locales, Zenit.getMessageResolver()).stream()
+        return HostOverviewState.capacityFacts(ledger, locales, Zenit.getMessageResolver()).stream()
             .filter(fact -> fact.label().equals(label)).findFirst().orElseThrow().value();
     }
 
     private static Row server(int id) {
-        return Models.get(ServerModel.class).findById(id);
+        return Models.get(HostModel.class).findById(id);
     }
 
     /** @return a byte count as a size in the language's own symbols */

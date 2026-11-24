@@ -3,11 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.OnboardingStep;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.HostFields;
@@ -299,21 +295,21 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
     @Test
     void theTenantTwinNamesNoHostAndEveryOfferFollowsWhatTheAppAndTheReaderCanDo() throws Exception {
         // A second app of the tenant's, on a host of its own, so a host filter has something to select.
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row secretHost = servers.createEmptyRow();
-        secretHost.set(ServerModel.NAME, "secret-host");
-        secretHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        secretHost.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        secretHost.set(ServerModel.SSH_TARGET, "operator@secret-host.invalid");
-        secretHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        secretHost.set(HostModel.NAME, "secret-host");
+        secretHost.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        secretHost.set(HostModel.MODE, HostModel.MODE_SSH);
+        secretHost.set(HostModel.SSH_TARGET, "operator@secret-host.invalid");
+        secretHost.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
         servers.save(secretHost);
-        int secretHostId = secretHost.get(ServerModel.ID);
+        int secretHostId = secretHost.get(HostModel.ID);
         Model instances = Models.get(InstanceModel.class);
         Row hidden = instances.createEmptyRow();
         hidden.set(InstanceModel.NAME, "tenant-hidden");
         hidden.set(InstanceModel.KIND, "hohenheim:docker_container");
         hidden.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "command", "sleep 60")));
-        hidden.set(InstanceModel.SERVER_ID, secretHostId);
+        hidden.set(InstanceModel.HOST_ID, secretHostId);
         instances.save(hidden);
         int hiddenId = hidden.get(InstanceModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, hiddenId,
@@ -343,7 +339,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             }
             for (Relation<?, ?> relation : model.getSchema().getRelations().values()) {
                 if (relation instanceof SingleKeyedRelation<?> keyed
-                        && (keyed.getRelatedModelSupplier().get() instanceof ServerModel
+                        && (keyed.getRelatedModelSupplier().get() instanceof HostModel
                             || keyed.getRelatedModelSupplier().get() instanceof DatabaseEngineModel)) {
                     assertThat(declared)
                         .as("step 2: %s relates to a host through %s, which HostFields must name", model.getModelId(),
@@ -366,7 +362,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         assertThat(PartsLists.filterVocabulary(admin, Objects.requireNonNull(admin
             .entryBySlug(HohenheimSlugs.INSTANCES)),
-                TenantConduits.operator()).find(InstanceModel.SERVER_ID.getName()))
+                TenantConduits.operator()).find(InstanceModel.HOST_ID.getName()))
             .as("step 2: the operator's own list still filters by host").isNotNull();
 
         // 3. A tenant request carrying a host filter or a host sort is refused or ignored, never honoured, and the
@@ -503,7 +499,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Power, Configure");
 
             // 5. A port without a public address reads in the tenant's words, never the host's internals.
-            PortLedger.claim(ServerModel.localServerId(), null, 25567, "tcp", InstanceModel.MODEL_ID, this.appId,
+            PortLedger.claim(HostModel.localHostId(), null, 25567, "tcp", InstanceModel.MODEL_ID, this.appId,
                 "manage journey");
             try {
                 assertThat(page(overview))

@@ -3,11 +3,11 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.hohenheim.server.cms.HostMediaTab;
 import be.elevenways.hohenheim.server.cms.InstanceDevicesPage;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.EditContext;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Select;
@@ -21,11 +21,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.instance.InstallMediaFetchView;
-import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -115,15 +114,15 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     static void seedFixtures() {
         FakeMediaKind.register();
 
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, PREFIX + "host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, PREFIX + "host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(host);
         HostFixtures.acknowledgePosture(host);
-        hostId = host.get(ServerModel.ID);
+        hostId = host.get(HostModel.ID);
 
         tenantId = ApiSupport.user("media-surf-tenant@surface.test", "Media Surface Tenant");
     }
@@ -131,7 +130,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @AfterAll
     static void removeHost() {
         if (hostId != null) {
-            Models.get(ServerModel.class).delete(hostId);
+            Models.get(HostModel.class).delete(hostId);
             hostId = null;
         }
     }
@@ -198,7 +197,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         record.set(InstanceModel.KIND, "hohenheim:vm");
         record.set(InstanceModel.SETTINGS,
             Map.of("image_origin", ImageOrigin.INSTALL_MEDIA.key()));
-        record.set(InstanceModel.SERVER_ID, hostId);
+        record.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(record);
         int recordId = record.get(InstanceModel.ID);
         this.instances.add(recordId);
@@ -431,7 +430,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             try {
                 int instanceId = mediaCapableInstance("media-surf-attach");
                 Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
-                    .assign(InstanceModel.SERVER_ID, socketHostId).updateAll();
+                    .assign(InstanceModel.HOST_ID, socketHostId).updateAll();
                 Row instance = Models.get(InstanceModel.class).findById(instanceId);
 
                 // 1. The Devices tab places the attach as an operation on the record itself.
@@ -518,9 +517,9 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 // class host, whose cleanup removes it, and the socket host leaves empty.
                 Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.SOURCE_MEDIA.eq("debian.iso"))
                     .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
-                Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(socketHostId))
-                    .assign(InstanceModel.SERVER_ID, hostId).updateAll();
-                Models.get(ServerModel.class).delete(socketHostId);
+                Models.get(InstanceModel.class).find().where(InstanceModel.HOST_ID.eq(socketHostId))
+                    .assign(InstanceModel.HOST_ID, hostId).updateAll();
+                Models.get(HostModel.class).delete(socketHostId);
             }
         }
     }
@@ -536,7 +535,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             incus.daemon.customVolumes.put("outside.iso", Map.of("name", "outside.iso", "content_type", "iso"));
             Integer socketHostId = socketHost(incus);
             try {
-                Row server = Models.get(ServerModel.class).findById(socketHostId);
+                Row server = Models.get(HostModel.class).findById(socketHostId);
                 int fetched = readyFetch(socketHostId, "fetched.iso");
                 readyFetch(socketHostId, "outside.iso");
 
@@ -557,8 +556,8 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                     .isEmpty();
             } finally {
                 Models.get(InstallMediaFetchModel.class).find()
-                    .where(InstallMediaFetchModel.SERVER_ID.eq(socketHostId)).delete();
-                Models.get(ServerModel.class).delete(socketHostId);
+                    .where(InstallMediaFetchModel.HOST_ID.eq(socketHostId)).delete();
+                Models.get(HostModel.class).delete(socketHostId);
             }
         }
     }
@@ -566,7 +565,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     /** A stored READY fetch of {@code name} onto the host, as the background lane writes its ending. */
     private static int readyFetch(int serverId, @NonNull String name) {
         Row row = Models.get(InstallMediaFetchModel.class).createEmptyRow();
-        row.set(InstallMediaFetchModel.SERVER_ID, serverId);
+        row.set(InstallMediaFetchModel.HOST_ID, serverId);
         row.set(InstallMediaFetchModel.NAME, name);
         row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.READY.token());
         row.set(InstallMediaFetchModel.PROGRESS, 1.0);
@@ -577,7 +576,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
     /** The names the host's Install media tab shows as fetched and available. */
     private static List<String> availableFetches(@NonNull Row server) {
-        return ServerMediaTab.view(server).fetches().stream()
+        return HostMediaTab.view(server).fetches().stream()
             .filter(fetch -> !fetch.active() && fetch.reason() == null)
             .map(InstallMediaFetchView::name).toList();
     }
@@ -604,7 +603,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                     machine.set(InstanceModel.NAME, PREFIX + "imageless-" + origin.key());
                     machine.set(InstanceModel.KIND, "hohenheim:vm");
                     machine.set(InstanceModel.SETTINGS, Map.of(ImageOrigin.SETTING, origin.key()));
-                    machine.set(InstanceModel.SERVER_ID, socketHostId);
+                    machine.set(InstanceModel.HOST_ID, socketHostId);
                     instances.save(machine);
                     int machineId = machine.get(InstanceModel.ID);
                     machines.add(machineId);
@@ -648,23 +647,23 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.SOURCE_MEDIA.eq("debian.iso"))
                     .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
                 machines.forEach(id -> HardDeletes.byId(instances, id));
-                Models.get(ServerModel.class).delete(socketHostId);
+                Models.get(HostModel.class).delete(socketHostId);
             }
         }
     }
 
     /** @return a new admitted Incus host served by this fake socket */
     private static Integer socketHost(FakeIncusSocket incus) {
-        Row socketHost = Models.get(ServerModel.class).createEmptyRow();
-        socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
-        socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        socketHost.set(ServerModel.INCUS_URL, incus.url());
-        socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(socketHost);
+        Row socketHost = Models.get(HostModel.class).createEmptyRow();
+        socketHost.set(HostModel.NAME, PREFIX + "socket-host");
+        socketHost.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        socketHost.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        socketHost.set(HostModel.INCUS_URL, incus.url());
+        socketHost.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        socketHost.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(socketHost);
         HostFixtures.acknowledgePosture(socketHost);
-        return socketHost.get(ServerModel.ID);
+        return socketHost.get(HostModel.ID);
     }
 
     private static OperationRequest<Row, ?, ?> attachRequest(Operation<Row, ?, ?> attach, Row instance) {
@@ -754,7 +753,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
      * place to find out.
      */
     @Test
-    void theServerMediaTabIsAdminAndIncusOnlyAndProtectsReferencedMedia() throws Exception {
+    void theHostMediaTabIsAdminAndIncusOnlyAndProtectsReferencedMedia() throws Exception {
         // 1. The tab renders for an admin on an INCUS host. The fixture daemon is
         //    unreachable, so the page states that by name instead of failing.
         var tab = adminGet("/admin/servers/" + hostId + "/page/install-media");
@@ -763,32 +762,32 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         // 2. A DOCKER host does not offer the tab at all: its daemon has no ISO
         //    volume to hold (hide AND 404, the devices-tab shape).
-        Row docker = Models.get(ServerModel.class).createEmptyRow();
-        docker.set(ServerModel.NAME, PREFIX + "docker-host");
-        docker.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        docker.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        Models.get(ServerModel.class).save(docker);
-        Integer dockerId = docker.get(ServerModel.ID);
+        Row docker = Models.get(HostModel.class).createEmptyRow();
+        docker.set(HostModel.NAME, PREFIX + "docker-host");
+        docker.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        docker.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        Models.get(HostModel.class).save(docker);
+        Integer dockerId = docker.get(HostModel.ID);
         try {
             assertThat(adminGet("/admin/servers/" + dockerId
                     + "/page/install-media").statusCode())
                 .as("step 2: a docker host answers 404 for the media tab").isEqualTo(404);
         } finally {
-            Models.get(ServerModel.class).delete(dockerId);
+            Models.get(HostModel.class).delete(dockerId);
         }
 
         // 2b. An UN-ENROLLED https Incus host renders the tab with the trust refusal
         //     as its named load error instead of 500ing: client CONSTRUCTION refusals
         //     (no pinned certificate) ride the same lane as an unreachable daemon.
         //     Found live on the first walkthrough of this page.
-        Row unenrolled = Models.get(ServerModel.class).createEmptyRow();
-        unenrolled.set(ServerModel.NAME, PREFIX + "unenrolled");
-        unenrolled.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        unenrolled.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        unenrolled.set(ServerModel.SSH_TARGET, "root@unenrolled.test");
-        unenrolled.set(ServerModel.INCUS_URL, "https://unenrolled.test:8443");
-        Models.get(ServerModel.class).save(unenrolled);
-        Integer unenrolledId = unenrolled.get(ServerModel.ID);
+        Row unenrolled = Models.get(HostModel.class).createEmptyRow();
+        unenrolled.set(HostModel.NAME, PREFIX + "unenrolled");
+        unenrolled.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        unenrolled.set(HostModel.MODE, HostModel.MODE_SSH);
+        unenrolled.set(HostModel.SSH_TARGET, "root@unenrolled.test");
+        unenrolled.set(HostModel.INCUS_URL, "https://unenrolled.test:8443");
+        Models.get(HostModel.class).save(unenrolled);
+        Integer unenrolledId = unenrolled.get(HostModel.ID);
         try {
             var trustRefused = adminGet("/admin/servers/" + unenrolledId
                 + "/page/install-media");
@@ -799,7 +798,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 .as("step 2b: and states the trust refusal by name")
                 .contains("no pinned Incus server certificate");
         } finally {
-            Models.get(ServerModel.class).delete(unenrolledId);
+            Models.get(HostModel.class).delete(unenrolledId);
         }
 
         // 3. The fetch endpoint refuses a NON-admin outright (the endpoint declares
@@ -996,7 +995,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeMediaKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);
@@ -1139,7 +1138,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
         @Override public boolean supportsDevices() { return true; }
 

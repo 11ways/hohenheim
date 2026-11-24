@@ -3,11 +3,10 @@ package be.elevenways.hohenheim.test.quota;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.RootDisk;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
@@ -181,19 +180,19 @@ class QuotaDimensionDriftTest {
     // -- helpers --------------------------------------------------------------
 
     private static int host(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, "drift-" + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, "drift-" + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store("drift-" + name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 65536L * 1024L * 1024L),
             true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static Row workload(String name, int serverId) {
@@ -201,7 +200,7 @@ class QuotaDimensionDriftTest {
         row.set(InstanceModel.NAME, "drift-" + name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         return row;
     }
 }

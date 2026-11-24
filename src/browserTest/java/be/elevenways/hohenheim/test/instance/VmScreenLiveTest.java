@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -58,7 +58,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
     void aTenantSeesAndDrivesARealVmsScreenUntilTheGrantIsRevoked() throws Exception {
         LiveIncusHost remote = LiveIncusHost.requirePrimary();
         String enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-screen");
-        int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
+        int hostId = Models.get(HostModel.class).findByName(HOST).get(HostModel.ID);
         UUID userId = ApiSupport.user("screen-live@hohenheim.local", "Screen live");
         int templateId = consoleTemplate();
         int instanceId = vmRecord("vm-screen-probe", hostId, templateId);
@@ -149,7 +149,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", VM_IMAGE, "memory_limit_mb", 512)));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.TEMPLATE_ID, templateId);
         instances.save(row);
         return row.get(InstanceModel.ID);

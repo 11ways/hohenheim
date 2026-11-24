@@ -4,10 +4,10 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -65,7 +65,7 @@ class StackRuntimeFlowTest {
     private static StackRuntime runtime;
     private static DockerClient docker;
 
-    // The runtime resolves its policy applier through WorkloadNetworkPolicy.forServer,
+    // The runtime resolves its policy applier through WorkloadNetworkPolicy.forHost,
     // so the netns fixture is installed as the process-wide override -- without it
     // every deploy here would (rightly) refuse on a developer machine.
     private static PrivateNetns netns;
@@ -121,7 +121,7 @@ class StackRuntimeFlowTest {
             Row stack = stacks.createEmptyRow();
             stack.set(StackModel.NAME, stackName);
             stack.set(StackModel.ENABLED, true);
-            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+            stack.set(StackModel.HOST_ID, HostModel.localHostId());
             stack.set(StackModel.REGISTRY_PASSWORD, "very-private-registry-secret");
             stacks.save(stack);
             id[0] = stack.get(StackModel.ID);

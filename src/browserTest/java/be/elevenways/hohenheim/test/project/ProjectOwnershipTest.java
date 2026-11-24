@@ -2,13 +2,7 @@ package be.elevenways.hohenheim.test.project;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.PlacementRefusal;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -156,7 +150,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             templates.delete(row.get(InstanceTemplateModel.ID));
         }
         if (admittedHostId != null) {
-            Models.get(ServerModel.class).delete(admittedHostId);
+            Models.get(HostModel.class).delete(admittedHostId);
         }
     }
 
@@ -193,13 +187,13 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     }
 
     private static int admittedHost() {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + "host");
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + "host");
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
         // Placement will not CHOOSE a host whose memory nobody measured, so an admitted
         // host needs the reading a real admit always has (requireAdmittable demands a
@@ -208,7 +202,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private HttpResponse<String> memberGet(String path) throws Exception {
@@ -546,7 +540,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
             Models.get(EnvironmentModel.class).delete(foreignId);
-            Models.get(ServerModel.class).delete(hostId);
+            Models.get(HostModel.class).delete(hostId);
         }
     }
 
@@ -563,17 +557,17 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         String popup = "he-bottom .pl-select-popup[data-open]";
         String hostName = PREFIX + "dedicated";
         int hostId = HostFixtures.admittedDockerHost(hostName, 16384);
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Model instances = Models.get(InstanceModel.class);
         Row dedicated = servers.findById(hostId);
-        dedicated.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+        dedicated.set(HostModel.POSTURE, HostModel.POSTURE_DEDICATED);
         servers.save(dedicated);
         HostFixtures.acknowledgePosture(servers.findById(hostId));
         String bucketOne = OwnerBudget.INSTANCES.bucketOf(HohenheimAccess.packSubjects(
             Projects.ownerSubjectsOf(projectOne)));
         int occupant = instance(PREFIX + "dedicated-occupant");
         instances.find().where(InstanceModel.ID.eq(occupant))
-            .assign(InstanceModel.SERVER_ID, hostId)
+            .assign(InstanceModel.HOST_ID, hostId)
             .assign(InstanceModel.QUOTA_BUCKET, bucketOne)
             .bypassBehaviours()
             .updateAll();

@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
@@ -138,7 +138,7 @@ public final class HostProbe {
      * certificate contradicted its pin was un-quarantined by the next probe that happened
      * to reach it, with no operator act anywhere. Reaching a daemon is not evidence about
      * WHICH machine answered -- that is exactly what the pin decides -- so it may not
-     * clear a pin verdict. See {@link ServerModel#QUARANTINED_AT}.
+     * clear a pin verdict. See {@link HostModel#QUARANTINED_AT}.
      */
     public static void recordSuccess(@NonNull String serverName) {
         recordSuccess(serverName, null);
@@ -167,16 +167,16 @@ public final class HostProbe {
      */
     public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info,
                                      @Nullable DiskSpace disk) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             return;
         }
         Instant now = Now.instant();
-        server.set(ServerModel.LAST_SEEN_AT, now);
-        server.set(ServerModel.LAST_ERROR_KIND, null);
-        server.set(ServerModel.LAST_ERROR, null);
+        server.set(HostModel.LAST_SEEN_AT, now);
+        server.set(HostModel.LAST_ERROR_KIND, null);
+        server.set(HostModel.LAST_ERROR, null);
         // A quarantined host's answer proves nothing about which machine answered (its pin decides): no reading.
-        if (server.get(ServerModel.QUARANTINED_AT) == null) {
+        if (server.get(HostModel.QUARANTINED_AT) == null) {
             if (info != null) {
                 HostPreflight.recordMemoryReading(server, info, now);
             }
@@ -184,8 +184,8 @@ public final class HostProbe {
                 HostDisk.record(server, disk, now);
             }
         }
-        // A heartbeat is bookkeeping, never activity: ServerModel captures none of the fields it writes.
-        Models.get(ServerModel.class).save(server);
+        // A heartbeat is bookkeeping, never activity: HostModel captures none of the fields it writes.
+        Models.get(HostModel.class).save(server);
     }
 
     /**
@@ -200,15 +200,15 @@ public final class HostProbe {
      * ({@code last_error_kind}) whose only reader was an admin list nobody had open.
      */
     public static void recordFailure(@NonNull String serverName, @NonNull Outcome outcome) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null || outcome.kind() == null) {
             return;
         }
-        String previous = server.get(ServerModel.LAST_ERROR_KIND);
-        server.set(ServerModel.LAST_ERROR_KIND, outcome.kind().token);
-        server.set(ServerModel.LAST_ERROR, outcome.detail());
+        String previous = server.get(HostModel.LAST_ERROR_KIND);
+        server.set(HostModel.LAST_ERROR_KIND, outcome.kind().token);
+        server.set(HostModel.LAST_ERROR, outcome.detail());
         boolean quarantines = outcome.kind() == FailureKind.HOST_KEY_CHANGED
-            && server.get(ServerModel.QUARANTINED_AT) == null;
+            && server.get(HostModel.QUARANTINED_AT) == null;
         if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
             quarantine(server, outcome.detail());
         }
@@ -217,14 +217,14 @@ public final class HostProbe {
         if (quarantines) {
             Map<String, Object> reason = outcome.detail() == null ? Map.of()
                 : Map.of(HohenheimActivityAction.REASON_KEY, outcome.detail());
-            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.HOST_PROBE, () -> Models.get(ServerModel.class)
+            ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.HOST_PROBE, () -> Models.get(HostModel.class)
                 .save(server, Change.fact(HohenheimActivityAction.QUARANTINED, reason)));
         } else {
-            Models.get(ServerModel.class).save(server);
+            Models.get(HostModel.class).save(server);
         }
         if (previous == null || previous.isBlank()) {
             Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
-                Alerts.about(ServerModel.MODEL_ID, server.get(ServerModel.ID)),
+                Alerts.about(HostModel.MODEL_ID, server.get(HostModel.ID)),
                 HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", serverName),
                 HohenheimMicrocopy.ALERT.of("host_unreachable_body").withArg("failure", outcome.kind().label())
                     .withArg("detail", outcome.detail() != null ? outcome.detail() : "-"));
@@ -247,16 +247,16 @@ public final class HostProbe {
      * hide how long the host has been in it.
      */
     private static void quarantine(@NonNull Row server, @Nullable String reason) {
-        if (server.get(ServerModel.QUARANTINED_AT) == null) {
-            server.set(ServerModel.QUARANTINED_AT, Now.instant());
-            server.set(ServerModel.QUARANTINE_REASON, reason);
+        if (server.get(HostModel.QUARANTINED_AT) == null) {
+            server.set(HostModel.QUARANTINED_AT, Now.instant());
+            server.set(HostModel.QUARANTINE_REASON, reason);
         }
-        server.set(ServerModel.PREFLIGHT_OK, false);
-        if (ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
-            server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        server.set(HostModel.PREFLIGHT_OK, false);
+        if (HostModel.ADMISSION_ADMITTED.equals(server.get(HostModel.ADMISSION))) {
+            server.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
         }
         Blast.slog("hohenheim.host.quarantined", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
+            "server", String.valueOf((Object) server.get(HostModel.NAME)),
             "reason", FailureKind.HOST_KEY_CHANGED.token));
     }
 }

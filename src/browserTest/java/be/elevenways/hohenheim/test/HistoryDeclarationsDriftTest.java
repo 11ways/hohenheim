@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -49,7 +49,7 @@ class HistoryDeclarationsDriftTest extends HohenheimHttpTestBase {
         assertThat(read).as("step 2: the walk really visited the History tabs").hasSizeGreaterThan(10);
         read.add(Models.get(InstanceModel.class));
         read.add(Models.get(DatabaseModel.class));
-        read.add(Models.get(ServerModel.class));
+        read.add(Models.get(HostModel.class));
         HistoryDeclarationsDrift.assertReadable(read);
     }
 }

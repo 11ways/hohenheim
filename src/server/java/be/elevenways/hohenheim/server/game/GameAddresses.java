@@ -108,11 +108,11 @@ public final class GameAddresses {
     }
 
     /** Re-reconcile every game address on this host: its A/AAAA values are the host's declared addresses. */
-    public static void afterServerAddressChange(int serverId) {
+    public static void afterHostAddressChange(int serverId) {
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.GAME_ADDRESS.isNotNull()).all()) {
             Integer id = instance.get(InstanceModel.ID);
-            if (id != null && Objects.equals(instance.get(InstanceModel.SERVER_ID), serverId)) {
+            if (id != null && Objects.equals(instance.get(InstanceModel.HOST_ID), serverId)) {
                 reconcile(id);
             }
         }

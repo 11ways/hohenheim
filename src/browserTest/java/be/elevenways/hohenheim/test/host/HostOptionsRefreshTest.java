@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test.host;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.server.options.HostOptions;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the ids it published itself; this pins that a surviving host is never removed and a
  * deleted one is.
  */
-class ServerOptionsRefreshTest {
+class HostOptionsRefreshTest {
 
     @RegisterExtension
     static final ServedApp APP = HohenheimServedApp.app();
@@ -38,35 +38,35 @@ class ServerOptionsRefreshTest {
     @Test
     void refreshKeepsLiveHostsAndPrunesOnlyRemovedOnes() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             int keptId = host(model, "options-kept");
             int goneId = host(model, "options-gone");
 
             // 1. Both hosts are offered after a refresh.
-            ServerOptions.refresh();
-            assertThat(ServerOptions.REGISTRY.get(key(keptId)))
+            HostOptions.refresh();
+            assertThat(HostOptions.REGISTRY.get(key(keptId)))
                 .as("step 1: the first host is offered").isNotNull();
-            assertThat(ServerOptions.REGISTRY.get(key(goneId)))
+            assertThat(HostOptions.REGISTRY.get(key(goneId)))
                 .as("step 1: the second host is offered").isNotNull();
 
             // 2. A deleted host disappears on the next refresh; the surviving one stays.
             model.delete(goneId);
-            ServerOptions.refresh();
-            assertThat(ServerOptions.REGISTRY.get(key(goneId)))
+            HostOptions.refresh();
+            assertThat(HostOptions.REGISTRY.get(key(goneId)))
                 .as("step 2: the deleted host is pruned").isNull();
-            assertThat(ServerOptions.REGISTRY.get(key(keptId)).getDisplayName())
+            assertThat(HostOptions.REGISTRY.get(key(keptId)).getDisplayName())
                 .as("step 2: the surviving host is still offered")
                 .startsWith("options-kept");
         });
     }
 
-    private static int host(ServerModel model, String name) {
+    private static int host(HostModel model, String name) {
         Row row = model.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
         model.save(row);
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static Identifier key(int serverId) {

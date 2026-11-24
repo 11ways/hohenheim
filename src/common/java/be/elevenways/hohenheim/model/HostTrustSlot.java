@@ -43,17 +43,17 @@ public record HostTrustSlot(@NonNull String name,
 
     /** SSH host-key trust plus the per-host client keypair; every {@code ssh} argv reads it. */
     public static final HostTrustSlot SSH = new HostTrustSlot("ssh",
-        ServerModel.HOST_KEY, ServerModel.HOST_KEY_FINGERPRINT,
-        ServerModel.HOST_KEY_VERIFIED, ServerModel.HOST_KEY_PINNED_AT,
-        ServerModel.HOST_KEY_OFFERED,
-        ServerModel.IDENTITY_PUBLIC_KEY, ServerModel.IDENTITY_PRIVATE_KEY);
+        HostModel.HOST_KEY, HostModel.HOST_KEY_FINGERPRINT,
+        HostModel.HOST_KEY_VERIFIED, HostModel.HOST_KEY_PINNED_AT,
+        HostModel.HOST_KEY_OFFERED,
+        HostModel.IDENTITY_PUBLIC_KEY, HostModel.IDENTITY_PRIVATE_KEY);
 
     /** Incus TLS trust: the pinned server certificate plus this host's client certificate. */
     public static final HostTrustSlot INCUS_TLS = new HostTrustSlot("incus",
-        ServerModel.INCUS_SERVER_CERT, ServerModel.INCUS_SERVER_CERT_FINGERPRINT,
-        ServerModel.INCUS_SERVER_CERT_VERIFIED, ServerModel.INCUS_SERVER_CERT_PINNED_AT,
-        ServerModel.INCUS_SERVER_CERT_OFFERED,
-        ServerModel.INCUS_CLIENT_CERT, ServerModel.INCUS_CLIENT_KEY);
+        HostModel.INCUS_SERVER_CERT, HostModel.INCUS_SERVER_CERT_FINGERPRINT,
+        HostModel.INCUS_SERVER_CERT_VERIFIED, HostModel.INCUS_SERVER_CERT_PINNED_AT,
+        HostModel.INCUS_SERVER_CERT_OFFERED,
+        HostModel.INCUS_CLIENT_CERT, HostModel.INCUS_CLIENT_KEY);
 
     /**
      * The slot the host's PRIMARY transport authenticates with: TLS for an Incus daemon,
@@ -61,7 +61,7 @@ public record HostTrustSlot(@NonNull String name,
      * is always named explicitly ({@link #SSH}), never derived from the runtime.
      */
     public static @NonNull HostTrustSlot transportOf(@NonNull Row server) {
-        return ServerModel.isIncus(server) ? INCUS_TLS : SSH;
+        return HostModel.isIncus(server) ? INCUS_TLS : SSH;
     }
 
     /** Whether this slot holds pinned material at all. */

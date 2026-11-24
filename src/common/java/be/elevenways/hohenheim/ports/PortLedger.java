@@ -198,7 +198,7 @@ public final class PortLedger {
         String address = canonicalAddressOf(key);
         List<Row> overlapping = new ArrayList<>();
         for (Row claim : Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(serverId))
+                .where(PortAllocationModel.HOST_ID.eq(serverId))
                 .and(PortAllocationModel.PORT.eq(port))
                 .and(PortAllocationModel.PROTOCOL.eq(canonicalProtocolOf(key)))
                 .orderBy(PortAllocationModel.ID, SortOrder.ASC)
@@ -326,7 +326,7 @@ public final class PortLedger {
         if (row == null) {
             row = ledger.createEmptyRow();
         }
-        row.set(PortAllocationModel.SERVER_ID, serverId);
+        row.set(PortAllocationModel.HOST_ID, serverId);
         row.set(PortAllocationModel.HOST_IP, canonicalAddressOf(key));
         row.set(PortAllocationModel.PORT, port);
         row.set(PortAllocationModel.PROTOCOL, canonicalProtocolOf(key));
@@ -453,7 +453,7 @@ public final class PortLedger {
     /** Every {@code releasing} claim on one host. */
     public static @NonNull List<Row> releasingClaimsOf(int serverId) {
         return Models.get(PortAllocationModel.class).find()
-            .where(PortAllocationModel.SERVER_ID.eq(serverId))
+            .where(PortAllocationModel.HOST_ID.eq(serverId))
             .and(PortAllocationModel.STATUS.eq(PortAllocationModel.STATUS_RELEASING))
             .all();
     }

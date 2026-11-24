@@ -4,12 +4,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -18,11 +17,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,7 +53,7 @@ class HostRecordTest {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         if (serverId != null) {
-            row.set(InstanceModel.SERVER_ID, serverId);
+            row.set(InstanceModel.HOST_ID, serverId);
         }
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
@@ -66,11 +63,11 @@ class HostRecordTest {
     @Test
     void admissionAndPostureGateInstancePlacement() {
         Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
-            Row local = Models.get(ServerModel.class).findById(localId);
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-            local.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
-            Models.get(ServerModel.class).save(local);
+            int localId = HostModel.localHostId();
+            Row local = Models.get(HostModel.class).findById(localId);
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+            local.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
+            Models.get(HostModel.class).save(local);
             int id = instanceRecord("gate-victim", null);
             InstanceService service = new InstanceService();
 
@@ -87,8 +84,8 @@ class HostRecordTest {
                 .isEqualTo(InstanceModel.STATUS_CREATED);
 
             // 2. Admitted but trusted-only: the POSTURE refuses a tenant instance.
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            Models.get(ServerModel.class).save(local);
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+            Models.get(HostModel.class).save(local);
             assertThat(catchThrowable(() -> service.deploy(id)))
                 .as("step 2: a trusted-only posture refuses tenant instances")
                 .isInstanceOfSatisfying(Violations.class, violations ->
@@ -96,9 +93,9 @@ class HostRecordTest {
                         assertThat(violation.message().key()).isEqualTo("host_posture_refuses")));
 
             // 3. Cordoning an admitted host refuses NEW placement again.
-            local.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
-            Models.get(ServerModel.class).save(local);
+            local.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_CORDONED);
+            Models.get(HostModel.class).save(local);
             HostFixtures.acknowledgePosture(local);
             assertThat(catchThrowable(() -> service.deploy(id)))
                 .as("step 3: a cordoned host refuses new placement")
@@ -107,19 +104,19 @@ class HostRecordTest {
                         assertThat(violation.message().key()).isEqualTo("host_not_admitted")));
 
             // 4. The admit transition itself is gated on a PASSING preflight.
-            local.set(ServerModel.PREFLIGHT_OK, false);
-            Models.get(ServerModel.class).save(local);
+            local.set(HostModel.PREFLIGHT_OK, false);
+            Models.get(HostModel.class).save(local);
             assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(local)))
                 .as("step 4: admit refuses without a passing preflight")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key()).isEqualTo("admit_needs_preflight")));
-            local.set(ServerModel.PREFLIGHT_OK, true);
+            local.set(HostModel.PREFLIGHT_OK, true);
             HostAdmission.requireAdmittable(local);   // step 4b: and passes with one
 
             // Restore the local host for other tests in this class.
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-            Models.get(ServerModel.class).save(local);
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+            Models.get(HostModel.class).save(local);
         });
     }
 
@@ -130,9 +127,9 @@ class HostRecordTest {
     @Test
     void removalRefusesWhileOwnedResourcesRemain() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             servers.add("edge-owned", "deploy@edge-owned.example");
-            int serverId = ServerModel.canonicalServerId("edge-owned");
+            int serverId = HostModel.canonicalHostId("edge-owned");
 
             // 1. A live instance on the host blocks removal, with counts in the refusal.
             int instanceId = instanceRecord("holds-the-host", serverId);
@@ -141,8 +138,8 @@ class HostRecordTest {
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key()).isEqualTo("server_in_use")));
-            assertThat(Models.get(ServerModel.class).findByName("edge-owned"))
-                .as("step 1: the server row survives the refused delete").isNotNull();
+            assertThat(Models.get(HostModel.class).findByName("edge-owned"))
+                .as("step 1: the host row survives the refused delete").isNotNull();
 
             // 2. A stack on the host blocks removal too, even with no instances left.
             Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
@@ -150,7 +147,7 @@ class HostRecordTest {
             Models.get(InstanceModel.class).save(instance);
             Row stack = Models.get(StackModel.class).createEmptyRow();
             stack.set(StackModel.NAME, "edge-stack");
-            stack.set(StackModel.SERVER_ID, serverId);
+            stack.set(StackModel.HOST_ID, serverId);
             Models.get(StackModel.class).save(stack);
             assertThat(catchThrowable(() -> servers.remove("edge-owned")))
                 .as("step 2: removal refuses while a stack references the host")
@@ -162,12 +159,12 @@ class HostRecordTest {
             //    purging the row (its backups outlive it).
             Models.get(StackModel.class).delete(stack.get(StackModel.ID));
             servers.remove("edge-owned");
-            assertThat(Models.get(ServerModel.class).findByName("edge-owned"))
+            assertThat(Models.get(HostModel.class).findByName("edge-owned"))
                 .as("step 3: an unowned host removes cleanly").isNull();
             // Trashed: a default find hides it by design, so the kept row is read as stored.
             Row trashed = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             assertThat(trashed).as("step 3: the trashed instance row is kept").isNotNull();
-            assertThat((Object) trashed.get(InstanceModel.SERVER_ID))
+            assertThat((Object) trashed.get(InstanceModel.HOST_ID))
                 .as("step 3: with its host pointer detached").isNull();
         });
     }
@@ -176,7 +173,7 @@ class HostRecordTest {
     @Test
     void probeFailuresAreTypedAndStoredAndBlockAdmission() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
             servers.add("edge-dark", "nobody@edge-dark.hohenheim-test.invalid");
 
             // 1. A remote host with no pinned key is not even attempted: the refusal is
@@ -188,13 +185,13 @@ class HostRecordTest {
             // 1b. Once it is pinned and credentialled, the live probe fails with a NAMED
             //     class, not a silent null. (The pin is a locally generated key: this
             //     host does not resolve, so nothing ever presents one.)
-            Row dark = Models.get(ServerModel.class).findByName("edge-dark");
+            Row dark = Models.get(HostModel.class).findByName("edge-dark");
             HostKeys.ensureIdentity(dark);
-            dark.set(ServerModel.HOST_KEY, dark.get(ServerModel.IDENTITY_PUBLIC_KEY));
-            dark.set(ServerModel.HOST_KEY_FINGERPRINT,
-                HostKeys.fingerprintOf(dark.get(ServerModel.IDENTITY_PUBLIC_KEY)));
-            Models.get(ServerModel.class).save(dark);
-            ServerService.Summary summary = servers.probeAndStore("edge-dark");
+            dark.set(HostModel.HOST_KEY, dark.get(HostModel.IDENTITY_PUBLIC_KEY));
+            dark.set(HostModel.HOST_KEY_FINGERPRINT,
+                HostKeys.fingerprintOf(dark.get(HostModel.IDENTITY_PUBLIC_KEY)));
+            Models.get(HostModel.class).save(dark);
+            HostService.Summary summary = servers.probeAndStore("edge-dark");
             assertThat(summary.reachable())
                 .as("step 1b: the invalid host is unreachable").isFalse();
             assertThat(summary.errorKind())
@@ -202,25 +199,25 @@ class HostRecordTest {
                 .isIn("dns", "unreachable", "timeout");
 
             // 2. The typed outcome is STORED on the record: columns, not memory.
-            Row stored = Models.get(ServerModel.class).findByName("edge-dark");
-            assertThat((String) stored.get(ServerModel.LAST_ERROR_KIND))
+            Row stored = Models.get(HostModel.class).findByName("edge-dark");
+            assertThat((String) stored.get(HostModel.LAST_ERROR_KIND))
                 .as("step 2: last_error_kind persisted").isEqualTo(summary.errorKind());
-            assertThat((String) stored.get(ServerModel.LAST_ERROR))
+            assertThat((String) stored.get(HostModel.LAST_ERROR))
                 .as("step 2: the human detail persisted too").isNotBlank();
-            assertThat((Object) stored.get(ServerModel.LAST_SEEN_AT))
+            assertThat((Object) stored.get(HostModel.LAST_SEEN_AT))
                 .as("step 2: a host never reached has no last_seen_at").isNull();
 
             // 3. And a failing probe BLOCKS the host: the typed failure and the admission
             //    verdict live on the same row, so no reader can see one without the other.
-            //    AIDEV-NOTE: this used to call ServerService.storedStates() and assert it
+            //    AIDEV-NOTE: this used to call HostService.storedStates() and assert it
             //    constructed no DockerClient -- tautological, since storedStates was on no
             //    render path and had no other caller. The invariant that matters (rendering
             //    a host page touches no daemon) is asserted on the REAL path by
-            //    ServerOverviewTest, and boot by RoleRestrictedBootTest; the machinery is
+            //    HostOverviewTest, and boot by RoleRestrictedBootTest; the machinery is
             //    deleted.
-            assertThat(String.valueOf((Object) stored.get(ServerModel.ADMISSION)))
+            assertThat(String.valueOf((Object) stored.get(HostModel.ADMISSION)))
                 .as("step 3: a host that failed its probe is admission-blocked")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
 
             servers.remove("edge-dark");
         });

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.cms.DeleteImpact;
 import be.elevenways.hohenheim.server.cms.ProvisionedRecords;
@@ -83,8 +83,8 @@ public final class DatabaseWrites {
         String image = trimmed(values.get(DatabaseModel.IMAGE.getName()));
         boolean ephemeral = RawValues.isOn(values, DatabaseModel.EPHEMERAL);
         // The FK is canonical; the service API still speaks the (unique) server name.
-        String server = ServerModel.nameOf(
-            values.get(DatabaseModel.SERVER_ID.getName()) instanceof Integer serverId ? serverId : null);
+        String server = HostModel.nameOf(
+            values.get(DatabaseModel.HOST_ID.getName()) instanceof Integer serverId ? serverId : null);
         ResourceLimits limits = ResourceLimits.of(
             values.get(DatabaseModel.MEMORY_LIMIT_MB.getName()) instanceof Integer mb ? mb : null,
             values.get(DatabaseModel.CPU_LIMIT.getName()) instanceof Double cpus ? cpus : null);
@@ -240,9 +240,9 @@ public final class DatabaseWrites {
         row.set(DatabaseEngineModel.NAME, name);
         row.set(DatabaseEngineModel.ENGINE, engine.token());
         row.set(DatabaseEngineModel.IMAGE, image.isEmpty() ? null : image);
-        row.set(DatabaseEngineModel.SERVER_ID,
-            values.get(DatabaseEngineModel.SERVER_ID.getName()) instanceof Integer serverId
-                ? serverId : ServerModel.localServerId());
+        row.set(DatabaseEngineModel.HOST_ID,
+            values.get(DatabaseEngineModel.HOST_ID.getName()) instanceof Integer serverId
+                ? serverId : HostModel.localHostId());
         row.set(DatabaseEngineModel.ROOT_USER, rootUser);
         row.set(DatabaseEngineModel.ROOT_PASSWORD, rootPassword);
         row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, limits.memoryMb());

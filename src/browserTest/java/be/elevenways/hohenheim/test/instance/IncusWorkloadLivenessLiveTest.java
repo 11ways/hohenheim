@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
@@ -96,7 +96,7 @@ class IncusWorkloadLivenessLiveTest {
     void preflightProvesTheHostKernelIsolatesARealWorkload() {
         Db.run(datasource, () -> {
             // 1. The stored report of the enrollment ceremony's own preflight run.
-            Row host = Models.get(ServerModel.class).findByName(HOST);
+            Row host = Models.get(HostModel.class).findByName(HOST);
             String userns = HostPreflight.storedCheckStatus(host, IncusPreflight.USERNS_CHECK);
             String seccomp = HostPreflight.storedCheckStatus(host, IncusPreflight.SECCOMP_CHECK);
             assertThat(userns)
@@ -271,7 +271,7 @@ class IncusWorkloadLivenessLiveTest {
     }
 
     private static Map<?, ?> storedChecks(Row host) {
-        Object capabilities = host.get(ServerModel.CAPABILITIES);
+        Object capabilities = host.get(HostModel.CAPABILITIES);
         assertThat(capabilities).as("the host carries a stored capabilities report")
             .isInstanceOf(Map.class);
         Object checks = ((Map<?, ?>) capabilities).get("checks");
@@ -287,12 +287,12 @@ class IncusWorkloadLivenessLiveTest {
     }
 
     private static int instanceRecord(String name, Map<String, Object> settings) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        Row host = Models.get(HostModel.class).findByName(HOST);
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.HOST_ID, host.get(HostModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

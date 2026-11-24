@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
@@ -75,12 +75,12 @@ public interface NftRunner {
      * shipped once, which is why this factory exists and why per-server callers must
      * never construct {@link Sudo} directly.
      */
-    static @NonNull NftRunner forServer(@NonNull Row server) {
+    static @NonNull NftRunner forHost(@NonNull Row server) {
         // The ssh LANE, not the docker transport mode: an Incus host reached over https
         // is MODE local by construction (incus_url is its transport) and still runs its
         // workloads on a machine whose kernel we must be able to read.
-        if (ServerModel.hasSshLane(server)) {
-            String kernel = "server:" + server.get(ServerModel.ID);
+        if (HostModel.hasSshLane(server)) {
+            String kernel = "server:" + server.get(HostModel.ID);
             return new NftRunner() {
                 @Override
                 public @NonNull Result run(@NonNull List<String> args, @Nullable String stdin) {

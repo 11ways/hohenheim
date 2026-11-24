@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.instance.RestoreCapacity;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -71,8 +71,8 @@ class RestoreCapacityLiveTest {
             String certificateFingerprint = null;
             try {
                 certificateFingerprint = remote.enrollThroughProduct(HOST, CLIENT);
-                Row host = Models.get(ServerModel.class).findByName(HOST);
-                int serverId = host.get(ServerModel.ID);
+                Row host = Models.get(HostModel.class).findByName(HOST);
+                int serverId = host.get(HostModel.ID);
 
                 // 1. The probe answers from the DAEMON's own storage pool, not from a
                 //    stub and not from the controller's filesystem.
@@ -143,9 +143,9 @@ class RestoreCapacityLiveTest {
                         // Reported by the next run's trust listing; never masks a failure.
                     }
                 }
-                Row host = Models.get(ServerModel.class).findByName(HOST);
+                Row host = Models.get(HostModel.class).findByName(HOST);
                 if (host != null) {
-                    Models.get(ServerModel.class).delete(host.get(ServerModel.ID));
+                    Models.get(HostModel.class).delete(host.get(HostModel.ID));
                 }
             }
         });

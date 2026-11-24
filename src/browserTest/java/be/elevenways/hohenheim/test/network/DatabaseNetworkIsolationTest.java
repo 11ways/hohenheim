@@ -4,9 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.test.database.EngineHandles;
@@ -77,9 +75,9 @@ class DatabaseNetworkIsolationTest {
             Db.run(datasource, () -> {
                 DatabaseService service = new DatabaseService(datasource);
                 io(() -> service.create(a, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                    "unused", "unused", "unused", true, ServerModel.MODE_LOCAL));
+                    "unused", "unused", "unused", true, HostModel.MODE_LOCAL));
                 io(() -> service.create(b, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                    "unused", "unused", "unused", true, ServerModel.MODE_LOCAL));
+                    "unused", "unused", "unused", true, HostModel.MODE_LOCAL));
                 // The engine handle comes from the OWNED INSTANCE since the lowering.
                 String handleA = EngineHandles.of(a);
                 String handleB = EngineHandles.of(b);

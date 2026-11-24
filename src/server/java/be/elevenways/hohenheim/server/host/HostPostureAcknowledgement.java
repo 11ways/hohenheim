@@ -2,8 +2,7 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -37,7 +36,7 @@ public final class HostPostureAcknowledgement {
 
     /**
      * Record that the acting operator accepted this host's posture risk at the current
-     * {@link ServerModel#POSTURE_WARNING_VERSION}.
+     * {@link HostModel#POSTURE_WARNING_VERSION}.
      *
      * AIDEV-NOTE: an ACTOR is required, and a system-originated call is refused rather
      * than recorded with a null one. The clause this implements asks for "actor, timestamp
@@ -50,36 +49,36 @@ public final class HostPostureAcknowledgement {
      *         {@code posture_acknowledgement_needs_actor}
      */
     public static void record(@NonNull Row server) {
-        if (!ServerModel.postureNeedsAcknowledgement(server)) {
+        if (!HostModel.postureNeedsAcknowledgement(server)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_not_acknowledgeable")
-                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+                .withArg("name", String.valueOf((Object) server.get(HostModel.NAME))));
         }
-        if (ServerModel.postureAcknowledged(server)) {
+        if (HostModel.postureAcknowledged(server)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_already_acknowledged")
-                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+                .withArg("name", String.valueOf((Object) server.get(HostModel.NAME))));
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
         PrincipalRef principal = who.actorReference();
         if (principal == null || !principal.kind().account() || who.origin() == AccountabilityOrigin.SYSTEM) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_acknowledgement_needs_actor")
-                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+                .withArg("name", String.valueOf((Object) server.get(HostModel.NAME))));
         }
         String label = HistoryText.actorName(principal, actor, who.actorLabel(), who.origin().token())
             .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
-        String posture = server.get(ServerModel.POSTURE);
-        server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
-        server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION, ServerModel.POSTURE_WARNING_VERSION);
-        server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-        ServerModel.ACKNOWLEDGER.write(server, principal);
-        server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
-        Models.get(ServerModel.class).save(server, Change.fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED, Map.of(
+        String posture = server.get(HostModel.POSTURE);
+        server.set(HostModel.ACKNOWLEDGED_POSTURE, posture);
+        server.set(HostModel.ACKNOWLEDGED_WARNING_VERSION, HostModel.POSTURE_WARNING_VERSION);
+        server.set(HostModel.ACKNOWLEDGED_AT, Now.instant());
+        HostModel.ACKNOWLEDGER.write(server, principal);
+        server.set(HostModel.ACKNOWLEDGED_BY_LABEL, label);
+        Models.get(HostModel.class).save(server, Change.fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED, Map.of(
             HohenheimActivityAction.POSTURE_KEY, String.valueOf(posture),
-            HohenheimActivityAction.WARNING_VERSION_KEY, ServerModel.POSTURE_WARNING_VERSION)));
+            HohenheimActivityAction.WARNING_VERSION_KEY, HostModel.POSTURE_WARNING_VERSION)));
         Blast.slog("hohenheim.host.posture_acknowledged", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
+            "server", String.valueOf((Object) server.get(HostModel.NAME)),
             "posture", String.valueOf(posture),
-            "version", ServerModel.POSTURE_WARNING_VERSION,
+            "version", HostModel.POSTURE_WARNING_VERSION,
             "actor", actor));
     }
 

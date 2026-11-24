@@ -5,8 +5,8 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -14,8 +14,8 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -140,7 +140,7 @@ class SharedDatabaseEngineTest {
 
         // 1. A mongo record created with the default placement lands SHARED and bound.
         Row first = service.insertRecord("shareda", ManagedDatabase.Engine.MONGO, null,
-            "usera", "password-a-0001", "dba", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+            "usera", "password-a-0001", "dba", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Row stored = Models.get(DatabaseModel.class).findByName("shareda");
@@ -168,8 +168,8 @@ class SharedDatabaseEngineTest {
             assertThat((String) engine.get(DatabaseEngineModel.STATUS))
                 .as("step 2: nothing is running yet, so it is provisioning")
                 .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
-            assertThat((Integer) engine.get(DatabaseEngineModel.SERVER_ID))
-                .as("step 2: on the record's host").isEqualTo(ServerModel.localServerId());
+            assertThat((Integer) engine.get(DatabaseEngineModel.HOST_ID))
+                .as("step 2: on the record's host").isEqualTo(HostModel.localHostId());
 
             // 3. THE OWNED INSTANCE: the engine owns a database_container exactly like a
             //    dedicated record used to, flagged shared, on the engine's default image,
@@ -203,7 +203,7 @@ class SharedDatabaseEngineTest {
         // 4. A SECOND mongo record on the same host binds to the SAME engine -- no second
         //    engine row and no second container. That is the entire saving.
         service.insertRecord("sharedb", ManagedDatabase.Engine.MONGO, null,
-            "userb", "password-b-0001", "dbb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+            "userb", "password-b-0001", "dbb", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Integer engineA = Models.get(DatabaseModel.class).findByName("shareda")
@@ -214,7 +214,7 @@ class SharedDatabaseEngineTest {
                 .isEqualTo(engineA);
             assertThat(Models.get(DatabaseEngineModel.class).find()
                     .where(DatabaseEngineModel.ENGINE.eq("mongo"))
-                    .where(DatabaseEngineModel.SERVER_ID.eq(ServerModel.localServerId()))
+                    .where(DatabaseEngineModel.HOST_ID.eq(HostModel.localHostId()))
                     .all())
                 .as("step 4: the host has exactly one mongo engine").hasSize(1);
             assertThat(Models.get(InstanceModel.class).find()
@@ -233,13 +233,13 @@ class SharedDatabaseEngineTest {
             //     are refused by name BEFORE any row is written.
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "userc", "password-c-0001", "dba", false,
-                    ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                    HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical database name is refused by name")
                 .isEqualTo("database_logical_name_taken");
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "usera", "password-c-0001", "dbc", false,
-                    ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                    HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical user is refused by name")
                 .isEqualTo("database_logical_user_taken");
@@ -251,7 +251,7 @@ class SharedDatabaseEngineTest {
             // 5. A DEDICATED record beside them is unaffected: it owns nothing on the
             //    engine and the engine's own instance is still the only one.
             service.insertRecord("dedicatedc", ManagedDatabase.Engine.MONGO, null,
-                "userc", "password-c-0001", "dbc", false, ServerService.LOCAL_HOST_NAME,
+                "userc", "password-c-0001", "dbc", false, HostService.LOCAL_HOST_NAME,
                 ResourceLimits.of(256, null), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             Row dedicated = Models.get(DatabaseModel.class).findByName("dedicatedc");
@@ -383,7 +383,7 @@ class SharedDatabaseEngineTest {
             remote.set(DatabaseEngineModel.ENGINE, "mongo");
             remote.set(DatabaseEngineModel.ROOT_USER, "root");
             remote.set(DatabaseEngineModel.ROOT_PASSWORD, "rootsecret");
-            remote.set(DatabaseEngineModel.SERVER_ID, otherHost);
+            remote.set(DatabaseEngineModel.HOST_ID, otherHost);
             remote.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             Models.get(DatabaseEngineModel.class).save(remote);
             assertThat(refusalOf(() -> service.insertRecord("refusehost",
@@ -440,7 +440,7 @@ class SharedDatabaseEngineTest {
             mysqlEngine.set(DatabaseEngineModel.ENGINE, "mysql");
             mysqlEngine.set(DatabaseEngineModel.ROOT_USER, "root");
             mysqlEngine.set(DatabaseEngineModel.ROOT_PASSWORD, "rootsecret");
-            mysqlEngine.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+            mysqlEngine.set(DatabaseEngineModel.HOST_ID, HostModel.localHostId());
             mysqlEngine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             Models.get(DatabaseEngineModel.class).save(mysqlEngine);
             stored.set(DatabaseModel.ENGINE_ID,
@@ -972,13 +972,13 @@ class SharedDatabaseEngineTest {
 
     /** A second host record, so "another host" is a real row and not a fiction. */
     private static int sshServer(String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
+        Row row = Models.get(HostModel.class).findByName(name);
         if (row == null) {
-            row = Models.get(ServerModel.class).createEmptyRow();
-            row.set(ServerModel.NAME, name);
-            row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            Models.get(ServerModel.class).save(row);
+            row = Models.get(HostModel.class).createEmptyRow();
+            row.set(HostModel.NAME, name);
+            row.set(HostModel.MODE, HostModel.MODE_SSH);
+            Models.get(HostModel.class).save(row);
         }
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 }

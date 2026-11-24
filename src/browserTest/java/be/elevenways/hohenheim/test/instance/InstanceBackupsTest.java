@@ -12,13 +12,7 @@ import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -344,14 +338,14 @@ class InstanceBackupsTest {
                     .where(InstanceTemplateModel.ID.eq(template.get(InstanceTemplateModel.ID)))
                     .assign(InstanceTemplateModel.APPROVED_AT, Now.instant()).updateAll();
                 FormEntry pick = OperationPipeline.inputForm(tenantRestore(backup, tenant)).entries().stream()
-                    .filter(entry -> entry.name().equals("serverId")).findFirst().orElseThrow();
+                    .filter(entry -> entry.name().equals("hostId")).findFirst().orElseThrow();
                 assertThat(((Select<?>) pick).options().resolve(EditContext.of(tenant)))
                     .as("step 4: a tenant is offered no host").isEmpty();
                 int copy = restoredInstance(restoreRun(tenantRestore(backup, tenant), tenant, "step 4"), tenant,
                     "step 4");
                 restored.add(copy);
                 Row copied = Models.get(InstanceModel.class).findById(copy);
-                assertThat((Integer) copied.get(InstanceModel.SERVER_ID))
+                assertThat((Integer) copied.get(InstanceModel.HOST_ID))
                     .as("step 4: on the instance's own host").isEqualTo(hostId);
                 assertThat((Integer) copied.get(InstanceModel.TEMPLATE_ID))
                     .as("step 4: bound to the approved template").isEqualTo(template.get(InstanceTemplateModel.ID));
@@ -381,8 +375,8 @@ class InstanceBackupsTest {
             InstanceBackups backups = new InstanceBackups();
             // A host whose daemon answers its storage pool, which the restore's capacity check asks.
             int volumeHost = HostFixtures.admittedIncusHost("in-place-host");
-            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(volumeHost))
-                .assign(ServerModel.INCUS_URL, daemon.url()).updateAll();
+            Models.get(HostModel.class).find().where(HostModel.ID.eq(volumeHost))
+                .assign(HostModel.INCUS_URL, daemon.url()).updateAll();
             int instanceId = volumeInstanceRecord("backup-in-place", volumeHost);
             service.deploy(instanceId);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
@@ -465,7 +459,7 @@ class InstanceBackupsTest {
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
                 service.destroy(nativeId);
                 service.destroy(instanceId);
-                Models.get(ServerModel.class).delete(volumeHost);
+                Models.get(HostModel.class).delete(volumeHost);
             }
         });
         }
@@ -494,7 +488,7 @@ class InstanceBackupsTest {
                 // 1. The source host has gone silent. The restore's host pick offers the spare and shows the source
                 //    disabled with the placement gate's own refusal, the words the Migrate page shows beside a host.
                 FormSpec form = OperationPipeline.inputForm(restoreRequest(backup));
-                FormEntry pick = form.entries().stream().filter(entry -> entry.name().equals("serverId"))
+                FormEntry pick = form.entries().stream().filter(entry -> entry.name().equals("hostId"))
                     .findFirst().orElse(null);
                 assertThat(pick).as("step 1: the restore asks for a host").isInstanceOf(Select.class);
                 List<? extends FieldOption<?>> options = ((Select<?>) pick).options()
@@ -517,7 +511,7 @@ class InstanceBackupsTest {
                     .as("step 2: a restore onto the silent source is refused by the placement gate")
                     .isEqualTo("host_contact_lapsed ");
                 assertThat(violationKeys(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(backup)
-                        .form(Map.of("serverId", hostId))))))
+                        .form(Map.of("hostId", hostId))))))
                     .as("step 2: and the form refuses the disabled host with the same named refusal, never the "
                         + "select's generic one").isEqualTo("host_contact_lapsed ");
                 assertThat(Models.get(InstanceModel.class).find().count())
@@ -536,16 +530,16 @@ class InstanceBackupsTest {
                 int picked = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of()), "step 3"), "step 3");
                 restored.add(picked);
                 assertThat((Integer) Models.get(InstanceModel.class).findById(picked)
-                        .get(InstanceModel.SERVER_ID))
+                        .get(InstanceModel.HOST_ID))
                     .as("step 3: picked for you lands on the host that accepts it, not the dead source")
                     .isEqualTo(spareId);
 
                 // 4. Named explicitly through the form, the spare is honoured.
-                int named = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of("serverId", spareId)),
+                int named = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of("hostId", spareId)),
                     "step 4"), "step 4");
                 restored.add(named);
                 assertThat((Integer) Models.get(InstanceModel.class).findById(named)
-                        .get(InstanceModel.SERVER_ID))
+                        .get(InstanceModel.HOST_ID))
                     .as("step 4: the picked host is where the restore lands").isEqualTo(spareId);
             } finally {
                 FakeNativeDaemons.FakeNativeKind.IMAGE_MISSING_ON.clear();
@@ -554,7 +548,7 @@ class InstanceBackupsTest {
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
                 restored.forEach(service::destroy);
                 service.destroy(instanceId);
-                Models.get(ServerModel.class).delete(spareId);
+                Models.get(HostModel.class).delete(spareId);
             }
         });
     }
@@ -573,7 +567,7 @@ class InstanceBackupsTest {
                 InstanceBackups backups = new InstanceBackups();
                 int instanceId = instanceRecord("backup-host-volumes", hostId);
                 service.deploy(instanceId);
-                String hostName = ServerModel.nameOf(hostId);
+                String hostName = HostModel.nameOf(hostId);
                 InstanceVolumes.declare(instanceId, "home", "/home/dev", 512L * 1024 * 1024, true);
                 InstanceVolumes.mountsFor(instanceId, hostName, null);
                 Path sourceHome = storage.directoryOf(hostName, InstanceVolumes.hostPathFor(instanceId, "home"));
@@ -622,7 +616,7 @@ class InstanceBackupsTest {
                     Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
                     restored.forEach(service::destroy);
                     service.destroy(instanceId);
-                    Models.get(ServerModel.class).delete(spareId);
+                    Models.get(HostModel.class).delete(spareId);
                 }
             });
         } finally {
@@ -723,10 +717,10 @@ class InstanceBackupsTest {
                 List<Integer> restored = new ArrayList<>();
                 int holdingId = HostFixtures.admittedIncusHost("media-holding-host");
                 int lackingId = HostFixtures.admittedIncusHost("media-lacking-host");
-                Models.get(ServerModel.class).find().where(ServerModel.ID.eq(holdingId))
-                    .assign(ServerModel.INCUS_URL, holding.url()).updateAll();
-                Models.get(ServerModel.class).find().where(ServerModel.ID.eq(lackingId))
-                    .assign(ServerModel.INCUS_URL, lacking.url()).updateAll();
+                Models.get(HostModel.class).find().where(HostModel.ID.eq(holdingId))
+                    .assign(HostModel.INCUS_URL, holding.url()).updateAll();
+                Models.get(HostModel.class).find().where(HostModel.ID.eq(lackingId))
+                    .assign(HostModel.INCUS_URL, lacking.url()).updateAll();
                 try {
                     // 1. The backup names the ISO in the machine's drive on its row.
                     int withMedia = backups.backupNow(instanceId, targetId, target);
@@ -786,8 +780,8 @@ class InstanceBackupsTest {
                     Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
                     restored.forEach(service::destroy);
                     service.destroy(instanceId);
-                    Models.get(ServerModel.class).delete(holdingId);
-                    Models.get(ServerModel.class).delete(lackingId);
+                    Models.get(HostModel.class).delete(holdingId);
+                    Models.get(HostModel.class).delete(lackingId);
                 }
             });
         }
@@ -819,8 +813,8 @@ class InstanceBackupsTest {
             Map<String, FakeNativeDaemons.FakeVolume> sourceVolumes = FakeNativeDaemons.volumesOf(hostId);
             Set<Integer> restored = new LinkedHashSet<>();
             int landingId = HostFixtures.admittedIncusHost("device-landing-host");
-            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(landingId))
-                .assign(ServerModel.INCUS_URL, landing.url()).updateAll();
+            Models.get(HostModel.class).find().where(HostModel.ID.eq(landingId))
+                .assign(HostModel.INCUS_URL, landing.url()).updateAll();
             try {
                 // 1. The restored record has the interface's row under the name the daemon holds it by. The landing
                 //    host never held one of this controller's extra interfaces, so the bridge they sit on does not
@@ -890,7 +884,7 @@ class InstanceBackupsTest {
                 //     once the pool has room the dialog's submit, asked again, runs the restore.
                 Row diskBackup = Models.get(InstanceBackupModel.class).findById(withDisk);
                 landing.daemon.poolTotalBytes = 2L * 1024 * 1024 * 1024;
-                OperationRun noRoom = restoreRun(restoreRequest(diskBackup).form(Map.of("serverId", landingId)),
+                OperationRun noRoom = restoreRun(restoreRequest(diskBackup).form(Map.of("hostId", landingId)),
                     "step 3b");
                 assertThat(noRoom.status()).as("step 3b: the operation's run is refused").isEqualTo(
                     OperationRunStatus.REFUSED);
@@ -898,10 +892,10 @@ class InstanceBackupsTest {
                     .extracting(Microcopy::key).isEqualTo("restore_capacity");
                 landing.daemon.poolTotalBytes = 100L * 1024 * 1024 * 1024;
                 int retried = restoredInstance(restoreRun(restoreRequest(diskBackup)
-                    .form(Map.of("serverId", landingId)), "step 3b"), "step 3b");
+                    .form(Map.of("hostId", landingId)), "step 3b"), "step 3b");
                 restored.add(retried);
                 assertThat((Integer) Models.get(InstanceModel.class).findById(retried)
-                        .get(InstanceModel.SERVER_ID))
+                        .get(InstanceModel.HOST_ID))
                     .as("step 3b: asked again, the restore ran").isEqualTo(landingId);
 
                 // 4. A backup an older build wrote names the disk but carries no volume: the restore is refused naming
@@ -933,11 +927,11 @@ class InstanceBackupsTest {
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
                 // Every record a restore created on the landing host, a held one included, so a failed step reports
                 // its own assertion rather than the host's in-use refusal.
-                Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(landingId)).all()
+                Models.get(InstanceModel.class).find().where(InstanceModel.HOST_ID.eq(landingId)).all()
                     .forEach(row -> restored.add(row.get(InstanceModel.ID)));
                 restored.forEach(service::destroy);
                 service.destroy(instanceId);
-                Models.get(ServerModel.class).delete(landingId);
+                Models.get(HostModel.class).delete(landingId);
             }
         });
         }
@@ -1017,14 +1011,14 @@ class InstanceBackupsTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeVolumeSnapshotKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image", "volumes", Map.of("data", "/var/data")));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
 
     private static void stampLastSeen(int serverId, Instant at) {
-        Models.get(ServerModel.class).find().where(ServerModel.ID.eq(serverId))
-            .assign(ServerModel.LAST_SEEN_AT, at).updateAll();
+        Models.get(HostModel.class).find().where(HostModel.ID.eq(serverId))
+            .assign(HostModel.LAST_SEEN_AT, at).updateAll();
     }
 
     /** A backup whose instance row is gone (its id cleared) still deletes: the operator governs it alone. */

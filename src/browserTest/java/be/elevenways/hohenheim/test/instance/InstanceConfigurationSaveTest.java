@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -87,7 +87,7 @@ class InstanceConfigurationSaveTest extends HohenheimHttpTestBase {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, host);
+        row.set(InstanceModel.HOST_ID, host);
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
@@ -100,9 +100,9 @@ class InstanceConfigurationSaveTest extends HohenheimHttpTestBase {
 
     private static void removeFixture(int id) {
         Row row = Models.get(InstanceModel.class).findById(id);
-        int host = row.get(InstanceModel.SERVER_ID);
+        int host = row.get(InstanceModel.HOST_ID);
         HardDeletes.byId(Models.get(InstanceModel.class), id);
-        Models.get(ServerModel.class).delete(host);
+        Models.get(HostModel.class).delete(host);
     }
 
     private static void assertWinner(int id, String step) {

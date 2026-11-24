@@ -4,8 +4,8 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -107,8 +107,8 @@ public final class AppImageFollowers {
         if (instanceId == null || !HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, instanceId, applicationId)) {
             return new Followed(app, null, "", appRefusal("image_from_app_other_owner", app));
         }
-        if (ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))
-                != ServerModel.canonicalServerId(app.get(InstanceModel.SERVER_ID))) {
+        if (HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID))
+                != HostModel.canonicalHostId(app.get(InstanceModel.HOST_ID))) {
             return new Followed(app, null, "", appRefusal("image_from_app_other_server", app));
         }
         Row serving = ApplicationReleases.ownedServing(applicationId);
@@ -403,7 +403,7 @@ public final class AppImageFollowers {
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null || !(stages(row, InstanceModel.IMAGE_APP_ID) || stages(row, InstanceModel.KIND)
-                    || stages(row, InstanceModel.SERVER_ID) || stages(row, InstanceModel.SETTINGS))) {
+                    || stages(row, InstanceModel.HOST_ID) || stages(row, InstanceModel.SETTINGS))) {
                 return;
             }
             Row stored = StoredRows.of(Models.get(InstanceModel.class), row);
@@ -441,7 +441,7 @@ public final class AppImageFollowers {
             throw Violations.ofField(InstanceModel.SETTINGS.getName() + ".image", null,
                 HohenheimMicrocopy.VIOLATIONS.of("image_and_image_from_app"));
         }
-        boolean moved = changed(row, stored, InstanceModel.SERVER_ID);
+        boolean moved = changed(row, stored, InstanceModel.HOST_ID);
         if (!placed && !moved) {
             return;
         }
@@ -458,8 +458,8 @@ public final class AppImageFollowers {
                 throw Violations.ofField(field, applicationId, appRefusal("image_from_app_other_owner", app));
             }
         }
-        if (ServerModel.canonicalServerId(row.afterWrite(InstanceModel.SERVER_ID, stored))
-                != ServerModel.canonicalServerId(app.get(InstanceModel.SERVER_ID))) {
+        if (HostModel.canonicalHostId(row.afterWrite(InstanceModel.HOST_ID, stored))
+                != HostModel.canonicalHostId(app.get(InstanceModel.HOST_ID))) {
             throw Violations.ofField(field, applicationId, appRefusal("image_from_app_other_server", app));
         }
     }
@@ -469,9 +469,9 @@ public final class AppImageFollowers {
         if (!ApplicationKind.ID.toString().equals(stored.get(InstanceModel.KIND))) {
             return;
         }
-        boolean moved = stages(row, InstanceModel.SERVER_ID)
-            && ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID))
-                != ServerModel.canonicalServerId(stored.get(InstanceModel.SERVER_ID));
+        boolean moved = stages(row, InstanceModel.HOST_ID)
+            && HostModel.canonicalHostId(row.get(InstanceModel.HOST_ID))
+                != HostModel.canonicalHostId(stored.get(InstanceModel.HOST_ID));
         boolean rekinded = changed(row, stored, InstanceModel.KIND);
         if (!moved && !rekinded) {
             return;
@@ -483,7 +483,7 @@ public final class AppImageFollowers {
         }
         String containers = DeleteImpact.workloadNames(followers);
         if (moved) {
-            throw Violations.ofField(InstanceModel.SERVER_ID.getName(), row.get(InstanceModel.SERVER_ID),
+            throw Violations.ofField(InstanceModel.HOST_ID.getName(), row.get(InstanceModel.HOST_ID),
                 HohenheimMicrocopy.VIOLATIONS.of("app_server_change_has_followers").withArg("containers", containers));
         }
         throw Violations.ofField(InstanceModel.KIND.getName(), row.get(InstanceModel.KIND),

@@ -15,8 +15,8 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -354,7 +354,7 @@ class ManagedDatabaseTest {
                 List.of("PGPASSWORD=secret123"));
             assertThat(create.exitCode()).withFailMessage("seed failed: %s", create.stderr()).isZero();
 
-            String dump = new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME))
+            String dump = new ManagedDatabase(new HostService().clientFor(HostService.LOCAL_HOST_NAME))
                 .backup(container, ManagedDatabase.Engine.POSTGRES, "appuser", "secret123", "appdb");
             assertThat(dump).contains("CREATE TABLE");
             assertThat(dump).contains("widgets");
@@ -376,7 +376,7 @@ class ManagedDatabaseTest {
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
             String container = Db.supply(datasource, () -> EngineHandles.of(name));
             ManagedDatabase engine =
-                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME));
+                new ManagedDatabase(new HostService().clientFor(HostService.LOCAL_HOST_NAME));
 
             psql(docker, container, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
             String dump = engine.backup(container, ManagedDatabase.Engine.POSTGRES,
@@ -417,7 +417,7 @@ class ManagedDatabaseTest {
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
             String container = Db.supply(datasource, () -> EngineHandles.of(name));
             ManagedDatabase engine =
-                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME));
+                new ManagedDatabase(new HostService().clientFor(HostService.LOCAL_HOST_NAME));
 
             mysql(docker, container, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
             String dump = engine.backup(container, ManagedDatabase.Engine.MYSQL,

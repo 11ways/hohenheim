@@ -1,15 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -26,7 +25,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -149,8 +147,8 @@ public final class InstanceKinds {
         }
         return HohenheimMicrocopy.VIOLATIONS.of("host_runtime_mismatch")
             .withArg("name", hostName)
-            .withArg("runtime", ServerModel.runtimeLabel(hostRuntime))
-            .withArg("required", ServerModel.runtimeLabels(supportedRuntimes));
+            .withArg("runtime", HostModel.runtimeLabel(hostRuntime))
+            .withArg("required", HostModel.runtimeLabels(supportedRuntimes));
     }
 
     /** @throws Violations naming the host when its runtime is not one the kind supports */
@@ -212,8 +210,8 @@ public final class InstanceKinds {
      */
     public static @NonNull List<FieldOption<String>> placeableOptions() {
         Set<String> inventoried = new HashSet<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            inventoried.add(ServerModel.runtimeOf(server));
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            inventoried.add(HostModel.runtimeOf(server));
         }
         List<FieldOption<String>> options = new ArrayList<>();
         for (FieldOption<String> option : authorableOptions()) {
@@ -225,7 +223,7 @@ public final class InstanceKinds {
             Set<String> runtimes = new TreeSet<>(handler.supportedRuntimes());
             options.add(option.withDescription(runtimes.size() == 1
                 ? HohenheimMicrocopy.INSTANCE.of("kind_needs_runtime_host")
-                    .withArg("runtime", ServerModel.RUNTIME.getValues().get(runtimes.iterator().next()).getLabel())
+                    .withArg("runtime", HostModel.RUNTIME.getValues().get(runtimes.iterator().next()).getLabel())
                 : HohenheimMicrocopy.INSTANCE.of("kind_needs_host")));
         }
         return options;
@@ -350,9 +348,9 @@ public final class InstanceKinds {
 
     /** @return the runtime of the host this record names (a missing host reads as the local Docker daemon) */
     public static @NonNull String hostRuntimeOf(@NonNull Row instance) {
-        Row server = Models.get(ServerModel.class).findById(
-            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
-        return server == null ? ServerModel.RUNTIME_DOCKER : ServerModel.runtimeOf(server);
+        Row server = Models.get(HostModel.class).findById(
+            HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID)));
+        return server == null ? HostModel.RUNTIME_DOCKER : HostModel.runtimeOf(server);
     }
 
     /**

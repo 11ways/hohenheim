@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.cms.StackParts;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
@@ -85,7 +84,7 @@ class StackAdminTest extends HohenheimTestBase {
         // The form's own POST, kept on purpose: where a create LANDS is the route's answer.
         var response = adminPostForm("/admin/stacks/new",
             "name=admin-test-stack&enabled=false&enabled=true&server_id="
-            + ServerModel.localServerId());
+            + HostModel.localHostId());
         assertThat(response.statusCode()).as("step 1: the stack is created").isIn(200, 302, 303);
 
         Row stack = Models.get(StackModel.class).find()
@@ -227,7 +226,7 @@ class StackAdminTest extends HohenheimTestBase {
         db.set(DatabaseModel.DB_NAME, "appdb");
         db.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         databases.save(db);
-        PortLedger.claim(ServerModel.localServerId(), "", 8210, "tcp",
+        PortLedger.claim(HostModel.localHostId(), "", 8210, "tcp",
             DatabaseModel.MODEL_ID, db.get(DatabaseModel.ID), null);
 
         Map<String, Object> clash = service(stackId, "dbclash");
@@ -259,7 +258,7 @@ class StackAdminTest extends HohenheimTestBase {
         site.set(SiteModel.UPSTREAM_KIND, "docker");
         site.set(SiteModel.ENABLED, false);
         sites.save(site);
-        PortLedger.claim(ServerModel.localServerId(), "0.0.0.0", 8211, null,
+        PortLedger.claim(HostModel.localHostId(), "0.0.0.0", 8211, null,
             SiteModel.MODEL_ID, site.get(SiteModel.ID), null);
 
         Map<String, Object> clash = service(stackId, "siteclash");
@@ -363,7 +362,7 @@ class StackAdminTest extends HohenheimTestBase {
     /** Create a stack on the local host through the stack entry's create; each test owns its own. */
     private int createStack(String name) {
         Object key = PanelResourceCalls.create(ADMIN, STACKS, new LinkedHashMap<>(Map.of("name", name,
-            "enabled", "true", "server_id", String.valueOf(ServerModel.localServerId()))), operator());
+            "enabled", "true", "server_id", String.valueOf(HostModel.localHostId()))), operator());
         Row stack = Models.get(StackModel.class).find().where(StackModel.NAME.eq(name)).first();
         assertThat(stack).as("stack %s exists", name).isNotNull();
         assertThat(String.valueOf(key)).as("stack %s is the created key", name)

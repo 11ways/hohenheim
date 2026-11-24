@@ -5,9 +5,9 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.instance.VolumeOperations;
@@ -106,7 +106,7 @@ class InstanceVolumesTest {
     @Test
     void aHostThatCannotDeliverRefusesByNameAndAnOwnerWithoutVolumesNeverAsks() {
         Db.run(datasource, () -> {
-            String local = ServerModel.nameOf(ServerModel.localServerId());
+            String local = HostModel.nameOf(HostModel.localHostId());
             setBackend(VolumeBackend.NONE);
             // A REAL owner: instance_volumes.instance_id is an enforced foreign key, so a
             // declaration can only ever be made for an instance that exists.
@@ -178,7 +178,7 @@ class InstanceVolumesTest {
             unplaced.set(InstanceModel.KIND, "hohenheim:application");
             unplaced.set(InstanceModel.SETTINGS, Map.of());
             unplaced.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-            unplaced.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            unplaced.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Models.get(InstanceModel.class).save(unplaced);
             int unplacedId = unplaced.get(InstanceModel.ID);
 
@@ -209,7 +209,7 @@ class InstanceVolumesTest {
             owner.set(InstanceModel.KIND, "hohenheim:application");
             owner.set(InstanceModel.SETTINGS, Map.of());
             owner.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-            owner.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            owner.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Models.get(InstanceModel.class).save(owner);
             int ownerId = owner.get(InstanceModel.ID);
             var operator = TenantConduits.operator();
@@ -272,8 +272,8 @@ class InstanceVolumesTest {
     }
 
     private static void setBackend(VolumeBackend backend) {
-        Row server = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        server.set(ServerModel.VOLUME_BACKEND, backend.token());
-        Models.get(ServerModel.class).save(server);
+        Row server = Models.get(HostModel.class).findById(HostModel.localHostId());
+        server.set(HostModel.VOLUME_BACKEND, backend.token());
+        Models.get(HostModel.class).save(server);
     }
 }

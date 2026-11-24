@@ -60,7 +60,7 @@ class InstanceVolumeMigrationTest {
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeVolumeSnapshotKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image",
             "volumes", Map.of("data", "/var/data", "world", "/srv/world")));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -110,7 +110,7 @@ class InstanceVolumeMigrationTest {
             // 3. Migrate: one call moves record, volume data and the memory charge.
             migrations().migrateTo(id, dst);
             Row row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 3: the record names the DESTINATION host").isEqualTo(dst);
             assertThat((Object) row.get(InstanceModel.MIGRATE_TARGET_ID))
                 .as("step 3: the migration window is closed").isNull();
@@ -219,7 +219,7 @@ class InstanceVolumeMigrationTest {
                 .delete();
             migrations().migrateTo(backend, dst);
             assertThat((Object) Models.get(InstanceModel.class).findById(backend)
-                    .get(InstanceModel.SERVER_ID))
+                    .get(InstanceModel.HOST_ID))
                 .as("step 4: the unpaired backend moved").isEqualTo(dst);
             assertThat(volumeOn(dst, backend, "data").data)
                 .as("step 4: with its data").containsEntry("marker", "precious");
@@ -276,7 +276,7 @@ class InstanceVolumeMigrationTest {
             //    next attempt's restore merges over the leftovers.
             InstanceMigrations.recoverInterrupted();
             Row row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 2: rollback keeps the record on the source").isEqualTo(src);
             assertThat((String) row.get(InstanceModel.STATUS))
                 .as("step 2: settled STOPPED, never auto-started")
@@ -306,7 +306,7 @@ class InstanceVolumeMigrationTest {
             //    host holding nothing and delete the only copy.
             InstanceMigrations.recoverInterrupted();
             row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 4: the handoff completed onto the destination").isEqualTo(dst);
             assertThat(volumeOn(dst, id, "data").data)
                 .as("step 4: data intact on the completed side")
@@ -364,7 +364,7 @@ class InstanceVolumeMigrationTest {
 
                 // 2. Boot recovery completes FORWARD and takes what the source still held beside the workload.
                 InstanceMigrations.recoverInterrupted();
-                assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID))
+                assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.HOST_ID))
                     .as("step 2: the handoff completed onto the destination").isEqualTo(dst);
                 assertThat(volumeOn(src, id, "data"))
                     .as("step 2: the source's named volume went with the completion").isNull();
@@ -429,7 +429,7 @@ class InstanceVolumeMigrationTest {
                 .as("step 3: the foreign volume's data is untouched")
                 .containsEntry("theirs", "untouchable");
             Row row = Models.get(InstanceModel.class).findById(id);
-            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+            assertThat((Object) row.get(InstanceModel.HOST_ID))
                 .as("step 3: the record still names the source").isEqualTo(src);
             assertThat((Object) row.get(InstanceModel.MIGRATE_TARGET_ID))
                 .as("step 3: the window is closed").isNull();

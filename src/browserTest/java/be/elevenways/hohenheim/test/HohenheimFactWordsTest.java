@@ -4,8 +4,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
@@ -182,7 +182,7 @@ class HohenheimFactWordsTest {
                 .isEqualTo("Restored from native snapshot snap0");
 
             // 7. A drain counts what moved and what was refused, and says whether the host is empty.
-            Model servers = Models.get(ServerModel.class);
+            Model servers = Models.get(HostModel.class);
             int host = HostFixtures.admittedIncusHost("words-host");
             assertThat(said(servers, host, HohenheimActivityAction.DRAINED, Map.of(HohenheimActivityAction.MOVED_KEY,
                     3, HohenheimActivityAction.REFUSED_KEY, 0, HohenheimActivityAction.COMPLETE_KEY, true), EN))
@@ -244,7 +244,7 @@ class HohenheimFactWordsTest {
             assertThat(detail(servers, host, NL)).as("step 11: in Dutch too")
                 .isEqualTo("incus opnieuw vastgezet op de nieuwe vingerafdruk SHA256:first");
             assertThat(said(servers, host, HohenheimActivityAction.POSTURE_RISK_ACCEPTED, Map.of(
-                    HohenheimActivityAction.POSTURE_KEY, ServerModel.POSTURE_SHARED_CONTAINER,
+                    HohenheimActivityAction.POSTURE_KEY, HostModel.POSTURE_SHARED_CONTAINER,
                     HohenheimActivityAction.WARNING_VERSION_KEY, 1), EN))
                 .as("step 11: a posture acceptance")
                 .isEqualTo("Accepted the risk of the Shared containers posture, warning version 1");
@@ -252,7 +252,7 @@ class HohenheimFactWordsTest {
                 .isEqualTo("Risico van de houding Gedeelde containers aanvaard, waarschuwingsversie 1");
 
             // 12. A converted acceptance keeps its own stored text after the plain words.
-            HistoryFixtureRows.action(datasource).change(ServerModel.MODEL_ID, host, ChangeOp.EVENT)
+            HistoryFixtureRows.action(datasource).change(HostModel.MODEL_ID, host, ChangeOp.EVENT)
                 .fact(HohenheimActivityAction.POSTURE_RISK_ACCEPTED,
                     Map.of(FactShape.LEGACY_DETAIL, "shared_container, 1"))
                 .done().write();

@@ -3,12 +3,7 @@ package be.elevenways.hohenheim.server.runtime;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.DockerPtyExec;
-import be.elevenways.hohenheim.server.docker.DockerTransport;
-import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.*;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.server.util.PermissionBits;
@@ -125,9 +120,9 @@ public final class DockerInstanceRuntime
      *
      * @param egress the KIND-declared egress posture
      */
-    public static @NonNull DockerInstanceRuntime onServer(@NonNull String serverName, @NonNull Egress egress) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, egress);
+    public static @NonNull DockerInstanceRuntime onHost(@NonNull String serverName, @NonNull Egress egress) {
+        return new DockerInstanceRuntime(new HostService().clientFor(serverName),
+            WorkloadNetworkPolicy.forHost(serverName), NetworkPosture.PRIVATE, egress);
     }
 
     /** The KIND-declared network posture this runtime was built with. */

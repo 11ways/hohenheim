@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,7 +35,7 @@ class InstanceOverviewSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         instanceId = row.get(InstanceModel.ID);
         return instanceId;

@@ -10,8 +10,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -33,7 +33,10 @@ import be.elevenways.zenit.delivery.DeliveryChannel;
 import be.elevenways.zenit.notifications.NotificationRecipient;
 import be.elevenways.zenit.delivery.DeliverySettings;
 import be.elevenways.zenit.delivery.server.DeliveryModel;
-import be.elevenways.zenit.notifications.server.*;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.NotificationInboxModel;
+import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -301,7 +304,7 @@ class AlertsTest {
 
         // 6. A host that stops answering is worded for a person, its technical detail after the words, and its
         //    repeats fold into the one item the administrator still holds: event and subject are its repeat key.
-        String phoenix = Alerts.about(ServerModel.MODEL_ID, 41);
+        String phoenix = Alerts.about(HostModel.MODEL_ID, 41);
         for (int occurrence = 0; occurrence < 3; occurrence++) {
             Alerts.send(NotificationEvents.HOST_UNREACHABLE, phoenix,
                 HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "phoenix"),
@@ -324,10 +327,10 @@ class AlertsTest {
         // 7. The same event about another host is its own item, and an alert changes no record of Hohenheim's: what it
         //    records is the notifications module's own bookkeeping (its inbox item and delivery rows, OPTIONAL as that
         //    module declares them), never a change on the host it is about.
-        ChangeModel changes = new ChangeModel(Models.get(ServerModel.class).getResolvedDatasource());
+        ChangeModel changes = new ChangeModel(Models.get(HostModel.class).getResolvedDatasource());
         Row newest = changes.find().orderBy(ChangeModel.ID, SortOrder.DESC).first();
         long before = newest == null ? 0L : newest.get(ChangeModel.ID);
-        Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
+        Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(HostModel.MODEL_ID, 42),
             HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "kumulus"), null);
         assertThat(Models.get(NotificationInboxModel.class).find().all())
             .as("step 7: another host's alert stands beside it").hasSize(4);

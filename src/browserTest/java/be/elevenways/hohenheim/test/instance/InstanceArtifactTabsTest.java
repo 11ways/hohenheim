@@ -1,11 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceSnapshotModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
@@ -71,7 +66,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         instance.set(InstanceModel.KIND, "hohenheim:docker_container");
         instance.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         instance.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(instance);
         instanceId = instance.get(InstanceModel.ID);
 
@@ -289,7 +284,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         doomed.set(InstanceModel.KIND, "hohenheim:docker_container");
         doomed.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         doomed.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        doomed.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        doomed.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(doomed);
         int goneId = doomed.get(InstanceModel.ID);
         // A complete backup names its committed key on its target; the delete in step 4 removes the (absent) artifact.
@@ -331,7 +326,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // 3. The restore's host pick lists the hosts a restore could land on, read off the backup alone.
         assertThat(InstanceBackups.destinationsFor(Models.get(InstanceBackupModel.class).findById(orphanId)))
             .as("step 3: the host pick offers this installation's host")
-            .anySatisfy(destination -> assertThat(destination.serverId()).isEqualTo(ServerModel.localServerId()));
+            .anySatisfy(destination -> assertThat(destination.serverId()).isEqualTo(HostModel.localHostId()));
 
         // 4. The operator's delete removes it through the entry's own DELETE.
         try {
@@ -358,7 +353,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         hidden.set(InstanceModel.KIND, "hohenheim:docker_container");
         hidden.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         hidden.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        hidden.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        hidden.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(hidden);
         int hiddenId = hidden.get(InstanceModel.ID);
         Row backup = Models.get(InstanceBackupModel.class).createEmptyRow();
@@ -451,7 +446,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
         app.set(InstanceModel.SETTINGS, Map.of("repository_url", "https://example.invalid/app.git", "branch", "main"));
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        app.set(InstanceModel.HOST_ID, HostModel.localHostId());
         app.set(InstanceModel.BACKUP_TARGET_ID, (Integer) target.get(BackupTargetModel.ID));
         Models.get(InstanceModel.class).save(app);
         int appId = app.get(InstanceModel.ID);

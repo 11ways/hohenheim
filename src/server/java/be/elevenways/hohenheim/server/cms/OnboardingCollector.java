@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -76,7 +76,7 @@ public final class OnboardingCollector {
         List<OnboardingStep> steps = new ArrayList<>(4);
 
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            List<Row> servers = Models.get(ServerModel.class).find().all();
+            List<Row> servers = Models.get(HostModel.class).find().all();
             steps.add(hostEnrolled(servers));
 
             List<HostVerdict> verdicts = servers.stream().map(HostVerdict::of).toList();
@@ -146,19 +146,19 @@ public final class OnboardingCollector {
             return new OnboardingStep(OnboardingStage.HOST, OnboardingState.TODO, "server",
                 HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host"),
                 HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host_detail"),
-                    listTarget(HohenheimSlugs.SERVERS));
+                    listTarget(HohenheimSlugs.HOSTS));
         }
         Row first = servers.get(0);
-        EnumField.EnumValue runtime = ServerModel.RUNTIME.getValues().get(first.get(ServerModel.RUNTIME));
+        EnumField.EnumValue runtime = HostModel.RUNTIME.getValues().get(first.get(HostModel.RUNTIME));
         return new OnboardingStep(OnboardingStage.HOST, OnboardingState.DONE, "server",
             HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host"),
             HohenheimMicrocopy.ONBOARDING_CHECKLIST.of(servers.size() > 1 ? "checklist_host_enrolled_more"
                 : "checklist_host_enrolled")
-                .withArg("name", String.valueOf((Object) first.get(ServerModel.NAME)))
+                .withArg("name", String.valueOf((Object) first.get(HostModel.NAME)))
                 .withArg("runtime", runtime != null ? FieldLabels.labelFor(runtime)
-                    : Microcopy.literal(String.valueOf((Object) first.get(ServerModel.RUNTIME))))
+                    : Microcopy.literal(String.valueOf((Object) first.get(HostModel.RUNTIME))))
                 .withArg("more", servers.size() - 1),
-            listTarget(HohenheimSlugs.SERVERS));
+            listTarget(HohenheimSlugs.HOSTS));
     }
 
     /**
@@ -176,7 +176,7 @@ public final class OnboardingCollector {
             // deploy would have produced, which is what makes this a route to the fix.
             placeable ? HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_admit_done")
                 : refusal != null ? refusal : HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_admit_detail"),
-            listTarget(HohenheimSlugs.SERVERS));
+            listTarget(HohenheimSlugs.HOSTS));
     }
 
     /**

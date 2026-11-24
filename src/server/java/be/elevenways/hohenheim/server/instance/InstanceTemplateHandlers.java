@@ -6,15 +6,14 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.Blast;
@@ -204,7 +203,7 @@ public final class InstanceTemplateHandlers {
         Map<String, FormEntry> replaced = new LinkedHashMap<>();
         replaced.put(InstanceTemplateOperations.VARIABLES, Nested.of(InstanceTemplateOperations.VARIABLES)
             .subSpec(templates.variableFormSpec(templateId)).build());
-        replaced.put(InstanceTemplateOperations.SERVER_ID.getName(), Select.of(InstanceTemplateOperations.SERVER_ID)
+        replaced.put(InstanceTemplateOperations.HOST_ID.getName(), Select.of(InstanceTemplateOperations.HOST_ID)
             .options(OptionSource.of(access != null && HohenheimAccess.isAdmin(access) ? hostOptions() : List.of()))
             .judgedBySiblings(List.of(InstanceTemplateOperations.PROJECT_ID.getName(),
                     InstanceTemplateOperations.ENVIRONMENT_ID.getName()),
@@ -262,12 +261,12 @@ public final class InstanceTemplateHandlers {
 
     /**
      * @return every host as an option, for an operator's host pick (placement still judges the choice), each with the
-     *         Hosts list's facts ({@link ServerParts#hostOption})
+     *         Hosts list's facts ({@link HostParts#hostOption})
      */
     public static @NonNull List<FieldOption<Integer>> hostOptions() {
         List<FieldOption<Integer>> options = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            options.add(ServerParts.hostOption(server));
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            options.add(HostParts.hostOption(server));
         }
         return options;
     }

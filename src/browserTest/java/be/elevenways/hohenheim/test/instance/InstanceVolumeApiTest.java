@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.instance.VolumeOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -133,7 +133,7 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         assertThat((Object) volume(appId, "data").get(InstanceVolumeModel.QUOTA_BYTES))
             .as("step 3: stored as the panel stores it").isEqualTo(VolumeOperations.quotaBytes(512));
         assertThat(keyGet(viewerKey, volumes).body()).as("step 3: the viewer now reads it").contains("\"data\"");
-        assertThat(hosts.directoryOf(ServerModel.nameOf(ServerModel.localServerId()),
+        assertThat(hosts.directoryOf(HostModel.nameOf(HostModel.localHostId()),
             InstanceVolumes.hostPathFor(appId, "data"))).as("step 3: the declaration created its directory")
             .isDirectory();
         HttpResponse<String> elsewhere = keyPost(adminKey, volumes, declaration("stray", "/stray")

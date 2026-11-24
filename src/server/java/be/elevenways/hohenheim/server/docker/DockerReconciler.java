@@ -1,16 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -419,13 +410,13 @@ public final class DockerReconciler {
      * is not probed: this sweep doubles as the Docker-tier heartbeat, and a host it
      * cannot address by construction is not a host it may report on.
      */
-    public static @NonNull Map<String, List<Finding>> sweepAll(@NonNull ServerService servers) {
+    public static @NonNull Map<String, List<Finding>> sweepAll(@NonNull HostService servers) {
         servers.ensureLocal();
         Map<String, List<Finding>> results = new LinkedHashMap<>();
         for (String serverName : servers.dockerNames()) {
             try {
                 DockerClient client = servers.clientFor(serverName);
-                results.put(serverName, sweepServer(serverName, client));
+                results.put(serverName, sweepHost(serverName, client));
                 // The sweep IS a successful daemon contact: the scheduled reconcile
                 // doubles as the host heartbeat, so last_seen_at, the memory reading
                 // placement rations against and the disk reading stay honest without
@@ -459,7 +450,7 @@ public final class DockerReconciler {
      *
      * @throws IOException when the daemon cannot be listed; stored findings are kept
      */
-    public static @NonNull List<Finding> sweepServer(@NonNull String serverName,
+    public static @NonNull List<Finding> sweepHost(@NonNull String serverName,
                                                      @NonNull DockerClient docker) throws IOException {
         List<Object> containers = docker.listContainers(true);
         List<Finding> findings = classifyAll(
@@ -537,11 +528,11 @@ public final class DockerReconciler {
     public static @NonNull ReleasingSweep sweepReleasingClaims(@NonNull String serverName,
                                                                @NonNull List<Object> containers,
                                                                @NonNull Probe probe) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             return new ReleasingSweep(0, 0);
         }
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         HostMode mode;
         try {
             mode = HostMode.of(server);

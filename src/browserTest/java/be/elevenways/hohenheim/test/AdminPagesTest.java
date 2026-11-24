@@ -5,13 +5,13 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.HohenheimSettingsSections;
 import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Uuids;
@@ -48,7 +48,8 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import com.microsoft.playwright.Locator;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,7 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Settings persistence, audit log, and certificate pages through the
@@ -855,13 +856,13 @@ class AdminPagesTest extends HohenheimTestBase {
      */
     @Test
     void dashboardAttentionOnboardingAndStatsAgreeWithEachOther() throws Exception {
-        var serverModel = Models.get(ServerModel.class);
-        Row local = serverModel.findById(ServerModel.localServerId());
+        var serverModel = Models.get(HostModel.class);
+        Row local = serverModel.findById(HostModel.localHostId());
         HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
         try {
             // 1. A host that is not admitted: the amber onboarding card and the attention
             //    list must agree, so "All clear" is impossible while the card is up.
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
             serverModel.save(local);
 
             List<AttentionItem> blocked = new ArrayList<>();
@@ -879,7 +880,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // Drawn ONCE: by the open admission step that presents the item, or by the band when no step is
             // open, never by both.
             // The host's front door (its Overview, where Check and admit reads), never its Configuration form.
-            String host = "[href='/admin/servers/" + local.get(ServerModel.ID) + "/open']";
+            String host = "[href='/admin/servers/" + local.get(HostModel.ID) + "/open']";
             var hostLinks = page.locator(".hh-attention-item > a.hh-attention-target" + host
                 + ", .hh-onboarding-step a.hh-onboarding-action" + host);
             assertThat(hostLinks.count())
@@ -921,8 +922,8 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(admitted).as("step 4: an admitted host the gate places on raises nothing").isEmpty();
 
             // 5. A CORDONED host is a deliberate operator state, never a warning.
-            local = serverModel.findById(ServerModel.localServerId());
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
+            local = serverModel.findById(HostModel.localHostId());
+            local.set(HostModel.ADMISSION, HostModel.ADMISSION_CORDONED);
             serverModel.save(local);
             List<AttentionItem> cordoned = new ArrayList<>();
             HostAttention.hostsTakingNoApps(cordoned);
@@ -1063,14 +1064,14 @@ class AdminPagesTest extends HohenheimTestBase {
     void theActivityListNamesAnActorThatStoredNoLabel() throws Exception {
 
         UUID actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
-        HistoryFixtureRows.Action action = HistoryFixtureRows.action(Models.get(ServerModel.class)
+        HistoryFixtureRows.Action action = HistoryFixtureRows.action(Models.get(HostModel.class)
                 .getResolvedDatasource()).by(PrincipalRef.account(actorId)).origin(AccountabilityOrigin.WEB.token())
-            .change(ServerModel.MODEL_ID, "label-probe-1", ChangeOp.UPDATE).done();
+            .change(HostModel.MODEL_ID, "label-probe-1", ChangeOp.UPDATE).done();
         action.write();
 
         try {
             // 1. The action genuinely carries no label -- otherwise step 2 proves nothing.
-            Row stored = HistoryTestSupport.actionOf(Models.get(ServerModel.class).getResolvedDatasource(),
+            Row stored = HistoryTestSupport.actionOf(Models.get(HostModel.class).getResolvedDatasource(),
                 action.id());
             assertThat(stored).as("step 1: the action is stored").isNotNull();
             assertThat((String) stored.get(ActionModel.LEGACY_LABEL))
@@ -1083,7 +1084,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .contains(HohenheimAccess.subjectLabel(new SubjectTag(GrantSubjectType.USER, actorId).token()))
                 .contains("Activity Label Actor");
         } finally {
-            RecordedChanges.forget(Models.get(ServerModel.class).getResolvedDatasource(), action.id());
+            RecordedChanges.forget(Models.get(HostModel.class).getResolvedDatasource(), action.id());
             Models.get(UserModel.class).delete(actorId);
         }
     }

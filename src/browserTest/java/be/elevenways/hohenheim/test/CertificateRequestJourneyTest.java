@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -58,9 +58,9 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
 
     @Test
     void aCertificateIsRequestedOnlyWhenItCanWork() throws Exception {
-        var servers = Models.get(ServerModel.class);
-        Row local = servers.findById(ServerModel.localServerId());
-        String declared = local.get(ServerModel.PUBLIC_IPV4);
+        var servers = Models.get(HostModel.class);
+        Row local = servers.findById(HostModel.localHostId());
+        String declared = local.get(HostModel.PUBLIC_IPV4);
         try {
             // 1. Let's Encrypt is switched off: the certificate list offers the request dead, with the reason, and a
             //    submit is refused before anything is written.
@@ -77,7 +77,7 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
             // 2. Switched on, a name that resolves to an address this host does not declare is refused before an
             //    order, with where it points, and the typed name is kept in the redrawn input.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
-            local.set(ServerModel.PUBLIC_IPV4, "203.0.113.10");
+            local.set(HostModel.PUBLIC_IPV4, "203.0.113.10");
             servers.save(local);
             try (OutboundFixture elsewhereDns = OutboundFixture.route("elsewhere.request-journey.test", 9)) {
                 String pointsTo = elsewhereDns.publicAddress().getHostAddress();
@@ -116,8 +116,8 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
             assertThat(AcmeProblem.sentenceFor("connection reset").key())
                 .as("step 4: anything else points at where the detail is").isEqualTo("acme_other");
         } finally {
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, declared);
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, declared);
             servers.save(local);
         }
     }

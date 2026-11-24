@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -33,7 +33,7 @@ import java.util.function.Predicate;
  * and the release probe had a host-aware lane only for HTTP; a remote workload's port
  * readiness therefore either timed out against an empty controller port or, worse, passed
  * against whatever the controller itself happened to listen on. Both probes now take the
- * lane {@link #forServer} picks: a direct socket for the local host, the host's own shell
+ * lane {@link #forHost} picks: a direct socket for the local host, the host's own shell
  * (the pinned ssh lane) for every other one.
  *
  * @author Jelle De Loecker
@@ -72,12 +72,12 @@ public interface PublishedPortProbe {
      * AIDEV-NOTE: a server id whose row is gone gets {@link #unreachable()}, never the local host: the controller's
      * own loopback port of that number belongs to another workload, whose answer would pass for this one's.
      */
-    static @NonNull PublishedPortProbe forServer(@Nullable Integer serverId) {
-        if (serverId == null || serverId == ServerModel.localServerId()) {
+    static @NonNull PublishedPortProbe forHost(@Nullable Integer serverId) {
+        if (serverId == null || serverId == HostModel.localHostId()) {
             return local();
         }
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        return server == null ? unreachable() : over(HostShell.forServer(server));
+        Row server = Models.get(HostModel.class).findById(serverId);
+        return server == null ? unreachable() : over(HostShell.forHost(server));
     }
 
     /** A lane on which nothing answers, for a host the controller cannot reach at all. */

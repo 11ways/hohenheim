@@ -6,13 +6,7 @@ import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.BackupStatus;
-import be.elevenways.hohenheim.model.DatabaseDumpModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -245,7 +239,7 @@ public final class DatabaseAttention {
     private static @NonNull Microcopy leftoverLine(@NonNull Row instance) {
         return HohenheimMicrocopy.ATTENTION_DETAIL.of("database_move_leftover")
             .withArg("engine", instance.get(InstanceModel.NAME))
-            .withArg("host", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
+            .withArg("host", HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)));
     }
 
     /**

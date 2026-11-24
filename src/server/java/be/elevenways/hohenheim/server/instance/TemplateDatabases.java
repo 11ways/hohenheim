@@ -2,11 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.protoblast.common.text.SlugText;
@@ -65,7 +61,7 @@ public final class TemplateDatabases {
         }
         String kind = template.get(InstanceTemplateModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
+        if (handler == null || !handler.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("kind", kind,
                 HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection")
                     .withArg("kind", String.valueOf(kind)));
@@ -104,15 +100,15 @@ public final class TemplateDatabases {
             Row database = TenantDatabases.allocate(ctx, labelFor(instanceName, prefix),
                 declaration.get(InstanceTemplateDatabaseModel.ENGINE),
                 Texts.trimmedOrNull(image), serverId);
-            int placed = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
+            int placed = HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID));
             if (placed != serverId) {
                 // Injection dials the engine over a link network that only exists on the
                 // instance's daemon: a database elsewhere would be credentials for a host
                 // the workload cannot reach, which is the silent-success shape.
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_database_host_mismatch")
                     .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
-                    .withArg("server", ServerModel.nameOf(placed))
-                    .withArg("instance_server", ServerModel.nameOf(serverId)));
+                    .withArg("server", HostModel.nameOf(placed))
+                    .withArg("instance_server", HostModel.nameOf(serverId)));
             }
             allocations.add(new Allocation(database, prefix));
         }

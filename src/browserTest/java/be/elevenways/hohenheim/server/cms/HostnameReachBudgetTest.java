@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
@@ -35,14 +35,14 @@ class HostnameReachBudgetTest extends HohenheimTestBase {
         for (int i = 0; i < names.length; i++) {
             names[i] = "hang" + i + "-" + suffix + ".test";
         }
-        var servers = Models.get(ServerModel.class);
-        Row local = servers.findById(ServerModel.localServerId());
-        String declared = local.get(ServerModel.PUBLIC_IPV4);
+        var servers = Models.get(HostModel.class);
+        Row local = servers.findById(HostModel.localHostId());
+        String declared = local.get(HostModel.PUBLIC_IPV4);
         try (OutboundFixture first = OutboundFixture.pendingResolution(names[0], here);
              OutboundFixture second = OutboundFixture.pendingResolution(names[1], here);
              OutboundFixture third = OutboundFixture.pendingResolution(names[2], here);
              OutboundFixture fourth = OutboundFixture.pendingResolution(names[3], here)) {
-            local.set(ServerModel.PUBLIC_IPV4, here.getHostAddress());
+            local.set(HostModel.PUBLIC_IPV4, here.getHostAddress());
             servers.save(local);
 
             // 1. One reader of a name the resolver holds waits its own bound, then reads "checking".
@@ -90,8 +90,8 @@ class HostnameReachBudgetTest extends HohenheimTestBase {
             assertThat(HostnameReach.recent(names[3], 0).verdict()).as("step 4: from the cache, without waiting")
                 .isEqualTo(HostnameReach.Verdict.POINTS_HERE);
         } finally {
-            local = servers.findById(ServerModel.localServerId());
-            local.set(ServerModel.PUBLIC_IPV4, declared);
+            local = servers.findById(HostModel.localHostId());
+            local.set(HostModel.PUBLIC_IPV4, declared);
             servers.save(local);
         }
     }

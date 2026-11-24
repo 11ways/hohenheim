@@ -137,7 +137,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return DockerInstanceRuntime.onServer(serverName, Egress.NONE);
+        return DockerInstanceRuntime.onHost(serverName, Egress.NONE);
     }
 
     @Override

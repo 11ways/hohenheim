@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
@@ -15,7 +15,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import java.time.Duration;
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -66,14 +65,14 @@ public final class RestoreCapacity {
         String reason = "the volume storage did not report its free space";
         long available;
         try {
-            available = InstanceVolumes.availableBytesOn(ServerModel.nameOf(serverId));
+            available = InstanceVolumes.availableBytesOn(HostModel.nameOf(serverId));
         } catch (RuntimeException unanswerable) {
             available = -1;
             reason = HohenheimViolations.reasonOf(unanswerable);
         }
         if (available < 0) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity_unknown")
-                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("server", HostModel.labelOf(serverId))
                 .withArg("reason", reason));
         }
         judge(serverId, available, requiredBytes);
@@ -92,17 +91,17 @@ public final class RestoreCapacity {
      * @throws Violations {@code restore_capacity_unknown} when nothing can be measured
      */
     public static long availableBytesOn(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String runtime = server != null ? ServerModel.runtimeOf(server)
-            : ServerModel.RUNTIME_DOCKER;
+        Row server = Models.get(HostModel.class).findById(serverId);
+        String runtime = server != null ? HostModel.runtimeOf(server)
+            : HostModel.RUNTIME_DOCKER;
         try {
-            return ServerModel.RUNTIME_INCUS.equals(runtime)
+            return HostModel.RUNTIME_INCUS.equals(runtime)
                 ? incusAvailableBytes(serverId)
                 : availableBytes(serverId,
-                    new ServerService().clientFor(ServerModel.nameOf(serverId)));
+                    new HostService().clientFor(HostModel.nameOf(serverId)));
         } catch (IOException | RuntimeException error) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity_unknown")
-                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("server", HostModel.labelOf(serverId))
                 .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
     }
@@ -118,7 +117,7 @@ public final class RestoreCapacity {
         long needed = (long) (requiredBytes * HEADROOM_FACTOR);
         if (availableBytes < needed) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity")
-                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("server", HostModel.labelOf(serverId))
                 .withArg("needed", needed)
                 .withArg("available", availableBytes));
         }
@@ -126,14 +125,14 @@ public final class RestoreCapacity {
 
     /** Free space of the pool the default profile's root device names (or the first pool). */
     private static long incusAvailableBytes(int serverId) throws IOException {
-        return HostDisk.incusSpace(new ServerService().incusClientFor(ServerModel.nameOf(serverId))).freeBytes();
+        return HostDisk.incusSpace(new HostService().incusClientFor(HostModel.nameOf(serverId))).freeBytes();
     }
 
     private static long availableBytes(int serverId, DockerClient docker) throws IOException {
         Map<String, Object> info = docker.info();
         String dockerRoot = info.get("DockerRootDir") instanceof String root && !root.isBlank()
             ? root : "/var/lib/docker";
-        Row server = Models.get(ServerModel.class).findById(serverId);
+        Row server = Models.get(HostModel.class).findById(serverId);
         if (!HostMode.SSH.declaredBy(server)) {
             return Files.getFileStore(existingAncestor(Path.of(dockerRoot))).getUsableSpace();
         }

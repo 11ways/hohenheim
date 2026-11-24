@@ -56,7 +56,7 @@ final class DashboardStats {
         if (AppDirectory.offers(panel, HohenheimSlugs.APPS, access)) {
             tiles.add(apps(panel, apps, words));
         }
-        if (AppDirectory.offers(panel, HohenheimSlugs.SERVERS, access)) {
+        if (AppDirectory.offers(panel, HohenheimSlugs.HOSTS, access)) {
             tiles.add(hosts(panel, access, words));
         }
         if (AppDirectory.offers(panel, HohenheimSlugs.CERTIFICATES, access)) {
@@ -94,7 +94,7 @@ final class DashboardStats {
     /** Every host, tallied by its verdict's standing (the Hosts list's state cell). */
     private static @NonNull DashboardStat hosts(@NonNull Panel panel, @NonNull AccessContext access,
                                                 AppDirectory.@NonNull Wording words) {
-        List<Row> servers = AppDirectory.listed(panel, HohenheimSlugs.SERVERS, access);
+        List<Row> servers = AppDirectory.listed(panel, HohenheimSlugs.HOSTS, access);
         Map<HostStanding, Integer> tally = new EnumMap<>(HostStanding.class);
         for (Row server : servers) {
             tally.merge(HostVerdict.of(server).standing(), 1, Integer::sum);
@@ -102,7 +102,7 @@ final class DashboardStats {
         List<Microcopy> parts = new ArrayList<>(tally.size());
         tally.forEach((standing, count) -> parts.add(standing.tally(count)));
         return tile("hosts", words.say(HohenheimMicrocopy.SERVER.of("plural")),
-            String.valueOf(servers.size()), words.join(parts), "server", panel, HohenheimSlugs.SERVERS);
+            String.valueOf(servers.size()), words.join(parts), "server", panel, HohenheimSlugs.HOSTS);
     }
 
     /**

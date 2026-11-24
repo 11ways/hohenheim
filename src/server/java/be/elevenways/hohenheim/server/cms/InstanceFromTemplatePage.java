@@ -102,7 +102,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
         Map<String, @Nullable Object> fixed = new LinkedHashMap<>();
         fixed.put(InstanceTemplateOperations.ENVIRONMENT_ID.getName(), null);
         if (!HohenheimAccess.isAdmin(access)) {
-            fixed.put(InstanceTemplateOperations.SERVER_ID.getName(), null);
+            fixed.put(InstanceTemplateOperations.HOST_ID.getName(), null);
         }
         if (Projects.visibleTo(access).isEmpty()) {
             fixed.put(InstanceTemplateOperations.PROJECT_ID.getName(), null);

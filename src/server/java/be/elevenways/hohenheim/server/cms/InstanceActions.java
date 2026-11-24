@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
-import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -31,10 +30,8 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -225,7 +222,7 @@ final class InstanceActions {
             .inlineInRow(false)
             .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx)
                     && OwnedInstances.placementRefusal(row) != null)
-            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SERVERS,
+            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.HOSTS,
                 OwnedInstances.placementHost(row), RecordOverview.SLUG))
             .build();
     }

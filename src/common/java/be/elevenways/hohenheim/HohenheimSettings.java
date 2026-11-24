@@ -625,7 +625,7 @@ public class HohenheimSettings {
             .buildSetting("reclaim_images", Boolean.class)
             .defaultValue(true)
             .description("Periodically remove superseded images of the repositories managed "
-                + "stacks declare, on every server that hosts a stack. An image with any "
+                + "stacks declare, on every host that runs a stack. An image with any "
                 + "reference outside those repositories is left alone, an image any container "
                 + "still references is never removed, and volumes are never touched here "
                 + "(that is the one removal which destroys data)")

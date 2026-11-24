@@ -201,7 +201,7 @@ public final class InstanceTemplates {
         input.variables().forEach((key, value) -> variables.put(key, value instanceof Secret secret
             ? secret.reveal() : value));
         String name = input.name() == null ? "" : input.name();
-        return create(template, name, input.serverId(), input.projectId(), input.environmentId(),
+        return create(template, name, input.hostId(), input.projectId(), input.environmentId(),
             TYPED_OWNER_FIELDS, templateId -> variables, ctx);
     }
 
@@ -262,7 +262,7 @@ public final class InstanceTemplates {
         instance.set(InstanceModel.KIND, template.get(InstanceTemplateModel.KIND));
         instance.set(InstanceModel.SETTINGS, placedSettings);
         instance.set(InstanceModel.TEMPLATE_ID, templateId);
-        instance.set(InstanceModel.SERVER_ID, placement);
+        instance.set(InstanceModel.HOST_ID, placement);
         if (environmentId != null) {
             // Validated against the pinned project owner by the ProjectGuards hook.
             instance.set(InstanceModel.ENVIRONMENT_ID, environmentId);

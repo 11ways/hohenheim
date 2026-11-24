@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -57,7 +57,7 @@ public class ReconcileDockerResources extends ScheduledTask {
     @Override
     public void executor(TaskContext ctx) {
         Map<String, List<DockerReconciler.Finding>> results =
-            DockerReconciler.sweepAll(new ServerService());
+            DockerReconciler.sweepAll(new HostService());
         for (Map.Entry<String, List<DockerReconciler.Finding>> entry : results.entrySet()) {
             long orphaned = entry.getValue().stream()
                 .filter(f -> f.bucket() == DockerReconciler.Bucket.ORPHANED).count();

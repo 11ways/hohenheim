@@ -5,9 +5,9 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.docker.HostService;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 
@@ -93,7 +92,7 @@ class IncusNetworkIsolationLiveTest {
     void twoTenantsCannotReachEachOtherButKeepTheInternet() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
-            IncusClient incus = new ServerService().incusClientFor(HOST);
+            IncusClient incus = new HostService().incusClientFor(HOST);
 
             // Two instances owned by different subjects (different records = different
             // owners in this codebase's grant model).
@@ -157,7 +156,7 @@ class IncusNetworkIsolationLiveTest {
     }
 
     private static int instanceRecord(String name, int ownerRecordId) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        Row host = Models.get(HostModel.class).findByName(HOST);
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", IMAGE);
         settings.put("memory_limit_mb", 128);
@@ -165,7 +164,7 @@ class IncusNetworkIsolationLiveTest {
         row.set(InstanceModel.NAME, name + "-" + ownerRecordId);
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.HOST_ID, host.get(HostModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.DatabaseAttention;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -213,14 +213,14 @@ class AttachedDatabaseAttentionTest {
     }
 
     private static int host(String name) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         // The same admitted, measured host InstanceDatabaseSurfaceTest places its pair on,
         // so the instance and database write gates accept the rows below.
@@ -228,7 +228,7 @@ class AttachedDatabaseAttentionTest {
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static int consumer(String name, int serverId) {
@@ -236,7 +236,7 @@ class AttachedDatabaseAttentionTest {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
         instances.save(row);
@@ -251,7 +251,7 @@ class AttachedDatabaseAttentionTest {
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.DB_USER, "appuser");
         row.set(DatabaseModel.DB_PASSWORD, "s3cr3t-attention-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         databases.save(row);
         return row.get(DatabaseModel.ID);
@@ -264,7 +264,7 @@ class AttachedDatabaseAttentionTest {
         assertThat(engine).as("the planted engine instance serves the database").isNotNull();
         int engineId = engine.get(InstanceModel.ID);
         Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(engineId))
-            .assign(InstanceModel.SERVER_ID, serverId)
+            .assign(InstanceModel.HOST_ID, serverId)
             .bypassBehaviours()
             .updateAll();
         return engineId;
@@ -297,8 +297,8 @@ class AttachedDatabaseAttentionTest {
 
     /** What a failed (or succeeding) host probe records. */
     private static void hostErrorKind(int serverId, String kind) {
-        Models.get(ServerModel.class).find().where(ServerModel.ID.eq(serverId))
-            .assign(ServerModel.LAST_ERROR_KIND, kind)
+        Models.get(HostModel.class).find().where(HostModel.ID.eq(serverId))
+            .assign(HostModel.LAST_ERROR_KIND, kind)
             .bypassBehaviours()
             .updateAll();
     }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
@@ -49,15 +50,22 @@ import java.util.regex.Pattern;
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
- * A Docker host the platform can manage: the implicit {@code local} daemon, or a remote one
- * reached over SSH ({@code mode = "ssh"}, {@code ssh_target} like {@code user@host}). The basis of
- * the multi-server inventory; {@code DockerClient}s are built per server from these records.
+ * A host: a machine this Hohenheim runs containers on, the implicit {@code local} daemon or a remote one reached over
+ * SSH ({@code mode = "ssh"}, {@code ssh_target} like {@code user@host}) or Incus. The basis of the host inventory;
+ * {@code DockerClient}s are built per host from these records.
+ *
+ * AIDEV-NOTE: a SERVER is a whole Hohenheim install (LinkedServerModel), a HOST is a machine one runs containers on;
+ * the code and every word a person or an assistant reads say "host". The STORED names keep the old word: the model id
+ * {@code hohenheim:server} (record codes, history, the cluster link's kinds, source ids), the table {@code servers}, the
+ * model name {@code Server}, every {@code server_id} column, the panel slug {@code servers}, and the operation ids
+ * ({@code delete_server}, {@code cordon_server}, ...). Live installs hold data under them, so renaming one is a
+ * migration of its own; the assistant word comes from {@link AssistantNoun}, never from the model id.
  */
-public class ServerModel extends Model {
+public class HostModel extends Model {
 
     public static final Identifier MODEL_ID = HohenheimIds.id("server");
-    /** The server model's reference: its class and MODEL_ID, resolved at first use. */
-    public static final ModelRef<ServerModel> REF = ModelRef.of(ServerModel.class, MODEL_ID);
+    /** The host model's reference: its class and MODEL_ID, resolved at first use. */
+    public static final ModelRef<HostModel> REF = ModelRef.of(HostModel.class, MODEL_ID);
 
     public static final Schema SCHEMA = new Schema();
 
@@ -65,9 +73,14 @@ public class ServerModel extends Model {
     public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
         SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
-    /** THE short code a server is named by in an assistant's tools: "SR12". */
+    /** THE short code a host is named by in an assistant's tools: "SR12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "SR"));
+
+    static {
+        // The word every assistant tool over a host is named by (host_test, list kind=host); "server" is a Hohenheim.
+        AssistantNoun.declare(MODEL_ID, HostModel.class, "host");
+    }
 
     /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */
     public static final String MODE_LOCAL = "local";
@@ -521,7 +534,7 @@ public class ServerModel extends Model {
         // server, which is exactly what makes the delete fail. Port claims
         // are therefore counted in the refusal like every other reference; the claims of a
         // host whose owners are gone are released by the observer or by the operator first.
-        SCHEMA.addBeforeRemoveHook(ServerModel::refuseRemovalWhileOwned);
+        SCHEMA.addBeforeRemoveHook(HostModel::refuseRemovalWhileOwned);
         // A declared server address must be an IP LITERAL: DNS generation serves the
         // stored string verbatim as an A/AAAA value, so a hostname or garbage here would
         // materialize as a record nothing can resolve -- refused on EVERY write path.
@@ -548,7 +561,7 @@ public class ServerModel extends Model {
                     HohenheimMicrocopy.VIOLATIONS.of("lan_parent_invalid").withArg("name", parent));
             }
         });
-        SCHEMA.addBeforeValidateHook(ServerModel::clearAcknowledgementOnPostureChange);
+        SCHEMA.addBeforeValidateHook(HostModel::clearAcknowledgementOnPostureChange);
     }
 
     /**
@@ -583,7 +596,7 @@ public class ServerModel extends Model {
         if (row == null || !row.has(POSTURE.getName())) {
             return;
         }
-        String acknowledged = row.afterWrite(ACKNOWLEDGED_POSTURE, StoredRows.of(Models.get(ServerModel.class), row));
+        String acknowledged = row.afterWrite(ACKNOWLEDGED_POSTURE, StoredRows.of(Models.get(HostModel.class), row));
         if (acknowledged == null || acknowledged.equals(row.get(POSTURE))) {
             return;
         }
@@ -620,7 +633,7 @@ public class ServerModel extends Model {
      * passed -- the admin resource's dead delete already counted live workloads only.
      *
      * AIDEV-NOTE: the migration target is checked FIRST and by name. A workload mid-flight
-     * is still attributed to its SOURCE host ({@code InstanceModel.SERVER_ID} stays the data
+     * is still attributed to its SOURCE host ({@code InstanceModel.HOST_ID} stays the data
      * authority until the handoff), so the ownership count below never sees the
      * destination; without this branch the target could go while its daemon holds the
      * half-copied guest, and {@code InstanceMigrations.settle} would then resolve a host
@@ -645,8 +658,8 @@ public class ServerModel extends Model {
                 throw Violations.ofForm(references.describe(HohenheimMicrocopy.VIOLATIONS.of("server_in_use")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))));
             }
-            InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
-                InstanceModel.SERVER_ID.eq(serverId));
+            InstanceModel.detachTrashed(InstanceModel.HOST_ID,
+                InstanceModel.HOST_ID.eq(serverId));
         });
     }
 
@@ -702,15 +715,15 @@ public class ServerModel extends Model {
      * @return host id to its references; a host nothing references is absent
      */
     public static @NonNull Map<Integer, References> referencesAmong(@NonNull Collection<Integer> serverIds) {
-        Map<Integer, Long> stacks = Models.get(StackModel.class).find().countBy(StackModel.SERVER_ID, serverIds);
+        Map<Integer, Long> stacks = Models.get(StackModel.class).find().countBy(StackModel.HOST_ID, serverIds);
         Map<Integer, Long> databases = Models.get(DatabaseModel.class).find()
-            .countBy(DatabaseModel.SERVER_ID, serverIds);
+            .countBy(DatabaseModel.HOST_ID, serverIds);
         Map<Integer, Long> engines = Models.get(DatabaseEngineModel.class).find()
-            .countBy(DatabaseEngineModel.SERVER_ID, serverIds);
+            .countBy(DatabaseEngineModel.HOST_ID, serverIds);
         Map<Integer, Long> instances = Models.get(InstanceModel.class).find()
-            .countBy(InstanceModel.SERVER_ID, serverIds);
+            .countBy(InstanceModel.HOST_ID, serverIds);
         Map<Integer, Long> ports = Models.get(PortAllocationModel.class).find()
-            .countBy(PortAllocationModel.SERVER_ID, serverIds);
+            .countBy(PortAllocationModel.HOST_ID, serverIds);
         Map<Integer, References> byServer = new HashMap<>();
         for (Integer serverId : serverIds) {
             References references = new References(stacks.getOrDefault(serverId, 0L),
@@ -884,7 +897,7 @@ public class ServerModel extends Model {
      * both {@code ""} and {@code "local"} across three separate normalisations
      * (DockerSiteRequestHandler, DatabaseService, StackParts), which would
      * have split one machine's port claims into two disjoint sets while every unique
-     * constraint held. Every consumer -- runtime resolution ({@link #canonicalServerId})
+     * constraint held. Every consumer -- runtime resolution ({@link #canonicalHostId})
      * AND the M051 legacy heal -- must route through this method; never re-derive.
      */
     public static @NonNull String canonicalSpelling(@Nullable Object raw) {
@@ -904,11 +917,11 @@ public class ServerModel extends Model {
     /**
      * THE batch resolution of stored host ids, where a null means the local daemon: each asked id to its server row,
      * in ONE read of the servers (the local daemon's row resolved once for a null). The single-spelling form is
-     * {@link #canonicalServerId}.
+     * {@link #canonicalHostId}.
      *
      * @return each asked id (null included) to its server row; an id naming no server is absent
      */
-    public static @NonNull Map<@Nullable Integer, Row> serversByStoredId(@NonNull Collection<@Nullable Integer> ids) {
+    public static @NonNull Map<@Nullable Integer, Row> hostsByStoredId(@NonNull Collection<@Nullable Integer> ids) {
         Set<Integer> stored = new HashSet<>();
         boolean local = false;
         for (Integer id : ids) {
@@ -926,7 +939,7 @@ public class ServerModel extends Model {
         Criteria asked = local && stored.isEmpty() ? NAME.eq(LOCAL_HOST_NAME)
             : local ? new CompositeCriteria(CompositeOperator.OR, ID.in(stored), NAME.eq(LOCAL_HOST_NAME))
                 : ID.in(stored);
-        for (Row server : Models.get(ServerModel.class).find().where(asked).all()) {
+        for (Row server : Models.get(HostModel.class).find().where(asked).all()) {
             Integer id = server.get(ID);
             if (stored.contains(id)) {
                 servers.put(id, server);
@@ -937,21 +950,21 @@ public class ServerModel extends Model {
         }
         if (local && !servers.containsKey(null)) {
             // First use: the local daemon's row does not exist yet, and resolving it creates it.
-            servers.put(null, localServerRow());
+            servers.put(null, localHostRow());
         }
         return servers;
     }
 
     /**
-     * {@link #canonicalServerId} for many stored host ids at once (the records of one page), read through
-     * {@link #serversByStoredId}.
+     * {@link #canonicalHostId} for many stored host ids at once (the records of one page), read through
+     * {@link #hostsByStoredId}.
      *
      * @return each asked id (null included) to its canonical server id
-     * @throws IllegalArgumentException when an id names no server, as {@link #canonicalServerId} does
+     * @throws IllegalArgumentException when an id names no server, as {@link #canonicalHostId} does
      */
-    public static @NonNull Map<@Nullable Integer, Integer> canonicalServerIds(
+    public static @NonNull Map<@Nullable Integer, Integer> canonicalHostIds(
             @NonNull Collection<@Nullable Integer> ids) {
-        Map<Integer, Row> servers = serversByStoredId(ids);
+        Map<Integer, Row> servers = hostsByStoredId(ids);
         Map<Integer, Integer> canonical = new HashMap<>();
         for (Integer id : ids) {
             Row server = servers.get(id);
@@ -970,23 +983,23 @@ public class ServerModel extends Model {
      *
      * @throws IllegalArgumentException when the spelling names no known server
      */
-    public static int canonicalServerId(@Nullable Object raw) {
+    public static int canonicalHostId(@Nullable Object raw) {
         if (raw == null || raw instanceof Number) {
             // A stored host id, or none (the local daemon): THE batch resolver's rule, for one.
             Integer stored = raw == null ? null : ((Number) raw).intValue();
-            return canonicalServerIds(Collections.singletonList(stored)).get(stored);
+            return canonicalHostIds(Collections.singletonList(stored)).get(stored);
         }
         String spelling = canonicalSpelling(raw);
         if (LOCAL_HOST_NAME.equals(spelling)) {
-            return localServerId();
+            return localHostId();
         }
-        Row byName = Models.get(ServerModel.class).findByName(spelling);
+        Row byName = Models.get(HostModel.class).findByName(spelling);
         if (byName != null) {
             return byName.get(ID);
         }
         if (spelling.chars().allMatch(Character::isDigit)) {
             Integer stored = Integer.parseInt(spelling);
-            return canonicalServerIds(List.of(stored)).get(stored);
+            return canonicalHostIds(List.of(stored)).get(stored);
         }
         throw new IllegalArgumentException("No server named '" + spelling + "'");
     }
@@ -995,8 +1008,8 @@ public class ServerModel extends Model {
      * The implicit local daemon's row id, creating its row when absent (idempotent, and safe
      * under concurrent first calls).
      */
-    public static int localServerId() {
-        return localServerRow().get(ID);
+    public static int localHostId() {
+        return localHostRow().get(ID);
     }
 
     /**
@@ -1009,8 +1022,8 @@ public class ServerModel extends Model {
      * JVM lock serializes this process's callers; the unique index stays the arbiter across
      * processes, and losing that race reads the winner's row instead of failing.
      */
-    public static synchronized @NonNull Row localServerRow() {
-        ServerModel model = Models.get(ServerModel.class);
+    public static synchronized @NonNull Row localHostRow() {
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(LOCAL_HOST_NAME);
         if (row != null) {
             return row;
@@ -1033,10 +1046,10 @@ public class ServerModel extends Model {
     /** The display/transport name of a server id; a null id means the local daemon. */
     public static @NonNull String nameOf(@Nullable Integer serverId) {
         if (serverId == null) {
-            Models.get(ServerModel.class);   // fail fast on an unbooted model registry
+            Models.get(HostModel.class);   // fail fast on an unbooted model registry
             return LOCAL_HOST_NAME;
         }
-        Row row = Models.get(ServerModel.class).findById(serverId);
+        Row row = Models.get(HostModel.class).findById(serverId);
         if (row == null) {
             throw new IllegalArgumentException("No server with id " + serverId);
         }
@@ -1044,17 +1057,17 @@ public class ServerModel extends Model {
     }
 
     /**
-     * The name of the server any spelling resolves to through {@link #canonicalServerId}.
+     * The name of the server any spelling resolves to through {@link #canonicalHostId}.
      *
      * @throws IllegalArgumentException when the spelling names no known server
      */
     public static @NonNull String canonicalNameOf(@Nullable Object raw) {
-        return nameOf(canonicalServerId(raw));
+        return nameOf(canonicalHostId(raw));
     }
 
     /** The name a message shows for a server id: its name, or {@code #<id>} for a row that is gone. */
     public static @NonNull String labelOf(int serverId) {
-        Row row = Models.get(ServerModel.class).findById(serverId);
+        Row row = Models.get(HostModel.class).findById(serverId);
         Object name = row != null ? row.get(NAME) : null;
         return name != null ? String.valueOf(name) : "#" + serverId;
     }
@@ -1074,12 +1087,12 @@ public class ServerModel extends Model {
         return labels;
     }
 
-    /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */
+    /** The registry key a type-settings map stores for a host ({@code hohenheim:<id>}). */
     public static @NonNull String registryKeyOf(int serverId) {
         return HohenheimIds.id(String.valueOf(serverId)).toString();
     }
 
-    /** What a reader calls a server row: a host, as the panel names it; a server is a whole Hohenheim install. */
+    /** What a reader calls a host row; a server is a whole Hohenheim install. */
     private static final Noun NOUN = new Noun(Map.of(
         "en", new Noun.Forms("host", "hosts", Map.of(NounFact.ARTICLE, "a")),
         "nl", new Noun.Forms("host", "hosts", Map.of(NounFact.GENDER, "common"))));

@@ -9,9 +9,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.model.HostMode;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
@@ -106,19 +106,19 @@ public final class HostAttention {
 
     /** @param heldBack what each host holds back ({@link AppHealth#heldBackByHost}), read once for the tier */
     static void hostsTakingNoApps(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            int id = server.get(ServerModel.ID);
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            int id = server.get(HostModel.ID);
             HostVerdict verdict = HostVerdict.of(server);
             AppHealth.HeldBack held = heldBack.get(id);
             AttentionSeverity raised = verdict.standing().severity();
             if (raised == null && held == null) {
                 continue;
             }
-            String name = server.get(ServerModel.NAME);
+            String name = server.get(HostModel.NAME);
             // A host that raises nothing itself but holds apps back warns for them.
             items.add(item(raised != null ? raised : AttentionSeverity.WARNING, "server",
                 verdict.standing().attentionTitle(name), raised != null ? verdict.reason() : held.reason(),
-                CmsRoutes.open(ADMIN, HohenheimSlugs.SERVERS, id),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.HOSTS, id),
                 verdict.remedyAction(name))
                 .about(AttentionSubject.host(id), heldBackText(held))
                 .forStage(OnboardingStage.ADMISSION));
@@ -182,7 +182,7 @@ public final class HostAttention {
         }
         Path volumeRoot = pathOf(VolumeBackends::volumeRoot);
         FileStore localVolumes = volumeRoot == null ? null : storeOf(volumeRoot);
-        for (Row server : Models.get(ServerModel.class).find().all()) {
+        for (Row server : Models.get(HostModel.class).find().all()) {
             if (HostMode.LOCAL.declaredBy(server) && localVolumes != null && measured.contains(localVolumes)) {
                 continue;
             }
@@ -191,11 +191,11 @@ public final class HostAttention {
             if (severity == null) {
                 continue;
             }
-            int id = server.get(ServerModel.ID);
+            int id = server.get(HostModel.ID);
             items.add(item(severity, "hard-drive",
-                HohenheimMicrocopy.ATTENTION_TITLE.of("host_disk").withArg("name", server.get(ServerModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("host_disk").withArg("name", server.get(HostModel.NAME)),
                 diskDetail(reading.space()),
-                CmsRoutes.open(ADMIN, HohenheimSlugs.SERVERS, id),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.HOSTS, id),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_host")));
         }
     }
@@ -253,14 +253,14 @@ public final class HostAttention {
      * {@code WORKLOAD_ISOLATION_REFUSED} (its cause's fact is HOST_ISOLATION), so the workload's item names this host
      * as its root ({@link WorkloadErrors#rootOf}) and folds under this one, which counts it; the sweep's failed run
      * folds here too ({@link #isolationRootOfSweep}). The switch ({@code security.nftables_enabled}) is one setting
-     * for every host today, asked per host through {@link WorkloadNetworkPolicy#forServer} as the deploy lane and the
+     * for every host today, asked per host through {@link WorkloadNetworkPolicy#forHost} as the deploy lane and the
      * sweep ask it; switching it on also needs passwordless sudo for nft on each host, which is why the item names
      * the host. The setting's key and the sudo need are the technical note under the words.
      */
     static void isolationUnenforced(@NonNull List<AttentionItem> items) {
         Map<Integer, Integer> held = isolationHeld();
         for (int host : isolationRoots(held)) {
-            String name = ServerModel.nameOf(host);
+            String name = HostModel.nameOf(host);
             int apps = held.getOrDefault(host, 0);
             items.add(item(apps > 0 ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "shield-halved",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("isolation_unenforced").withArg("host", name),
@@ -285,7 +285,7 @@ public final class HostAttention {
 
     /** @return whether per-workload network policy is enforced on this host, as its deploy lane asks it */
     static boolean enforcesIsolation(int serverId) {
-        return WorkloadNetworkPolicy.forServer(ServerModel.nameOf(serverId)).isEnabled();
+        return WorkloadNetworkPolicy.forHost(HostModel.nameOf(serverId)).isEnabled();
     }
 
     /** @return per host, how many errored workloads it refused to start for its switched-off firewall rules */
@@ -295,7 +295,7 @@ public final class HostAttention {
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
                 .all()) {
             AttentionSubject root = WorkloadErrors.rootOf(instance);
-            if (root != null && ServerModel.MODEL_ID.equals(root.model())) {
+            if (root != null && HostModel.MODEL_ID.equals(root.model())) {
                 held.merge(root.id(), 1, Integer::sum);
             }
         }
@@ -312,13 +312,13 @@ public final class HostAttention {
             for (Row instance : Models.get(InstanceModel.class).find()
                     .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                     .all()) {
-                unchecked.add(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+                unchecked.add(HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID)));
             }
         }
         List<Integer> roots = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            int id = server.get(ServerModel.ID);
-            if (ServerModel.isIncus(server) || enforcesIsolation(id)) {
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            int id = server.get(HostModel.ID);
+            if (HostModel.isIncus(server) || enforcesIsolation(id)) {
                 continue;   // the Incus tier keeps workloads apart by its own sweep
             }
             if (held.containsKey(id) || unchecked.contains(id)) {
@@ -347,7 +347,7 @@ public final class HostAttention {
     /** @return the host's required preflight checks that did not pass, in words, in the stored report's order */
     static @NonNull List<Microcopy> failedRequiredChecks(@NonNull Row server) {
         List<Microcopy> failed = new ArrayList<>();
-        for (PreflightCheckView check : ServerOverviewState.preflightReport(server).mustPass()) {
+        for (PreflightCheckView check : HostOverviewState.preflightReport(server).mustPass()) {
             if (check.notPassing()) {
                 failed.add(check.label());
             }
@@ -373,7 +373,7 @@ public final class HostAttention {
                 return parkedAt != null && !parkedAt.isAfter(threshold);
             })
             .toList();
-        byHost(stuck, claim -> serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
+        byHost(stuck, claim -> hostNameOf(claim.get(PortAllocationModel.HOST_ID)),
             claim -> claim.get(PortAllocationModel.PORT) + "/" + claim.get(PortAllocationModel.PROTOCOL))
             .forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
             HohenheimMicrocopy.ATTENTION_TITLE.of("ports_releasing").withArg("server", server),
@@ -383,9 +383,9 @@ public final class HostAttention {
 
     // A releasing claim can outlive its servers row (host removal parks claims and
     // deletes nothing), so a dangling id must still render, not throw.
-    private static String serverNameOf(@Nullable Integer serverId) {
+    private static String hostNameOf(@Nullable Integer serverId) {
         try {
-            return ServerModel.nameOf(serverId);
+            return HostModel.nameOf(serverId);
         } catch (IllegalArgumentException gone) {
             return "removed host #" + serverId;
         }

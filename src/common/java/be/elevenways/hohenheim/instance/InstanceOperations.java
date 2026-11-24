@@ -364,7 +364,7 @@ public final class InstanceOperations {
         .register();
 
     /** The host a migration moves the workload to. */
-    public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
+    public static final IntegerField TARGET_HOST = IntegerField.builder("targetServerId")
         .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("host"))
         .required()
         .build();
@@ -385,8 +385,8 @@ public final class InstanceOperations {
             .notForAssistants("names its destination host by a stored number, not a code; its tool comes once the"
                 + " input names a host by its code")
             .gate(HohenheimSources.OPERATOR)
-            .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
-                values -> new MigrateInput(values.get(TARGET_SERVER))))
+            .input(OperationInput.of(FormSpec.builder().add(TARGET_HOST).build(), MigrateInput.class,
+                values -> new MigrateInput(values.get(TARGET_HOST))))
             .result(Integer.class)
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)

@@ -7,11 +7,10 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
@@ -125,8 +124,8 @@ class WorkspaceIncusLiveTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, dataPath);
 
         Db.run(datasource, () -> {
-            shell = HostShell.forServer(Models.get(ServerModel.class).findByName(HOST));
-            shellA = HostShell.forServer(Models.get(ServerModel.class).findByName(HOST_A));
+            shell = HostShell.forHost(Models.get(HostModel.class).findByName(HOST));
+            shellA = HostShell.forHost(Models.get(HostModel.class).findByName(HOST_A));
             for (String host : List.of(HOST, HOST_A)) {
                 HostShell hostShell = HOST.equals(host) ? shell : shellA;
                 hostShell.run("mkdir -p " + HostShell.quote(dataPath));
@@ -204,8 +203,8 @@ class WorkspaceIncusLiveTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
-            int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
-            int hostAId = Models.get(ServerModel.class).findByName(HOST_A).get(ServerModel.ID);
+            int hostId = Models.get(HostModel.class).findByName(HOST).get(HostModel.ID);
+            int hostAId = Models.get(HostModel.class).findByName(HOST_A).get(HostModel.ID);
 
             // 1. A workspace runs on daystrom and a marker is written into its home from inside.
             Map<String, Object> settings = new LinkedHashMap<>();
@@ -252,7 +251,7 @@ class WorkspaceIncusLiveTest {
             // 4. Migrated to nightstrom, the same record's home there holds the marker owned by its mapped uid,
             //    the workspace reads it from inside, and daystrom keeps no copy.
             new InstanceMigrations().migrateTo(sourceId, hostId);
-            assertThat((Object) Models.get(InstanceModel.class).findById(sourceId).get(InstanceModel.SERVER_ID))
+            assertThat((Object) Models.get(InstanceModel.class).findById(sourceId).get(InstanceModel.HOST_ID))
                 .as("step 4: the record lives on " + HOST).isEqualTo(hostId);
             assertThat(shell.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
                 .as("step 4: nightstrom's home holds the marker").isEqualTo(marker);
@@ -434,7 +433,7 @@ class WorkspaceIncusLiveTest {
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings) {
         return workspaceRecord(imageId, settings, "live-workspace",
-            Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID));
+            Models.get(HostModel.class).findByName(HOST).get(HostModel.ID));
     }
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings, String name, int hostId) {
@@ -442,7 +441,7 @@ class WorkspaceIncusLiveTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceModel.class).save(row);
         // No volume is declared here on purpose: the deploy's own preparation declares the

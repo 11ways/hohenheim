@@ -62,7 +62,7 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, "appmetrics-web");
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image", "cpu_limit", 2));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         instanceId = row.get(InstanceModel.ID);
 

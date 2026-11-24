@@ -12,8 +12,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * THE Docker host mode vocabulary: how a Docker host is REACHED, one member per stored
  * {@code servers.mode} token, with the facts the rest of the code reads off the member.
  *
- * AIDEV-NOTE: {@link ServerModel#MODE} is BUILT from this enum, so the stored field and
- * the typed reading cannot drift apart. The tokens stay the {@code ServerModel.MODE_*}
+ * AIDEV-NOTE: {@link HostModel#MODE} is BUILT from this enum, so the stored field and
+ * the typed reading cannot drift apart. The tokens stay the {@code HostModel.MODE_*}
  * string constants (the InstanceStatus binding), so rows written by every earlier version
  * keep parsing. The mode used to be compared as a string, and anything that was not
  * {@code ssh} -- a typo, a null, a mode a later version adds -- silently addressed THIS
@@ -28,10 +28,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum HostMode {
 
     /** The controller's own daemon, over its unix socket. */
-    LOCAL(ServerModel.MODE_LOCAL, false, "Local", "house", ColorHue.TEAL),
+    LOCAL(HostModel.MODE_LOCAL, false, "Local", "house", ColorHue.TEAL),
 
     /** A remote daemon, over the pinned ssh argv of {@code HostKeys.sshArgv}. */
-    SSH(ServerModel.MODE_SSH, true, "SSH", "terminal", ColorHue.INDIGO);
+    SSH(HostModel.MODE_SSH, true, "SSH", "terminal", ColorHue.INDIGO);
 
     private final @NonNull String token;
     private final boolean remote;
@@ -104,15 +104,15 @@ public enum HostMode {
     /** The mode a host row declares; fails closed like {@link #forToken}. */
     public static @NonNull HostMode of(@NonNull Row server) {
         try {
-            return forToken(server.get(ServerModel.MODE));
+            return forToken(server.get(HostModel.MODE));
         } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("Host '" + server.get(ServerModel.NAME) + "': "
+            throw new IllegalArgumentException("Host '" + server.get(HostModel.NAME) + "': "
                 + unknown.getMessage(), unknown);
         }
     }
 
     /** Whether a host row declares exactly this mode; an unknown or missing mode is no mode. */
     public boolean declaredBy(@Nullable Row server) {
-        return server != null && parse(server.get(ServerModel.MODE)) == this;
+        return server != null && parse(server.get(HostModel.MODE)) == this;
     }
 }

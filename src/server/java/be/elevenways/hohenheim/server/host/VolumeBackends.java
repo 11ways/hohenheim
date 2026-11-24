@@ -2,9 +2,8 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -67,7 +66,7 @@ public final class VolumeBackends {
      */
     public static @NonNull Detection runAndStore(@NonNull String serverName) {
 
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
 
         if (server == null) {
             throw new IllegalArgumentException("No server named '" + serverName + "'");
@@ -83,15 +82,15 @@ public final class VolumeBackends {
      *
      * AIDEV-NOTE: a probe's finding is bookkeeping, never activity: inside Check again it was the first of two saves
      * of one host, so the host page's Recent card said "Jelle checked local" twice per press (Starfleet's ten
-     * identical rows were these plus the then-unrecorded heartbeat). ServerModel captures none of these fields, so
+     * identical rows were these plus the then-unrecorded heartbeat). HostModel captures none of these fields, so
      * this save records nothing; the preflight's report save records the act.
      */
     public static void store(@NonNull Row server, @NonNull Detection detection) {
-        server.set(ServerModel.VOLUME_BACKEND, detection.backend().token());
-        server.set(ServerModel.VOLUME_ROOT, detection.root());
-        server.set(ServerModel.VOLUME_BACKEND_DETAIL, detection.detail());
-        server.set(ServerModel.VOLUME_PROBED_AT, Now.instant());
-        Models.get(ServerModel.class).save(server);
+        server.set(HostModel.VOLUME_BACKEND, detection.backend().token());
+        server.set(HostModel.VOLUME_ROOT, detection.root());
+        server.set(HostModel.VOLUME_BACKEND_DETAIL, detection.detail());
+        server.set(HostModel.VOLUME_PROBED_AT, Now.instant());
+        Models.get(HostModel.class).save(server);
     }
 
     /**
@@ -112,7 +111,7 @@ public final class VolumeBackends {
             + "while [ ! -e \"$p\" ] && [ \"$p\" != \"/\" ]; do p=$(dirname \"$p\"); done; "
             + "echo \"$p\"; stat -f -c %T \"$p\"; findmnt -no OPTIONS --target \"$p\" || true";
 
-        HostShell.Result result = HostShell.forServer(server).run(script);
+        HostShell.Result result = HostShell.forHost(server).run(script);
 
         if (result.exitCode() != 0) {
             String said = result.text().strip();
@@ -172,9 +171,9 @@ public final class VolumeBackends {
     public static void requireQuotaCapableHost(@NonNull String serverName,
                                                @NonNull Microcopy kindLabel) {
 
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         VolumeBackend backend = server == null
-            ? VolumeBackend.NONE : ServerModel.volumeBackendOf(server);
+            ? VolumeBackend.NONE : HostModel.volumeBackendOf(server);
 
         if (backend.supportsQuota()) {
             return;

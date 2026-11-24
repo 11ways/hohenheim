@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.BackupStatus;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseRestores;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -79,7 +79,7 @@ class DatabaseDumpRestoreLiveTest {
         try (DumpTargetFixture target = DumpTargetFixture.install("dump-restore-live")) {
             // 1. A persistent database holding one row, dumped to the target.
             service.create(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE, "appuser", PASSWORD, "appdb", false,
-                ServerModel.nameOf(ServerModel.localServerId()), ResourceLimits.none(),
+                HostModel.nameOf(HostModel.localHostId()), ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_DEDICATED);
             psql(docker, name, PASSWORD, "CREATE TABLE things (x integer); INSERT INTO things VALUES (7);");
             Row dump = DatabaseBackups.backUp(service, name);

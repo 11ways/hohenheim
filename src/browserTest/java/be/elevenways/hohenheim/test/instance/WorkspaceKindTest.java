@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.model.DeployTrigger;
@@ -102,7 +102,7 @@ class WorkspaceKindTest {
         Db.run(datasource, () -> {
             int imageId = runtimeImage("node-22", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, "npm ci");
-            int id = workspace("ws-docker", imageId, ServerModel.localServerId(), Map.of());
+            int id = workspace("ws-docker", imageId, HostModel.localHostId(), Map.of());
 
             InstanceSpec spec = InstanceKinds.getHandler(KIND)
                 .specFor(id, storedSettings(id));
@@ -157,7 +157,7 @@ class WorkspaceKindTest {
                 "start_command", "node server.js --port 8080",
                 "container_port", 8080,
                 "build_command", "make build");
-            int id = workspace("ws-override", imageId, ServerModel.localServerId(), settings);
+            int id = workspace("ws-override", imageId, HostModel.localHostId(), settings);
 
             InstanceSpec spec = InstanceKinds.getHandler(KIND).specFor(id, settings);
 
@@ -246,7 +246,7 @@ class WorkspaceKindTest {
             //    throwable" failure carries no description, so a broken guard would report
             //    an unnamed assertion.
             assertThat(catchThrowable(() -> workspace("ws-no-image", null,
-                    ServerModel.localServerId(), Map.of())))
+                    HostModel.localHostId(), Map.of())))
                 .as("step 1: a workspace must name what it runs inside, at the write")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("runtime_image_required");
@@ -255,7 +255,7 @@ class WorkspaceKindTest {
             //    refusal is about the missing image and not about the kind.
             int imageId = runtimeImage("node-22i", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, null);
-            int id = workspace("ws-no-image", imageId, ServerModel.localServerId(), Map.of());
+            int id = workspace("ws-no-image", imageId, HostModel.localHostId(), Map.of());
             assertThat(id).as("step 2: naming an image is all that was missing").isPositive();
 
             // 3. The LATE half is untouched: a row that names none is still refused where
@@ -276,7 +276,7 @@ class WorkspaceKindTest {
     @Test
     void aHostWithNoVolumeQuotaRefusesToCarryAWorkspace() {
         Db.run(datasource, () -> {
-            String local = ServerModel.nameOf(ServerModel.localServerId());
+            String local = HostModel.nameOf(HostModel.localHostId());
             setBackend(VolumeBackend.NONE);
             Throwable noQuota = catchThrowable(() -> InstanceKinds.getHandler(KIND).requirePlaceableOn(local, Map.of()));
             assertThat(noQuota)
@@ -341,7 +341,7 @@ class WorkspaceKindTest {
         Db.run(datasource, () -> {
             int imageId = runtimeImage("node-22c", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, null);
-            int id = workspace("ws-clone", imageId, ServerModel.localServerId(), Map.of());
+            int id = workspace("ws-clone", imageId, HostModel.localHostId(), Map.of());
             Map<String, Object> settings = Map.of(
                 "repository_url", "https://git.example.test/team/app.git",
                 "branch", "main");
@@ -351,7 +351,7 @@ class WorkspaceKindTest {
                 Models.get(InstanceModel.class).findById(id),
                 InstanceKinds.getHandler(KIND), runtime,
                 InstanceKinds.getHandler(KIND).specFor(id, settings),
-                ServerModel.localServerId(), Map.of(), settings, null);
+                HostModel.localHostId(), Map.of(), settings, null);
 
             BuildLog log = new BuildLog(64 * 1024);
             String commit = new WorkspaceBuilds().checkout(resolved, "main", settings, log);
@@ -405,7 +405,7 @@ class WorkspaceKindTest {
 
             // 1. A bare workspace is a bare container up, exactly as before: nothing to
             //    check out means nothing to check out.
-            int bare = workspace("ws-lane-bare", imageId, ServerModel.localServerId(),
+            int bare = workspace("ws-lane-bare", imageId, HostModel.localHostId(),
                 Map.of());
             assertThat(WorkspaceBuilds.deploysSource(
                     Models.get(InstanceModel.class).findById(bare)))
@@ -413,7 +413,7 @@ class WorkspaceKindTest {
                 .isFalse();
 
             // 2. The moment it names a raw repository URL, its deploy IS a source deploy.
-            int sourced = workspace("ws-lane-url", imageId, ServerModel.localServerId(),
+            int sourced = workspace("ws-lane-url", imageId, HostModel.localHostId(),
                 Map.of("repository_url", "https://git.example.test/team/app.git"));
             assertThat(WorkspaceBuilds.deploysSource(
                     Models.get(InstanceModel.class).findById(sourced)))
@@ -423,7 +423,7 @@ class WorkspaceKindTest {
             // 3. And so does the PROVIDER-bound spelling, which names no URL at all --
             //    reading only repository_url would have left every provider-bound
             //    workspace on the bare lane.
-            int bound = workspace("ws-lane-bound", imageId, ServerModel.localServerId(),
+            int bound = workspace("ws-lane-bound", imageId, HostModel.localHostId(),
                 Map.of("repository", "team/app"));
             assertThat(WorkspaceBuilds.deploysSource(
                     Models.get(InstanceModel.class).findById(bound)))
@@ -437,7 +437,7 @@ class WorkspaceKindTest {
             other.set(InstanceModel.KIND, "hohenheim:docker_container");
             other.set(InstanceModel.SETTINGS, Map.of("image", "nginx",
                 "repository_url", "https://git.example.test/team/app.git"));
-            other.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            other.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Models.get(InstanceModel.class).save(other);
             instances.add(other.get(InstanceModel.ID));
             assertThat(WorkspaceBuilds.deploysSource(other))
@@ -467,7 +467,7 @@ class WorkspaceKindTest {
                 "hohenheim/node-22", "npm start", 3000, null);
             Map<String, Object> settings = Map.of(
                 "repository_url", "https://git.example.test/team/app.git");
-            int id = workspace("ws-start-sourced", imageId, ServerModel.localServerId(),
+            int id = workspace("ws-start-sourced", imageId, HostModel.localHostId(),
                 settings);
 
             List<String> command = InstanceKinds.getHandler(KIND)
@@ -488,7 +488,7 @@ class WorkspaceKindTest {
 
             // 4. FALSIFIED: a workspace with NO repository is untouched -- it starts what
             //    it always started, in the image's own workdir.
-            int bare = workspace("ws-start-bare", imageId, ServerModel.localServerId(),
+            int bare = workspace("ws-start-bare", imageId, HostModel.localHostId(),
                 Map.of());
             assertThat(InstanceKinds.getHandler(KIND).specFor(bare, Map.of()).command())
                 .as("step 4: a repository-less workspace starts exactly what it always did")
@@ -512,7 +512,7 @@ class WorkspaceKindTest {
 
             // 1. A token in the user-info is refused, by name, before anything is stored.
             assertThat(catchThrowable(() -> workspace("ws-token-url", imageId,
-                    ServerModel.localServerId(),
+                    HostModel.localHostId(),
                     Map.of("repository_url", "https://someone:ghp_secrettoken@git.example.test/a.git"))))
                 .as("step 1: a credentialed clone URL never reaches the volume")
                 .isInstanceOf(Violations.class)
@@ -520,7 +520,7 @@ class WorkspaceKindTest {
 
             // 2. So is a bare token with no username half.
             assertThat(catchThrowable(() -> workspace("ws-token-only", imageId,
-                    ServerModel.localServerId(),
+                    HostModel.localHostId(),
                     Map.of("repository_url", "https://ghp_secrettoken@git.example.test/a.git"))))
                 .as("step 2: user-info with no colon is still a credential over https")
                 .isInstanceOf(Violations.class)
@@ -528,13 +528,13 @@ class WorkspaceKindTest {
 
             // 3. FALSIFIED: the same URL without the credential saves, so the refusal is
             //    about the credential and not about the field.
-            int clean = workspace("ws-clean-url", imageId, ServerModel.localServerId(),
+            int clean = workspace("ws-clean-url", imageId, HostModel.localHostId(),
                 Map.of("repository_url", "https://git.example.test/a.git"));
             assertThat(clean).as("step 3: a clean URL is stored").isPositive();
 
             // 4. And an ssh clone URL keeps its username, which is how every one of them
             //    is spelled -- refusing it would refuse the whole ssh lane.
-            int ssh = workspace("ws-ssh-url", imageId, ServerModel.localServerId(),
+            int ssh = workspace("ws-ssh-url", imageId, HostModel.localHostId(),
                 Map.of("repository_url", "ssh://git@git.example.test/a.git"));
             assertThat(ssh).as("step 4: an ssh username is not a credential").isPositive();
         });
@@ -566,7 +566,7 @@ class WorkspaceKindTest {
                 "/srv/repos/app.git");
             int index = 0;
             for (String url : accepted) {
-                int id = workspace("ws-clone-ok-" + index++, imageId, ServerModel.localServerId(),
+                int id = workspace("ws-clone-ok-" + index++, imageId, HostModel.localHostId(),
                     Map.of("repository_url", url));
                 assertThat(storedSettings(id).get("repository_url"))
                     .as("step 1: " + url + " is a clone URL and is stored verbatim")
@@ -576,21 +576,21 @@ class WorkspaceKindTest {
             // 2. A bare word is not a URL at all: git would read it as a path relative to an
             //    internal checkout directory, so it can only ever be a typo.
             assertThat(catchThrowable(() -> workspace("ws-clone-word", imageId,
-                    ServerModel.localServerId(), Map.of("repository_url", "not-a-url"))))
+                    HostModel.localHostId(), Map.of("repository_url", "not-a-url"))))
                 .as("step 2: 'not-a-url' is refused by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("repository_url_invalid");
 
             // 3. A scheme with one slash is refused too -- git reads it as the host "http".
             assertThat(catchThrowable(() -> workspace("ws-clone-half", imageId,
-                    ServerModel.localServerId(), Map.of("repository_url", "http:/x"))))
+                    HostModel.localHostId(), Map.of("repository_url", "http:/x"))))
                 .as("step 3: a mistyped scheme never becomes an ssh host")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("repository_url_invalid");
 
             // 4. And whitespace, which git takes as part of the single argv entry.
             assertThat(catchThrowable(() -> workspace("ws-clone-space", imageId,
-                    ServerModel.localServerId(),
+                    HostModel.localHostId(),
                     Map.of("repository_url", "https://git.example.test/team/my app.git"))))
                 .as("step 4: a space in the URL is refused")
                 .isInstanceOf(Violations.class)
@@ -599,7 +599,7 @@ class WorkspaceKindTest {
             // 5. The refusal lands ON THE FIELD, which is what puts it under the input the
             //    operator typed into rather than at the top of the form.
             Violations violations = (Violations) catchThrowable(() -> workspace("ws-clone-field",
-                imageId, ServerModel.localServerId(), Map.of("repository_url", "not-a-url")));
+                imageId, HostModel.localHostId(), Map.of("repository_url", "not-a-url")));
             assertThat(violations.all())
                 .as("step 5: the violation names repository_url")
                 .anyMatch(violation -> "repository_url".equals(violation.fieldName()));
@@ -608,7 +608,7 @@ class WorkspaceKindTest {
             //    credentialed URL is well-formed, and the operator must read the sentence
             //    that is about the secret.
             assertThat(catchThrowable(() -> workspace("ws-clone-cred", imageId,
-                    ServerModel.localServerId(),
+                    HostModel.localHostId(),
                     Map.of("repository_url", "https://someone:ghp_secrettoken@git.example.test/a.git"))))
                 .as("step 6: a credential is still refused as a credential")
                 .isInstanceOf(Violations.class)
@@ -624,7 +624,7 @@ class WorkspaceKindTest {
             row.set(InstanceModel.NAME, "ws-not-a-workspace");
             row.set(InstanceModel.KIND, "hohenheim:docker_container");
             row.set(InstanceModel.SETTINGS, Map.of("image", "nginx"));
-            row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            row.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Models.get(InstanceModel.class).save(row);
             int id = row.get(InstanceModel.ID);
             instances.add(id);
@@ -643,7 +643,7 @@ class WorkspaceKindTest {
             int imageId = runtimeImage("node-22d", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, null);
             Map<String, Object> settings = Map.of("home_quota_mb", 512);
-            int id = workspace("ws-quota", imageId, ServerModel.localServerId(), settings);
+            int id = workspace("ws-quota", imageId, HostModel.localHostId(), settings);
 
             WorkspaceKind.ensureHomeDeclared(id, settings);
 
@@ -710,7 +710,7 @@ class WorkspaceKindTest {
         Db.run(datasource, () -> {
             int imageId = runtimeImage("node-22e", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, null);
-            int id = workspace("ws-readiness", imageId, ServerModel.localServerId(),
+            int id = workspace("ws-readiness", imageId, HostModel.localHostId(),
                 Map.of());
             Row instance = Models.get(InstanceModel.class).findById(id);
             InstanceStatus running = new InstanceStatus(ContainerState.RUNNING, List.of(),
@@ -767,7 +767,7 @@ class WorkspaceKindTest {
         Db.run(datasource, () -> {
             int imageId = runtimeImage("node-22r", "hohenheim/node-22:1",
                 "hohenheim/node-22", "npm start", 3000, null);
-            int id = workspace("ws-remote-readiness", imageId, ServerModel.localServerId(),
+            int id = workspace("ws-remote-readiness", imageId, HostModel.localHostId(),
                 Map.of());
             Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
             template.set(InstanceTemplateModel.NAME, "ws-remote-readiness-template");
@@ -821,7 +821,7 @@ class WorkspaceKindTest {
                     .contains("curl").contains("http://127.0.0.1:" + port + "/healthz"));
 
             // 4. The lane is picked from the host record: the local host probes directly.
-            assertThat(PublishedPortProbe.forServer(ServerModel.localServerId()))
+            assertThat(PublishedPortProbe.forHost(HostModel.localHostId()))
                 .as("step 4: the controller's own host uses the direct lane")
                 .isInstanceOf(PublishedPortProbe.Local.class);
         });
@@ -889,7 +889,7 @@ class WorkspaceKindTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, KIND);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
@@ -905,25 +905,25 @@ class WorkspaceKindTest {
     }
 
     private static int incusHost(String name) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
-            row.set(ServerModel.NAME, name);
+            row.set(HostModel.NAME, name);
         }
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.INCUS_URL, "https://192.0.2.41:8443");
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.VOLUME_BACKEND, VolumeBackend.BTRFS.token());
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.INCUS_URL, "https://192.0.2.41:8443");
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.VOLUME_BACKEND, VolumeBackend.BTRFS.token());
         model.save(row);
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static void setBackend(VolumeBackend backend) {
-        Row server = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        server.set(ServerModel.VOLUME_BACKEND, backend.token());
-        Models.get(ServerModel.class).save(server);
+        Row server = Models.get(HostModel.class).findById(HostModel.localHostId());
+        server.set(HostModel.VOLUME_BACKEND, backend.token());
+        Models.get(HostModel.class).save(server);
     }
 }

@@ -4,9 +4,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -376,23 +376,23 @@ class AppImageFollowersTest {
 
             // 1. Only a Docker container, with no image of its own, naming a live app.
             assertThat(violationKeys(catchThrowable(() -> save("guard-kind", "hohenheim:application",
-                FakeApps.settingsFor("v1"), app, ServerModel.localServerId()))))
+                FakeApps.settingsFor("v1"), app, HostModel.localHostId()))))
                 .as("step 1: another kind is refused").contains("image_app_id=image_from_app_kind");
             assertThat(violationKeys(catchThrowable(() -> save("guard-image", DockerContainerKind.ID.toString(),
-                Map.of("image", "fake/worker"), app, ServerModel.localServerId()))))
+                Map.of("image", "fake/worker"), app, HostModel.localHostId()))))
                 .as("step 1: an image of its own is refused").isEqualTo("settings.image=image_and_image_from_app ");
             assertThat(violationKeys(catchThrowable(() -> save("guard-tag", DockerContainerKind.ID.toString(),
-                Map.of("tag", "1"), app, ServerModel.localServerId()))))
+                Map.of("tag", "1"), app, HostModel.localHostId()))))
                 .as("step 1: so is a tag").isEqualTo("settings.image=image_and_image_from_app ");
             assertThat(violationKeys(catchThrowable(() -> save("guard-unknown", DockerContainerKind.ID.toString(),
-                Map.of(), other, ServerModel.localServerId()))))
+                Map.of(), other, HostModel.localHostId()))))
                 .as("step 1: a record that is no app is refused").isEqualTo("image_app_id=image_from_app_unknown ");
 
             // 2. Another server is refused at the write.
             int elsewhere = HostFixtures.admittedDockerHost("follow-elsewhere", 8192);
             assertThat(violationKeys(catchThrowable(() -> save("guard-server", DockerContainerKind.ID.toString(),
                 Map.of(), app, elsewhere))))
-                .as("step 2: an app on another server is refused")
+                .as("step 2: an app on another host is refused")
                 .isEqualTo("image_app_id=image_from_app_other_server ");
 
             // 3. Another owner is refused at the write, and an owner moved through the grants since is refused at
@@ -404,7 +404,7 @@ class AppImageFollowersTest {
             RecordGrants.grant(GrantSubjectType.USER, owner, InstanceModel.MODEL_ID, theirs,
                 HohenheimCapabilities.MANAGE, true);
             assertThat(violationKeys(catchThrowable(() -> save("guard-owner", DockerContainerKind.ID.toString(),
-                Map.of(), theirs, ServerModel.localServerId()))))
+                Map.of(), theirs, HostModel.localHostId()))))
                 .as("step 3: an app of another owner is refused").isEqualTo("image_app_id=image_from_app_other_owner ");
             RecordGrants.grant(GrantSubjectType.USER, owner, InstanceModel.MODEL_ID, app,
                 HohenheimCapabilities.MANAGE, true);
@@ -419,9 +419,9 @@ class AppImageFollowersTest {
             // 4. The app keeps its server while followed; the move is accepted once the reference is cleared.
             assertThat(violationKeys(catchThrowable(() -> {
                 Row moved = row(app);
-                moved.set(InstanceModel.SERVER_ID, elsewhere);
+                moved.set(InstanceModel.HOST_ID, elsewhere);
                 Models.get(InstanceModel.class).save(moved);
-            }))).as("step 4: a followed app cannot change server").isEqualTo(
+            }))).as("step 4: a followed app cannot change host").isEqualTo(
                 "server_id=app_server_change_has_followers ");
 
             // 5. A followed app's Delete is drawn dead with its reason, and the service refuses it in the same words.
@@ -459,7 +459,7 @@ class AppImageFollowersTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("command", "worker --queue",
             "memory_limit_mb", 256)));
         row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
@@ -472,7 +472,7 @@ class AppImageFollowersTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
         Models.get(InstanceModel.class).save(row);
@@ -483,7 +483,7 @@ class AppImageFollowersTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         row.set(InstanceModel.IMAGE_APP_ID, app);
         Models.get(InstanceModel.class).save(row);

@@ -5,15 +5,14 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.hohenheim.server.options.HostOptions;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -51,7 +50,7 @@ class DatasourceDerivedCachesTest {
             DnsZoneStore.INSTANCE.reload();
             BanService.INSTANCE.createBan(BANNED_IP, "swap", BanModel.SOURCE_MANUAL, null, Duration.ofHours(1));
             int serverId = host();
-            ServerOptions.refresh();
+            HostOptions.refresh();
             assertThat(DnsZoneStore.INSTANCE.getZone(ZONE)).as("step 1: the zone is served").isNotNull();
             assertThat(BanService.INSTANCE.isBanned(BANNED_IP)).as("step 1: the ban is enforced").isTrue();
             assertThat(hostName(serverId)).as("step 1: the host is offered").startsWith(HOST);
@@ -62,7 +61,7 @@ class DatasourceDerivedCachesTest {
             assertThat(DnsZoneStore.INSTANCE.zones()).as("step 2: no zone view of the old database")
                 .noneMatch(zone -> zone.getOriginString().equals(ZONE));
             assertThat(BanService.INSTANCE.isBanned(BANNED_IP)).as("step 2: the old ban is not enforced").isFalse();
-            ServerOptions.ensureFresh();
+            HostOptions.ensureFresh();
             assertThat(hostName(serverId)).as("step 2: the old host is not offered").doesNotStartWith(HOST);
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, bansEnabled);
@@ -70,18 +69,18 @@ class DatasourceDerivedCachesTest {
     }
 
     private static int host() {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.createEmptyRow();
-        row.set(ServerModel.NAME, HOST);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        row.set(HostModel.NAME, HOST);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
         model.save(row);
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** @return the offered host's display name under that id, or "" when none is offered */
     private static String hostName(int serverId) {
-        TypeDefinition entry = ServerOptions.REGISTRY.get(HohenheimIds.id(String.valueOf(serverId)));
+        TypeDefinition entry = HostOptions.REGISTRY.get(HohenheimIds.id(String.valueOf(serverId)));
         return entry == null ? "" : entry.getDisplayName();
     }
 }

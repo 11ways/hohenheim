@@ -4,8 +4,8 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.async.ProgressSink;
@@ -105,7 +105,7 @@ public final class InstallMediaFetches {
      *         {@code media_fetch_busy} while {@link #MAX_ACTIVE} fetches run
      */
     public static int start(@NonNull Row server, @NonNull String name, @NonNull Transfer transfer) {
-        int serverId = server.get(ServerModel.ID);
+        int serverId = server.get(HostModel.ID);
         InstallMediaFetchModel model = Models.get(InstallMediaFetchModel.class);
         int fetchId;
         Lease lease;
@@ -115,7 +115,7 @@ public final class InstallMediaFetches {
             List<Row> active = settled(model.find()
                 .where(InstallMediaFetchModel.STATE.in(activeTokens())));
             for (Row row : active) {
-                if (Integer.valueOf(serverId).equals(row.get(InstallMediaFetchModel.SERVER_ID))
+                if (Integer.valueOf(serverId).equals(row.get(InstallMediaFetchModel.HOST_ID))
                         && name.equals(row.get(InstallMediaFetchModel.NAME))) {
                     throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("media_fetch_running")
                         .withArg("media", name));
@@ -135,11 +135,11 @@ public final class InstallMediaFetches {
             try {
                 // An earlier ending of the same name is superseded by this attempt.
                 model.find()
-                    .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
+                    .where(InstallMediaFetchModel.HOST_ID.eq(serverId))
                     .where(InstallMediaFetchModel.NAME.eq(name))
                     .delete();
                 Row row = model.createEmptyRow();
-                row.set(InstallMediaFetchModel.SERVER_ID, serverId);
+                row.set(InstallMediaFetchModel.HOST_ID, serverId);
                 row.set(InstallMediaFetchModel.NAME, name);
                 row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.PENDING.token());
                 model.save(row);
@@ -183,7 +183,7 @@ public final class InstallMediaFetches {
         Instant since = Now.instant().minus(LIVE_BOUND).minus(SHOWN_FOR);
         List<Row> shown = new ArrayList<>();
         for (Row row : settled(Models.get(InstallMediaFetchModel.class).find()
-                .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
+                .where(InstallMediaFetchModel.HOST_ID.eq(serverId))
                 .where(InstallMediaFetchModel.CREATED_AT.gt(since))
                 .orderBy(InstallMediaFetchModel.ID, SortOrder.DESC))) {
             Instant finished = row.get(InstallMediaFetchModel.FINISHED_AT);
@@ -208,7 +208,7 @@ public final class InstallMediaFetches {
             }
         }
         Models.get(InstallMediaFetchModel.class).find()
-            .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
+            .where(InstallMediaFetchModel.HOST_ID.eq(serverId))
             .where(InstallMediaFetchModel.NAME.eq(name))
             .where(InstallMediaFetchModel.STATE.in(ended))
             .delete();
@@ -232,7 +232,7 @@ public final class InstallMediaFetches {
             transfer.run(progress);
             held.afterRelease(() -> {
                 write(fetchId, InstallMediaFetchState.READY, 1.0, null, true);
-                History.event(Models.get(ServerModel.class), serverId,
+                History.event(Models.get(HostModel.class), serverId,
                     Change.fact(HohenheimActivityAction.MEDIA_FETCHED, Map.of(HohenheimActivityAction.NAME_KEY, name)));
             });
         } catch (IOException | RuntimeException failure) {
@@ -372,7 +372,7 @@ public final class InstallMediaFetches {
      * BootSettle borrow), or, when the lease cannot be consulted, it is older than any live job can be.
      */
     private static boolean orphaned(@NonNull Row row, @NonNull Instant deadline) {
-        Integer serverId = row.get(InstallMediaFetchModel.SERVER_ID);
+        Integer serverId = row.get(InstallMediaFetchModel.HOST_ID);
         String name = row.get(InstallMediaFetchModel.NAME);
         Leases leases = leases();
         if (serverId != null && name != null && leases.canAcquireHere()) {

@@ -263,7 +263,7 @@ public class DatabaseModel extends Model {
         .filterable(false)
         .build());
     /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
-    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
+    public static final IntegerField HOST_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
         .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
@@ -396,8 +396,8 @@ public class DatabaseModel extends Model {
         // so no consumer ever re-invents a "blank means local" spelling.
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
-                row.set(SERVER_ID, ServerModel.localServerId());
+            if (row != null && row.get(ID) == null && row.get(HOST_ID) == null) {
+                row.set(HOST_ID, HostModel.localHostId());
             }
         });
         // A new record without a placement is dedicated EXPLICITLY, so only rows older

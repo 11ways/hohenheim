@@ -10,8 +10,8 @@ import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.instance.InstallMediaFetchView;
 import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.hohenheim.instance.InstallMediumView;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
@@ -51,7 +51,7 @@ import java.util.Map;
  * the background fetches (InstallMediaFetches), a fetch-from-URL form and per-medium delete. Hidden and 404d on Docker
  * hosts -- their daemon has no ISO volume to hold (the devices-tab hide-AND-enforce shape).
  */
-public final class ServerMediaTab implements RecordTab.Rendered<Row> {
+public final class HostMediaTab implements RecordTab.Rendered<Row> {
 
     /**
      * An upload into or a delete from a host's pool ended: the daemon holds the media, so no model write announces
@@ -68,19 +68,19 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
     public static final LiveRead<String, InstallMediaView> PART =
         LiveRead.of(HohenheimIds.id("install_media"), String.class, InstallMediaView.class)
             .heard(part -> {
-                RecordTabPart.At at = ServerMediaTab.TAB_PART.at(part);
+                RecordTabPart.At at = HostMediaTab.TAB_PART.at(part);
                 return at == null ? List.of() : List.of(LiveFeed.keyed(
                     access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE), at.key(),
                     InstallMediaFetchModel.MODEL_ID, POOL));
             });
 
     /** Where {@link #PART} lives: the Install media tab of a server record. */
-    private static final RecordTabPart TAB_PART = new RecordTabPart(HohenheimSlugs.SERVERS,
+    private static final RecordTabPart TAB_PART = new RecordTabPart(HohenheimSlugs.HOSTS,
         HohenheimSlugs.Tab.INSTALL_MEDIA);
 
     /** Serve {@link #PART}; called once by HohenheimHandlers. */
     public static void registerPart() {
-        LiveReads.serve(PART, TAB_PART::page, ServerMediaTab::partRead);
+        LiveReads.serve(PART, TAB_PART::page, HostMediaTab::partRead);
     }
 
     /** Tell the readers of one host's part that its pool changed. */
@@ -103,7 +103,7 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
-        return ServerModel.isIncus(record);
+        return HostModel.isIncus(record);
     }
 
     /**
@@ -119,25 +119,25 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row server) {
         Conduit conduit = request.conduit();
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.SERVER_MEDIA,
-            server.get(ServerModel.NAME)));
-        vars.put("serverName", server.get(ServerModel.NAME));
+            server.get(HostModel.NAME)));
+        vars.put("serverName", server.get(HostModel.NAME));
         // The live part's first paint; the same view is what its re-read answers.
         vars.put("part", LiveReads.at(PART, TAB_PART.parameter(request.panelSlug(), serverId, 1),
             () -> view(server)));
-        vars.put("fetchTarget", HohenheimEndpoints.SERVERS_MEDIA_FETCH
-            .with(HohenheimEndpoints.SERVER_ID, serverId));
-        vars.put("deleteTarget", HohenheimEndpoints.SERVERS_MEDIA_DELETE
-            .with(HohenheimEndpoints.SERVER_ID, serverId));
+        vars.put("fetchTarget", HohenheimEndpoints.HOST_MEDIA_FETCH
+            .with(HohenheimEndpoints.HOST_ID, serverId));
+        vars.put("deleteTarget", HohenheimEndpoints.HOST_MEDIA_DELETE
+            .with(HohenheimEndpoints.HOST_ID, serverId));
         // The uploader is a fetch() call, not a form post, so the template needs the URL
         // itself rather than a RouteTarget to render into an action attribute.
-        vars.put("uploadUrl", HohenheimEndpoints.SERVERS_MEDIA_UPLOAD
-            .with(HohenheimEndpoints.SERVER_ID, serverId).toUrl());
+        vars.put("uploadUrl", HohenheimEndpoints.HOST_MEDIA_UPLOAD
+            .with(HohenheimEndpoints.HOST_ID, serverId).toUrl());
         vars.put("maxIsoBytes", InstallMedia.MAX_ISO_BYTES);
         vars.put("head", recordHead(conduit));
-        return new RenderTemplateResult(HohenheimTemplateIds.SERVER_MEDIA, vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.HOST_MEDIA, vars);
     }
 
     /**
@@ -160,13 +160,13 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
             // An unreachable daemon renders the tab with a named error instead of a 500:
             // the operator came here to manage media, and "the host did not answer" is
             // an answer about the host, not a page failure.
-            Blast.log("MEDIA: listing install media of", server.get(ServerModel.NAME),
+            Blast.log("MEDIA: listing install media of", server.get(HostModel.NAME),
                 "failed -", unreachable.getMessage());
             loadError = unreachable.getMessage();
         }
 
         List<InstallMediaFetchView> fetches = new ArrayList<>();
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         Set<String> listed = new HashSet<>();
         for (InstallMediumView medium : media) {
             listed.add(medium.name());

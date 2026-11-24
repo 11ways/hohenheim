@@ -4,7 +4,7 @@ import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -172,7 +172,7 @@ public final class TenantDatabases {
             // logical name or user on the engine, so both are unique by construction.
             engine, Texts.blankAsNull(image), userNameFor(storedName),
             Secrets.generatePassword(), sqlIdentifier(storedName), false,
-            ServerModel.nameOf(serverId), ResourceLimits.none(),
+            HostModel.nameOf(serverId), ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING));
         Row record = created[0];
         int recordId = record.get(DatabaseModel.ID);

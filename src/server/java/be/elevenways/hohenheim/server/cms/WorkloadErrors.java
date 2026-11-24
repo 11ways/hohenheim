@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -67,7 +67,7 @@ final class WorkloadErrors {
         Reading reading = switch (cause.errorCause()) {
             case HOST_ISOLATION -> new Reading(withDetail
                 ? HohenheimMicrocopy.ATTENTION_DETAIL.of("start_refused_isolation").withArg("host",
-                ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID))) : sentence,
+                HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID))) : sentence,
                 null);
             case EXIT_CODE -> new Reading(none ? sentence
                 : HohenheimMicrocopy.ATTENTION_DETAIL.of("error_cause_exit_code").withArg("cause", sentence)
@@ -156,7 +156,7 @@ final class WorkloadErrors {
         }
         return switch (cause.errorCause()) {
             case HOST_ISOLATION -> {
-                int host = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+                int host = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
                 yield HostAttention.enforcesIsolation(host) ? null : AttentionSubject.host(host);
             }
             case NONE, PLAIN, EXIT_CODE, MESSAGE -> null;

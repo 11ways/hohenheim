@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.ServerMediaTab;
+import be.elevenways.hohenheim.server.cms.HostMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
@@ -35,17 +35,17 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * and delete forms of the server record's Install media tab. Every endpoint declares the media permission; the
  * service refuses non-Incus hosts by name.
  */
-final class ServerMediaHandlers {
+final class HostMediaHandlers {
 
-    private ServerMediaHandlers() {
+    private HostMediaHandlers() {
     }
 
     static void init() {
         InstallMedia media = new InstallMedia();
 
-        HohenheimEndpoints.SERVERS_MEDIA_FETCH.setHandler(conduit -> {
-            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
-            Row server = Models.get(ServerModel.class).findById(serverId);
+        HohenheimEndpoints.HOST_MEDIA_FETCH.setHandler(conduit -> {
+            Integer serverId = conduit.getParameter(HohenheimEndpoints.HOST_ID);
+            Row server = Models.get(HostModel.class).findById(serverId);
             if (server == null) {
                 conduit.notFound();
                 return null;
@@ -74,9 +74,9 @@ final class ServerMediaHandlers {
             return HandlerSupport.redirect(tab);
         });
 
-        HohenheimEndpoints.SERVERS_MEDIA_UPLOAD.setHandler(conduit -> {
-            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
-            Row server = Models.get(ServerModel.class).findById(serverId);
+        HohenheimEndpoints.HOST_MEDIA_UPLOAD.setHandler(conduit -> {
+            Integer serverId = conduit.getParameter(HohenheimEndpoints.HOST_ID);
+            Row server = Models.get(HostModel.class).findById(serverId);
             if (server == null) {
                 conduit.notFound();
                 return null;
@@ -108,7 +108,7 @@ final class ServerMediaHandlers {
                 return uploadFailure(conduit, serverId, HandlerSupport.violationMessage(refused));
             } catch (IOException | RuntimeException e) {
                 Blast.log("MEDIA: upload of", name, "to",
-                    server.get(ServerModel.NAME), "failed -", e.getMessage());
+                    server.get(HostModel.NAME), "failed -", e.getMessage());
                 return uploadFailure(conduit, serverId, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
                     .withArg("name", name));
             } finally {
@@ -120,20 +120,20 @@ final class ServerMediaHandlers {
                     Blast.log("MEDIA: could not remove the upload temp file", temp);
                 }
             }
-            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_UPLOADED,
+            History.event(Models.get(HostModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_UPLOADED,
                 Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_uploaded").withArg("name", name));
             // The tab's live part hears the new medium; the answer is a bare status rather than a redirect: there is
             // no form post to send back.
-            ServerMediaTab.poolChanged(serverId);
+            HostMediaTab.poolChanged(serverId);
             conduit.setResponseStatus(200);
             conduit.endWithContentType("text/plain; charset=utf-8", "");
             return null;
         });
 
-        HohenheimEndpoints.SERVERS_MEDIA_DELETE.setHandler(conduit -> {
-            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
-            Row server = Models.get(ServerModel.class).findById(serverId);
+        HohenheimEndpoints.HOST_MEDIA_DELETE.setHandler(conduit -> {
+            Integer serverId = conduit.getParameter(HohenheimEndpoints.HOST_ID);
+            Row server = Models.get(HostModel.class).findById(serverId);
             if (server == null) {
                 conduit.notFound();
                 return null;
@@ -146,11 +146,11 @@ final class ServerMediaHandlers {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
                 return HandlerSupport.redirect(tab);
             }
-            History.event(Models.get(ServerModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_DELETED,
+            History.event(Models.get(HostModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_DELETED,
                 Map.of(HohenheimActivityAction.NAME_KEY, name)));
             HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_deleted").withArg("name", name));
             // Another reader's open tab redraws its part without the deleted medium.
-            ServerMediaTab.poolChanged(serverId);
+            HostMediaTab.poolChanged(serverId);
             return HandlerSupport.redirect(tab);
         });
     }
@@ -165,14 +165,14 @@ final class ServerMediaHandlers {
                                                       @NonNull Microcopy reason) {
         HohenheimFlash.error(conduit, reason);
         // The tab's live part hears the upload end.
-        ServerMediaTab.poolChanged(serverId);
+        HostMediaTab.poolChanged(serverId);
         conduit.setResponseStatus(422);
         conduit.endWithContentType("text/plain; charset=utf-8", "");
         return null;
     }
 
     private static @NonNull RouteTarget mediaTab(@NonNull Integer serverId) {
-        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS, serverId,
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.HOSTS, serverId,
             HohenheimSlugs.Tab.INSTALL_MEDIA);
     }
 }

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
@@ -223,13 +223,13 @@ public final class HostnameReach {
     /** The controller host's declared public IPv4 and IPv6 and the addresses this machine holds, loopback aside. */
     private static @NonNull Own ownAddresses() {
         Set<String> own = new LinkedHashSet<>();
-        Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        Row local = Models.get(HostModel.class).findById(HostModel.localHostId());
         if (local != null) {
-            for (String declared : new String[] {local.get(ServerModel.PUBLIC_IPV4),
-                    local.get(ServerModel.PUBLIC_IPV6)}) {
+            for (String declared : new String[] {local.get(HostModel.PUBLIC_IPV4),
+                    local.get(HostModel.PUBLIC_IPV6)}) {
                 if (declared != null && !declared.isBlank()) {
                     InetAddress literal = literal(declared);
-                    // ServerModel refuses a non-literal on save; an older row reads as undeclared.
+                    // HostModel refuses a non-literal on save; an older row reads as undeclared.
                     if (literal != null) {
                         own.add(literal.getHostAddress());
                     }

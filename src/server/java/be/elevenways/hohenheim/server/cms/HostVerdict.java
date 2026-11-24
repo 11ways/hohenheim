@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostStanding;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.PlacementRefusal;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -35,8 +35,8 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
 
     /** @return this host's verdict, read from its stored row and the gate */
     static @NonNull HostVerdict of(@NonNull Row server) {
-        String admission = server.get(ServerModel.ADMISSION);
-        if (ServerModel.ADMISSION_ADMITTED.equals(admission)) {
+        String admission = server.get(HostModel.ADMISSION);
+        if (HostModel.ADMISSION_ADMITTED.equals(admission)) {
             Microcopy refusal;
             try {
                 refusal = InstancePlacement.hostRefusal(server);
@@ -47,7 +47,7 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
             return refusal == null ? new HostVerdict(HostStanding.TAKING, null, PlacementRefusal.Remedy.OPEN_HOST)
                 : new HostVerdict(HostStanding.REFUSING, refusal, PlacementRefusal.remedyOf(refusal));
         }
-        if (ServerModel.ADMISSION_CORDONED.equals(admission)) {
+        if (HostModel.ADMISSION_CORDONED.equals(admission)) {
             return new HostVerdict(HostStanding.PAUSED, HohenheimMicrocopy.HOST_LIST.of("cordoned_detail"),
                 PlacementRefusal.Remedy.OPEN_HOST);
         }
@@ -55,7 +55,7 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
         List<Microcopy> failed = HostAttention.failedRequiredChecks(server);
         Microcopy reason = !failed.isEmpty()
             ? HohenheimMicrocopy.HOST_LIST.of("checks_failed").withArg("count", failed.size()).withArg("checks", failed)
-            : server.get(ServerModel.PROBED_AT) == null ? HohenheimMicrocopy.HOST_LIST.of("never_checked")
+            : server.get(HostModel.PROBED_AT) == null ? HohenheimMicrocopy.HOST_LIST.of("never_checked")
             : HohenheimMicrocopy.HOST_LIST.of("checks_pass");
         return new HostVerdict(HostStanding.WAITING, reason, PlacementRefusal.Remedy.CHECK_AND_ADMIT);
     }

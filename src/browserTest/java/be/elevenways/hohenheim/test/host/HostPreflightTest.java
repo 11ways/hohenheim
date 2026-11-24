@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostDisk;
@@ -166,21 +166,21 @@ class HostPreflightTest {
         LiveLane.requireImage(new DockerClient(), PinnedImages.ALPINE);
 
         Db.run(datasource, () -> {
-            ServerModel.localServerId();
+            HostModel.localHostId();
             HostPreflight.Report report = HostPreflight.runAndStore("local");
 
-            Row local = Models.get(ServerModel.class).findByName("local");
-            assertThat((Object) local.get(ServerModel.PROBED_AT))
+            Row local = Models.get(HostModel.class).findByName("local");
+            assertThat((Object) local.get(HostModel.PROBED_AT))
                 .as("step 1: probed_at is stamped").isNotNull();
-            assertThat((Boolean) local.get(ServerModel.PREFLIGHT_OK))
+            assertThat((Boolean) local.get(HostModel.PREFLIGHT_OK))
                 .as("step 1: preflight_ok stores the real verdict")
                 .isEqualTo(report.passed());
-            Object capabilities = local.get(ServerModel.CAPABILITIES);
+            Object capabilities = local.get(HostModel.CAPABILITIES);
             assertThat(capabilities)
                 .as("step 2: the capabilities JSON holds the check map")
                 .isInstanceOfSatisfying(Map.class, map ->
                     assertThat((Map<?, ?>) map.get("checks")).isNotEmpty());
-            assertThat((Object) local.get(ServerModel.LAST_SEEN_AT))
+            assertThat((Object) local.get(HostModel.LAST_SEEN_AT))
                 .as("step 2: the daemon contact updated last_seen_at").isNotNull();
             assertThat(HostDisk.storedOf(local))
                 .as("step 2: the same contact measured the host's disk, as Probe now and the heartbeat do")
@@ -195,7 +195,7 @@ class HostPreflightTest {
                 assertThat(report.passed())
                     .as("step 3: a failed required nft check fails the whole preflight")
                     .isFalse();
-                assertThat((Boolean) local.get(ServerModel.PREFLIGHT_OK))
+                assertThat((Boolean) local.get(HostModel.PREFLIGHT_OK))
                     .as("step 3: and the stored verdict says so")
                     .isFalse();
             }

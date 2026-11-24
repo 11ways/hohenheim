@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
@@ -17,13 +17,7 @@ import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
-import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.ImageIds;
-import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ReleaseKind;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.*;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.StaticSiteKind;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -206,10 +200,10 @@ public final class ApplicationReleases {
         imported.remove("artifact_path");
         imported.remove("tag");
         imported.put(InstanceKindFields.IMAGE, verifiedImageId);
-        int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(application.get(InstanceModel.HOST_ID));
         try {
             return inScope(applicationId, () -> {
-                DesiredSpec desired = desiredSettings(new ServerService().clientFor(serverId),
+                DesiredSpec desired = desiredSettings(new HostService().clientFor(serverId),
                         application, imported);
                 for (String key : List.of("artifact_path", "commit_sha")) {
                     if (source.containsKey(key)) {
@@ -234,8 +228,8 @@ public final class ApplicationReleases {
         Row application = requireApplication(applicationId);
         Map<String, Object> settings = resolvedSettings(application, overrides);
         String applicationName = application.get(InstanceModel.NAME);
-        int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
-        DockerClient docker = new ServerService().clientFor(serverId);
+        int serverId = HostModel.canonicalHostId(application.get(InstanceModel.HOST_ID));
+        DockerClient docker = new HostService().clientFor(serverId);
         String fingerprint = ReleaseEngine.sourceFingerprint(applicationId, settings);
 
         try {
@@ -253,8 +247,8 @@ public final class ApplicationReleases {
                 if (fingerprintable && serving != null
                         && fingerprint.equals(
                             storedSettings(serving).get("source_fingerprint"))
-                        && serverId == ServerModel.canonicalServerId(
-                            serving.get(InstanceModel.SERVER_ID))) {
+                        && serverId == HostModel.canonicalHostId(
+                            serving.get(InstanceModel.HOST_ID))) {
                     int servingId = serving.get(InstanceModel.ID);
                     InstanceStatus live =
                         reusableStatus(docker, servingId, storedSettings(serving));
@@ -280,13 +274,13 @@ public final class ApplicationReleases {
                             reusableStatus(docker, servingId, storedSettings(serving));
                         if (live != null) {
                             ReleaseEngine.requireHealthy(live, storedSettings(serving),
-                                ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID)));
+                                HostModel.canonicalHostId(serving.get(InstanceModel.HOST_ID)));
                             return new Release(servingId, live);
                         }
                     }
                     InstanceStatus restarted = new InstanceService().deploy(servingId);
                     ReleaseEngine.requireHealthy(restarted, storedSettings(serving),
-                        ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID)));
+                        HostModel.canonicalHostId(serving.get(InstanceModel.HOST_ID)));
                     return new Release(servingId, restarted);
                 }
 
@@ -377,7 +371,7 @@ public final class ApplicationReleases {
         // Captured BEFORE the destroys soft-delete the rows the derivation reads.
         Set<Integer> servers = new LinkedHashSet<>();
         for (Row instance : owned) {
-            servers.add(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+            servers.add(HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID)));
         }
         try {
             inScope(applicationId, () -> {
@@ -400,7 +394,7 @@ public final class ApplicationReleases {
             // have no consumer left to disconnect: remove them all, verified.
             InstanceDatabaseNetworks.sweepFor(applicationId, true, servers);
             // The workload is gone, so nothing holds the build artifacts any more.
-            BuildArtifacts.pruneSuperseded(new ServerService().clientFor(ServerModel.localServerId()),
+            BuildArtifacts.pruneSuperseded(new HostService().clientFor(HostModel.localHostId()),
                 InstanceModel.MODEL_ID.toString(), applicationId, "");
         } catch (Violations refused) {
             throw refused;
@@ -650,7 +644,7 @@ public final class ApplicationReleases {
             settings.put("runtime_image_id", image.get(RuntimeImageModel.ID));
             settings.put("runtime_image_context", image.get(RuntimeImageModel.BUILD_CONTEXT));
             settings.put("runtime_image_reference",
-                RuntimeImages.referenceFor(image, ServerModel.RUNTIME_DOCKER));
+                RuntimeImages.referenceFor(image, HostModel.RUNTIME_DOCKER));
             settings.put("runtime_image_content", RuntimeImages.contextFingerprint(image));
             settings.put("runtime_image_updated_at", String.valueOf(image.get(RuntimeImageModel.UPDATED_AT)));
             inherit(settings, "command", image.get(RuntimeImageModel.DEFAULT_COMMAND));
@@ -697,7 +691,7 @@ public final class ApplicationReleases {
             Path artifactContext = artifactPath.isEmpty() ? null
                 : RuntimeImages.materializeArtifactContext(RuntimeImages.requireFor(application),
                     Path.of(artifactPath));
-            String serverName = ServerModel.canonicalNameOf(application.get(InstanceModel.SERVER_ID));
+            String serverName = HostModel.canonicalNameOf(application.get(InstanceModel.HOST_ID));
             SandboxedBuilds.Result build;
             try {
                 build = new SandboxedBuilds(docker, serverName).run(new BuildRequest(
@@ -802,7 +796,7 @@ public final class ApplicationReleases {
         // Resolved here (host directories created, quotas applied) and stored on the
         // release, so a rollback re-mounts exactly what it stored.
         Map<String, String> mounts = InstanceVolumes.mountsFor(applicationId,
-            ServerModel.canonicalNameOf(application.get(InstanceModel.SERVER_ID)));
+            HostModel.canonicalNameOf(application.get(InstanceModel.HOST_ID)));
         if (!mounts.isEmpty()) {
             desired.put(VOLUME_MOUNTS, mounts);
         }

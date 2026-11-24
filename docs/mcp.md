@@ -22,7 +22,7 @@ The key is shown once; revoke it on the same page.
   the /manage one), a setting at its default marked so, a related record by its
   code and name, a secret only as set or not set; an app's variables are read
   with `app_list_variables`. `history` tells what happened to one, and `list`
-  lists the records of one kind (`list` with `kind` `site`, `app`, `server`,
+  lists the records of one kind (`list` with `kind` `site`, `app`, `host`,
   `user`, ...), each by its code, a page at a time; most kinds take a search
   word, so a hostname or an app's name leads to its code in one call.
 - Every other tool is one operation the panel already places (deploy an app,
@@ -37,10 +37,11 @@ The key is shown once; revoke it on the same page.
   the key's owner may not use is not listed.
 
 Records are named by short codes, never by internal ids: `S14` is a site, `AP33`
-an app, `SR2` a server, `Z8` a DNS zone, `C12` a certificate, `RL5` a deploy. The
-server's instructions name every kind's letters, and say once what the
-`version` argument of a changing tool does: the version a read showed (`v8`),
-so a record changed since is refused instead of overwritten.
+an app, `SR2` a host (a machine apps run on), `Z8` a DNS zone, `C12` a
+certificate, `RL5` a deploy. The connection's instructions name every kind's
+letters, and say once what the `version` argument of a changing tool does: the
+version a read showed (`v8`), so a record changed since is refused instead of
+overwritten.
 
 Work that outlives a call, such as deploying an app or rolling it back
 (`app_deploy`, `app_roll_back`), answers at once with the code of its run

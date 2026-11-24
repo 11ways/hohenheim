@@ -2,13 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimSecrets;
@@ -166,7 +160,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
                     .where(InstanceModel.NAME.startsWith(PREFIX)).all());
                 if (admittedHostId != null) {
                     created.addAll(instances.find().withTrashed()
-                        .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all());
+                        .where(InstanceModel.HOST_ID.eq(admittedHostId)).all());
                 }
                 for (Row instance : created) {
                     InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
@@ -176,7 +170,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         if (admittedHostId != null) {
             InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
             for (Row row : databases.find()
-                    .where(DatabaseModel.SERVER_ID.eq(admittedHostId)).all()) {
+                    .where(DatabaseModel.HOST_ID.eq(admittedHostId)).all()) {
                 Integer id = row.get(DatabaseModel.ID);
                 for (Row link : links.findByDatabaseId(id)) {
                     links.delete(link.get(InstanceDatabaseModel.ID));
@@ -185,7 +179,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             }
             // Engines go LAST: an engine refuses to go while a record still names it.
             for (Row engine : engines.find()
-                    .where(DatabaseEngineModel.SERVER_ID.eq(admittedHostId)).all()) {
+                    .where(DatabaseEngineModel.HOST_ID.eq(admittedHostId)).all()) {
                 engines.delete(engine.get(DatabaseEngineModel.ID));
             }
         }
@@ -194,7 +188,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             HardDeletes.byId(sites, row.get(SiteModel.ID));
         }
         if (admittedHostId != null) {
-            Models.get(ServerModel.class).delete(admittedHostId);
+            Models.get(HostModel.class).delete(admittedHostId);
         }
     }
 
@@ -302,19 +296,19 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
     }
 
     private static int admittedHost() {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + "host");
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, PREFIX + "host");
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** A session GET, in the (session, path) order this class's journeys read in. */
@@ -411,7 +405,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         int databaseAId = database.get(DatabaseModel.ID);
 
         // 4. PLACEMENT chose the admitted host; the tenant named none and could not.
-        assertThat((Integer) database.get(DatabaseModel.SERVER_ID))
+        assertThat((Integer) database.get(DatabaseModel.HOST_ID))
             .as("step 4: the engine landed on the admitted host placement chose")
             .isEqualTo(admittedHostId);
 
@@ -443,7 +437,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         assertThat(sharedEngineId).as("step 6: it names its engine").isNotNull();
         Row engine = Models.get(DatabaseEngineModel.class).findById(sharedEngineId);
         assertThat(engine).as("step 6: and that engine row exists").isNotNull();
-        assertThat((Integer) engine.get(DatabaseEngineModel.SERVER_ID))
+        assertThat((Integer) engine.get(DatabaseEngineModel.HOST_ID))
             .as("step 6: on the same admitted host").isEqualTo(admittedHostId);
         Row engineInstance = DatabaseInstances.ownedBy(EngineHost.ofEngine(engine));
         assertThat(engineInstance).as("step 6: the engine owns the instance row").isNotNull();
@@ -657,7 +651,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
 
         Model databases = Models.get(DatabaseModel.class);
         Row stored = databases.findById(databaseAId);
-        int storedServer = stored.get(DatabaseModel.SERVER_ID);
+        int storedServer = stored.get(DatabaseModel.HOST_ID);
 
         // 1..6 THE ATTACKS, one per column, each straight at the MODEL -- no form, no
         //      resource, exactly the shape a direct POST or a revision restore takes.
@@ -666,7 +660,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
         //      the refusal a tenant sees must still be the FROZEN one (hook order), never
         //      an invariant that reads as "your engine choice is wrong".
         for (Map.Entry<String, Object> attack : new java.util.LinkedHashMap<String, Object>() {{
-                put(DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId());
+                put(DatabaseModel.HOST_ID.getName(), HostModel.localHostId());
                 put(DatabaseModel.IMAGE.getName(), "attacker/postgres:evil");
                 put(DatabaseModel.MEMORY_LIMIT_MB.getName(), 65536);
                 put(DatabaseModel.EPHEMERAL.getName(), true);
@@ -685,7 +679,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
                 .as("step 1: and " + attack.getKey() + " kept its stored value")
                 .isEqualTo(stored.get(attack.getKey()));
         }
-        assertThat((Integer) databases.findById(databaseAId).get(DatabaseModel.SERVER_ID))
+        assertThat((Integer) databases.findById(databaseAId).get(DatabaseModel.HOST_ID))
             .as("step 2: placement is intact after every attempt").isEqualTo(storedServer);
 
         // 3. And a tenant cannot INSERT a database record at all outside the funnel: the
@@ -696,7 +690,7 @@ class TenantDatabaseSurfaceTest extends HohenheimHttpTestBase {
             row.set(DatabaseModel.NAME, PREFIX + "smuggled");
             row.set(DatabaseModel.ENGINE, "postgres");
             row.set(DatabaseModel.DB_NAME, "smuggled");
-            row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+            row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
             databases.save(row);
         }));
         assertThat(violationKeys(smuggled))

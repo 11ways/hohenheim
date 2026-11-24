@@ -7,9 +7,9 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -100,7 +100,7 @@ class InstanceRuntimeLiveTest {
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
-            int localId = ServerModel.localServerId();
+            int localId = HostModel.localHostId();
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("image", TestImages.ALPINE);
             settings.put("command", "sleep 300");

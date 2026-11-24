@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.server.options.HostOptions;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
@@ -41,9 +41,9 @@ public final class SshTargetKind implements BackupTargetKindHandler {
      * every other host-picking settings field uses, so a host rename never re-points a
      * backup target at a different machine.
      */
-    public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
+    public static final EnumField HOST = SETTINGS_SCHEMA.addField(
         RegistryMemberField.builder("server")
-            .registry(ServerOptions.REGISTRY)
+            .registry(HostOptions.REGISTRY)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
             .help(HohenheimMicrocopy.HELP.of("backup_ssh_server"))
             .build());
@@ -74,7 +74,7 @@ public final class SshTargetKind implements BackupTargetKindHandler {
 
     @Override
     public Schema getSchema() {
-        ServerOptions.ensureFresh();
+        HostOptions.ensureFresh();
         return SETTINGS_SCHEMA;
     }
 
@@ -91,14 +91,14 @@ public final class SshTargetKind implements BackupTargetKindHandler {
         }
         String spelling = trimmed(settings.get("server"));
         if (spelling.isEmpty()) {
-            // Explicit, because canonicalServerId folds a blank spelling to the LOCAL
+            // Explicit, because canonicalHostId folds a blank spelling to the LOCAL
             // host, and "the local host is not an ssh destination" is a confusing way to
             // say "you picked no host".
             throw new IOException("SSH backup target names no destination host");
         }
         int serverId;
         try {
-            serverId = ServerModel.canonicalServerId(spelling);
+            serverId = HostModel.canonicalHostId(spelling);
         } catch (IllegalArgumentException unknown) {
             throw new IOException("SSH backup target names no enrolled host: "
                 + unknown.getMessage());

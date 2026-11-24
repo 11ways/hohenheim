@@ -4,12 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
@@ -263,7 +258,7 @@ final class AppDirectory {
                 WidgetBadge.of(InstanceModel.KIND, instance.get(InstanceModel.KIND), words.locales, words.resolver)
                     .label(),
                 address, address == null ? null : address.primary(),
-                delegated ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)),
+                delegated ? null : HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)),
                 mainHttps(names, served, working, certificates, access, panel.slug()), workloadHealth.apply(instance),
                 InstanceParts.recordRoute(panel.slug(), instance, null)));
         }
@@ -291,7 +286,7 @@ final class AppDirectory {
                 words.say(HohenheimMicrocopy.APP_LIST.of("stack_kind")
                     .withArg("count", members.getOrDefault(id, 0L))),
                 new SiteHostnamesCell(null, 0), null,
-                delegated ? null : ServerModel.canonicalNameOf(stack.get(StackModel.SERVER_ID)),
+                delegated ? null : HostModel.canonicalNameOf(stack.get(StackModel.HOST_ID)),
                 null, stackHealth.apply(stack),
                 CmsRoutes.subpage(panel.slug(), HohenheimSlugs.STACKS, id, HohenheimSlugs.Tab.SERVICES)));
         }
@@ -404,7 +399,7 @@ final class AppDirectory {
     private static @Nullable String websiteHost(@NonNull Row site, @NonNull Map<Integer, Row> servedBy) {
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = instanceId == null ? null : servedBy.get(instanceId);
-        return instance == null ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
+        return instance == null ? null : HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID));
     }
 
     /** The live (untrashed) sites serving each of these workloads, read once, in stored order. */

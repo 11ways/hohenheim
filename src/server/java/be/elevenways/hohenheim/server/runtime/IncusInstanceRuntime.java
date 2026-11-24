@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.instance.ImageOrigin;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -476,11 +476,11 @@ public final class IncusInstanceRuntime
         if (name == null) {
             return;
         }
-        Row server = Models.get(ServerModel.class).findByName(name);
+        Row server = Models.get(HostModel.class).findByName(name);
         if (server == null) {
             return;
         }
-        IncusKernelIsolation kernel = IncusKernelIsolation.forServer(server);
+        IncusKernelIsolation kernel = IncusKernelIsolation.forHost(server);
         if (!kernel.available()) {
             // Refusing to answer is not evidence of a leak; the sweep reports the host as
             // unverifiable every run rather than manufacturing a verdict here.

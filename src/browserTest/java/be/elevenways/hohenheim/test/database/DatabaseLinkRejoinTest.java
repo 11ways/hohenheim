@@ -1,10 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -95,7 +91,7 @@ class DatabaseLinkRejoinTest {
                 DatabaseEngineModel.ENGINE.getName(), ManagedDatabase.Engine.MONGO.token(),
                 DatabaseEngineModel.ROOT_USER.getName(), "root",
                 DatabaseEngineModel.ROOT_PASSWORD.getName(), "root-secret-password-1",
-                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             int engineId = engine.get(DatabaseEngineModel.ID);
             String engineHandle = EngineHandles.plantEngine(engineId, PREFIX + "mongo",
@@ -113,7 +109,7 @@ class DatabaseLinkRejoinTest {
                 DatabaseModel.ENGINE_ID.getName(), engineId,
                 DatabaseModel.DB_NAME.getName(), "shopdb", DatabaseModel.DB_USER.getName(), "shopuser",
                 DatabaseModel.DB_PASSWORD.getName(), "shop-secret-password-1",
-                DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             int databaseId = database.get(DatabaseModel.ID);
             assertThat(DatabaseInstances.servedBy(Models.get(InstanceModel.class).findById(engineInstance)))
@@ -195,7 +191,7 @@ class DatabaseLinkRejoinTest {
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME, name);
         instance.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instance.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(instance);
         return instance.get(InstanceModel.ID);

@@ -2,12 +2,12 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
@@ -354,7 +354,7 @@ public final class InstanceService {
             env.putAll(resolved.variables());
             try {
                 // The volume directories the one-shot binds must exist before its create, as for the workload's own.
-                resolved.handler().prepareForDeploy(instanceId, ServerModel.nameOf(resolved.serverId()),
+                resolved.handler().prepareForDeploy(instanceId, HostModel.nameOf(resolved.serverId()),
                     resolved.settings());
                 return support.runPreDeploy(resolved.spec(), argv, env, timeoutMs, tailLines,
                     oneShot -> InstanceDatabaseNetworks.attachLinks(resolved, instanceId, oneShot));
@@ -446,7 +446,7 @@ public final class InstanceService {
             // Before create, because a bind whose source does not exist is silently
             // created root-owned by the daemon.
             resolved.handler().prepareForDeploy(instanceId,
-                ServerModel.nameOf(resolved.serverId()), resolved.settings());
+                HostModel.nameOf(resolved.serverId()), resolved.settings());
             String handle = resolved.runtime().create(spec);
             // Pin honesty, recorded from DAEMON truth right after create: the resolved
             // image identity behind the mutable alias is what the record answers with,
@@ -478,7 +478,7 @@ public final class InstanceService {
             // answered once the workload is up and its host port is known. console_line
             // is the console hub's and was already armed above.
             InstanceReadiness.await(resolved.row(), status,
-                PublishedPortProbe.forServer(resolved.serverId()));
+                PublishedPortProbe.forHost(resolved.serverId()));
             this.beforeOutcomeWrite.run();
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
@@ -781,11 +781,11 @@ public final class InstanceService {
             // The named-refusal funnel, caught below: destroy is the abandon-ship verb
             // and must not be BLOCKED by a destination host that became unaddressable.
             InstanceRuntime target = runtimeFor(resolved.handler(),
-                ServerModel.nameOf(targetId));
+                HostModel.nameOf(targetId));
             if (target instanceof WorkloadAttribution support
                     && support.claimOf(resolved.spec())
                         == WorkloadAttribution.WorkloadClaim.OURS) {
-                InstanceMigrations.removeMigrationCopy(target, resolved, ServerModel.nameOf(targetId));
+                InstanceMigrations.removeMigrationCopy(target, resolved, HostModel.nameOf(targetId));
             }
         } catch (IOException | Violations cleanupFailed) {
             Blast.log("INSTANCE: destroy could not remove the mid-migration copy of",
@@ -813,7 +813,7 @@ public final class InstanceService {
         if (row == null) {
             throw InstanceOperationLock.notFound(instanceId);
         }
-        int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(row.get(InstanceModel.HOST_ID));
         this.leases.requireFence(serverId);
         // The release's own claim, queued: the caller holds the application's (the documented lock order), and a
         // reconciler glance at the release must delay the switch, never fail it. The ledger follows the role in the
@@ -1081,7 +1081,7 @@ public final class InstanceService {
                 continue;   // written by THIS process: a live operation, not a corpse
             }
             int id = row.get(InstanceModel.ID);
-            Integer serverId = row.get(InstanceModel.SERVER_ID);
+            Integer serverId = row.get(InstanceModel.HOST_ID);
             try {
                 // Only a record nobody holds: a live operation's claim (this controller's or a rival's)
                 // means the status is that operation's to finish, whatever the clock says.
@@ -1227,7 +1227,7 @@ public final class InstanceService {
         if (row == null) {
             throw InstanceOperationLock.notFound(instanceId);
         }
-        String serverName = ServerModel.canonicalNameOf(row.get(InstanceModel.SERVER_ID));
+        String serverName = HostModel.canonicalNameOf(row.get(InstanceModel.HOST_ID));
         // AIDEV-NOTE: an ALREADY destroyed record still has its data, and that is the whole
         // reason an ordinary destroy keeps it. "I deleted the workspace last week, now
         // remove its files" has to work, so the container teardown is conditional and the
@@ -1399,14 +1399,14 @@ public final class InstanceService {
         }
         // THE canonical host key -- null folds to the local daemon, any other spelling
         // was already normalized onto servers.id by the model's beforeValidate hook.
-        int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
-        String serverName = ServerModel.nameOf(serverId);
+        int serverId = HostModel.canonicalHostId(row.get(InstanceModel.HOST_ID));
+        String serverName = HostModel.nameOf(serverId);
         // The kind's declared runtime must MATCH the host's declared runtime before any
         // client is built: a docker kind resolved against an incus host (or vice versa)
         // is a named refusal, never a client aimed at the wrong daemon.
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String hostRuntime = server != null ? ServerModel.runtimeOf(server)
-            : ServerModel.RUNTIME_DOCKER;
+        Row server = Models.get(HostModel.class).findById(serverId);
+        String hostRuntime = server != null ? HostModel.runtimeOf(server)
+            : HostModel.RUNTIME_DOCKER;
         InstanceKinds.requireRuntimeMatch(serverName, hostRuntime, handler.supportedRuntimes());
         return new Resolved(row, handler, runtimeFor(handler, serverName), spec, serverId,
             variables, settings, source == null ? null : source.refusal());

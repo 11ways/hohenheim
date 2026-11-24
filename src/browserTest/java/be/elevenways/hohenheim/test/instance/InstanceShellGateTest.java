@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
@@ -289,21 +288,21 @@ class InstanceShellGateTest extends HohenheimTestBase {
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         return row.get(InstanceModel.ID);
     }
 
     /** A workspace on an Incus host: a NON-root uid, on the runtime with no shell lane. */
     private static int incusWorkspace(String name) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row host = servers.createEmptyRow();
-        host.set(ServerModel.NAME, PREFIX + "incus-host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.SSH_TARGET, "nobody@shellgate-incus.invalid");
+        host.set(HostModel.NAME, PREFIX + "incus-host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.SSH_TARGET, "nobody@shellgate-incus.invalid");
         servers.save(host);
-        int hostId = Models.get(ServerModel.class).findByName(PREFIX + "incus-host")
-            .get(ServerModel.ID);
+        int hostId = Models.get(HostModel.class).findByName(PREFIX + "incus-host")
+            .get(HostModel.ID);
 
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
@@ -312,7 +311,7 @@ class InstanceShellGateTest extends HohenheimTestBase {
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("start_command", "sleep 300")));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         // The seeded node-22 image; the workspace kind refuses to resolve without one.
         row.set(InstanceModel.RUNTIME_IMAGE_ID, 1);
         instances.save(row);

@@ -3,11 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.ProxyAttention;
@@ -156,7 +152,7 @@ class StreamJourneyTest extends HohenheimTestBase {
             .isEqualTo("outcome_stream_live");
         Row site = siteNamed("r4a-ssh");
         int siteId = site.get(SiteModel.ID);
-        Row claim = PortLedger.holderOf(PortLedger.claimKeyOf(ServerModel.localServerId(), "", publicPort, "tcp"));
+        Row claim = PortLedger.holderOf(PortLedger.claimKeyOf(HostModel.localHostId(), "", publicPort, "tcp"));
         assertThat(claim).as("step 2: the port is claimed in the ledger").isNotNull();
         assertThat(PortLedger.isOwnedBy(claim, SiteModel.MODEL_ID, siteId)).as("step 2: by the stream").isTrue();
 
@@ -204,7 +200,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         // 5. Switched to TCP and UDP on the site form: datagrams are forwarded too, under a UDP claim of their own. The
         //    save rebinds the port for both transports before it answers; what the proxy opened is its own fact.
         edit(site, publicPort, "both", null);
-        assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(ServerModel.localServerId(), "", publicPort, "udp")))
+        assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(HostModel.localHostId(), "", publicPort, "udp")))
             .as("step 5: the UDP port is claimed too").isNotNull();
         assertThat(proxy.getStreamFailure(siteId)).as("step 5: the proxy opened both transports").isNull();
         assertThat(proxy.getStreamUdpAddress(siteId)).as("step 5: and listens for datagrams").isNotNull();

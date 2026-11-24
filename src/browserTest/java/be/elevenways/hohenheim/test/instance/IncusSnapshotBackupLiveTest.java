@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
@@ -139,7 +139,7 @@ class IncusSnapshotBackupLiveTest {
     }
 
     private static int instanceRecord(String name) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        Row host = Models.get(HostModel.class).findByName(HOST);
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", IMAGE);
         settings.put("memory_limit_mb", 256);
@@ -148,7 +148,7 @@ class IncusSnapshotBackupLiveTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.HOST_ID, host.get(HostModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -290,7 +290,7 @@ class IncusSnapshotBackupLiveTest {
                 String operatorBucket = HohenheimAccess.packSubjects(Set.of());
                 long quotaBefore = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 newId = backups.restoreToNew(backupId, "incus-clone",
-                    Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID)).instanceId();
+                    Models.get(InstanceModel.class).findById(id).get(InstanceModel.HOST_ID)).instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 7: the new instance has its own id")
                     .isNotEqualTo(id);

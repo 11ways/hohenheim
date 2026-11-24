@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -20,7 +20,6 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -157,9 +156,9 @@ class InstanceKindOfferTest {
     @DisplayName("every kind's supported runtimes are real host runtimes, and the set is never empty")
     void supportedRuntimesBindToTheHostRuntimeVocabulary() {
 
-        // 1. The host-runtime vocabulary is declared ONCE, on ServerModel.RUNTIME. A kind
+        // 1. The host-runtime vocabulary is declared ONCE, on HostModel.RUNTIME. A kind
         //    naming a runtime no host can declare places nowhere and says nothing about it.
-        Set<String> hostRuntimes = ServerModel.RUNTIME.getValues().keySet();
+        Set<String> hostRuntimes = HostModel.RUNTIME.getValues().keySet();
         assertThat(hostRuntimes)
             .as("step 1: hosts declare a populated runtime vocabulary")
             .isNotEmpty();
@@ -191,7 +190,7 @@ class InstanceKindOfferTest {
             .isTrue();
         assertThat(InstanceKinds.getHandler("hohenheim:workspace").supportedRuntimes())
             .as("step 4: and it is the workspace, on both runtimes")
-            .containsExactlyInAnyOrder(ServerModel.RUNTIME_DOCKER, ServerModel.RUNTIME_INCUS);
+            .containsExactlyInAnyOrder(HostModel.RUNTIME_DOCKER, HostModel.RUNTIME_INCUS);
     }
 
     @Test

@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -59,7 +59,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(row);
         instanceId = row.get(InstanceModel.ID);
         return instanceId;
@@ -229,7 +229,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
     @Test
     void theLedgersPublishedPortRendersWithItsHostAddress() throws Exception {
         int id = instance();
-        int localHost = ServerModel.localServerId();
+        int localHost = HostModel.localHostId();
         PortLedger.claim(localHost, null, 25565, "tcp", InstanceModel.MODEL_ID, id,
             "overview test");
         // A held claim reads In use only while its workload runs (a stopped one's reads Reserved, see
@@ -252,8 +252,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    rather than printing a reachable-looking localhost. The precondition is
             //    PINNED, never branched on: a harness host that ever gained a public IPv4
             //    would silently stop testing the no-address rendering altogether.
-            Row server = Models.get(ServerModel.class).findById(localHost);
-            String declared = server.get(ServerModel.PUBLIC_IPV4);
+            Row server = Models.get(HostModel.class).findById(localHost);
+            String declared = server.get(HostModel.PUBLIC_IPV4);
             assertThat(declared == null ? "" : declared.strip())
                 .withFailMessage("step 2: the fixture host must declare NO public IPv4 for"
                     + " the no-address rendering to be under test (found '%s')", declared)
@@ -264,16 +264,16 @@ class InstanceOverviewTest extends HohenheimTestBase {
                 .contains("data-endpoint-noaddress");
 
             // 3. Declare one: the address now joins the port.
-            server.set(ServerModel.PUBLIC_IPV4, "203.0.113.7");
-            Models.get(ServerModel.class).save(server);
+            server.set(HostModel.PUBLIC_IPV4, "203.0.113.7");
+            Models.get(HostModel.class).save(server);
             try {
                 assertThat(adminGet(overviewUrl()).body())
                     .as("step 3: the declared host address joins the published port")
                     .contains("203.0.113.7:25565");
             } finally {
-                Row restore = Models.get(ServerModel.class).findById(localHost);
-                restore.set(ServerModel.PUBLIC_IPV4, declared);
-                Models.get(ServerModel.class).save(restore);
+                Row restore = Models.get(HostModel.class).findById(localHost);
+                restore.set(HostModel.PUBLIC_IPV4, declared);
+                Models.get(HostModel.class).save(restore);
             }
         } finally {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
@@ -303,7 +303,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
     void aPreallocatedPortReadsInUseWhileItsWorkloadRuns() throws Exception {
         int id = instance();
         var instances = Models.get(InstanceModel.class);
-        PortLedger.claimPreallocated(ServerModel.localServerId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
+        PortLedger.claimPreallocated(HostModel.localHostId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
             "overview test");
         try {
             // 1. Stopped: the number is held for it, nothing listens, so it is Reserved.
@@ -344,8 +344,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
      */
     @Test
     void aBlockedHostIsStatedOnTheOverviewAndNotOnlyToasted() throws Exception {
-        var servers = Models.get(ServerModel.class);
-        int serverId = ServerModel.localServerId();
+        var servers = Models.get(HostModel.class);
+        int serverId = HostModel.localHostId();
         // The whole fixture-written state, not just admission: admitLocal also stamps the
         // posture, the preflight and its acknowledgement, and the local host is one row
         // every class in the fork shares.
@@ -365,7 +365,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
             // 2. Block the host and change NOTHING else.
             Row server = servers.findById(serverId);
-            server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+            server.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
             servers.save(server);
 
             String blocked = adminGet(overviewUrl()).body();
@@ -415,7 +415,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
         decoy.set(InstanceModel.KIND, "hohenheim:docker_container");
         decoy.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         decoy.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        decoy.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        decoy.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(decoy);
 
         try {

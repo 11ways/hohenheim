@@ -5,8 +5,8 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.KeptFromAssistants;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -24,8 +24,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Permission;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.Objects;
 
 import java.util.Objects;
 
@@ -85,9 +83,9 @@ public final class AdminSources {
 
         // Hosts, for the record pickers and list relations that name a host. The instance form's host pick is a
         // kind-judged select over every host (InstanceParts.hostPick), not this source.
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.REF)
-            .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(HohenheimSlugs.SERVERS)));
+        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(HostModel.REF)
+            .project(HostModel.NAME, HostModel.RUNTIME, HostModel.VOLUME_BACKEND)
+            .search(HostModel.NAME), HostModel.class, panel, panel.entryBySlug(HohenheimSlugs.HOSTS)));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).

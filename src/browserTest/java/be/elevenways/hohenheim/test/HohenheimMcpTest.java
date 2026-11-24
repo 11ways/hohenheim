@@ -6,19 +6,7 @@ import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.DeployTrigger;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.DatabaseDumpModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -26,7 +14,9 @@ import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -52,6 +42,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.operation.OperationRunModel;
@@ -222,6 +213,27 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /**
+     * Words: a host (a machine apps run on) names its tools and its list kind "host"; "server" is left for a whole
+     * Hohenheim, while the operation ids a history stores keep their old spelling.
+     */
+    @Test
+    void aHostIsNamedHostNeverServer() {
+        assertThat(HohenheimMcpModule.tools()).as("step 1: the boot module built the tools").isNotNull();
+        assertThat(AssistantNoun.of(HostModel.MODEL_ID)).as("step 1: the list kind of a host").isEqualTo("host");
+        List<String> names = new ArrayList<>();
+        names.add(HostParts.DELETE.assistantName());
+        names.add(StackOperations.RECLAIM_IMAGES.assistantName());
+        for (Operation<Row, Void, ?> operation : HostParts.lifecycleForAssistants()) {
+            names.add(operation.assistantName());
+        }
+        assertThat(names).as("step 2: every host tool is named after the host").containsExactlyInAnyOrder(
+            "host_delete", "host_reclaim_images", "host_test", "host_admit", "host_pause", "host_drain",
+            "host_resume", "host_reap");
+        assertThat(HostParts.DELETE.id().toString()).as("step 3: the stored operation id keeps its old spelling")
+            .isEqualTo("hohenheim:delete_server");
+    }
+
+    /**
      * Words: every operation is placed once and says more than its label, and every argument declares its shape and
      * its words; what is left is pinned by name, so the list can only shrink.
      *
@@ -369,7 +381,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             Row worker = Models.get(InstanceModel.class).createEmptyRow();
             worker.set(InstanceModel.NAME, workerName);
             worker.set(InstanceModel.KIND, DockerContainerKind.ID.toString());
-            worker.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            worker.set(InstanceModel.HOST_ID, HostModel.localHostId());
             Map<String, Object> workerSettings = new LinkedHashMap<>();
             workerSettings.put("image", "fake/worker");
             workerSettings.put("tag", "1.4");

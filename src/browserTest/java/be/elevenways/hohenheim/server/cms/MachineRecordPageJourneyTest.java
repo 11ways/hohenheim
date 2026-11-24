@@ -3,10 +3,10 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
@@ -48,9 +48,9 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
         List<Runnable> cleanup = new ArrayList<>();
         try {
             Row host = incusHost(cleanup);
-            Row vm = instance(cleanup, PREFIX + "vm", "hohenheim:vm", host.get(ServerModel.ID),
+            Row vm = instance(cleanup, PREFIX + "vm", "hohenheim:vm", host.get(HostModel.ID),
                 Map.of("image", "alpine/3.22", "image_origin", "catalog"));
-            Row app = instance(cleanup, PREFIX + "app", "hohenheim:docker_container", ServerModel.localServerId(),
+            Row app = instance(cleanup, PREFIX + "app", "hohenheim:docker_container", HostModel.localHostId(),
                 Map.of("image", "alpine", "command", "sleep 60"));
             String vmPage = "/admin/instances/" + vm.get(InstanceModel.ID);
             String appPage = "/admin/instances/" + app.get(InstanceModel.ID);
@@ -65,8 +65,8 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
                     continue;
                 }
                 for (String runtime : kind.supportedRuntimes()) {
-                    String serverName = ServerModel.RUNTIME_INCUS.equals(runtime)
-                        ? host.get(ServerModel.NAME) : ServerModel.LOCAL_HOST_NAME;
+                    String serverName = HostModel.RUNTIME_INCUS.equals(runtime)
+                        ? host.get(HostModel.NAME) : HostModel.LOCAL_HOST_NAME;
                     assertThat(kind.runtimeFor(serverName).getClass())
                         .as("step 1: %s on %s builds its declared driver", id, runtime)
                         .isEqualTo(kind.driverOn(runtime));
@@ -179,7 +179,7 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
         List<Runnable> cleanup = new ArrayList<>();
         try {
             Row host = incusHost(cleanup);
-            Row vm = instance(cleanup, PREFIX + "iso", "hohenheim:vm", host.get(ServerModel.ID),
+            Row vm = instance(cleanup, PREFIX + "iso", "hohenheim:vm", host.get(HostModel.ID),
                 Map.of("image_origin", "install_media"));
             int vmId = vm.get(InstanceModel.ID);
             String vmPage = "/admin/instances/" + vmId + "/page/";
@@ -245,13 +245,13 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
     }
 
     private static Row incusHost(List<Runnable> cleanup) {
-        var servers = Models.get(ServerModel.class);
+        var servers = Models.get(HostModel.class);
         Row host = servers.createEmptyRow();
-        host.set(ServerModel.NAME, PREFIX + "host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        host.set(HostModel.NAME, PREFIX + "host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
         servers.save(host);
         HostFixtures.acknowledgePosture(host);
         cleanup.add(() -> HardDeletes.row(servers, host));
@@ -272,7 +272,7 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
         image.set(RuntimeImageModel.ENABLED, true);
         images.save(image);
         cleanup.add(() -> HardDeletes.row(images, image));
-        return instance(cleanup, name, "hohenheim:workspace", ServerModel.localServerId(), settings,
+        return instance(cleanup, name, "hohenheim:workspace", HostModel.localHostId(), settings,
             image.get(RuntimeImageModel.ID));
     }
 
@@ -284,7 +284,7 @@ class MachineRecordPageJourneyTest extends HohenheimHttpTestBase {
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
         instances.save(row);
         cleanup.add(() -> HardDeletes.row(instances, row));

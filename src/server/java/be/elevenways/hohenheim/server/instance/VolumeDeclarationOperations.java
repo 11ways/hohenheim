@@ -4,9 +4,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations.Declaration;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -140,7 +140,7 @@ public final class VolumeDeclarationOperations {
                 && WorkspaceKind.HOME_VOLUME.equals(name)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_home_protected"));
         }
-        String server = ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
+        String server = HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID));
         InstanceVolumes.destroyOne(owner, name, server);
     }
 

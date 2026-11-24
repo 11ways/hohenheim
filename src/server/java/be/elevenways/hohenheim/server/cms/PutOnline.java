@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -18,7 +19,6 @@ import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -280,19 +280,19 @@ public final class PutOnline {
     /** The host pick and the owner a template's app is charged to: Online-2's "Runs on" card. */
     private static final FormSection RUNS_ON = FormSection.of("runs_on",
             HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card"),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
             InstanceTemplateOperations.ENVIRONMENT_ID.getName())
         .describe(HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card_lead"));
 
     /** The kind-led flows' "Runs on" card: the host pick alone, since they charge the operator's own quota. */
     private static final FormSection RUNS_ON_HOST = FormSection.of("runs_on",
-            HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card"), InstanceTemplateOperations.SERVER_ID.getName())
+            HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card"), InstanceTemplateOperations.HOST_ID.getName())
         .describe(HohenheimMicrocopy.PUT_ONLINE.of("runs_on_card_host_lead"));
 
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
         .add(HOSTNAME)
-        .add(InstanceTemplateOperations.SERVER_ID)
+        .add(InstanceTemplateOperations.HOST_ID)
         .add(InstanceTemplateOperations.PROJECT_ID)
         .add(InstanceTemplateOperations.ENVIRONMENT_ID)
         .add(Nested.of(InstanceTemplateOperations.VARIABLES).subSpec(FormSpec.builder().build()).build())
@@ -304,7 +304,7 @@ public final class PutOnline {
         .showWhen(CertificateModel.PRIVATE_KEY_PEM.getName(), HTTPS.getName(), uploadTokens())
         .section(RUNS_ON)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
             InstanceTemplateOperations.ENVIRONMENT_ID.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
         .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS,
@@ -319,7 +319,7 @@ public final class PutOnline {
      */
     private static final FormSpec SERVICE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
-        .add(InstanceTemplateOperations.SERVER_ID)
+        .add(InstanceTemplateOperations.HOST_ID)
         .add(InstanceTemplateOperations.PROJECT_ID)
         .add(InstanceTemplateOperations.ENVIRONMENT_ID)
         .add(Nested.of(InstanceTemplateOperations.VARIABLES).subSpec(FormSpec.builder().build()).build())
@@ -327,7 +327,7 @@ public final class PutOnline {
         .add(GAME_ADDRESS)
         .section(RUNS_ON)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
             InstanceTemplateOperations.ENVIRONMENT_ID.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
         .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS,
@@ -397,7 +397,7 @@ public final class PutOnline {
         .showWhen(CertificateModel.PRIVATE_KEY_PEM.getName(), HTTPS.getName(), uploadTokens())
         .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
@@ -424,7 +424,7 @@ public final class PutOnline {
             .build())
         .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName(),
                 InstanceOperations.INSTALL_MEDIA.getName())
@@ -450,7 +450,7 @@ public final class PutOnline {
         .add(GAME_ADDRESS)
         .section(RUNS_ON_HOST)
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
-            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+            InstanceTemplateOperations.HOST_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
@@ -497,7 +497,7 @@ public final class PutOnline {
      * @param certificate_pem the HTTPS step's entries are spelled as their form fields, which the boot check holds
      *                        every record component to
      */
-    public record FromTemplate(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
+    public record FromTemplate(@Nullable String name, @Nullable String hostname, @Nullable Integer hostId,
                                @Nullable Integer projectId, @Nullable Integer environmentId,
                                @NonNull Map<String, Object> variables, @Nullable String https,
                                @Nullable String certificate_pem, @Nullable Secret private_key_pem,
@@ -505,7 +505,7 @@ public final class PutOnline {
 
         /** @return the template create funnel's own input */
         public InstanceTemplateOperations.@NonNull CreateFromTemplate create() {
-            return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.serverId, this.projectId,
+            return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.hostId, this.projectId,
                 this.environmentId, this.variables);
         }
 
@@ -521,13 +521,13 @@ public final class PutOnline {
      *
      * @param game_address spelled as its form field, which the boot check holds every record component to
      */
-    public record Service(@Nullable String name, @Nullable Integer serverId, @Nullable Integer projectId,
+    public record Service(@Nullable String name, @Nullable Integer hostId, @Nullable Integer projectId,
                           @Nullable Integer environmentId, @NonNull Map<String, Object> variables,
                           @NonNull Map<String, Object> ports, @Nullable String game_address) {
 
         /** @return the template create funnel's own input */
         public InstanceTemplateOperations.@NonNull CreateFromTemplate create() {
-            return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.serverId, this.projectId,
+            return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.hostId, this.projectId,
                 this.environmentId, this.variables);
         }
     }
@@ -565,7 +565,7 @@ public final class PutOnline {
     }
 
     /** A workload of one kind: its name, host (null: placement picks), settings, address and HTTPS choice. */
-    public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
+    public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer hostId,
                            @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https,
                            @Nullable String certificate_pem, @Nullable Secret private_key_pem,
                            @Nullable Integer access_list_id) {
@@ -578,7 +578,7 @@ public final class PutOnline {
     }
 
     /** A machine of one kind: its name, host (null: placement picks), settings and, for an empty VM, its ISO. */
-    public record Machine(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
+    public record Machine(@Nullable String name, @Nullable Integer hostId, @Nullable String kind,
                           @Nullable Map<String, Object> settings, @Nullable String installMedia) {
     }
 
@@ -589,13 +589,13 @@ public final class PutOnline {
      * @param ports        the Ports step's rows, as its item list coerced them
      * @param game_address spelled as its form field, which the boot check holds every record component to
      */
-    public record WorkloadService(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
+    public record WorkloadService(@Nullable String name, @Nullable Integer hostId, @Nullable String kind,
                                   @Nullable Map<String, Object> settings, @NonNull List<Map<String, Object>> ports,
                                   @Nullable String game_address) {
     }
 
     /** A site's repository deploy: the host (null: placement picks), the kind (only Static site) and its settings. */
-    public record FromRepository(@Nullable Integer serverId, @Nullable String kind,
+    public record FromRepository(@Nullable Integer hostId, @Nullable String kind,
                                  @Nullable Map<String, Object> settings) {
     }
 
@@ -618,7 +618,7 @@ public final class PutOnline {
             .gate(OperationGate.open())
             .input(OperationInput.of(TEMPLATE_INPUT, FromTemplate.class, values -> new FromTemplate(
                 values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
-                values.get(InstanceTemplateOperations.SERVER_ID), values.get(InstanceTemplateOperations.PROJECT_ID),
+                values.get(InstanceTemplateOperations.HOST_ID), values.get(InstanceTemplateOperations.PROJECT_ID),
                 values.get(InstanceTemplateOperations.ENVIRONMENT_ID),
                 InstanceTemplateOperations.variables(values.get(InstanceTemplateOperations.VARIABLES)),
                 values.get(HTTPS), values.get(CertificateModel.CERTIFICATE_PEM),
@@ -641,7 +641,7 @@ public final class PutOnline {
             .verb(HohenheimVerbs.PUT_SERVICE_ONLINE)
             .gate(OperationGate.open())
             .input(OperationInput.of(SERVICE_INPUT, Service.class, values -> new Service(
-                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.HOST_ID),
                 values.get(InstanceTemplateOperations.PROJECT_ID),
                 values.get(InstanceTemplateOperations.ENVIRONMENT_ID),
                 InstanceTemplateOperations.variables(values.get(InstanceTemplateOperations.VARIABLES)),
@@ -706,7 +706,7 @@ public final class PutOnline {
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_INPUT, Workload.class, values -> new Workload(
                 values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
-                values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.HOST_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 values.get(HTTPS), values.get(CertificateModel.CERTIFICATE_PEM),
                 secretOf(values.get(CertificateModel.PRIVATE_KEY_PEM.getName())),
@@ -729,7 +729,7 @@ public final class PutOnline {
             .notForAssistants(KIND_SETTINGS)
             .gate(OperationGate.open())
             .input(OperationInput.of(MACHINE_INPUT, Machine.class, values -> new Machine(
-                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.HOST_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 values.get(InstanceOperations.INSTALL_MEDIA))))
             .result(Integer.class)
@@ -752,7 +752,7 @@ public final class PutOnline {
             .notForAssistants(KIND_SETTINGS)
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_SERVICE_INPUT, WorkloadService.class, values -> new WorkloadService(
-                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.HOST_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 RawValues.list(values.get(PORTS)).stream().map(RawValues::map).toList(),
                 values.get(GAME_ADDRESS))))
@@ -778,7 +778,7 @@ public final class PutOnline {
                 + " an assistant is never sent a secret")
             .gate(OperationGate.open())
             .input(OperationInput.of(REPOSITORY_INPUT, FromRepository.class, values -> new FromRepository(
-                values.get(InstanceTemplateOperations.SERVER_ID), values.get(InstanceModel.KIND),
+                values.get(InstanceTemplateOperations.HOST_ID), values.get(InstanceModel.KIND),
                 RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())))))
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
@@ -1029,10 +1029,10 @@ public final class PutOnline {
 
     /** The host the answers chose, or that placement picks one. */
     private static @NonNull SummaryLine runsOnLine(@NonNull StepAnswers answers) {
-        Integer serverId = answers.get(InstanceTemplateOperations.SERVER_ID.getName(), Integer.class);
+        Integer serverId = answers.get(InstanceTemplateOperations.HOST_ID.getName(), Integer.class);
         return new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on"),
             serverId == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on_auto")
-                : Microcopy.literal(serverName(serverId)));
+                : Microcopy.literal(hostName(serverId)));
     }
 
     /**
@@ -1053,9 +1053,9 @@ public final class PutOnline {
             .withArg("addresses", String.join(", ", reach.addresses())));
     }
 
-    private static @NonNull String serverName(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        return server == null ? "#" + serverId : String.valueOf((Object) server.get(ServerModel.NAME));
+    private static @NonNull String hostName(int serverId) {
+        Row server = Models.get(HostModel.class).findById(serverId);
+        return server == null ? "#" + serverId : String.valueOf((Object) server.get(HostModel.NAME));
     }
 
     /**
@@ -1063,7 +1063,7 @@ public final class PutOnline {
      * host offered and each one the chosen kind cannot be placed on disabled with the placement gate's reason.
      */
     private static @NonNull Select<Integer> declaredHostPick() {
-        return InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID);
+        return InstanceParts.hostPick(InstanceTemplateOperations.HOST_ID);
     }
 
     /** The HTTPS step's cards, one per {@link HttpsChoice}, in the vocabulary's order. */

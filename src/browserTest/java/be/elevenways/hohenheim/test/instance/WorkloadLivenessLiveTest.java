@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -86,7 +86,7 @@ class WorkloadLivenessLiveTest {
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
-            ServerModel.localServerId();
+            HostModel.localHostId();
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("image", TestImages.ALPINE);
             settings.put("command", "sleep 600");

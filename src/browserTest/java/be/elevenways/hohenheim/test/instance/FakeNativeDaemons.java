@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.ConsoleKind;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -117,7 +117,7 @@ final class FakeNativeDaemons {
 
     /** The fake daemon of a host record, created on first use. */
     static Map<String, FakeWorkload> daemonOf(int serverId) {
-        return DAEMONS.computeIfAbsent(ServerModel.nameOf(serverId),
+        return DAEMONS.computeIfAbsent(HostModel.nameOf(serverId),
             name -> new ConcurrentHashMap<>());
     }
 
@@ -129,7 +129,7 @@ final class FakeNativeDaemons {
 
     /** The volume store of a host record, created on first use. */
     static Map<String, FakeVolume> volumesOf(int serverId) {
-        return VOLUME_STORES.computeIfAbsent(ServerModel.nameOf(serverId),
+        return VOLUME_STORES.computeIfAbsent(HostModel.nameOf(serverId),
             name -> new ConcurrentHashMap<>());
     }
 
@@ -140,7 +140,7 @@ final class FakeNativeDaemons {
 
     /** The link networks of a host record, created on first use. */
     static Set<String> linkNetworksOf(int serverId) {
-        return LINK_NETWORKS.computeIfAbsent(ServerModel.nameOf(serverId),
+        return LINK_NETWORKS.computeIfAbsent(HostModel.nameOf(serverId),
             name -> ConcurrentHashMap.newKeySet());
     }
 
@@ -827,7 +827,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
@@ -902,7 +902,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
@@ -1141,7 +1141,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(HostModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

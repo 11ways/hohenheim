@@ -6,12 +6,11 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.Secrets;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -98,14 +97,14 @@ public final class DatabaseEngines {
         row.set(DatabaseEngineModel.NAME, nameFor(serverId, engine));
         row.set(DatabaseEngineModel.ENGINE, engine.token());
         row.set(DatabaseEngineModel.IMAGE, image);
-        row.set(DatabaseEngineModel.SERVER_ID, serverId);
+        row.set(DatabaseEngineModel.HOST_ID, serverId);
         row.set(DatabaseEngineModel.ROOT_USER, rootUserOf(engine));
         row.set(DatabaseEngineModel.ROOT_PASSWORD, Secrets.generatePassword());
         row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
         model().save(row);
         reserveRow(row, ResourceLimits.none());
         Blast.log("DB-ENGINE: created shared", engine.token(), "engine",
-            row.get(DatabaseEngineModel.NAME), "on server", ServerModel.nameOf(serverId));
+            row.get(DatabaseEngineModel.NAME), "on server", HostModel.nameOf(serverId));
         return row;
     }
 
@@ -199,7 +198,7 @@ public final class DatabaseEngines {
             throw new IOException("Shared engine '" + host.name() + "' is " + live.state()
                 + "; its tenant isolation cannot be confirmed until it serves");
         }
-        DockerClient docker = new ServerService().clientFor(ServerModel.nameOf(host.serverId()));
+        DockerClient docker = new HostService().clientFor(HostModel.nameOf(host.serverId()));
         List<String> failures = new ArrayList<>();
         Set<List<String>> ran = new HashSet<>();
         for (Row database : databasesOn(engineId)) {
@@ -395,7 +394,7 @@ public final class DatabaseEngines {
      * suffix if an operator already took that spelling.
      */
     static @NonNull String nameFor(int serverId, ManagedDatabase.@NonNull Engine engine) {
-        String base = engine.token() + "-" + ServerModel.nameOf(serverId);
+        String base = engine.token() + "-" + HostModel.nameOf(serverId);
         String candidate = base;
         for (int n = 2; model().findFirst(DatabaseEngineModel.NAME, candidate) != null; n++) {
             candidate = base + "-" + n;

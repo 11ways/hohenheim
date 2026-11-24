@@ -15,12 +15,7 @@ import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.TrustLaneView;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.host.WorkloadView;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostFact;
@@ -91,13 +86,13 @@ import java.util.function.UnaryOperator;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-public final class ServerOverviewState {
+public final class HostOverviewState {
 
-    private ServerOverviewState() {}
+    private HostOverviewState() {}
 
     public static @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         String panelSlug = CmsSupport.panelSlug(conduit);
         LocaleChain locales = conduit.getLocales();
         MessageResolver resolver = conduit.getMessageResolver();
@@ -106,9 +101,9 @@ public final class ServerOverviewState {
 
         // Quarantine is LOUD and leads: the repin ceremony that clears it renders in the
         // action band below, as the resource's own confirmed row action.
-        Instant quarantinedAt = server.get(ServerModel.QUARANTINED_AT);
+        Instant quarantinedAt = server.get(HostModel.QUARANTINED_AT);
         if (quarantinedAt != null) {
-            String reason = Objects.toString(server.get(ServerModel.QUARANTINE_REASON), "");
+            String reason = Objects.toString(server.get(HostModel.QUARANTINE_REASON), "");
             String body = reason.isBlank()
                 ? HohenheimMicrocopy.SERVER_OVERVIEW.of("quarantine_clears_by_repin").resolve(locales, resolver)
                 : reason + " " + HohenheimMicrocopy.SERVER_OVERVIEW.of("quarantine_clears_by_repin")
@@ -125,7 +120,7 @@ public final class ServerOverviewState {
             Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("state"))))
             .withData(stateBadges(server, verdict, locales, resolver)));
         state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
-            .withData(ServerParts.statusCellOf(server)));
+            .withData(HostParts.statusCellOf(server)));
         // Why a host takes no new apps, in the words the Hosts list and the attention band use (one verdict).
         boolean verdictSaid = verdict.standing().severity() != null && verdict.reason() != null;
         if (verdictSaid) {
@@ -135,9 +130,9 @@ public final class ServerOverviewState {
 
         // The last failure in words (its kind's label, "Docker not found"), the transport's own text after it as the
         // technical line: a host once read "Last error" over raw ssh English.
-        String lastError = Objects.toString(server.get(ServerModel.LAST_ERROR), "");
+        String lastError = Objects.toString(server.get(HostModel.LAST_ERROR), "");
         if (!lastError.isBlank()) {
-            String kind = Objects.toString(server.get(ServerModel.LAST_ERROR_KIND), "");
+            String kind = Objects.toString(server.get(HostModel.LAST_ERROR_KIND), "");
             String title = kind.isBlank() ? HohenheimMicrocopy.SERVER_OVERVIEW.of("last_error")
                 .resolve(locales, resolver)
                 : HostProbe.FailureKind.labelOf(kind).resolve(locales, resolver);
@@ -148,15 +143,15 @@ public final class ServerOverviewState {
         // The volume-backend FINDING and its consequence, beside admission and posture:
         // what the preflight probe measured on the data root, and -- when it measured
         // nothing usable -- what that refuses and how to fix it, in the operator's words.
-        VolumeBackend volumeBackend = ServerModel.volumeBackendOf(server);
+        VolumeBackend volumeBackend = HostModel.volumeBackendOf(server);
         state.add(FactListWidget.of(List.of(WidgetFact.badge(
             HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
             WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                 volumeBackend.color(), volumeBackend.icon())))));
-        if (volumeBackend == VolumeBackend.UNCHECKED && server.get(ServerModel.VOLUME_PROBED_AT) == null) {
+        if (volumeBackend == VolumeBackend.UNCHECKED && server.get(HostModel.VOLUME_PROBED_AT) == null) {
             // Never checked at all (a new host's stored default): there is no finding and no reason yet. A host whose
             // verdict already reads "Never checked yet" gets the badge alone: one problem said once.
-            if (!verdictSaid || server.get(ServerModel.PROBED_AT) != null) {
+            if (!verdictSaid || server.get(HostModel.PROBED_AT) != null) {
                 state.add(alert(AlertVariant.WARNING, NoticeData.of(
                     HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_title")
                         .resolve(locales, resolver),
@@ -168,7 +163,7 @@ public final class ServerOverviewState {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unchecked_title").resolve(locales, resolver),
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unchecked_body")
-                    .withArg("reason", Objects.toString(server.get(ServerModel.VOLUME_BACKEND_DETAIL), ""))
+                    .withArg("reason", Objects.toString(server.get(HostModel.VOLUME_BACKEND_DETAIL), ""))
                     .resolve(locales, resolver))));
         } else if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
             // The filesystem COULD enforce a quota; this build has no operations for it.
@@ -239,7 +234,7 @@ public final class ServerOverviewState {
         bands.add(band(new WidgetTree(List.of(
             new WidgetInstance(ItemListWidget.ID, Map.of(
                 "label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("recent_activity"))))
-                .withData(AdminActivityResource.recentFor(Models.get(ServerModel.class), serverId,
+                .withData(AdminActivityResource.recentFor(Models.get(HostModel.class), serverId,
                     AdminActivityResource.peopleOnly(), accessContext, 10))))));
 
         return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
@@ -253,11 +248,11 @@ public final class ServerOverviewState {
                                                           @NonNull LocaleChain locales,
                                                           @Nullable MessageResolver resolver) {
         List<WidgetBadge> badges = new ArrayList<>();
-        badges.add(WidgetBadge.of(ServerModel.RUNTIME, ServerModel.runtimeOf(server),
+        badges.add(WidgetBadge.of(HostModel.RUNTIME, HostModel.runtimeOf(server),
             locales, resolver));
         badges.add(WidgetBadge.of(verdict.standing().label().resolve(locales, resolver), verdict.standing().variant(),
             verdict.standing().icon()));
-        addBadge(badges, ServerModel.POSTURE, server.get(ServerModel.POSTURE), locales, resolver);
+        addBadge(badges, HostModel.POSTURE, server.get(HostModel.POSTURE), locales, resolver);
         return badges;
     }
 
@@ -292,11 +287,11 @@ public final class ServerOverviewState {
     /** The lanes this record declares, in transport-first order. */
     private static @NonNull List<TrustLaneView> trustLanes(@NonNull Row server) {
         List<TrustLaneView> lanes = new ArrayList<>();
-        if (ServerModel.isIncusHttps(server)) {
+        if (HostModel.isIncusHttps(server)) {
             lanes.add(laneView(server, HostTrustLane.INCUS, HostTrustSlot.INCUS_TLS,
                 IncusTrust::fingerprintOf));
         }
-        if (ServerModel.hasSshLane(server)) {
+        if (HostModel.hasSshLane(server)) {
             lanes.add(laneView(server, HostTrustLane.SSH, HostTrustSlot.SSH,
                 HostKeys::fingerprintOf));
         }
@@ -327,14 +322,14 @@ public final class ServerOverviewState {
      * is a state an operator has to be able to read too.
      */
     public static @NonNull PostureAcknowledgementView acknowledgementViewOf(@NonNull Row server) {
-        Instant at = server.get(ServerModel.ACKNOWLEDGED_AT);
-        String label = server.get(ServerModel.ACKNOWLEDGED_BY_LABEL);
+        Instant at = server.get(HostModel.ACKNOWLEDGED_AT);
+        String label = server.get(HostModel.ACKNOWLEDGED_BY_LABEL);
         return new PostureAcknowledgementView(
-            ServerModel.postureNeedsAcknowledgement(server),
-            ServerModel.postureAcknowledged(server),
-            server.get(ServerModel.ACKNOWLEDGED_POSTURE),
-            server.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION),
-            ServerModel.POSTURE_WARNING_VERSION,
+            HostModel.postureNeedsAcknowledgement(server),
+            HostModel.postureAcknowledged(server),
+            server.get(HostModel.ACKNOWLEDGED_POSTURE),
+            server.get(HostModel.ACKNOWLEDGED_WARNING_VERSION),
+            HostModel.POSTURE_WARNING_VERSION,
             at != null ? at.toString() : null,
             label != null ? label : "");
     }
@@ -345,23 +340,23 @@ public final class ServerOverviewState {
      * so a record named after a remote machine cannot silently green-light the wrong host.
      */
     public static @Nullable KernelIsolationView kernelIsolationViewOf(@NonNull Row server) {
-        if (!ServerModel.isIncus(server)) {
+        if (!HostModel.isIncus(server)) {
             return null;
         }
         Instant checkedAt = HostPreflight.storedCheckAt(server, IncusPreflight.KERNEL_LANE_CHECK);
         return new KernelIsolationView(
-            ServerModel.acceptsTenantWorkloads(server),
+            HostModel.acceptsTenantWorkloads(server),
             IncusKernelIsolation.laneAvailable(server),
             HostPreflight.storedCheckStatus(server, IncusPreflight.KERNEL_LANE_CHECK),
             checkedAt != null ? checkedAt.toString() : null,
-            ServerModel.isIncusHttps(server) ? "" : IncusEndpoint.of(server).describe());
+            HostModel.isIncusHttps(server) ? "" : IncusEndpoint.of(server).describe());
     }
 
     // -- preflight -----------------------------------------------------------------
 
     /** The whole stored report as one payload: kernel verdict, checks, facts and stamp. */
     static @NonNull HostPreflightReportView preflightReport(@NonNull Row server) {
-        Instant probedAt = server.get(ServerModel.PROBED_AT);
+        Instant probedAt = server.get(HostModel.PROBED_AT);
         List<PreflightCheckView> mustPass = new ArrayList<>();
         List<PreflightCheckView> advice = new ArrayList<>();
         for (PreflightCheckView check : preflightChecks(server)) {
@@ -378,7 +373,7 @@ public final class ServerOverviewState {
             advice,
             preflightFacts(server),
             probedAt != null ? probedAt.toString() : null,
-            Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
+            Boolean.TRUE.equals(server.get(HostModel.PREFLIGHT_OK)));
     }
 
     /**
@@ -404,7 +399,7 @@ public final class ServerOverviewState {
     /** Every stored check with its own status/required/timestamp and what it found in words. */
     private static @NonNull List<PreflightCheckView> preflightChecks(@NonNull Row server) {
         List<PreflightCheckView> checks = new ArrayList<>();
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(HostPreflight.CHECKS_KEY) instanceof Map<?, ?> stored)) {
             return checks;
         }
@@ -428,7 +423,7 @@ public final class ServerOverviewState {
     /** Every stored fact in words with its unit and its own measurement stamp; an undeclared one as stored. */
     private static @NonNull List<HostFactView> preflightFacts(@NonNull Row server) {
         List<HostFactView> facts = new ArrayList<>();
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
             return facts;
         }
         for (Map.Entry<?, ?> entry : capabilities.entrySet()) {
@@ -518,7 +513,7 @@ public final class ServerOverviewState {
 
     /**
      * What runs on this host, once each: its instances, stacks, managed databases and database engines, the records
-     * {@link ServerModel#refuseRemovalWhileOwned} counts, with the memory each books in the capacity ledger.
+     * {@link HostModel#refuseRemovalWhileOwned} counts, with the memory each books in the capacity ledger.
      *
      * AIDEV-NOTE: a database engine, and a dedicated database, runs as an instance it owns (generated_for); the ledger
      * books that instance once. The owner row is the one an operator recognises and the one that blocks removal, so it
@@ -528,9 +523,9 @@ public final class ServerOverviewState {
      */
     static @NonNull List<WorkloadView> workloadsOf(@NonNull String panel, int serverId) {
         List<Row> databases = Models.get(DatabaseModel.class).find()
-            .where(DatabaseModel.SERVER_ID.eq(serverId)).all();
+            .where(DatabaseModel.HOST_ID.eq(serverId)).all();
         List<Row> engines = Models.get(DatabaseEngineModel.class).find()
-            .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all();
+            .where(DatabaseEngineModel.HOST_ID.eq(serverId)).all();
         Set<String> owners = new HashSet<>();
         for (Row database : databases) {
             owners.add(ownerKey(DatabaseModel.MODEL_ID, database.get(DatabaseModel.ID)));
@@ -541,7 +536,7 @@ public final class ServerOverviewState {
         Map<String, Row> owned = new HashMap<>();
         List<WorkloadView> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .where(InstanceModel.HOST_ID.eq(serverId))
                 .all()) {
             String owner = ownerKey(instance.get(InstanceModel.GENERATED_FOR_MODEL),
                 instance.get(InstanceModel.GENERATED_FOR_ID));
@@ -559,7 +554,7 @@ public final class ServerOverviewState {
                 InstanceParts.recordRoute(panel, instance, null)));
         }
         for (Row stack : Models.get(StackModel.class).find()
-                .where(StackModel.SERVER_ID.eq(serverId)).all()) {
+                .where(StackModel.HOST_ID.eq(serverId)).all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) stack.get(StackModel.NAME)),
                 WorkloadTier.STACK,

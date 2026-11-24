@@ -4,8 +4,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.instance.GuestNetworkMode;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
@@ -90,9 +90,9 @@ class IncusLanGuestLiveTest {
     void aLanGuestTakesALeaseFromTheLanAndIsReachedOnItsOwnAddress() {
         Db.run(datasource, () -> {
             // 1. The operator declares the uplink; the host check admits it as macvlan.
-            Row host = Models.get(ServerModel.class).findByName(HOST);
-            host.set(ServerModel.LAN_PARENT, PARENT);
-            Models.get(ServerModel.class).save(host);
+            Row host = Models.get(HostModel.class).findByName(HOST);
+            host.set(HostModel.LAN_PARENT, PARENT);
+            Models.get(HostModel.class).save(host);
             HostPreflight.Report report = HostPreflight.runAndStore(HOST);
             HostPreflight.Check lan = report.checks().stream()
                 .filter(check -> IncusPreflight.LAN_PARENT_CHECK.equals(check.name())).findFirst().orElse(null);
@@ -101,7 +101,7 @@ class IncusLanGuestLiveTest {
             assertThat(lan.found().finding()).isEqualTo(PreflightFinding.LAN_PARENT_ADMITTED);
             assertThat(lan.found().args()).containsEntry("nictype", "macvlan");
 
-            int hostId = host.get(ServerModel.ID);
+            int hostId = host.get(HostModel.ID);
             InstanceService service = new InstanceService();
             int id = vmRecord(hostId);
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
@@ -184,7 +184,7 @@ class IncusLanGuestLiveTest {
         row.set(InstanceModel.NAME, "lan-live-vm");
         row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

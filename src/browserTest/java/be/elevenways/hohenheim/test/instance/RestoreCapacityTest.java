@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.instance.RestoreCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -35,24 +35,24 @@ class RestoreCapacityTest extends HohenheimTestBase {
     @AfterEach
     void cleanUp() {
         for (Integer id : this.createdHosts) {
-            Models.get(ServerModel.class).delete(id);
+            Models.get(HostModel.class).delete(id);
         }
         this.createdHosts.clear();
     }
 
     private int host(String name, String runtime) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, NAME_PREFIX + name);
-        row.set(ServerModel.RUNTIME, runtime);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, NAME_PREFIX + name);
+        row.set(HostModel.RUNTIME, runtime);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
         // .invalid never resolves, so the probe fails FAST and deterministically --
         // an unroutable IP would make this test a connect-timeout stopwatch.
-        row.set(ServerModel.SSH_TARGET, "root@capacity-test.invalid");
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        row.set(HostModel.SSH_TARGET, "root@capacity-test.invalid");
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         this.createdHosts.add(id);
         return id;
     }
@@ -79,8 +79,8 @@ class RestoreCapacityTest extends HohenheimTestBase {
      */
     @Test
     void theHeadroomFactorDecidesAndTheRefusalNamesBothFigures() {
-        int serverId = host("judge", ServerModel.RUNTIME_INCUS);
-        String hostName = ServerModel.nameOf(serverId);
+        int serverId = host("judge", HostModel.RUNTIME_INCUS);
+        String hostName = HostModel.nameOf(serverId);
 
         // 1. Comfortably enough space: no refusal at all.
         assertThat(catchThrowable(() -> RestoreCapacity.judge(serverId, 10_000L, 1_000L)))
@@ -126,7 +126,7 @@ class RestoreCapacityTest extends HohenheimTestBase {
         // 1. requiredBytes 0 is not a capacity question at all: no probe, no refusal,
         //    even on a host nothing can reach. (A restore of an empty payload must not
         //    be blocked by an unreachable daemon.)
-        int incusId = host("unreachable-incus", ServerModel.RUNTIME_INCUS);
+        int incusId = host("unreachable-incus", HostModel.RUNTIME_INCUS);
         assertThat(catchThrowable(() -> RestoreCapacity.require(incusId, 0L)))
             .as("step 1: a zero-byte requirement short-circuits before the probe")
             .isNull();
@@ -138,7 +138,7 @@ class RestoreCapacityTest extends HohenheimTestBase {
             "step 2: an unmeasurable incus host is refused, not admitted");
         assertThat(String.valueOf(incusRefusal.message().args().get("server")))
             .as("step 2: the refusal names the host that could not be measured")
-            .isEqualTo(ServerModel.nameOf(incusId));
+            .isEqualTo(HostModel.nameOf(incusId));
         assertThat(String.valueOf(incusRefusal.message().args().get("reason")))
             .as("step 2: and carries the underlying reason instead of swallowing it")
             .isNotBlank()
@@ -146,7 +146,7 @@ class RestoreCapacityTest extends HohenheimTestBase {
 
         // 3. The docker lane fails closed the same way -- the dispatch on the host's
         //    DECLARED runtime is what picks the probe, and neither branch may pass.
-        int dockerId = host("unreachable-docker", ServerModel.RUNTIME_DOCKER);
+        int dockerId = host("unreachable-docker", HostModel.RUNTIME_DOCKER);
         Throwable docker = catchThrowable(() -> RestoreCapacity.require(dockerId, 1_000L));
         refusalOf(docker, "restore_capacity_unknown",
             "step 3: an unmeasurable docker host is refused too");

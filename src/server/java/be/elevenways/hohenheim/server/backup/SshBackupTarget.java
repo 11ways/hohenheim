@@ -2,8 +2,7 @@ package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
@@ -67,7 +66,7 @@ public final class SshBackupTarget implements BackupTarget {
     /** The bound on a captured answer: a listing of every stored archive fits many times over. */
     private static final int CAPTURE_CAP_BYTES = (int) ByteUnit.MEGABYTE.bytes(16);
 
-    private final int serverId;
+    private final int hostId;
     private final @NonNull String basePath;
 
     /**
@@ -75,7 +74,7 @@ public final class SshBackupTarget implements BackupTarget {
      * @param basePath absolute remote directory backups live under
      */
     public SshBackupTarget(int serverId, @NonNull String basePath) {
-        this.serverId = serverId;
+        this.hostId = serverId;
         this.basePath = normalizedBase(basePath);
     }
 
@@ -102,10 +101,10 @@ public final class SshBackupTarget implements BackupTarget {
      *                    is quarantined
      */
     private @NonNull Row destination() {
-        Row server = Models.get(ServerModel.class).findById(this.serverId);
+        Row server = Models.get(HostModel.class).findById(this.hostId);
         if (server == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_host_missing")
-                .withArg("id", this.serverId));
+                .withArg("id", this.hostId));
         }
         HostAdmission.requireBackupDestination(server);
         return server;

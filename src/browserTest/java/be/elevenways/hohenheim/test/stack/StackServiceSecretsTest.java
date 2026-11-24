@@ -3,12 +3,7 @@ package be.elevenways.hohenheim.test.stack;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
@@ -177,7 +172,7 @@ class StackServiceSecretsTest {
         stack.set(StackModel.NAME, name);
         // Disabled: the boot adoption pass must not try to deploy it.
         stack.set(StackModel.ENABLED, false);
-        stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+        stack.set(StackModel.HOST_ID, HostModel.localHostId());
         model.save(stack);
         return stack.get(StackModel.ID);
     }
@@ -217,7 +212,7 @@ class StackServiceSecretsTest {
                 Row instance = Models.get(InstanceModel.class).createEmptyRow();
                 instance.set(InstanceModel.NAME, "seclegacy-db");
                 instance.set(InstanceModel.KIND, StackServiceKind.ID.toString());
-                instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
                 instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
                 instance.set(InstanceModel.SETTINGS, settings);
                 Models.get(InstanceModel.class).save(instance);

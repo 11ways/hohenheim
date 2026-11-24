@@ -3,9 +3,8 @@ package be.elevenways.hohenheim.test.host;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
@@ -15,11 +14,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,12 +62,12 @@ class HostTrustSlotTest {
     @Test
     void anIncusHostCarriesTlsAndSshTrustSideBySideWithoutEitherDisplacingTheOther() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "slot-incus");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.INCUS_URL, "https://192.0.2.9:8443");
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+            host.set(HostModel.NAME, "slot-incus");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.INCUS_URL, "https://192.0.2.9:8443");
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
             model.save(host);
 
             // 1. The daemon's TLS trust, complete and confirmed. The ssh slot is still
@@ -86,7 +83,7 @@ class HostTrustSlotTest {
             Row tlsOnly = model.findByName("slot-incus");
             assertThat(HostTrustSlot.INCUS_TLS.isConfirmed(tlsOnly))
                 .as("step 1: the daemon lane is pinned and confirmed").isTrue();
-            assertThat((String) tlsOnly.get(ServerModel.HOST_KEY))
+            assertThat((String) tlsOnly.get(HostModel.HOST_KEY))
                 .as("step 1: and NOTHING landed in the ssh slot").isNull();
             HostAdmission.requireVerifiedIdentity(tlsOnly);
             assertThat(catchThrowable(() -> HostKeys.sshArgv(tlsOnly, List.of("true"))))
@@ -96,9 +93,9 @@ class HostTrustSlotTest {
 
             // 2. No ssh target = no admin lane, so kernel truth is UNAVAILABLE and the
             //    host is honestly unverifiable rather than assumed safe.
-            assertThat(ServerModel.hasSshLane(tlsOnly))
+            assertThat(HostModel.hasSshLane(tlsOnly))
                 .as("step 2: no ssh target means no lane").isFalse();
-            assertThat(IncusKernelIsolation.forServer(tlsOnly).available())
+            assertThat(IncusKernelIsolation.forHost(tlsOnly).available())
                 .as("step 2: so kernel truth cannot be read").isFalse();
             assertThat(catchThrowable(() -> HostAdmission.requireBackupDestination(tlsOnly)))
                 .as("step 2: and it is not a backup destination either")
@@ -110,9 +107,9 @@ class HostTrustSlotTest {
             //    unconfirmed, both stay unavailable. Nothing is verifiable until a human
             //    compared a fingerprint.
             Row targeted = model.findByName("slot-incus");
-            targeted.set(ServerModel.SSH_TARGET, "root@192.0.2.9");
+            targeted.set(HostModel.SSH_TARGET, "root@192.0.2.9");
             model.save(targeted);
-            assertThat(IncusKernelIsolation.forServer(model.findByName("slot-incus")).available())
+            assertThat(IncusKernelIsolation.forHost(model.findByName("slot-incus")).available())
                 .as("step 3: a target without a pin is not a lane").isFalse();
 
             HostPins.apply(model.findByName("slot-incus"), HostTrustSlot.SSH, SSH_KEY,
@@ -121,27 +118,27 @@ class HostTrustSlotTest {
             sshPinned.set(HostTrustSlot.SSH.clientPrivate(), "-----BEGIN OPENSSH PRIVATE KEY-----");
             sshPinned.set(HostTrustSlot.SSH.clientPublic(), SSH_KEY);
             model.save(sshPinned);
-            assertThat(IncusKernelIsolation.forServer(model.findByName("slot-incus")).available())
+            assertThat(IncusKernelIsolation.forHost(model.findByName("slot-incus")).available())
                 .as("step 3: an UNCONFIRMED pin is not a lane either").isFalse();
 
             // 4. Confirmed: the lane opens, the argv carries the ssh key line, and the
             //    daemon's certificate is exactly where it was.
             HostPins.confirm(model.findByName("slot-incus"), HostTrustSlot.SSH);
             Row both = model.findByName("slot-incus");
-            assertThat(IncusKernelIsolation.forServer(both).available())
+            assertThat(IncusKernelIsolation.forHost(both).available())
                 .as("step 4: kernel truth is readable through the product's own lane")
                 .isTrue();
             assertThat(String.join(" ", HostKeys.sshArgv(both, List.of("nft"))))
                 .as("step 4: and the argv is the pinned one, aimed at the ssh target")
                 .contains("StrictHostKeyChecking=yes")
-                .contains("HostKeyAlias=hohenheim-host-" + both.get(ServerModel.ID))
+                .contains("HostKeyAlias=hohenheim-host-" + both.get(HostModel.ID))
                 .contains("root@192.0.2.9");
-            assertThat((String) both.get(ServerModel.INCUS_SERVER_CERT))
+            assertThat((String) both.get(HostModel.INCUS_SERVER_CERT))
                 .as("step 4: pinning the ssh lane displaced no TLS material")
                 .isEqualTo(SERVER_PEM);
-            assertThat((Boolean) both.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
+            assertThat((Boolean) both.get(HostModel.INCUS_SERVER_CERT_VERIFIED))
                 .as("step 4: nor its confirmation").isTrue();
-            assertThat((String) both.get(ServerModel.HOST_KEY))
+            assertThat((String) both.get(HostModel.HOST_KEY))
                 .as("step 4: and the ssh slot holds a key line, never a PEM")
                 .doesNotContain("CERTIFICATE");
             HostAdmission.requireBackupDestination(both);
@@ -158,7 +155,7 @@ class HostTrustSlotTest {
                 .as("step 5: a different offer is a MISMATCH, and re-pins nothing")
                 .isEqualTo(HostKeys.ScanOutcome.MISMATCH);
             Row quarantined = model.findByName("slot-incus");
-            assertThat((String) quarantined.get(ServerModel.HOST_KEY))
+            assertThat((String) quarantined.get(HostModel.HOST_KEY))
                 .as("step 5: the pin still names the original key").isEqualTo(SSH_KEY);
             assertThat(quarantined.get(HostTrustSlot.SSH.offered()))
                 .as("step 5: the offered key is evidence in the SSH slot")
@@ -166,7 +163,7 @@ class HostTrustSlotTest {
             assertThat(quarantined.get(HostTrustSlot.INCUS_TLS.offered()))
                 .as("step 5: and no evidence was written into the TLS slot")
                 .isNull();
-            assertThat((String) quarantined.get(ServerModel.INCUS_SERVER_CERT))
+            assertThat((String) quarantined.get(HostModel.INCUS_SERVER_CERT))
                 .as("step 5: whose certificate is byte-for-byte what it was")
                 .isEqualTo(SERVER_PEM);
             assertThat(HostPins.isQuarantined(quarantined, HostTrustSlot.SSH))
@@ -177,7 +174,7 @@ class HostTrustSlotTest {
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key()).isEqualTo("host_quarantined")));
-            assertThat(IncusKernelIsolation.forServer(quarantined).available())
+            assertThat(IncusKernelIsolation.forHost(quarantined).available())
                 .as("step 5: an untrusted lane leaves the host unverifiable again")
                 .isFalse();
             assertThat(catchThrowable(() ->
@@ -191,13 +188,13 @@ class HostTrustSlotTest {
             //    the ssh confirmation and touches no TLS column.
             HostPins.repin(quarantined, HostTrustSlot.SSH, HostKeys::fingerprintOf);
             Row repinned = model.findByName("slot-incus");
-            assertThat((String) repinned.get(ServerModel.HOST_KEY))
+            assertThat((String) repinned.get(HostModel.HOST_KEY))
                 .as("step 6: the ssh slot adopted the offered key").isEqualTo(OTHER_SSH_KEY);
-            assertThat((Boolean) repinned.get(ServerModel.HOST_KEY_VERIFIED))
+            assertThat((Boolean) repinned.get(HostModel.HOST_KEY_VERIFIED))
                 .as("step 6: unconfirmed again, at the bottom of the ceremony").isFalse();
-            assertThat((Boolean) repinned.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
+            assertThat((Boolean) repinned.get(HostModel.INCUS_SERVER_CERT_VERIFIED))
                 .as("step 6: while the daemon lane stays confirmed").isTrue();
-            assertThat((String) repinned.get(ServerModel.INCUS_SERVER_CERT))
+            assertThat((String) repinned.get(HostModel.INCUS_SERVER_CERT))
                 .as("step 6: with its certificate intact").isEqualTo(SERVER_PEM);
         });
     }

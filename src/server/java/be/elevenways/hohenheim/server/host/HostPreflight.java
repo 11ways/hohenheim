@@ -3,11 +3,11 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.PreflightStatus;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -141,8 +141,8 @@ public final class HostPreflight {
      * @throws IllegalArgumentException when no such server exists
      */
     public static @NonNull Report runAndStore(@NonNull String serverName) {
-        ServerService servers = new ServerService();
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        HostService servers = new HostService();
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             throw new IllegalArgumentException("No server named '" + serverName + "'");
         }
@@ -153,13 +153,13 @@ public final class HostPreflight {
         Report report;
         // The runtime declaration is DATA on the record: an Incus host gets the Incus
         // battery through the same store funnel, never a Docker probe aimed at it.
-        if (ServerModel.isIncus(server)) {
+        if (HostModel.isIncus(server)) {
             report = IncusPreflight.runAndStore(server);
         } else {
             try {
                 // The SAME per-server nft lane the workload policy applier uses -- what this
                 // probe proves is what a deploy will later rely on, not a lookalike.
-                report = run(servers.clientFor(serverName), NftRunner.forServer(server));
+                report = run(servers.clientFor(serverName), NftRunner.forHost(server));
             } catch (HostKeys.HostTrustException refusal) {
                 // An unpinned host cannot be probed at all -- that refusal is itself the
                 // verdict, and it must be STORED like any other, not thrown at the operator
@@ -602,7 +602,7 @@ public final class HostPreflight {
      * it was required then OR {@link IncusPreflight#postureRequires} says the current posture
      * demands it. No ssh, no daemon call, nothing on the hot path but a map walk.
      *
-     * AIDEV-NOTE: deliberately NOT a second {@code ServerModel} before-validate hook beside
+     * AIDEV-NOTE: deliberately NOT a second {@code HostModel} before-validate hook beside
      * M092's {@code clearAcknowledgementOnPostureChange}. Two hooks writing the same record
      * on one save is worse than the bug, and clearing {@code preflight_ok} on a posture edit
      * would SILENTLY CORDON a running production host -- the availability decision
@@ -615,7 +615,7 @@ public final class HostPreflight {
      *         {@code preflight_ok}'s own question, answered by the admit gate
      */
     public static @Nullable String failedRequirementNow(@NonNull Row server) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(CHECKS_KEY) instanceof Map<?, ?> checks)) {
             return null;
         }
@@ -656,7 +656,7 @@ public final class HostPreflight {
     private static @Nullable Object storedCheckField(@NonNull Row server,
                                                      @NonNull String checkName,
                                                      @NonNull String field) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(CHECKS_KEY) instanceof Map<?, ?> checks)
                 || !(checks.get(checkName) instanceof Map<?, ?> check)) {
             return null;
@@ -672,7 +672,7 @@ public final class HostPreflight {
      */
     public static @Nullable Instant factMeasuredAt(@NonNull Row server,
                                                    @NonNull String factName) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
                 || !(capabilities.get(FACTS_AT_KEY) instanceof Map<?, ?> stamps)) {
             return null;
         }
@@ -751,7 +751,7 @@ public final class HostPreflight {
      */
     public static void store(@NonNull String serverName, @NonNull Report report,
                              @Nullable Set<String> battery) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             return;
         }
@@ -780,11 +780,11 @@ public final class HostPreflight {
         }
         capabilities.put(CHECKS_KEY, checkMap);
         capabilities.put(FACTS_AT_KEY, factsAt);
-        server.set(ServerModel.CAPABILITIES, capabilities);
-        server.set(ServerModel.PROBED_AT, report.at());
-        server.set(ServerModel.PREFLIGHT_OK, report.passed());
-        server.set(ServerModel.CONTROLLER_VERSION, controllerVersion());
-        Models.get(ServerModel.class).save(server);
+        server.set(HostModel.CAPABILITIES, capabilities);
+        server.set(HostModel.PROBED_AT, report.at());
+        server.set(HostModel.PREFLIGHT_OK, report.passed());
+        server.set(HostModel.CONTROLLER_VERSION, controllerVersion());
+        Models.get(HostModel.class).save(server);
         // Health goes through THE typed funnel, which also quarantines a host whose key
         // changed. Re-parsing the kind back out of the detail string was a second,
         // divergent classifier over text this class had just composed.
@@ -827,7 +827,7 @@ public final class HostPreflight {
             factsAt.put(reading.getKey().token(), at.toString());
         }
         capabilities.put(FACTS_AT_KEY, factsAt);
-        server.set(ServerModel.CAPABILITIES, capabilities);
+        server.set(HostModel.CAPABILITIES, capabilities);
     }
 
     /** @return the memory total a daemon's {@code /info} answer reports: the reading preflight and heartbeat share */
@@ -842,7 +842,7 @@ public final class HostPreflight {
      */
     private static @NonNull Map<String, Object> storedMap(@NonNull Row server,
                                                           @Nullable String key) {
-        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
             return Map.of();
         }
         Map<?, ?> source = capabilities;

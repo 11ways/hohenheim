@@ -5,7 +5,7 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -45,13 +45,13 @@ class OnboardingChecklistTest {
     @Test
     void enrolmentAndAdmissionAreOneStepEach() {
         Db.run(datasource, () -> {
-            ServerModel servers = Models.get(ServerModel.class);
-            Row local = servers.findById(ServerModel.localServerId());
-            String admission = local.get(ServerModel.ADMISSION);
+            HostModel servers = Models.get(HostModel.class);
+            Row local = servers.findById(HostModel.localHostId());
+            String admission = local.get(HostModel.ADMISSION);
             try {
                 // 1. The only host is enrolled but BLOCKED: enrolment is done and names the host; the
                 //    admission step alone stays open, so the waiting host is said once.
-                local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+                local.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
                 servers.save(local);
                 List<OnboardingStep> blocked = OnboardingCollector.collect();
                 assertThat(blocked.get(0).state())
@@ -65,13 +65,13 @@ class OnboardingChecklistTest {
 
                 // 2. Admitting the host leaves enrolment done (admission's own done words are
                 //    DashboardAttentionJourneyTest's, on a host that is placeable, not merely admitted).
-                local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+                local.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
                 servers.save(local);
                 assertThat(OnboardingCollector.collect().get(0).state())
                     .as("step 2: enrolment stays done")
                     .isEqualTo(OnboardingState.DONE);
             } finally {
-                local.set(ServerModel.ADMISSION, admission);
+                local.set(HostModel.ADMISSION, admission);
                 servers.save(local);
             }
         });

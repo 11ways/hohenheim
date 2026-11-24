@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.ApiWire;
@@ -179,7 +178,7 @@ class ApiWireInstancesTest extends HohenheimHttpTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.CREATED_AT, T0);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
@@ -187,14 +186,14 @@ class ApiWireInstancesTest extends HohenheimHttpTestBase {
 
     /** A Docker host the application kind's picker rules accept, reached over ssh nobody answers. */
     private static int sshDockerHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.VOLUME_BACKEND, "btrfs");
-        row.set(ServerModel.SSH_TARGET, "root@" + name + ".test");
-        Models.get(ServerModel.class).save(row);
-        int id = row.get(ServerModel.ID);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.MODE, HostModel.MODE_SSH);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.VOLUME_BACKEND, "btrfs");
+        row.set(HostModel.SSH_TARGET, "root@" + name + ".test");
+        Models.get(HostModel.class).save(row);
+        int id = row.get(HostModel.ID);
         // The create's host pick judges the kind's placement, so the wire create needs a host that takes it.
         HostFixtures.admitDockerHost(id, 16384);
         return id;

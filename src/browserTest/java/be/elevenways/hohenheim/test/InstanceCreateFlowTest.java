@@ -5,8 +5,8 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -47,17 +47,17 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         // Both admitted and measured, so what the pick says about them is the KIND's verdict: the docker host's data
         // root enforces quotas, the incus host's does not.
         dockerHostId = seeded("cf-docker-host", () -> HostFixtures.admittedDockerHost("cf-docker-host", 16384));
-        VolumeBackends.store(Models.get(ServerModel.class).findById(dockerHostId),
+        VolumeBackends.store(Models.get(HostModel.class).findById(dockerHostId),
             new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
         incusHostId = seeded("cf-incus-host", () -> HostFixtures.admittedIncusHost("cf-incus-host"));
-        VolumeBackends.store(Models.get(ServerModel.class).findById(incusHostId),
+        VolumeBackends.store(Models.get(HostModel.class).findById(incusHostId),
             new VolumeBackends.Detection(VolumeBackend.NONE, "/fixture/volumes", "fixture: ext4"));
     }
 
     /** @return the host of that name this database already holds, else the one the fixture creates */
     private static Integer seeded(String name, IntSupplier create) {
-        Row existing = Models.get(ServerModel.class).findByName(name);
-        return existing != null ? existing.get(ServerModel.ID) : create.getAsInt();
+        Row existing = Models.get(HostModel.class).findByName(name);
+        return existing != null ? existing.get(HostModel.ID) : create.getAsInt();
     }
 
     /** Asserts the open host pick offers this host disabled, saying why in words that contain {@code words}. */
@@ -189,7 +189,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row saved = findInstance("cf-first-workspace");
         assertThat((Object) saved.get(InstanceModel.KIND))
             .as("step 7: the card's kind persisted").isEqualTo("hohenheim:workspace");
-        assertThat((Object) saved.get(InstanceModel.SERVER_ID))
+        assertThat((Object) saved.get(InstanceModel.HOST_ID))
             .as("step 7: the chosen host persisted").isEqualTo(dockerHostId);
         assertThat((Object) saved.get(InstanceModel.RUNTIME_IMAGE_ID))
             .as("step 7: the chosen runtime image persisted").isNotNull();
@@ -219,7 +219,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("the control: an incus host carries a vm").isIn(302, 303);
         Row saved = findInstance("cf-honest-vm");
         assertThat(saved).isNotNull();
-        assertThat((Object) saved.get(InstanceModel.SERVER_ID)).isEqualTo(incusHostId);
+        assertThat((Object) saved.get(InstanceModel.HOST_ID)).isEqualTo(incusHostId);
     }
 
     /**
@@ -231,7 +231,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      */
     @Test
     void aHostTheKindCannotBePlacedOnIsOfferedDisabledAndRefusedInTheGatesWords() throws Exception {
-        int vmOnly = admittedQuotaHost("cf-vm-only", ServerModel.POSTURE_VM_ISOLATED);
+        int vmOnly = admittedQuotaHost("cf-vm-only", HostModel.POSTURE_VM_ISOLATED);
         int takesIt = admittedQuotaHost("cf-takes-workspace", null);
         String gateWords = "cf-vm-only is set to VM isolated, so it takes no container app";
 
@@ -295,18 +295,18 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         type("input[name='name']", "cf-ws-on-taking-host");
         page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
         page.waitForCondition(() -> findInstance("cf-ws-on-taking-host") != null);
-        assertThat((Object) findInstance("cf-ws-on-taking-host").get(InstanceModel.SERVER_ID))
+        assertThat((Object) findInstance("cf-ws-on-taking-host").get(InstanceModel.HOST_ID))
             .as("step 5: the workspace landed on the host that takes it").isEqualTo(takesIt);
     }
 
     /** @return an admitted, measured Incus host whose data root enforces quotas, under the given posture when one */
     private static int admittedQuotaHost(String name, String posture) {
-        var servers = Models.get(ServerModel.class);
+        var servers = Models.get(HostModel.class);
         Row existing = servers.findByName(name);
-        int id = existing != null ? existing.get(ServerModel.ID) : HostFixtures.admittedIncusHost(name);
+        int id = existing != null ? existing.get(HostModel.ID) : HostFixtures.admittedIncusHost(name);
         Row row = servers.findById(id);
         if (posture != null) {
-            row.set(ServerModel.POSTURE, posture);
+            row.set(HostModel.POSTURE, posture);
             servers.save(row);
         }
         VolumeBackends.store(servers.findById(id),
@@ -477,7 +477,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row app = Models.get(InstanceModel.class).createEmptyRow();
         app.set(InstanceModel.NAME, "cf-stored-source");
         app.set(InstanceModel.KIND, "hohenheim:application");
-        app.set(InstanceModel.SERVER_ID, dockerHostId);
+        app.set(InstanceModel.HOST_ID, dockerHostId);
         app.set(InstanceModel.SETTINGS, stored);
         app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(app);
@@ -513,18 +513,18 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      */
     @Test
     void anEmptyHostPickIsPlacedByTheChooserOrRefusedOnTheHostField() throws Exception {
-        var servers = Models.get(ServerModel.class);
-        int local = ServerModel.localServerId();
+        var servers = Models.get(HostModel.class);
+        int local = HostModel.localHostId();
         Row before = servers.findById(local);
-        String priorAdmission = before.get(ServerModel.ADMISSION);
-        Object priorCapabilities = before.get(ServerModel.CAPABILITIES);
+        String priorAdmission = before.get(HostModel.ADMISSION);
+        Object priorCapabilities = before.get(HostModel.CAPABILITIES);
         // Every other host this database holds is blocked for the walk, so the chooser has only the local one.
         Map<Integer, String> otherAdmissions = new LinkedHashMap<>();
         for (Row server : servers.find().all()) {
-            int id = server.get(ServerModel.ID);
+            int id = server.get(HostModel.ID);
             if (id != local) {
-                otherAdmissions.put(id, server.get(ServerModel.ADMISSION));
-                server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+                otherAdmissions.put(id, server.get(HostModel.ADMISSION));
+                server.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
                 servers.save(server);
             }
         }
@@ -533,9 +533,9 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             //    BLOCKED, and so is every other host -- so nothing is eligible. The submit is
             //    refused and writes NOTHING; it used to create the record against the blocked
             //    local host.
-            assertThat((String) before.get(ServerModel.ADMISSION))
+            assertThat((String) before.get(HostModel.ADMISSION))
                 .as("fixture: the local daemon is blocked until an operator admits it")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
             HttpResponse<String> nowhere = httpPostForm("/admin/instances/new",
                 "name=cf-nowhere&kind=hohenheim%3Adocker_container&server_id=",
                 sessionToken, csrfToken);
@@ -597,7 +597,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             assertThat(placed.statusCode()).as("step 3: the create redirects").isIn(302, 303);
             Row chosen = findInstance("cf-chosen");
             assertThat(chosen).as("step 3: the record exists").isNotNull();
-            assertThat((Object) chosen.get(InstanceModel.SERVER_ID))
+            assertThat((Object) chosen.get(InstanceModel.HOST_ID))
                 .as("step 3: on the one eligible host, written EXPLICITLY (never a null"
                     + " that only reads as local)")
                 .isEqualTo(local);
@@ -609,23 +609,23 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 "name=cf-named&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId,
                 sessionToken, csrfToken);
             assertThat(named.statusCode()).as("step 4: the create redirects").isIn(302, 303);
-            assertThat((Object) findInstance("cf-named").get(InstanceModel.SERVER_ID))
+            assertThat((Object) findInstance("cf-named").get(InstanceModel.HOST_ID))
                 .as("step 4: the named host is what persisted")
                 .isEqualTo(dockerHostId);
         } finally {
             Row after = servers.findById(local);
-            after.set(ServerModel.ADMISSION, priorAdmission);
-            after.set(ServerModel.CAPABILITIES, priorCapabilities);
+            after.set(HostModel.ADMISSION, priorAdmission);
+            after.set(HostModel.CAPABILITIES, priorCapabilities);
             servers.save(after);
             otherAdmissions.forEach(this::restoreAdmission);
         }
     }
 
     private void restoreAdmission(int serverId, String admission) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
+        Row server = Models.get(HostModel.class).findById(serverId);
         if (server != null) {
-            server.set(ServerModel.ADMISSION, admission);
-            Models.get(ServerModel.class).save(server);
+            server.set(HostModel.ADMISSION, admission);
+            Models.get(HostModel.class).save(server);
         }
     }
 

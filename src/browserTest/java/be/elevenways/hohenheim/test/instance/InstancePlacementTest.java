@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPins;
@@ -21,7 +21,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -31,20 +30,17 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -113,7 +109,7 @@ class InstancePlacementTest {
                     HardDeletes.byId(Models.get(InstanceModel.class), id);
                 }
                 for (Integer id : this.hosts) {
-                    Models.get(ServerModel.class).delete(id);
+                    Models.get(HostModel.class).delete(id);
                 }
         });
         this.instances.clear();
@@ -129,19 +125,19 @@ class InstancePlacementTest {
      * the freshness bound reads.
      */
     private int host(String name, String admission, String posture, Long memoryMb) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, admission);
-        row.set(ServerModel.POSTURE, posture);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, admission);
+        row.set(HostModel.POSTURE, posture);
+        Models.get(HostModel.class).save(row);
         // An operator who declares shared containers also accepts that risk; without the
         // act, this fixture would be asserting the acknowledgement gate rather than the
         // chooser. The gate itself has its own journey, and the helper no-ops on the
         // postures that need no acknowledgement.
         HostFixtures.acknowledgePosture(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         this.hosts.add(id);
         storeReport(PREFIX + name, memoryMb, null);
         return id;
@@ -150,25 +146,25 @@ class InstancePlacementTest {
     /** An INCUS host: the runtime whose kernel-truth gate placement must consult. */
     private int incusHost(String name, Long memoryMb, String kernelLaneStatus) {
         return incusHost(name, memoryMb, kernelLaneStatus,
-            ServerModel.POSTURE_SHARED_CONTAINER);
+            HostModel.POSTURE_SHARED_CONTAINER);
     }
 
     /** The same, with the posture named -- the axis the isolation pairing reads. */
     private int incusHost(String name, Long memoryMb, String kernelLaneStatus,
                           String posture) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, PREFIX + name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.INCUS_URL, "https://192.0.2.41:8443");
-        row.set(ServerModel.SSH_TARGET, "root@192.0.2.41");
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, posture);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, PREFIX + name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.INCUS_URL, "https://192.0.2.41:8443");
+        row.set(HostModel.SSH_TARGET, "root@192.0.2.41");
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, posture);
+        Models.get(HostModel.class).save(row);
         HostFixtures.acknowledgePosture(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         this.hosts.add(id);
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         HostPins.apply(model.findById(id), HostTrustSlot.INCUS_TLS,
             "-----BEGIN CERTIFICATE-----\nMIIBdaemon\n-----END CERTIFICATE-----\n",
             "sha256:daemon");
@@ -207,9 +203,9 @@ class InstancePlacementTest {
      * "Never measured" is a property of the record, not of one report.
      */
     private static void unmeasure(String name) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(name);
-        row.set(ServerModel.CAPABILITIES, null);
+        row.set(HostModel.CAPABILITIES, null);
         model.save(row);
         storeReport(name, null, null);
     }
@@ -235,7 +231,7 @@ class InstancePlacementTest {
         row.set(InstanceModel.KIND, DOCKER_KIND);
         row.set(InstanceModel.SETTINGS,
             Map.of("image", "fake/image", "memory_limit_mb", memoryMb));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);
@@ -275,10 +271,10 @@ class InstancePlacementTest {
     void theChooserScoresFreeHeadroomAndRefusesByNameWithTheReasonThatApplies() {
         Db.run(datasource, () -> {
             // 1. No eligible host at all: named refusal, never a default.
-            int blocked = host("blocked", ServerModel.ADMISSION_BLOCKED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
-            int trustedOnly = host("trusted-only", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_TRUSTED_ONLY, 4096L);
+            int blocked = host("blocked", HostModel.ADMISSION_BLOCKED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int trustedOnly = host("trusted-only", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_TRUSTED_ONLY, 4096L);
             assertThat(keyOf(catchThrowable(() -> InstancePlacement.chooseForBucket(
                     BUCKET, workload(512), null))))
                 .as("step 1: a blocked host and a trusted-only host leave nothing eligible,"
@@ -286,8 +282,8 @@ class InstancePlacementTest {
                 .isEqualTo("no_placement_available");
 
             // 2. One admitted shared host: it is chosen, and neither ineligible host is.
-            int alpha = host("alpha", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int alpha = host("alpha", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(512), null))
                 .as("step 2: the only admitted tenant-accepting host is chosen")
                 .isEqualTo(alpha);
@@ -296,8 +292,8 @@ class InstancePlacementTest {
                 .doesNotContain(alpha);
 
             // 3. A second eligible host, empty, beats the one carrying a workload.
-            int beta = host("beta", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int beta = host("beta", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
             liveInstanceOn(alpha, BUCKET, 512);
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(512), null))
                 .as("step 3: the emptier host wins")
@@ -321,7 +317,7 @@ class InstancePlacementTest {
             // 5. Equal bookings: the LOWEST ID breaks the tie, so a placement is
             //    reproducible. Beta reaches alpha's 768 by releasing 256 of its 1024.
             Row betaWorkload = Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(beta)).first();
+                .where(InstanceModel.HOST_ID.eq(beta)).first();
             betaWorkload.set(InstanceModel.SETTINGS,
                 Map.of("image", "fake/image", "memory_limit_mb", 768));
             Models.get(InstanceModel.class).save(betaWorkload);
@@ -355,7 +351,7 @@ class InstancePlacementTest {
             //    survivor is chosen instead.
             unmeasure(PREFIX + "beta");
             assertThat(InstanceCapacity.budgetMbOf(
-                    Models.get(ServerModel.class).findById(beta)))
+                    Models.get(HostModel.class).findById(beta)))
                 .as("step 8: an unmeasured host has NO budget, not an unlimited one")
                 .isNull();
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
@@ -399,10 +395,10 @@ class InstancePlacementTest {
             // 1. PAIR ONE, the class docblock's own worked example: a big host carrying
             //    something against a small host carrying nothing. Both fit a 256 MB
             //    workload, so eligibility cannot be what decides.
-            int small = host("score-small", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 1024L);
-            int large = host("score-large", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 8192L);
+            int small = host("score-small", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 1024L);
+            int large = host("score-large", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 8192L);
             liveInstanceOn(large, BUCKET, 512);
             assertThat(Map.of(
                     "small", InstanceCapacity.bookedMbOn(small),
@@ -420,10 +416,10 @@ class InstancePlacementTest {
 
             // 3. PAIR TWO, EQUAL BUDGETS. Both are measured at 4096 MB, so budget alone
             //    cannot decide; only what each already carries can.
-            int lightlyLoaded = host("score-light", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
-            int instanceHeavy = host("score-instances", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int lightlyLoaded = host("score-light", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int instanceHeavy = host("score-instances", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
             liveInstanceOn(instanceHeavy, BUCKET, 512);
             assertThat(Map.of(
                     "light", InstanceCapacity.bookableMbOn(lightlyLoaded, 4096L)
@@ -463,10 +459,10 @@ class InstancePlacementTest {
             //    preflight never proved it could read its own kernel. HostAdmission
             //    refuses such a host at deploy, so placement must not offer it.
             int unproven = incusHost("incus-unproven", 4096L, HostPreflight.STATUS_FAIL);
-            assertThat((String) Models.get(ServerModel.class).findById(unproven)
-                    .get(ServerModel.ADMISSION))
+            assertThat((String) Models.get(HostModel.class).findById(unproven)
+                    .get(HostModel.ADMISSION))
                 .as("step 1: the host really is stored as ADMITTED")
-                .isEqualTo(ServerModel.ADMISSION_ADMITTED);
+                .isEqualTo(HostModel.ADMISSION_ADMITTED);
             InstancePlacement.Workload incus = InstancePlacement.Workload.of(
                 InstanceKinds.getHandler("hohenheim:system_container"),
                 Map.of("image", "images:debian/13"));
@@ -500,10 +496,10 @@ class InstancePlacementTest {
             assertThat(keyOf(again))
                 .as("step 3: and it is the same named refusal")
                 .isEqualTo("no_placement_available");
-            assertThat((String) Models.get(ServerModel.class).findById(unproven)
-                    .get(ServerModel.ADMISSION))
+            assertThat((String) Models.get(HostModel.class).findById(unproven)
+                    .get(HostModel.ADMISSION))
                 .as("step 3: and placement never rewrites the operator's admit")
-                .isEqualTo(ServerModel.ADMISSION_ADMITTED);
+                .isEqualTo(HostModel.ADMISSION_ADMITTED);
         });
     }
 
@@ -516,8 +512,8 @@ class InstancePlacementTest {
     @Test
     void aKindsOwnHostRequirementExcludesAHostAndIsWhatTheOperatorIsTold() {
         Db.run(datasource, () -> {
-            int only = host("kind-gate", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int only = host("kind-gate", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
 
             // 1. POSITIVE ANCHOR FIRST: with no kind requirement, this host is chosen.
             //    Everything below is therefore about the requirement, not the host.
@@ -570,10 +566,10 @@ class InstancePlacementTest {
     @Test
     void aDedicatedHostAcceptsOneBucketAndStopsAcceptingOnceAnotherLandsOnIt() {
         Db.run(datasource, () -> {
-            int shared = host("ded-shared", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
-            int dedicated = host("ded-exclusive", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_DEDICATED, 4096L);
+            int shared = host("ded-shared", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int dedicated = host("ded-exclusive", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_DEDICATED, 4096L);
 
             // 1. Empty, a dedicated host accepts anyone -- it has made no promise yet.
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), shared))
@@ -650,8 +646,8 @@ class InstancePlacementTest {
     @Test
     void aHostWithNoVolumeQuotaTakesNoWorkspaceOrApplication() {
         Db.run(datasource, () -> {
-            int plain = host("vol-none", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 8192L);
+            int plain = host("vol-none", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 8192L);
             setVolumeBackend(plain, VolumeBackend.NONE);
 
             InstanceKindHandler workspace = InstanceKinds.getHandler("hohenheim:workspace");
@@ -670,7 +666,7 @@ class InstancePlacementTest {
             // 2. Both new kinds refuse it BY NAME when asked directly.
             for (InstanceKindHandler kind : List.of(workspace, application)) {
                 assertThat(keyOf(catchThrowable(() ->
-                        kind.requirePlaceableOn(ServerModel.nameOf(plain), Map.of()))))
+                        kind.requirePlaceableOn(HostModel.nameOf(plain), Map.of()))))
                     .as("step 2: %s names the missing quota", kind.typeId())
                     .isEqualTo("host_no_volume_quota");
             }
@@ -717,7 +713,7 @@ class InstancePlacementTest {
 
     /** Stamp a detected volume backend on a host the way the preflight probe does. */
     private static void setVolumeBackend(int serverId, VolumeBackend backend) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findById(serverId);
         VolumeBackends.store(row, new VolumeBackends.Detection(backend,
             "/fixture/volumes", "fixture: " + backend.token()));
@@ -732,7 +728,7 @@ class InstancePlacementTest {
         Db.run(datasource, () -> {
             int incus = incusHost("lan-none", 8192L, HostPreflight.STATUS_PASS);
             InstanceKindHandler vm = InstanceKinds.getHandler("hohenheim:vm");
-            String name = ServerModel.nameOf(incus);
+            String name = HostModel.nameOf(incus);
 
             // 1. POSITIVE ANCHOR: a hidden machine is placeable there.
             assertThat(catchThrowable(() -> vm.requirePlaceableOn(name, Map.of("network_mode", "hidden"))))
@@ -750,7 +746,7 @@ class InstancePlacementTest {
     void aVmIsolatedHostRefusesAContainerWorkloadAndStillTakesAVirtualMachine() {
         Db.run(datasource, () -> {
             int vmOnly = incusHost("vm-isolated", 8192L, HostPreflight.STATUS_PASS,
-                ServerModel.POSTURE_VM_ISOLATED);
+                HostModel.POSTURE_VM_ISOLATED);
             InstanceKindHandler containerKind =
                 InstanceKinds.getHandler("hohenheim:system_container");
             InstanceKindHandler vmKind = InstanceKinds.getHandler("hohenheim:vm");
@@ -799,7 +795,7 @@ class InstancePlacementTest {
             // 5. A dedicated host is unaffected by the isolation axis in either direction:
             //    it rations by OWNER, and says nothing about kernels.
             int dedicated = incusHost("vm-pair-dedicated", 8192L, HostPreflight.STATUS_PASS,
-                ServerModel.POSTURE_DEDICATED);
+                HostModel.POSTURE_DEDICATED);
             HostAdmission.requireInstancePlacement(dedicated, containerKind.isolation(), BUCKET);
             HostAdmission.requireInstancePlacement(dedicated, vmKind.isolation(), BUCKET);
         });
@@ -829,12 +825,12 @@ class InstancePlacementTest {
             // The implicit local daemon, as a fresh installation carries it: enrolled,
             // never preflighted, admission `blocked`. Registered for teardown because this
             // journey ADMITS it and every other test in this class walks EVERY host row.
-            int local = ServerModel.localServerId();
+            int local = HostModel.localHostId();
             this.hosts.add(local);
-            assertThat((String) Models.get(ServerModel.class).findById(local)
-                    .get(ServerModel.ADMISSION))
+            assertThat((String) Models.get(HostModel.class).findById(local)
+                    .get(HostModel.ADMISSION))
                 .as("fixture: the seeded local host is blocked until an operator admits it")
-                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+                .isEqualTo(HostModel.ADMISSION_BLOCKED);
 
             // 1. Nothing is eligible: the operator's create is REFUSED BY NAME. This is
             //    the step that fails under the old behaviour, which handed the blocked
@@ -848,15 +844,15 @@ class InstancePlacementTest {
             // 2. The operator admits and preflights the local daemon. The SAME call now
             //    lands on it: eligibility is what changed, not the caller.
             HostFixtures.admitLocal();
-            storeReport(ServerModel.MODE_LOCAL, 4096L, null);
+            storeReport(HostModel.MODE_LOCAL, 4096L, null);
             assertThat(InstancePlacement.forActor(admin, null, workload(512)))
                 .as("step 2: admitted and measured, local is what the chooser picks")
                 .isEqualTo(local);
 
             // 3. And the score applies to this lane as well: a bigger empty host outranks
             //    the local daemon, which the implicit default could never express.
-            int roomier = host("no-host-roomier", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 16384L);
+            int roomier = host("no-host-roomier", HostModel.ADMISSION_ADMITTED,
+                HostModel.POSTURE_SHARED_CONTAINER, 16384L);
             assertThat(InstancePlacement.forActor(admin, null, workload(512)))
                 .as("step 3: the operator lane is scored like every other placement")
                 .isEqualTo(roomier);
@@ -865,9 +861,9 @@ class InstancePlacementTest {
             //    now the ONLY way past the chooser: cordoned, local is out of the eligible
             //    set, and an operator who names it anyway still gets it (the deploy gate
             //    is what refuses to run there -- see the dedicated-host journey).
-            Row localRow = Models.get(ServerModel.class).findById(local);
-            localRow.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
-            Models.get(ServerModel.class).save(localRow);
+            Row localRow = Models.get(HostModel.class).findById(local);
+            localRow.set(HostModel.ADMISSION, HostModel.ADMISSION_CORDONED);
+            Models.get(HostModel.class).save(localRow);
             assertThat(InstancePlacement.forActor(admin, local, workload(512)))
                 .as("step 4: an operator naming a host still gets the host they named")
                 .isEqualTo(local);

@@ -2,12 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.app.PutOnlineReach;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.cms.PutOnline;
@@ -97,9 +92,9 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         daemon.installContainerKind();
 
         hostId = HostFixtures.admittedDockerHost(PREFIX + "host", 8192);
-        Row host = Models.get(ServerModel.class).findById(hostId);
-        host.set(ServerModel.PUBLIC_IPV4, HOST_IPV4);
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).findById(hostId);
+        host.set(HostModel.PUBLIC_IPV4, HOST_IPV4);
+        Models.get(HostModel.class).save(host);
 
         zoneId = DnsFixtures.createZone(ORIGIN, DnsZoneModel.ROLE_PRIMARY, null);
         DnsZoneStore.INSTANCE.reload();
@@ -109,7 +104,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         holder.set(InstanceModel.NAME, PREFIX + "holder");
         holder.set(InstanceModel.KIND, "hohenheim:docker_container");
         holder.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-        holder.set(InstanceModel.SERVER_ID, hostId);
+        holder.set(InstanceModel.HOST_ID, hostId);
         holder.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         Models.get(InstanceModel.class).save(holder);
         holderId = holder.get(InstanceModel.ID);
@@ -119,13 +114,13 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     static void cleanUp() {
         try {
             for (Row instance : Models.get(InstanceModel.class).find()
-                    .where(InstanceModel.SERVER_ID.eq(hostId)).all()) {
+                    .where(InstanceModel.HOST_ID.eq(hostId)).all()) {
                 int id = instance.get(InstanceModel.ID);
                 GameAddresses.set(id, null);
                 PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
                 InstanceRowCleanup.delete(id);
             }
-            HardDeletes.byId(Models.get(ServerModel.class), hostId);
+            HardDeletes.byId(Models.get(HostModel.class), hostId);
         } finally {
             FakeDockerDaemon.restore();
             daemon.close();
@@ -235,7 +230,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .anySatisfy(claim -> {
                 assertThat((Integer) claim.get(PortAllocationModel.PORT)).isEqualTo(hostPort);
                 assertThat((String) claim.get(PortAllocationModel.HOST_IP)).isEmpty();
-                assertThat((Integer) claim.get(PortAllocationModel.SERVER_ID)).isEqualTo(hostId);
+                assertThat((Integer) claim.get(PortAllocationModel.HOST_ID)).isEqualTo(hostId);
                 assertThat(PortLedger.isReleasing(claim)).isFalse();
             });
 
@@ -643,7 +638,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                     assertThat((Integer) claim.get(PortAllocationModel.PORT)).isEqualTo(port.hostPort());
                     assertThat((String) claim.get(PortAllocationModel.PROTOCOL)).isEqualTo(port.protocol());
                     assertThat((String) claim.get(PortAllocationModel.HOST_IP)).isEmpty();
-                    assertThat((Integer) claim.get(PortAllocationModel.SERVER_ID)).isEqualTo(hostId);
+                    assertThat((Integer) claim.get(PortAllocationModel.HOST_ID)).isEqualTo(hostId);
                     assertThat(PortLedger.isReleasing(claim)).isFalse();
                 });
         }
@@ -698,17 +693,17 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
 
         try (FakeIncusSocket incus = FakeIncusSocket.start()) {
             int vmHost = HostFixtures.admittedIncusHost(PREFIX + "vm-host");
-            Row host = Models.get(ServerModel.class).findById(vmHost);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.INCUS_URL, incus.url());
-            host.set(ServerModel.PUBLIC_IPV4, HOST_IPV4);
-            Models.get(ServerModel.class).save(host);
+            Row host = Models.get(HostModel.class).findById(vmHost);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.INCUS_URL, incus.url());
+            host.set(HostModel.PUBLIC_IPV4, HOST_IPV4);
+            Models.get(HostModel.class).save(host);
             Integer vmId = null;
             try {
                 String gameAddress = "vm." + ORIGIN;
                 Map<String, Object> form = new LinkedHashMap<>();
                 form.put(InstanceModel.NAME.getName(), PREFIX + "vm-service");
-                form.put("serverId", vmHost);
+                form.put("hostId", vmHost);
                 form.put(InstanceModel.KIND.getName(), kind);
                 form.put(InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image",
                     "images:alpine/3.22/cloud", PublishedPort.SRV_SERVICE, "minecraft")));
@@ -757,7 +752,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                     .anySatisfy(claim -> {
                         assertThat((Integer) claim.get(PortAllocationModel.PORT)).isEqualTo(hostPort);
                         assertThat((String) claim.get(PortAllocationModel.HOST_IP)).isEmpty();
-                        assertThat((Integer) claim.get(PortAllocationModel.SERVER_ID)).isEqualTo(vmHost);
+                        assertThat((Integer) claim.get(PortAllocationModel.HOST_ID)).isEqualTo(vmHost);
                     });
 
                 // 5. THE ASSERTION: the Incus daemon holds the machine with a NAT proxy device forwarding that host
@@ -789,7 +784,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                     PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, vmId);
                     InstanceRowCleanup.delete(vmId);
                 }
-                HardDeletes.byId(Models.get(ServerModel.class), vmHost);
+                HardDeletes.byId(Models.get(HostModel.class), vmHost);
             }
         }
     }
@@ -822,7 +817,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     private static Map<String, Object> serviceForm(String name, String gamePort, String gameAddress) {
         Map<String, Object> form = new LinkedHashMap<>();
         form.put("name", name);
-        form.put("serverId", hostId);
+        form.put("hostId", hostId);
         form.put("variables", Map.of());
         form.put(PutOnline.PORTS, Map.of("game", gamePort));
         form.put(PutOnline.GAME_ADDRESS.getName(), gameAddress);
@@ -837,7 +832,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         settings.putAll(moreSettings);
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(InstanceModel.NAME.getName(), name);
-        form.put("serverId", hostId);
+        form.put("hostId", hostId);
         form.put(InstanceModel.KIND.getName(), "hohenheim:docker_container");
         form.put(InstanceModel.SETTINGS.getName(), settings);
         form.put(PutOnline.PORTS, ports);

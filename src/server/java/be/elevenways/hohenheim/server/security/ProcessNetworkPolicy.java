@@ -115,10 +115,10 @@ public final class ProcessNetworkPolicy {
     /**
      * The applier for the managed-process tier.
      *
-     * AIDEV-NOTE: there is no {@code forServer} counterpart and there must not be one.
+     * AIDEV-NOTE: there is no {@code forHost} counterpart and there must not be one.
      * Managed processes are children of THIS controller ({@code Subprocess}), so the
      * kernel that must carry their rules is always the local one -- the remote-host
-     * mis-targeting {@code NftRunner.forServer} exists to prevent cannot arise here.
+     * mis-targeting {@code NftRunner.forHost} exists to prevent cannot arise here.
      */
     public static @NonNull ProcessNetworkPolicy current() {
         ProcessNetworkPolicy installed = override;

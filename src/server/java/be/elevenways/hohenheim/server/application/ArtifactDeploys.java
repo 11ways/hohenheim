@@ -7,8 +7,8 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.DataDirectory;
@@ -67,7 +67,7 @@ public final class ArtifactDeploys {
         // not mistake an old, still-uploading request for abandoned scratch.
         Row application = ApplicationReleases.requireApplication(applicationId);
         HostLeases.production().requireFence(
-            ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)));
+            HostModel.canonicalHostId(application.get(InstanceModel.HOST_ID)));
         Path uploads = directoryFor(applicationId).toPath().resolve("uploads");
         Files.createDirectories(uploads);
         return Files.createTempFile(uploads, "upload-", ".jar");
@@ -332,7 +332,7 @@ public final class ArtifactDeploys {
                 continue;
             }
             BootSettle.underBorrowedHostLease(HostLeases.production(),
-                ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)), () -> {
+                HostModel.canonicalHostId(application.get(InstanceModel.HOST_ID)), () -> {
                     InstanceOperationLock.production().exclusive(applicationId,
                             InstanceOperationLock.Contention.QUEUE, () -> {
                         finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
@@ -349,7 +349,7 @@ public final class ArtifactDeploys {
             Path uploads = directoryFor(applicationId).toPath().resolve("uploads");
             if (!Files.isDirectory(uploads)) continue;
             BootSettle.underBorrowedHostLease(HostLeases.production(),
-                ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)), () ->
+                HostModel.canonicalHostId(application.get(InstanceModel.HOST_ID)), () ->
                     cleanupUploads(uploads, BootSettle.processStart()));
         }
     }

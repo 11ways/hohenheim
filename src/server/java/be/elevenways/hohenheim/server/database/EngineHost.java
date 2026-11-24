@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -55,7 +55,7 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
             Objects.toString(database.get(DatabaseModel.DB_USER), ""),
             Objects.toString(database.get(DatabaseModel.DB_PASSWORD), ""),
             Objects.toString(database.get(DatabaseModel.DB_NAME), ""),
-            ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)),
+            HostModel.canonicalHostId(database.get(DatabaseModel.HOST_ID)),
             ResourceLimits.of(database.get(DatabaseModel.MEMORY_LIMIT_MB),
                 database.get(DatabaseModel.CPU_LIMIT)),
             false);
@@ -74,7 +74,7 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
             engine, engineRow.get(DatabaseEngineModel.IMAGE), false,
             rootUser, Objects.toString(engineRow.get(DatabaseEngineModel.ROOT_PASSWORD), ""),
             engine.rootDatabase(rootUser),
-            ServerModel.canonicalServerId(engineRow.get(DatabaseEngineModel.SERVER_ID)),
+            HostModel.canonicalHostId(engineRow.get(DatabaseEngineModel.HOST_ID)),
             ResourceLimits.of(engineRow.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
                 engineRow.get(DatabaseEngineModel.CPU_LIMIT)),
             true);
@@ -125,10 +125,10 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
 
         /**
          * Whether {@link #dedicated} or {@link #ofEngine} resolves this placement without throwing: in practice, whether
-         * its engine token is known. The stored host check only mirrors their canonicalServerId; both server_id columns
+         * its engine token is known. The stored host check only mirrors their canonicalHostId; both server_id columns
          * reference servers.id, so a stored host id always names a server.
          *
-         * @param servers the hosts read through {@link ServerModel#serversByStoredId}, this stored host id among them
+         * @param servers the hosts read through {@link HostModel#hostsByStoredId}, this stored host id among them
          */
         public boolean resolves(@NonNull Map<@Nullable Integer, Row> servers) {
             return ManagedDatabase.Engine.forToken(this.token) != null && servers.containsKey(this.serverId);
@@ -165,7 +165,7 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
             }
             if (!DatabaseModel.isShared(database)) {
                 placements.put(id, new Placement(new Owner(DatabaseModel.MODEL_ID, id),
-                    database.get(DatabaseModel.ENGINE), database.get(DatabaseModel.SERVER_ID)));
+                    database.get(DatabaseModel.ENGINE), database.get(DatabaseModel.HOST_ID)));
                 continue;
             }
             Integer engineId = database.get(DatabaseModel.ENGINE_ID);
@@ -180,7 +180,7 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
     /** The placement of one shared engine row's own instance. */
     private static @NonNull Placement engineHosted(@NonNull Row engine) {
         return new Placement(new Owner(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)),
-            engine.get(DatabaseEngineModel.ENGINE), engine.get(DatabaseEngineModel.SERVER_ID));
+            engine.get(DatabaseEngineModel.ENGINE), engine.get(DatabaseEngineModel.HOST_ID));
     }
 
     /**

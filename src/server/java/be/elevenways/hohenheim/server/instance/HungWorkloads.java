@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -85,7 +85,7 @@ public final class HungWorkloads {
     }
 
     private HungWorkloads(@NonNull InstanceService instances) {
-        this(instances, PublishedPortProbe::forServer, (id, server, name) -> InstanceStatusReconciler
+        this(instances, PublishedPortProbe::forHost, (id, server, name) -> InstanceStatusReconciler
             .redeployInBackground(instances, id, server, name, Set.of(InstanceModel.STATUS_RUNNING)));
     }
 
@@ -172,7 +172,7 @@ public final class HungWorkloads {
             MISSES.remove(key);
             return false;
         }
-        int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        int serverId = HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID));
         // Probed holding no claim: a remote probe takes seconds, and a person's operation must not be refused for it.
         String failure = unanswered(this.probes.apply(serverId), port);
         if (failure == null) {
@@ -208,7 +208,7 @@ public final class HungWorkloads {
             Change.fact(HohenheimActivityAction.RESTARTED_UNANSWERED,
                 Map.of(HohenheimActivityAction.REASON_KEY, failure)));
         this.restart.restart(instanceId,
-            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)), name);
+            HostModel.canonicalHostId(instance.get(InstanceModel.HOST_ID)), name);
         return true;
     }
 

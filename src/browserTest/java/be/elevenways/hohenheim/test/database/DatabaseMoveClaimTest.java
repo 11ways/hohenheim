@@ -5,14 +5,14 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.protoblast.testsupport.thread.Racers;
@@ -21,7 +21,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -64,7 +63,7 @@ class DatabaseMoveClaimTest {
     void aMoveThatAnotherOperationHoldsIsRefusedAndLeavesTheRecordAlone() {
         DatabaseService service = new DatabaseService();
         service.insertRecord(NAME, ManagedDatabase.Engine.POSTGRES, null, "app", "pw", "app", false,
-            ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+            HostService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
             DatabaseModel.PLACEMENT_DEDICATED, null);
 
         // 1. Another move (or any operation) holds the record: it reads provisioning.
@@ -106,7 +105,7 @@ class DatabaseMoveClaimTest {
         try {
             DatabaseService service = new DatabaseService();
             service.insertRecord(SERIAL, ManagedDatabase.Engine.POSTGRES, null, "app", OLD_PASSWORD, "appdb", false,
-                ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+                HostService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             DatabaseModel databases = Models.get(DatabaseModel.class);
             int recordId = databases.findByName(SERIAL).get(DatabaseModel.ID);
@@ -221,7 +220,7 @@ class DatabaseMoveClaimTest {
         try {
             DatabaseService service = new DatabaseService();
             service.insertRecord(LANDING, ManagedDatabase.Engine.POSTGRES, null, "app", OLD_PASSWORD, "landdb", false,
-                ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+                HostService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             DatabaseModel databases = Models.get(DatabaseModel.class);
             int recordId = databases.findByName(LANDING).get(DatabaseModel.ID);
@@ -232,7 +231,7 @@ class DatabaseMoveClaimTest {
             engine.set(DatabaseEngineModel.ENGINE, "postgres");
             engine.set(DatabaseEngineModel.ROOT_USER, "root");
             engine.set(DatabaseEngineModel.ROOT_PASSWORD, ROOT_PASSWORD);
-            engine.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+            engine.set(DatabaseEngineModel.HOST_ID, HostModel.localHostId());
             engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             engines.save(engine);
             String shared = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), LANDING, "postgres",

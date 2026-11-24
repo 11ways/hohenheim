@@ -5,8 +5,8 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -58,7 +58,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * so the daemon's TLS material no longer occupies them), the fixture performs only the
  * acts an operator performs -- install the product-minted public key in authorized_keys,
  * compare the scanned fingerprint against what the host reports for itself -- and every
- * kernel read below travels {@code HostKeys.sshArgv} -> {@code NftRunner.forServer}.
+ * kernel read below travels {@code HostKeys.sshArgv} -> {@code NftRunner.forHost}.
  * A hermetic test can only prove the MECHANISM through {@code overrideRunnerForTest};
  * this proves the DEPLOYMENT. The fixture's own ssh helpers stay the INJECTION lane (they
  * break the kernel), never the verification lane.
@@ -125,24 +125,24 @@ class IncusKernelIsolationLiveTest {
     void kernelDivergenceIsSeenRepairedAndOtherwiseStopsTheWorkload() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
 
             // 1. WITHOUT an ssh admin lane this remote daemon's kernel is unreadable, and
             //    the product says so instead of guessing. This is the state every https
             //    Incus host was in before the trust columns were split.
             Row laneless = model.findByName(HOST);
-            assertThat(ServerModel.hasSshLane(laneless))
+            assertThat(HostModel.hasSshLane(laneless))
                 .as("step 1: the enrolled host starts with no ssh admin lane")
                 .isFalse();
-            assertThat(IncusKernelIsolation.forServer(laneless).available())
+            assertThat(IncusKernelIsolation.forHost(laneless).available())
                 .as("step 1: so kernel truth is UNAVAILABLE, never assumed fine")
                 .isFalse();
-            assertThatInspectRefuses(IncusKernelIsolation.forServer(laneless),
+            assertThatInspectRefuses(IncusKernelIsolation.forHost(laneless),
                 ControllerScope.handle(ControllerScope.KIND_INSTANCE, 0));
             // 1b. And that is now a PLACEMENT REFUSAL, not merely a missing diagnostic:
             //     a real https daemon with a tenant-accepting posture and no lane cannot
             //     pass preflight or be admitted, by name.
-            assertThat(ServerModel.acceptsTenantWorkloads(laneless))
+            assertThat(HostModel.acceptsTenantWorkloads(laneless))
                 .as("step 1b: the enrolled host accepts tenant workloads")
                 .isTrue();
             HostPreflight.Report lanelessReport = HostPreflight.runAndStore(HOST);
@@ -169,31 +169,31 @@ class IncusKernelIsolationLiveTest {
             //    and it lands in its OWN columns, next to the daemon certificate.
             String sshFingerprint = remote.enrollSshLaneThroughProduct(HOST);
             Row host = model.findByName(HOST);
-            assertThat((String) host.get(ServerModel.HOST_KEY_FINGERPRINT))
+            assertThat((String) host.get(HostModel.HOST_KEY_FINGERPRINT))
                 .as("step 2: the ssh pin is the host's own ssh host key")
                 .isEqualTo(sshFingerprint);
-            assertThat((String) host.get(ServerModel.INCUS_SERVER_CERT_FINGERPRINT))
+            assertThat((String) host.get(HostModel.INCUS_SERVER_CERT_FINGERPRINT))
                 .as("step 2: and the daemon certificate is untouched beside it")
                 .isEqualTo(remote.fingerprint());
-            assertThat((String) host.get(ServerModel.HOST_KEY))
+            assertThat((String) host.get(HostModel.HOST_KEY))
                 .as("step 2: the ssh slot holds a known_hosts line, never a PEM")
                 .startsWith("ssh-").doesNotContain("BEGIN CERTIFICATE");
-            assertThat((String) host.get(ServerModel.INCUS_SERVER_CERT))
+            assertThat((String) host.get(HostModel.INCUS_SERVER_CERT))
                 .as("step 2: and the tls slot holds the PEM")
                 .contains("BEGIN CERTIFICATE");
 
             // 3. THE PRODUCTION PATH: no test seam is installed, so this verifier reaches
             //    daystrom's kernel over HostKeys.sshArgv with the pin it just confirmed.
-            IncusKernelIsolation kernel = IncusKernelIsolation.forServer(host);
+            IncusKernelIsolation kernel = IncusKernelIsolation.forHost(host);
             assertThat(kernel.available())
                 .as("step 3: kernel truth is now readable through the product's own lane")
                 .isTrue();
 
             // 4. An UNCONFIRMED lane is not a lane: refusing to answer stays the verdict
             //    until a human compared the fingerprint.
-            host.set(ServerModel.HOST_KEY_VERIFIED, false);
+            host.set(HostModel.HOST_KEY_VERIFIED, false);
             model.save(host);
-            assertThat(IncusKernelIsolation.forServer(model.findByName(HOST)).available())
+            assertThat(IncusKernelIsolation.forHost(model.findByName(HOST)).available())
                 .as("step 4: an unconfirmed ssh pin leaves the host unverifiable")
                 .isFalse();
             HostKeys.confirm(model.findByName(HOST));
@@ -211,7 +211,7 @@ class IncusKernelIsolationLiveTest {
                 .isTrue();
             Row admittable = model.findByName(HOST);
             HostAdmission.requireAdmittable(admittable);
-            admittable.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            admittable.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
             model.save(admittable);
             HostAdmission.requireKernelTruth(model.findByName(HOST));
 
@@ -434,7 +434,7 @@ class IncusKernelIsolationLiveTest {
     }
 
     private static int instanceRecord(String name, int ownerRecordId) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        Row host = Models.get(HostModel.class).findByName(HOST);
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", IMAGE);
         settings.put("memory_limit_mb", 128);
@@ -442,7 +442,7 @@ class IncusKernelIsolationLiveTest {
         row.set(InstanceModel.NAME, name + "-" + ownerRecordId);
         row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.HOST_ID, host.get(HostModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

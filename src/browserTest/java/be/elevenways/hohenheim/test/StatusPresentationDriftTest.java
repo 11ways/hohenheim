@@ -6,17 +6,9 @@ import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
-import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -151,9 +143,9 @@ class StatusPresentationDriftTest {
     @DisplayName("a stored admission wears its host standing's badge")
     void admissionWearsTheStandingBadge() {
         // 1. Every stored admission token is carried by a standing, so none is stored without a badge.
-        assertThat(ServerModel.ADMISSION.getValues().keySet()).as("step 1: the standings carry every stored token")
-            .containsExactlyInAnyOrder(ServerModel.ADMISSION_BLOCKED, ServerModel.ADMISSION_ADMITTED,
-                ServerModel.ADMISSION_CORDONED);
+        assertThat(HostModel.ADMISSION.getValues().keySet()).as("step 1: the standings carry every stored token")
+            .containsExactlyInAnyOrder(HostModel.ADMISSION_BLOCKED, HostModel.ADMISSION_ADMITTED,
+                HostModel.ADMISSION_CORDONED);
 
         // 2. The Hosts list's badge and the admission field's are one: a host waiting for its checks is amber in
         //    both, never red in one of them.
@@ -161,12 +153,12 @@ class StatusPresentationDriftTest {
             if (standing.admission() == null) {
                 continue;
             }
-            EnumField.EnumValue value = ServerModel.ADMISSION.getValues().get(standing.admission());
+            EnumField.EnumValue value = HostModel.ADMISSION.getValues().get(standing.admission());
             assertThat(value.color()).as("step 2: %s's colour", standing).isEqualTo(standing.variant());
             assertThat(value.getIcon().name()).as("step 2: %s's icon", standing).isEqualTo(standing.icon());
             assertThat(value.getLabel()).as("step 2: %s's words", standing).isEqualTo(standing.label());
         }
-        assertThat(ServerModel.ADMISSION.getValues().get(ServerModel.ADMISSION_BLOCKED).color())
+        assertThat(HostModel.ADMISSION.getValues().get(HostModel.ADMISSION_BLOCKED).color())
             .as("step 2: waiting is amber").isEqualTo(BadgeVariant.WARNING);
     }
 
@@ -202,7 +194,7 @@ class StatusPresentationDriftTest {
         //    enum against constants beside it.
         record Bound(String name, EnumField field, List<String> tokens) {}
         List<Bound> bound = List.of(
-            new Bound("volume backend", ServerModel.VOLUME_BACKEND,
+            new Bound("volume backend", HostModel.VOLUME_BACKEND,
                 Arrays.stream(VolumeBackend.values()).map(VolumeBackend::token).toList()),
             new Bound("readiness kind", InstanceTemplateModel.READINESS_KIND,
                 Arrays.stream(ReadinessKind.values()).map(ReadinessKind::token).toList()),

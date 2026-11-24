@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -82,9 +82,9 @@ class DatabaseResizeTest extends HohenheimHttpTestBase {
         for (Row row : databases.find().where(DatabaseModel.NAME.startsWith(PREFIX)).all()) {
             databases.delete(row.get(DatabaseModel.ID));
         }
-        Model servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
-            servers.delete(row.get(ServerModel.ID));
+        Model servers = Models.get(HostModel.class);
+        for (Row row : servers.find().where(HostModel.NAME.startsWith(PREFIX)).all()) {
+            servers.delete(row.get(HostModel.ID));
         }
     }
 
@@ -193,20 +193,20 @@ class DatabaseResizeTest extends HohenheimHttpTestBase {
     }
 
     private static int host(String name, long memTotalBytes) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", memTotalBytes), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static int database(String name, Integer serverId) {
@@ -217,7 +217,7 @@ class DatabaseResizeTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.DB_USER, "appuser");
         row.set(DatabaseModel.DB_PASSWORD, "s3cr3t-resize-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         databases.save(row);
         Integer id = row.get(DatabaseModel.ID);

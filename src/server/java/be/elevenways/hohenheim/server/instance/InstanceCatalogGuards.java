@@ -36,7 +36,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * image, and under enforced foreign keys (zenit 8a86d3c2) that made the DELETE fail as a raw
  * constraint error after the refusal had already passed, so a template or image any
  * destroyed workload ever used could never go. Its pointer is history and is cleared
- * (InstanceModel.detachTrashed) once the refusal passed, the same shape ServerModel uses.
+ * (InstanceModel.detachTrashed) once the refusal passed, the same shape HostModel uses.
  *
  * AIDEV-NOTE: the template catalog's delete button used to carry the template refusal alone;
  * this hook is the enforcement for every writer. Offering that delete dead WITH the count

@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
@@ -136,7 +136,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 DatabaseEngineModel.NAME.getName(), PREFIX + "engine", DatabaseEngineModel.ENGINE.getName(), "postgres",
                 DatabaseEngineModel.ROOT_USER.getName(), "root",
                 DatabaseEngineModel.ROOT_PASSWORD.getName(), ROOT_PASSWORD,
-                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.HOST_ID.getName(), HostModel.localHostId(),
                 DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
             int engineId = engine.get(DatabaseEngineModel.ID);
             String handle = EngineHandles.plantEngine(engineId, PREFIX + "engine", "postgres",
@@ -162,7 +162,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 InstanceModel.KIND.getName(), "hohenheim:application",
                 InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("repository_url",
                     "https://git.example.test/acme/rotate.git")),
-                InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+                InstanceModel.HOST_ID.getName(), HostModel.localHostId()));
             int appId = app.get(InstanceModel.ID);
             int[] release = new int[1];
             ApplicationReleases.inScopeUnchecked(appId, () -> {
@@ -170,7 +170,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                 serving.set(InstanceModel.NAME, PREFIX + "app");
                 serving.set(InstanceModel.KIND, "hohenheim:release");
                 serving.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
-                serving.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                serving.set(InstanceModel.HOST_ID, HostModel.localHostId());
                 serving.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
                 instances.save(serving);
                 release[0] = serving.get(InstanceModel.ID);
@@ -436,7 +436,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
                     DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
                     DatabaseModel.DB_NAME.getName(), "appdb", DatabaseModel.DB_USER.getName(), "appuser",
                     DatabaseModel.DB_PASSWORD.getName(), OLD_PASSWORD,
-                    DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                    DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
                     DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
                 int databaseId = database.get(DatabaseModel.ID);
                 String handle = EngineHandles.plant(databaseId, PREFIX + "own-" + engine.token(), engine.token(),
@@ -452,7 +452,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             Row app = instances.createEmptyRow();
             app.set(InstanceModel.NAME, PREFIX + "plain");
             app.set(InstanceModel.KIND, "hohenheim:docker_container");
-            app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            app.set(InstanceModel.HOST_ID, HostModel.localHostId());
             app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/app", "tag", "v1",
                 "container_port", 8080)));
             instances.save(app);
@@ -896,7 +896,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
             DatabaseModel.DB_NAME.getName(), "appdb", DatabaseModel.DB_USER.getName(), "appuser",
             DatabaseModel.DB_PASSWORD.getName(), password,
-            DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+            DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
             DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
         int databaseId = database.get(DatabaseModel.ID);
         String handle = EngineHandles.plant(databaseId, PREFIX + name, ManagedDatabase.Engine.REDIS.token(),
@@ -962,7 +962,7 @@ class DatabasePasswordChangeJourneyTest extends HohenheimHttpTestBase {
             DatabaseModel.PLACEMENT_SHARED, DatabaseModel.ENGINE_ID.getName(), engineId,
             DatabaseModel.DB_NAME.getName(), name + "db", DatabaseModel.DB_USER.getName(), name + "user",
             DatabaseModel.DB_PASSWORD.getName(), password,
-            DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+            DatabaseModel.HOST_ID.getName(), HostModel.localHostId(),
             DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
     }
 

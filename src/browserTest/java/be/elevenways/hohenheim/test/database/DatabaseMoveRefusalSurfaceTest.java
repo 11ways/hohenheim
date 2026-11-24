@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -52,7 +52,7 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimHttpTestBase {
     void aRefusedMoveClaimIsAFlashRefusalNotAServerError() throws Exception {
         // 1. An active, dedicated postgres record the panel OFFERS the move to.
         Row record = new DatabaseService().insertRecord(NAME, ManagedDatabase.Engine.POSTGRES, null,
-            "app", "not-logical!", "app", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+            "app", "not-logical!", "app", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_ACTIVE, DatabaseModel.PLACEMENT_DEDICATED, null);
         assertThat(DatabaseService.moveRefusal(record))
             .as("step 1: the move is offered for this record").isNull();

@@ -3,10 +3,10 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.server.docker.HostService;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -23,7 +23,6 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.server.cms.InstanceMigratePage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
@@ -66,7 +65,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         instance.set(InstanceModel.KIND, "hohenheim:docker_container");
         instance.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
         instance.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instances.save(instance);
         instanceId = instance.get(InstanceModel.ID);
 
@@ -77,20 +76,20 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         // wrong with it is admission. It used to be written with no mode at all, which the
         // transport read silently took for the local daemon; HostMode now refuses a missing
         // mode, so that fixture reached the unreachable refusal before admission was asked.
-        // Every production write path stamps a mode (ServerResource, ServerService.add).
-        var servers = Models.get(ServerModel.class);
+        // Every production write path stamps a mode (ServerResource, HostService.add).
+        var servers = Models.get(HostModel.class);
         Row stranger = servers.createEmptyRow();
-        stranger.set(ServerModel.NAME, "migrate-stranger");
-        stranger.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        stranger.set(HostModel.NAME, "migrate-stranger");
+        stranger.set(HostModel.MODE, HostModel.MODE_LOCAL);
         servers.save(stranger);
-        strangerHostId = servers.findByName("migrate-stranger").get(ServerModel.ID);
+        strangerHostId = servers.findByName("migrate-stranger").get(HostModel.ID);
 
         // An SSH-MODE host with NO pinned key, enrolled through the real funnel (add()
         // stamps MODE_SSH): building a Docker client for it fails closed in
         // HostKeys.sshArgv. The estate WILL contain such hosts (any freshly enrolled,
         // not-yet-confirmed machine), so the survey must answer for it BY NAME.
-        new ServerService().add("migrate-unpinned", "nobody@migrate-unpinned.invalid");
-        unpinnedHostId = servers.findByName("migrate-unpinned").get(ServerModel.ID);
+        new HostService().add("migrate-unpinned", "nobody@migrate-unpinned.invalid");
+        unpinnedHostId = servers.findByName("migrate-unpinned").get(HostModel.ID);
 
         tenantId = ApiSupport.user("migrate-tenant@hohenheim.local", "Migrate Tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
@@ -117,7 +116,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // 2. It names the source host, so the operator knows what they are moving FROM.
         assertThat(page.body()).as("step 2: the current host is named")
-            .contains(ServerModel.nameOf(ServerModel.localServerId()));
+            .contains(HostModel.nameOf(HostModel.localHostId()));
 
         // 3. The admin list offers the way in.
         HttpResponse<String> list = adminGet("/admin/instances");
@@ -232,7 +231,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
-        int localHost = ServerModel.localServerId();
+        int localHost = HostModel.localHostId();
 
         // 1. The host the workload ALREADY runs on: the migrate operation refuses it by its own name, answered on
         //    the invoke lane as a refusal (never a success redirect), naming why.
@@ -263,7 +262,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         // 3. THE STATE: the record still names the host it started on -- a move onto the
         //    stranger would have written its id here.
         Row after = Models.get(InstanceModel.class).findById(instanceId);
-        assertThat(ServerModel.canonicalServerId(after.get(InstanceModel.SERVER_ID)))
+        assertThat(HostModel.canonicalHostId(after.get(InstanceModel.HOST_ID)))
             .withFailMessage("step 3: a refused migration moved the record onto the"
                 + " ineligible host anyway")
             .isEqualTo(localHost);
@@ -365,9 +364,9 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // 2. The record did not move.
         Row after = Models.get(InstanceModel.class).findById(instanceId);
-        assertThat(ServerModel.canonicalServerId(after.get(InstanceModel.SERVER_ID)))
+        assertThat(HostModel.canonicalHostId(after.get(InstanceModel.HOST_ID)))
             .as("step 2: the refused call moved nothing")
-            .isEqualTo(ServerModel.localServerId());
+            .isEqualTo(HostModel.localHostId());
     }
 
     // -- plumbing -----------------------------------------------------------------
@@ -384,7 +383,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(response.body()).as(step + ": the migrate form is redrawn, still on its tab")
             .contains("name=\"" + CmsEndpoints.TAB_PARAM.getName() + "\"")
             .contains("value=\"" + HohenheimSlugs.Tab.MIGRATE + "\"")
-            .contains("name=\"" + InstanceOperations.TARGET_SERVER.getName() + "\"");
+            .contains("name=\"" + InstanceOperations.TARGET_HOST.getName() + "\"");
     }
 
     /** @return a refusal key's shipped English text for this name, as the page escapes it */
@@ -399,7 +398,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                 InstanceOperations.MIGRATE.id())
             .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
         return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), HohenheimSlugs.Tab.MIGRATE,
-            InstanceOperations.TARGET_SERVER.getName(), String.valueOf(target),
+            InstanceOperations.TARGET_HOST.getName(), String.valueOf(target),
             CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
             CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF));
     }

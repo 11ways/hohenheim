@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
@@ -242,7 +242,7 @@ class SitePanelLockoutTest extends HohenheimHttpTestBase {
             InstanceModel.KIND.getName(), "hohenheim:docker_container",
             InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine", "command", "sleep 60")),
             InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
-            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()).forEach(app::set);
+            InstanceModel.HOST_ID.getName(), HostModel.localHostId()).forEach(app::set);
         Models.get(InstanceModel.class).save(app);
         return app;
     }

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test.host;
-
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
@@ -53,7 +52,7 @@ class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
 
     @Test
     void aTenantOwnedWorkloadIsPostureCheckedOnEveryRedeployWhoeverAuthoredItsKind() {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         int hostId = acknowledgedSharedHost();
 
         // 1. A SITE the tenant owns, and the site's release container -- an
@@ -89,10 +88,10 @@ class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
         //    REGRESSES under a workload that is already placed -- and the redeploy must
         //    refuse. (Pre-fix it sailed through, because the KIND is not tenant-authored.)
         Row withdraw = servers.createEmptyRow();
-        withdraw.set(ServerModel.ID, hostId);
-        withdraw.set(ServerModel.ACKNOWLEDGED_POSTURE, null);
-        withdraw.set(ServerModel.ACKNOWLEDGED_AT, null);
-        ServerModel.ACKNOWLEDGER.write(withdraw, (PrincipalRef) null);
+        withdraw.set(HostModel.ID, hostId);
+        withdraw.set(HostModel.ACKNOWLEDGED_POSTURE, null);
+        withdraw.set(HostModel.ACKNOWLEDGED_AT, null);
+        HostModel.ACKNOWLEDGER.write(withdraw, (PrincipalRef) null);
         servers.save(withdraw);
         assertThat(refusalKeys(catchThrowable(() -> new InstanceService().deploy(instanceId))))
             .as("step 3: a tenant-owned workload is refused a redeploy onto a host whose"
@@ -102,8 +101,8 @@ class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
         // 4. A CORDONED host refuses the same redeploy by its own name, so step 3 is the
         //    whole placement gate running again and not one bespoke posture branch.
         Row cordon = servers.createEmptyRow();
-        cordon.set(ServerModel.ID, hostId);
-        cordon.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        cordon.set(HostModel.ID, hostId);
+        cordon.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
         servers.save(cordon);
         assertThat(refusalKeys(catchThrowable(() -> new InstanceService().deploy(instanceId))))
             .as("step 4: and the admission half of the same gate refuses too")
@@ -132,23 +131,23 @@ class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
     // -- fixtures ----------------------------------------------------------------
 
     private static int acknowledgedSharedHost() {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         String name = PREFIX + "host";
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.LAST_SEEN_AT, Now.instant());
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.LAST_SEEN_AT, Now.instant());
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static int site() {
@@ -173,7 +172,7 @@ class TenantAttributedRedeployGateTest extends HohenheimHttpTestBase {
             row.set(InstanceModel.KIND, ReleaseKind.ID.toString());
             row.set(InstanceModel.SETTINGS,
                 new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
-            row.set(InstanceModel.SERVER_ID, hostId);
+            row.set(InstanceModel.HOST_ID, hostId);
             row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
             Models.get(InstanceModel.class).save(row);
             created[0] = row.get(InstanceModel.ID);

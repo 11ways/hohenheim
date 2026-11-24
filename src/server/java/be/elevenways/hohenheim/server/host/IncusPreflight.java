@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
@@ -93,7 +93,7 @@ public final class IncusPreflight {
      *         there is posture-driven and the stored flag is already the honest answer
      */
     public static boolean isPostureDriven(@NonNull Row server, @NonNull String checkName) {
-        return POSTURE_SENSITIVE_CHECKS.contains(checkName) && ServerModel.isIncus(server);
+        return POSTURE_SENSITIVE_CHECKS.contains(checkName) && HostModel.isIncus(server);
     }
 
     /**
@@ -110,14 +110,14 @@ public final class IncusPreflight {
      */
     public static boolean postureRequires(@NonNull Row server, @NonNull String checkName) {
         return isPostureDriven(server, checkName)
-            && ServerModel.acceptsTenantWorkloads(server);
+            && HostModel.acceptsTenantWorkloads(server);
     }
 
     /** Run the battery against one host record and STORE the outcome. */
     public static HostPreflight.@NonNull Report runAndStore(@NonNull Row server) {
         HostPreflight.Report report;
         try {
-            IncusClient client = IncusClients.forServer(server);
+            IncusClient client = IncusClients.forHost(server);
             report = withLanParentCheck(server, withContainerKernelChecks(server, run(client), client), client);
         } catch (HostKeys.HostTrustException refusal) {
             // Same stance as the ssh lane: an unpinned host cannot be probed at all,
@@ -128,7 +128,7 @@ public final class IncusPreflight {
                 Map.of(), false, Now.instant(), outcome);
         }
         report = withKernelLaneCheck(server, report);
-        HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report, BATTERY);
+        HostPreflight.store(String.valueOf((Object) server.get(HostModel.NAME)), report, BATTERY);
         return report;
     }
 
@@ -139,7 +139,7 @@ public final class IncusPreflight {
      */
     private static HostPreflight.@NonNull Report withLanParentCheck(
             @NonNull Row server, HostPreflight.@NonNull Report report, @NonNull IncusClient client) {
-        String parent = server.get(ServerModel.LAN_PARENT);
+        String parent = server.get(HostModel.LAN_PARENT);
         if (parent == null || parent.isBlank()) {
             return report;
         }
@@ -172,7 +172,7 @@ public final class IncusPreflight {
      * real isolation loss into a 1-in-7 "flake" nobody was watching. It now runs the same
      * nft transaction the Docker battery's required {@code nftables} check runs, through
      * the lane the verifier itself would use, and its REQUIRED-ness follows
-     * {@link ServerModel#acceptsTenantWorkloads}: a storage-only or operator-only host
+     * {@link HostModel#acceptsTenantWorkloads}: a storage-only or operator-only host
      * still enrols, confirms, admits and holds backups with no lane, which is the recorded
      * backup-target decision and must not regress.
      *
@@ -184,7 +184,7 @@ public final class IncusPreflight {
      */
     private static HostPreflight.@NonNull Report withKernelLaneCheck(
             @NonNull Row server, HostPreflight.@NonNull Report report) {
-        boolean required = ServerModel.acceptsTenantWorkloads(server);
+        boolean required = HostModel.acceptsTenantWorkloads(server);
         HostPreflight.Check check;
         try {
             NftRunner nft = IncusKernelIsolation.kernelRunner(server);
@@ -217,7 +217,7 @@ public final class IncusPreflight {
      * SAME simplestreams lane real instances use, so a host that cannot answer this also
      * could not have run a tenant workload.
      *
-     * AIDEV-NOTE: REQUIRED-ness follows {@link ServerModel#acceptsTenantWorkloads}, the
+     * AIDEV-NOTE: REQUIRED-ness follows {@link HostModel#acceptsTenantWorkloads}, the
      * {@code kernel_isolation_lane} rule, and for the Incus tier the verdict is the
      * OPPOSITE of the Docker battery's advisory stance on the same question: an
      * unprivileged (userns-remapped) container is the Incus DEFAULT, so a tenant-accepting
@@ -229,7 +229,7 @@ public final class IncusPreflight {
     private static HostPreflight.@NonNull Report withContainerKernelChecks(
             @NonNull Row server, HostPreflight.@NonNull Report report,
             @NonNull IncusClient client) {
-        boolean required = ServerModel.acceptsTenantWorkloads(server);
+        boolean required = HostModel.acceptsTenantWorkloads(server);
         KernelProbe probe = probeInstanceKernel(client, required);
         List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
         checks.addAll(probe.checks());
@@ -484,7 +484,7 @@ public final class IncusPreflight {
      *
      * AIDEV-NOTE: {@code mem_total} is no longer a display fact -- InstanceCapacity reads
      * it back as the denominator of every placement decision on this host, and the Incus
-     * battery simply never recorded it (only ServerService's live summary probe did, in
+     * battery simply never recorded it (only HostService's live summary probe did, in
      * memory). A host whose resources cannot be read gets a REQUIRED failing check rather
      * than a missing fact, because a silently absent budget is the zero-denominator gate
      * this whole seam exists to remove; placement skips such a host by name either way,

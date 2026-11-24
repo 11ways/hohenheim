@@ -5,15 +5,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.SiteRedirectModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.site.ProtectPath;
@@ -184,7 +176,7 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
         form.put(InstanceModel.NAME.getName(), NAME);
         form.put(PutOnline.HOSTNAME.getName(), HOSTNAME);
         form.put(InstanceModel.KIND.getName(), kind);
-        form.put("serverId", ServerModel.localServerId());
+        form.put("hostId", HostModel.localHostId());
         form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url", upstream.toString(), "branch", "main",
             "build_command", "mkdir -p out && cp index.html out/ && echo " + MARK + "-not-found > out/404.html",
             "output_directory", "out",
@@ -481,7 +473,7 @@ class StaticSiteJourneyTest extends HohenheimTestBase {
     private static Map<String, Object> repositoryForm(String buildCommand) {
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(InstanceModel.KIND.getName(), "hohenheim:static_site");
-        form.put("serverId", ServerModel.localServerId());
+        form.put("hostId", HostModel.localHostId());
         form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url", folderUpstream.toString(), "branch",
             "main", "build_command", buildCommand, "output_directory", "out", "build_image", TestImages.ALPINE));
         return form;

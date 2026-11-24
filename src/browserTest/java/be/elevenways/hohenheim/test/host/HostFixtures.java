@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -48,7 +48,7 @@ public final class HostFixtures {
      */
     public static void makeLocalPlaceable(long memoryMb) {
         admitLocal();
-        HostPreflight.store(ServerModel.MODE_LOCAL, new HostPreflight.Report(
+        HostPreflight.store(HostModel.MODE_LOCAL, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
                 "fixture: reachable")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L),
@@ -57,15 +57,15 @@ public final class HostFixtures {
 
     /** Give the implicit local host a quota-capable volume root, which a workspace and an application need. */
     public static void giveLocalVolumeQuota() {
-        VolumeBackends.store(Models.get(ServerModel.class).findById(ServerModel.localServerId()),
+        VolumeBackends.store(Models.get(HostModel.class).findById(HostModel.localHostId()),
             new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
     }
 
     /** Withdraw the implicit local host's admission, the state a fresh installation is in. */
     public static void blockLocal() {
-        Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).findById(HostModel.localHostId());
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        Models.get(HostModel.class).save(row);
     }
 
     /**
@@ -84,7 +84,7 @@ public final class HostFixtures {
      * @return the captured state; {@link LocalHostState#restore} writes it back
      */
     public static @NonNull LocalHostState captureLocal() {
-        Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        Row row = Models.get(HostModel.class).findById(HostModel.localHostId());
         Map<String, Object> values = new LinkedHashMap<>();
         for (Field<?, ?> field : CAPTURED) {
             values.put(field.getName(), row.get(field.getName()));
@@ -94,25 +94,25 @@ public final class HostFixtures {
 
     /** The local-host columns {@link #captureLocal} saves and {@link LocalHostState#restore} writes back. */
     private static final List<Field<?, ?>> CAPTURED = List.of(
-        ServerModel.ADMISSION,
-        ServerModel.POSTURE,
-        ServerModel.PREFLIGHT_OK,
-        ServerModel.CAPABILITIES,
-        ServerModel.PROBED_AT,
-        ServerModel.CONTROLLER_VERSION,
-        ServerModel.LAST_SEEN_AT,
-        ServerModel.LAST_ERROR_KIND,
-        ServerModel.LAST_ERROR,
-        ServerModel.ACKNOWLEDGED_POSTURE,
-        ServerModel.ACKNOWLEDGED_WARNING_VERSION,
-        ServerModel.ACKNOWLEDGED_AT,
-        ServerModel.ACKNOWLEDGED_BY,
-        ServerModel.ACKNOWLEDGED_BY_KIND,
-        ServerModel.ACKNOWLEDGED_BY_LABEL,
-        ServerModel.VOLUME_BACKEND,
-        ServerModel.VOLUME_ROOT,
-        ServerModel.VOLUME_BACKEND_DETAIL,
-        ServerModel.VOLUME_PROBED_AT);
+        HostModel.ADMISSION,
+        HostModel.POSTURE,
+        HostModel.PREFLIGHT_OK,
+        HostModel.CAPABILITIES,
+        HostModel.PROBED_AT,
+        HostModel.CONTROLLER_VERSION,
+        HostModel.LAST_SEEN_AT,
+        HostModel.LAST_ERROR_KIND,
+        HostModel.LAST_ERROR,
+        HostModel.ACKNOWLEDGED_POSTURE,
+        HostModel.ACKNOWLEDGED_WARNING_VERSION,
+        HostModel.ACKNOWLEDGED_AT,
+        HostModel.ACKNOWLEDGED_BY,
+        HostModel.ACKNOWLEDGED_BY_KIND,
+        HostModel.ACKNOWLEDGED_BY_LABEL,
+        HostModel.VOLUME_BACKEND,
+        HostModel.VOLUME_ROOT,
+        HostModel.VOLUME_BACKEND_DETAIL,
+        HostModel.VOLUME_PROBED_AT);
 
     /**
      * The implicit local host's fixture-written columns at one moment.
@@ -129,11 +129,11 @@ public final class HostFixtures {
          * posture, and the captured pair is consistent by construction.
          */
         public void restore() {
-            Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+            Row row = Models.get(HostModel.class).findById(HostModel.localHostId());
             for (Map.Entry<String, Object> value : this.values.entrySet()) {
                 row.set(value.getKey(), value.getValue());
             }
-            Models.get(ServerModel.class).save(row);
+            Models.get(HostModel.class).save(row);
         }
     }
 
@@ -148,12 +148,12 @@ public final class HostFixtures {
      * @return the new server's id
      */
     public static int admittedIncusHost(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(List.of(
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
@@ -161,7 +161,7 @@ public final class HostFixtures {
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true, Now.instant(),
             null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
+        return Models.get(HostModel.class).findByName(name).get(HostModel.ID);
     }
 
     /**
@@ -171,12 +171,12 @@ public final class HostFixtures {
      * @return the new server's id
      */
     public static int admittedDockerHost(@NonNull String name, long memoryMb) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        Models.get(ServerModel.class).save(row);
-        int id = row.get(ServerModel.ID);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        Models.get(HostModel.class).save(row);
+        int id = row.get(HostModel.ID);
         admitDockerHost(id, memoryMb);
         return id;
     }
@@ -189,17 +189,17 @@ public final class HostFixtures {
      * @param memoryMb the measured total its budget is derived from
      */
     public static void admitDockerHost(int serverId, long memoryMb) {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row row = servers.findById(serverId);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
         servers.save(row);
-        if (ServerModel.requiresPinnedIdentity(servers.findById(serverId))) {
+        if (HostModel.requiresPinnedIdentity(servers.findById(serverId))) {
             HostPins.apply(servers.findById(serverId), HostTrustSlot.SSH, FIXTURE_SSH_KEY, "sha256:fixture");
             HostPins.confirm(servers.findById(serverId), HostTrustSlot.SSH);
         }
         acknowledgePosture(servers.findById(serverId));
-        HostPreflight.store(String.valueOf((Object) row.get(ServerModel.NAME)), new HostPreflight.Report(List.of(
+        HostPreflight.store(String.valueOf((Object) row.get(HostModel.NAME)), new HostPreflight.Report(List.of(
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L), true, Now.instant(), null));
     }
@@ -210,12 +210,12 @@ public final class HostFixtures {
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */
     public static void admitLocal() {
-        int id = ServerModel.localServerId();
-        Row row = Models.get(ServerModel.class).findById(id);
-        row.set(ServerModel.PREFLIGHT_OK, true);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
+        int id = HostModel.localHostId();
+        Row row = Models.get(HostModel.class).findById(id);
+        row.set(HostModel.PREFLIGHT_OK, true);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        Models.get(HostModel.class).save(row);
         acknowledgePosture(row);
     }
 
@@ -237,8 +237,8 @@ public final class HostFixtures {
      * is the hook doing its job, not a bug to work around.
      */
     public static void acknowledgePosture(@NonNull Row server) {
-        if (!ServerModel.postureNeedsAcknowledgement(server)
-                || ServerModel.postureAcknowledged(server)) {
+        if (!HostModel.postureNeedsAcknowledgement(server)
+                || HostModel.postureAcknowledged(server)) {
             return;
         }
         // AIDEV-NOTE: resolve the shared fixture's real account in the CURRENT datasource, not a fabricated actor

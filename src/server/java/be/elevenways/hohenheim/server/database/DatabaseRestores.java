@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -83,7 +83,7 @@ public final class DatabaseRestores {
             requireOneDatabase(engine, newName, plain);
             String user = source != null ? source.get(DatabaseModel.DB_USER) : null;
             String database = dump.get(DatabaseDumpModel.DB_NAME);
-            String server = ServerModel.nameOf(source != null ? source.get(DatabaseModel.SERVER_ID) : null);
+            String server = HostModel.nameOf(source != null ? source.get(DatabaseModel.HOST_ID) : null);
             // The insert refuses a taken name before any record exists; from here on the record is this call's own.
             Row inserted = service.insertRecord(newName, engine, dump.get(DatabaseDumpModel.IMAGE),
                 user == null || user.isBlank() ? "appuser" : user, Secrets.generatePassword(),

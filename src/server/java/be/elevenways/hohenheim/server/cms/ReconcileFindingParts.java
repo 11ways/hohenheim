@@ -73,7 +73,7 @@ public final class ReconcileFindingParts {
             .label(LABEL).recordLabel(HohenheimMicrocopy.RECONCILE_FINDING.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.RECONCILE_FINDING)).navGroup(NavGroup.SYSTEM)
             .navOrder(25).showInNav(false).icon(Icon.of("magnifying-glass"))
-            .standsUnder(HohenheimSlugs.SERVERS)
+            .standsUnder(HohenheimSlugs.HOSTS)
             .form(ResourceForm.<Row>of(formSpec()).build()).reads(ResourceReads.rows())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL.withAdvancedFilter(true).withFacetRail(true))
                 .facets().ruleFilters().exportable(true).widgets(ReconcileFindingParts::widgets)

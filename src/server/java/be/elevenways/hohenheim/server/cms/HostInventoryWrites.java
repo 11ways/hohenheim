@@ -2,10 +2,10 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostMode;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
-import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.hohenheim.server.options.HostOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.OperationInput;
@@ -32,23 +32,23 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-final class ServerInventoryWrites {
+final class HostInventoryWrites {
     private static final Pattern SSH_TARGET = Pattern.compile(
         "^(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*@)?(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*|\\[[0-9A-Fa-f:]+\\])(?::[0-9]{1,5})?$");
-    private ServerInventoryWrites() {}
+    private HostInventoryWrites() {}
 
     /** @param merged the create's values, its create defaults included */
     static Object create(Map<String, Object> submitted, OperationInput.Values merged) {
         Map<String, Object> values = new LinkedHashMap<>(submitted);
         validate(merged, null);
         String token = token(values, merged, null);
-        Row row = Models.get(ServerModel.class).createEmptyRow();
+        Row row = Models.get(HostModel.class).createEmptyRow();
         assign(row, values, merged);
-        Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> Models.get(ServerModel.class)
+        Models.get(HostModel.class).getResolvedDatasource().withTransaction(tx -> Models.get(HostModel.class)
                 .save(row));
-        Object key = row.get(ServerModel.ID);
+        Object key = row.get(HostModel.ID);
         report(HostEnrolment.afterCreate(key, token));
-        ServerOptions.refresh();
+        HostOptions.refresh();
         return key;
     }
 
@@ -59,47 +59,47 @@ final class ServerInventoryWrites {
     static void update(Row row, Map<String, Object> submitted, OperationInput.Values merged) {
         Objects.requireNonNull(row);
         Map<String, Object> values = new LinkedHashMap<>(submitted);
-        if (ServerParts.local(row)) {
-            for (String field : ServerParts.LOCAL_IMMUTABLE) {
+        if (HostParts.local(row)) {
+            for (String field : HostParts.LOCAL_IMMUTABLE) {
                 if (values.containsKey(field) && !Objects.equals(Texts.trimmedOrNull(values.get(field)),
                         Texts.trimmedOrNull(row.get(field)))) {
                     throw Violations.ofField(field, values.get(field),
                         HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
                 }
             }
-            if (tokenText(values.get(ServerParts.INCUS_TRUST_TOKEN.getName())) != null) {
-                throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
+            if (tokenText(values.get(HostParts.INCUS_TRUST_TOKEN.getName())) != null) {
+                throw Violations.ofField(HostParts.INCUS_TRUST_TOKEN.getName(), "",
                     HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
             }
-            Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> {
-                apply(row, values, ServerModel.PUBLIC_IPV4);
-                apply(row, values, ServerModel.PUBLIC_IPV6);
-                apply(row, values, ServerModel.LAN_PARENT);
-                if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(
-                        ServerModel.POSTURE, posture);
-                Models.get(ServerModel.class).save(row);
+            Models.get(HostModel.class).getResolvedDatasource().withTransaction(tx -> {
+                apply(row, values, HostModel.PUBLIC_IPV4);
+                apply(row, values, HostModel.PUBLIC_IPV6);
+                apply(row, values, HostModel.LAN_PARENT);
+                if (values.get(HostModel.POSTURE.getName()) instanceof String posture) row.set(
+                        HostModel.POSTURE, posture);
+                Models.get(HostModel.class).save(row);
             });
         } else {
             validate(merged, row);
             String token = token(values, merged, row);
-            Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> {
+            Models.get(HostModel.class).getResolvedDatasource().withTransaction(tx -> {
                 assign(row, values, merged);
-                Models.get(ServerModel.class).save(row);
+                Models.get(HostModel.class).save(row);
             });
-            report(HostEnrolment.afterUpdate(row.get(ServerModel.ID), token));
+            report(HostEnrolment.afterUpdate(row.get(HostModel.ID), token));
         }
-        ServerOptions.refresh();
+        HostOptions.refresh();
     }
 
     private static void assign(Row row, Map<String, Object> values, OperationInput.Values merged) {
-        for (Field<String, ?> field : List.of(ServerModel.NAME, ServerModel.SSH_TARGET,
-                ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6, ServerModel.LAN_PARENT)) apply(row, values, field);
-        if (values.get(ServerModel.RUNTIME.getName()) instanceof String runtime) row.set(ServerModel.RUNTIME, runtime);
-        if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(ServerModel.POSTURE, posture);
-        if (values.containsKey(ServerModel.INCUS_URL.getName())) {
-            row.set(ServerModel.INCUS_URL, Texts.trimmedOrNull(values.get(ServerModel.INCUS_URL.getName())));
+        for (Field<String, ?> field : List.of(HostModel.NAME, HostModel.SSH_TARGET,
+                HostModel.PUBLIC_IPV4, HostModel.PUBLIC_IPV6, HostModel.LAN_PARENT)) apply(row, values, field);
+        if (values.get(HostModel.RUNTIME.getName()) instanceof String runtime) row.set(HostModel.RUNTIME, runtime);
+        if (values.get(HostModel.POSTURE.getName()) instanceof String posture) row.set(HostModel.POSTURE, posture);
+        if (values.containsKey(HostModel.INCUS_URL.getName())) {
+            row.set(HostModel.INCUS_URL, Texts.trimmedOrNull(values.get(HostModel.INCUS_URL.getName())));
         }
-        row.set(ServerModel.MODE, (ServerModel.RUNTIME_DOCKER.equals(runtime(merged, row)) ? HostMode.SSH
+        row.set(HostModel.MODE, (HostModel.RUNTIME_DOCKER.equals(runtime(merged, row)) ? HostMode.SSH
                 : HostMode.LOCAL).token());
     }
 
@@ -110,16 +110,16 @@ final class ServerInventoryWrites {
 
     /** @return the host's runtime; a blank one reads as the stored row's own answer, a docker host on a create */
     private static String runtime(OperationInput.Values merged, @Nullable Row row) {
-        return merged.get(ServerModel.RUNTIME.getName()) instanceof String value && !value.isBlank() ? value
-            : row == null ? ServerModel.RUNTIME_DOCKER : ServerModel.runtimeOf(row);
+        return merged.get(HostModel.RUNTIME.getName()) instanceof String value && !value.isBlank() ? value
+            : row == null ? HostModel.RUNTIME_DOCKER : HostModel.runtimeOf(row);
     }
 
     private static @Nullable String token(Map<String, Object> values, OperationInput.Values merged,
                                           @Nullable Row row) {
-        String token = tokenText(values.remove(ServerParts.INCUS_TRUST_TOKEN.getName()));
-        if (token != null && (!ServerModel.RUNTIME_INCUS.equals(runtime(merged, row))
-                || !trimmed(merged.get(ServerModel.INCUS_URL.getName())).startsWith("https://"))) {
-            throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
+        String token = tokenText(values.remove(HostParts.INCUS_TRUST_TOKEN.getName()));
+        if (token != null && (!HostModel.RUNTIME_INCUS.equals(runtime(merged, row))
+                || !trimmed(merged.get(HostModel.INCUS_URL.getName())).startsWith("https://"))) {
+            throw Violations.ofField(HostParts.INCUS_TRUST_TOKEN.getName(), "",
                 HohenheimMicrocopy.VIOLATIONS.of("incus_token_needs_https"));
         }
         return token;
@@ -131,15 +131,15 @@ final class ServerInventoryWrites {
     }
 
     private static void validate(OperationInput.Values merged, @Nullable Row row) {
-        String name = trimmed(merged.get(ServerModel.NAME.getName()));
-        if (ServerService.LOCAL_HOST_NAME.equals(name)) throw Violations.ofField("name", name,
+        String name = trimmed(merged.get(HostModel.NAME.getName()));
+        if (HostService.LOCAL_HOST_NAME.equals(name)) throw Violations.ofField("name", name,
             HohenheimMicrocopy.VIOLATIONS.of(row == null ? "local_server_reserved" : "local_server_immutable"));
-        if (!ServerModel.isValidName(name)) {
+        if (!HostModel.isValidName(name)) {
             throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_format"));
         }
-        String target = trimmed(merged.get(ServerModel.SSH_TARGET.getName()));
-        if (ServerModel.RUNTIME_INCUS.equals(runtime(merged, row))) {
-            String url = trimmed(merged.get(ServerModel.INCUS_URL.getName()));
+        String target = trimmed(merged.get(HostModel.SSH_TARGET.getName()));
+        if (HostModel.RUNTIME_INCUS.equals(runtime(merged, row))) {
+            String url = trimmed(merged.get(HostModel.INCUS_URL.getName()));
             try { IncusEndpoint.parse(url); } catch (IllegalArgumentException bad) {
                 throw Violations.ofField("incus_url", url, HohenheimMicrocopy.VIOLATIONS.of("incus_url_format"));
             }

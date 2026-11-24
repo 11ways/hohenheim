@@ -10,11 +10,11 @@ import be.elevenways.hohenheim.host.KernelIsolationView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerParts;
-import be.elevenways.hohenheim.server.cms.ServerOverviewState;
+import be.elevenways.hohenheim.server.cms.HostOverviewState;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -26,17 +26,14 @@ import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -101,12 +98,12 @@ class HostEvidenceTest {
     @Test
     void aFailedProbeRecordsItsFailureWithoutErasingWhatAnEarlierRunMeasured() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "evidence-a");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_VM_ISOLATED);
+            host.set(HostModel.NAME, "evidence-a");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_VM_ISOLATED);
             model.save(host);
 
             // 1. A full, reachable preflight: 16 GB measured, the kernel lane PROVEN.
@@ -139,7 +136,7 @@ class HostEvidenceTest {
             assertThat(HostPreflight.storedCheckStatus(afterFailure, "daemon"))
                 .as("step 2: THIS run's own verdict is stored, fail-closed and honest")
                 .isEqualTo(HostPreflight.STATUS_FAIL);
-            assertThat((Boolean) afterFailure.get(ServerModel.PREFLIGHT_OK))
+            assertThat((Boolean) afterFailure.get(HostModel.PREFLIGHT_OK))
                 .as("step 2: and the run's verdict still sinks preflight_ok").isFalse();
             assertThat(InstanceCapacity.budgetMbOf(afterFailure))
                 .withFailMessage("step 2: the failed probe erased the memory reading, so"
@@ -157,7 +154,7 @@ class HostEvidenceTest {
                     HostPreflight.MEM_TOTAL_FACT))
                 .as("step 3: the memory reading is stamped when it was MEASURED")
                 .isEqualTo(measuredAt);
-            assertThat((Instant) afterFailure.get(ServerModel.PROBED_AT))
+            assertThat((Instant) afterFailure.get(HostModel.PROBED_AT))
                 .as("step 3: while probed_at follows the run that just failed")
                 .isAfter(measuredAt);
             assertThat(HostPreflight.storedCheckAt(afterFailure, "daemon"))
@@ -216,18 +213,18 @@ class HostEvidenceTest {
     @Test
     void aLapsedHeartbeatRefusesPlacementByNameAndIsVisibleInTheList() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "evidence-b");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-            host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            host.set(ServerModel.PREFLIGHT_OK, true);
-            host.set(ServerModel.LAST_SEEN_AT, Now.instant());
+            host.set(HostModel.NAME, "evidence-b");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+            host.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+            host.set(HostModel.PREFLIGHT_OK, true);
+            host.set(HostModel.LAST_SEEN_AT, Now.instant());
             model.save(host);
             HostFixtures.acknowledgePosture(host);
-            int serverId = model.findByName("evidence-b").get(ServerModel.ID);
+            int serverId = model.findByName("evidence-b").get(HostModel.ID);
 
             Integer originalMinutes = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES);
@@ -242,7 +239,7 @@ class HostEvidenceTest {
                 // 2. THE DEFECT. Nine hours of silence, and every stored column still says
                 //    healthy: admitted, preflight_ok, no error kind. Only the clock knows.
                 Row lapsing = model.findByName("evidence-b");
-                lapsing.set(ServerModel.LAST_SEEN_AT, Now.instant().minus(Duration.ofHours(9)));
+                lapsing.set(HostModel.LAST_SEEN_AT, Now.instant().minus(Duration.ofHours(9)));
                 model.save(lapsing);
                 assertThat(catchThrowable(() ->
                         HostAdmission.requireInstancePlacement(serverId,
@@ -258,9 +255,9 @@ class HostEvidenceTest {
                 //    preflight verdict and the record itself are untouched, so the host
                 //    resumes the moment it answers again.
                 Row afterRefusal = model.findByName("evidence-b");
-                assertThat((String) afterRefusal.get(ServerModel.ADMISSION))
+                assertThat((String) afterRefusal.get(HostModel.ADMISSION))
                     .as("step 3: no gate rewrites the admission column behind the operator")
-                    .isEqualTo(ServerModel.ADMISSION_ADMITTED);
+                    .isEqualTo(HostModel.ADMISSION_ADMITTED);
 
                 // 4. And it is READABLE: the list cell's structured state token says the
                 //    host is silent, where before a lapsed host rendered identically to a
@@ -274,7 +271,7 @@ class HostEvidenceTest {
                 //    refusal and the cell, so steps 2 and 4 were the clock and not a gate
                 //    that refuses everything.
                 Row answering = model.findByName("evidence-b");
-                answering.set(ServerModel.LAST_SEEN_AT, Now.instant());
+                answering.set(HostModel.LAST_SEEN_AT, Now.instant());
                 model.save(answering);
                 HostAdmission.requireInstancePlacement(serverId,
                     WorkloadIsolation.SHARED_KERNEL, BUCKET);
@@ -286,7 +283,7 @@ class HostEvidenceTest {
                 Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 0);
                 Row silentAgain = model.findByName("evidence-b");
-                silentAgain.set(ServerModel.LAST_SEEN_AT,
+                silentAgain.set(HostModel.LAST_SEEN_AT,
                     Now.instant().minus(Duration.ofDays(30)));
                 model.save(silentAgain);
                 HostAdmission.requireInstancePlacement(serverId,
@@ -306,13 +303,13 @@ class HostEvidenceTest {
     @Test
     void theListShowsAQuarantineAndTheFormNamesTheMachineAVerdictIsAbout() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "evidence-c");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_VM_ISOLATED);
-            host.set(ServerModel.SSH_TARGET, "root@192.0.2.44");
+            host.set(HostModel.NAME, "evidence-c");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.POSTURE, HostModel.POSTURE_VM_ISOLATED);
+            host.set(HostModel.SSH_TARGET, "root@192.0.2.44");
             model.save(host);
             HostPins.apply(model.findByName("evidence-c"), HostTrustSlot.SSH, SSH_KEY,
                 HostKeys.fingerprintOf(SSH_KEY));
@@ -339,7 +336,7 @@ class HostEvidenceTest {
             // 2. POSITIVE ANCHOR: an https record addresses a real remote daemon, so the
             //    local-socket note must NOT appear -- step 1 is not a constant string.
             Row remote = model.findByName("evidence-c");
-            remote.set(ServerModel.INCUS_URL, "https://192.0.2.44:8443");
+            remote.set(HostModel.INCUS_URL, "https://192.0.2.44:8443");
             model.save(remote);
             assertThat(kernelIsolationViewOf("evidence-c").endpointNote())
                 .as("step 2: a genuinely remote daemon carries no local-socket note")
@@ -349,10 +346,10 @@ class HostEvidenceTest {
             //    the success cleared last_error_kind, which is the only thing the list cell
             //    used to look at, so a security state vanished from the list entirely.
             Row quarantined = model.findByName("evidence-c");
-            quarantined.set(ServerModel.QUARANTINED_AT, Now.instant());
-            quarantined.set(ServerModel.QUARANTINE_REASON, "the daemon offered another cert");
-            quarantined.set(ServerModel.LAST_ERROR_KIND, (String) null);
-            quarantined.set(ServerModel.LAST_SEEN_AT, Now.instant());
+            quarantined.set(HostModel.QUARANTINED_AT, Now.instant());
+            quarantined.set(HostModel.QUARANTINE_REASON, "the daemon offered another cert");
+            quarantined.set(HostModel.LAST_ERROR_KIND, (String) null);
+            quarantined.set(HostModel.LAST_SEEN_AT, Now.instant());
             model.save(quarantined);
             assertThat(hostStatusCell(model.findByName("evidence-c")).state())
                 .withFailMessage("step 3: a quarantined host renders in the list with no"
@@ -363,7 +360,7 @@ class HostEvidenceTest {
             // 4. POSITIVE ANCHOR: lifting the stamp restores the ordinary cell, so step 3
             //    was the quarantine column and not a cell that always shouts.
             Row cleared = model.findByName("evidence-c");
-            cleared.set(ServerModel.QUARANTINED_AT, (Instant) null);
+            cleared.set(HostModel.QUARANTINED_AT, (Instant) null);
             model.save(cleared);
             HostStatusCell ordinary = hostStatusCell(model.findByName("evidence-c"));
             assertThat(ordinary.state())
@@ -381,15 +378,15 @@ class HostEvidenceTest {
     @Test
     void theIncusIsolationSweepCoversEveryWorkloadThatCouldBeOnTheBridge() {
         Db.run(datasource, () -> {
-            ServerModel model = Models.get(ServerModel.class);
+            HostModel model = Models.get(HostModel.class);
             Row host = model.createEmptyRow();
-            host.set(ServerModel.NAME, "evidence-d");
-            host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            host.set(ServerModel.INCUS_URL, "https://192.0.2.77:8443");
-            host.set(ServerModel.POSTURE, ServerModel.POSTURE_VM_ISOLATED);
+            host.set(HostModel.NAME, "evidence-d");
+            host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+            host.set(HostModel.MODE, HostModel.MODE_LOCAL);
+            host.set(HostModel.INCUS_URL, "https://192.0.2.77:8443");
+            host.set(HostModel.POSTURE, HostModel.POSTURE_VM_ISOLATED);
             model.save(host);
-            int serverId = model.findByName("evidence-d").get(ServerModel.ID);
+            int serverId = model.findByName("evidence-d").get(HostModel.ID);
 
             // 1. A workload the deploy stamped `starting`, which is what every template
             //    carrying a readiness line gets: the guest is up and on the bridge.
@@ -440,7 +437,7 @@ class HostEvidenceTest {
         InstanceModel model = Models.get(InstanceModel.class);
         Row row = model.createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.STATUS, status);
         model.save(row);
         return model.find().where(InstanceModel.NAME.eq(name)).first().get(InstanceModel.ID);
@@ -504,7 +501,7 @@ class HostEvidenceTest {
 
     /** The host list's structured status cell, through the resource's own production path. */
     private static HostStatusCell hostStatusCell(Row row) {
-        PanelResource<Row> resource = ServerParts.admin();
+        PanelResource<Row> resource = HostParts.admin();
         for (ColumnSpec column : resource.list().table().columns()) {
             if ("host_status".equals(column.name())) {
                 return (HostStatusCell) resource.reads().cellMapping().cell(row, column);
@@ -515,8 +512,8 @@ class HostEvidenceTest {
 
     /** The overview page's kernel-isolation view, built the way the page builds it. */
     private static KernelIsolationView kernelIsolationViewOf(String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        KernelIsolationView view = ServerOverviewState.kernelIsolationViewOf(row);
+        Row row = Models.get(HostModel.class).findByName(name);
+        KernelIsolationView view = HostOverviewState.kernelIsolationViewOf(row);
         if (view == null) {
             throw new IllegalStateException("no kernel-isolation view for '" + name + "'");
         }

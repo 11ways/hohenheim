@@ -4,15 +4,15 @@ import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -180,7 +180,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     /** The operator picks the runtime; the kind runs on both. */
     @Override public @NonNull Set<String> supportedRuntimes() {
-        return Set.of(ServerModel.RUNTIME_DOCKER, ServerModel.RUNTIME_INCUS);
+        return Set.of(HostModel.RUNTIME_DOCKER, HostModel.RUNTIME_INCUS);
     }
 
     /** A userland plus an editor's language server: measurably more than a bare service. */
@@ -207,10 +207,10 @@ public final class WorkspaceKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
 
-        if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(serverName))) {
+        if (HostModel.RUNTIME_INCUS.equals(runtimeOf(serverName))) {
             // OPEN egress and the tenant-range denies, the SystemContainerKind stance: a
             // workspace fetches its own dependencies by definition.
-            return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+            return new IncusInstanceRuntime(new HostService().incusClientFor(serverName),
                 Egress.OPEN, IncusWorkloadType.CONTAINER, serverName);
         }
 
@@ -219,9 +219,9 @@ public final class WorkspaceKind implements InstanceKindHandler {
         // gate that makes an interactive shell defensible at all (see InstanceShell). Every
         // other Docker kind runs as root in its container and its shell is refused by name
         // long before a runtime could be asked for a pseudo-terminal.
-        ServerService servers = new ServerService();
+        HostService servers = new HostService();
         return new DockerInstanceRuntime(servers.clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName),
+            WorkloadNetworkPolicy.forHost(serverName),
             NetworkPosture.PRIVATE, Egress.OPEN, servers.transportFor(serverName));
     }
 
@@ -230,9 +230,9 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
         Row instance = requireInstance(instanceId);
         Row image = RuntimeImages.requireFor(instance);
-        String serverName = ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
+        String serverName = HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID));
         String runtime = runtimeOf(serverName);
-        boolean incus = ServerModel.RUNTIME_INCUS.equals(runtime);
+        boolean incus = HostModel.RUNTIME_INCUS.equals(runtime);
 
         int uid = WorkspaceUids.forInstance(instanceId);
         String startCommand = startCommandOf(settings, image);
@@ -311,13 +311,13 @@ public final class WorkspaceKind implements InstanceKindHandler {
     @Override
     public @NonNull Integer volumeOwnerUid(int instanceId, @NonNull String serverName) {
         int uid = WorkspaceUids.forInstance(instanceId);
-        if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(serverName))) {
+        if (HostModel.RUNTIME_INCUS.equals(runtimeOf(serverName))) {
             // The uid the WORKLOAD runs as is a namespace id there; the directory on the
             // host has to belong to the host uid that namespace id maps to.
-            Row server = Models.get(ServerModel.class).findByName(serverName);
+            Row server = Models.get(HostModel.class).findByName(serverName);
             if (server != null) {
                 return WorkspaceUids.incusHostUid(uid,
-                    WorkspaceUids.incusSubuidBase(serverName, HostShell.forServer(server)));
+                    WorkspaceUids.incusSubuidBase(serverName, HostShell.forHost(server)));
             }
         }
         return uid;
@@ -415,7 +415,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     /** The DECLARED runtime of a host; an unknown host folds to Docker, as resolve does. */
     static @NonNull String runtimeOf(@NonNull String serverName) {
-        Row server = Models.get(ServerModel.class).findByName(serverName);
-        return server == null ? ServerModel.RUNTIME_DOCKER : ServerModel.runtimeOf(server);
+        Row server = Models.get(HostModel.class).findByName(serverName);
+        return server == null ? HostModel.RUNTIME_DOCKER : HostModel.runtimeOf(server);
     }
 }

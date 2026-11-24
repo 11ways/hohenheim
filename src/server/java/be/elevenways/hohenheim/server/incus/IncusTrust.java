@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostIdentities;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -29,7 +28,7 @@ import java.util.Map;
  * and the per-host client identity is a self-signed certificate the daemon is taught
  * to trust -- by an operator installing it, or by {@link #enrollWithToken}.
  *
- * AIDEV-NOTE: this enrollment IS the node-identity story (see ServerModel.RUNTIME).
+ * AIDEV-NOTE: this enrollment IS the node-identity story (see HostModel.RUNTIME).
  * The client certificate is minted per HOST record, mirroring the per-host ssh
  * identity: revoking one host's trust entry touches nothing else.
  *
@@ -132,8 +131,8 @@ public final class IncusTrust {
      *         when the daemon still reports the connection untrusted afterwards
      */
     public static void enrollWithToken(@NonNull Row server, @NonNull String token) {
-        IncusClient client = IncusClients.forServer(server);
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        IncusClient client = IncusClients.forHost(server);
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         try {
             client.enrollWithToken(token.trim());
             if (!client.trusted()) {
@@ -155,7 +154,7 @@ public final class IncusTrust {
      * or null for a host that holds none (a unix-socket daemon, or no identity minted yet).
      */
     public static @Nullable String ownEntryOf(@NonNull Row server) {
-        if (!ServerModel.isIncus(server) || !IncusEndpoint.of(server).https()) {
+        if (!HostModel.isIncus(server) || !IncusEndpoint.of(server).https()) {
             return null;
         }
         String certificate = server.get(HostTrustSlot.INCUS_TLS.clientPublic());
@@ -186,22 +185,22 @@ public final class IncusTrust {
      * knows, so the client is built now and spent after the commit.
      *
      * AIDEV-NOTE: never a reason to refuse the removal. A host that cannot be reached keeps the entry, which the
-     * delete dialog names with the command that removes it (ServerParts.deleteBody), and the failure is logged.
+     * delete dialog names with the command that removes it (HostParts.deleteBody), and the failure is logged.
      */
     public static void releaseAfterRemoval(@NonNull Row server) {
         String fingerprint = ownEntryOf(server);
         if (fingerprint == null) {
             return;
         }
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        String name = String.valueOf((Object) server.get(HostModel.NAME));
         IncusClient client;
         try {
-            client = IncusClients.forServer(server);
+            client = IncusClients.forHost(server);
         } catch (RuntimeException unusable) {
             trustLeft(name, fingerprint, unusable);
             return;
         }
-        Models.get(ServerModel.class).getResolvedDatasource().afterCommit(() -> {
+        Models.get(HostModel.class).getResolvedDatasource().afterCommit(() -> {
             try {
                 boolean removed = releaseOwnEntry(client, fingerprint);
                 Blast.slog("hohenheim.host.incus_trust_released", Map.of("server", name,

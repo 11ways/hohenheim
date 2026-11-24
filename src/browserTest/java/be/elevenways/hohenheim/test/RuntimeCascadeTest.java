@@ -2,35 +2,10 @@ package be.elevenways.hohenheim.test;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
-import be.elevenways.hohenheim.model.StackDeploymentModel;
-import be.elevenways.hohenheim.model.StackFileModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
-import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
@@ -455,20 +430,20 @@ class RuntimeCascadeTest {
             int sourceId = server("cascade-source");
             int targetId = server("cascade-target");
             int instanceId = instance("cascade-mover", null, null);
-            Model servers = Models.get(ServerModel.class);
+            Model servers = Models.get(HostModel.class);
             AccessContext operator = TenantConduits.operator();
             // The window opens the way InstanceOperationGuard opens it: one set-based
-            // statement that fires no write hooks and leaves SERVER_ID on the source.
+            // statement that fires no write hooks and leaves HOST_ID on the source.
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId))
-                .assign(InstanceModel.SERVER_ID, sourceId)
+                .assign(InstanceModel.HOST_ID, sourceId)
                 .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
                 .assign(InstanceModel.MIGRATE_TARGET_ID, targetId)
                 .updateAll();
 
             // 1. The resource offers the target's delete DEAD, naming the workload.
             Microcopy reason = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(
-                ServerParts.DELETE, operator, servers.findById(targetId))).reason();
+                HostParts.DELETE, operator, servers.findById(targetId))).reason();
             assertThat(reason).as("step 1: a migration target is offered dead").isNotNull();
             assertThat(reason.key()).as("step 1: with the migrating reason").isEqualTo("delete_migrating");
             assertThat(reason.args().get("instance")).as("step 1: naming the workload")
@@ -488,7 +463,7 @@ class RuntimeCascadeTest {
                 .assign(InstanceModel.STATUS, "stopped")
                 .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
                 .updateAll();
-            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, servers.findById(targetId)))
+            assertThat(OperationPipeline.offer(HostParts.DELETE, operator, servers.findById(targetId)))
                 .as("step 3: nothing is moving onto it any more").isInstanceOf(OperationPipeline.Offer.Available.class);
             servers.delete(servers.findById(targetId));
             assertThat(servers.findById(targetId)).as("step 3: the host is gone").isNull();
@@ -579,10 +554,10 @@ class RuntimeCascadeTest {
     }
 
     private static int server(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        Models.get(ServerModel.class).save(row);
-        return row.get(ServerModel.ID);
+        Row row = Models.get(HostModel.class).createEmptyRow();
+        row.set(HostModel.NAME, name);
+        Models.get(HostModel.class).save(row);
+        return row.get(HostModel.ID);
     }
 
     private static int certificate(String niceName, String domains) {

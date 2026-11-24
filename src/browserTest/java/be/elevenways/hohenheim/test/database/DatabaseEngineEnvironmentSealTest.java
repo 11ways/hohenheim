@@ -7,14 +7,13 @@ import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.zenit.common.Zenit;
@@ -26,7 +25,6 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -66,7 +64,7 @@ class DatabaseEngineEnvironmentSealTest {
         // 1. A shared mongo record mints its engine and reserves the engine instance: the
         //    settings carry no environment at all.
         new DatabaseService(datasource).insertRecord("envseal", ManagedDatabase.Engine.MONGO, null,
-            "envuser", "envpassword-01", "envdb", false, ServerService.LOCAL_HOST_NAME,
+            "envuser", "envpassword-01", "envdb", false, HostService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING);
         int[] ids = new int[2];
         Db.run(datasource, () -> {

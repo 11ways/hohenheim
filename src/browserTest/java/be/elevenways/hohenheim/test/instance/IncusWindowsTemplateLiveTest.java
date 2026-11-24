@@ -1,13 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
@@ -26,11 +25,9 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.kvm.common.ScreenMessage;
 import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
@@ -133,10 +130,10 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
 
     @Test
     void windowsFromAPreparedTemplateThroughTheSameDriver() throws Exception {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
-        int hostId = host.get(ServerModel.ID);
+        Row host = Models.get(HostModel.class).findByName(HOST);
+        int hostId = host.get(HostModel.ID);
 
-        IncusClient incus = new ServerService().incusClientFor(HOST);
+        IncusClient incus = new HostService().incusClientFor(HOST);
         InstanceService service = new InstanceService();
 
         // AIDEV-NOTE: only ONE of these three ever runs; the other two exist to carry
@@ -290,8 +287,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
                 .contains("10.0.0.0/8").contains("169.254.0.0/16")
                 .contains("192.168.0.0/16").contains("fc00::/7");
 
-            IncusKernelIsolation kernel = IncusKernelIsolation.forServer(
-                Models.get(ServerModel.class).findByName(HOST));
+            IncusKernelIsolation kernel = IncusKernelIsolation.forHost(
+                Models.get(HostModel.class).findByName(HOST));
             assertThat(kernel.available())
                 .as("step 8: this host's kernel is readable, so the Windows tier's"
                     + " isolation is VERIFIED and not merely configured")
@@ -402,7 +399,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, VmKind.ID.toString());
         row.set(InstanceModel.SETTINGS, windowsSettings(alias, memoryMb));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         instances.save(row);
         return row.get(InstanceModel.ID);
     }

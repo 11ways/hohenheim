@@ -1,14 +1,8 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -78,14 +72,14 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
         sites.save(site);
         gitSiteId = site.get(SiteModel.ID);
 
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row server = servers.createEmptyRow();
-        server.set(ServerModel.NAME, PREFIX + "host");
-        server.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        server.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        server.set(ServerModel.SSH_TARGET, "root@edge.example.test");
+        server.set(HostModel.NAME, PREFIX + "host");
+        server.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        server.set(HostModel.MODE, HostModel.MODE_SSH);
+        server.set(HostModel.SSH_TARGET, "root@edge.example.test");
         servers.save(server);
-        serverId = server.get(ServerModel.ID);
+        serverId = server.get(HostModel.ID);
 
         Model providers = Models.get(SiteAuthProviderModel.class);
         Row provider = providers.createEmptyRow();
@@ -116,7 +110,7 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
         Row instance = instances.createEmptyRow();
         instance.set(InstanceModel.NAME, PREFIX + "instance");
         instance.set(InstanceModel.KIND, "hohenheim:docker_container");
-        instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instance.set(InstanceModel.HOST_ID, HostModel.localHostId());
         instance.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         instance.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
@@ -187,8 +181,8 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
         cases.add(new Case("manage/sites", patch(HohenheimSlugs.MANAGE, gitSiteId), Models.get(SiteModel.class),
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
         cases.add(new Case("admin/servers", patch(HohenheimSlugs.ADMIN, "servers", serverId),
-                Models.get(ServerModel.class),
-            serverId, ServerModel.NAME.getName(), PREFIX + "renamed-host"));
+                Models.get(HostModel.class),
+            serverId, HostModel.NAME.getName(), PREFIX + "renamed-host"));
         cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.AUTH_PROVIDERS,
             providerId),
             Models.get(SiteAuthProviderModel.class), providerId,

@@ -78,7 +78,7 @@ class InstanceHistoryJourneyTest {
             row.set(InstanceModel.NAME, "history-capture");
             row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
             row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-            row.set(InstanceModel.SERVER_ID, hostId);
+            row.set(InstanceModel.HOST_ID, hostId);
             row.set(InstanceModel.IMAGE_FINGERPRINT, PINNED);
             instances.save(row);
             int id = row.get(InstanceModel.ID);
@@ -158,7 +158,7 @@ class InstanceHistoryJourneyTest {
             row.set(InstanceModel.NAME, "history-uploads");
             row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
             row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-            row.set(InstanceModel.SERVER_ID, hostId);
+            row.set(InstanceModel.HOST_ID, hostId);
             instances.save(row);
             int id = row.get(InstanceModel.ID);
             AccessContext reader = TestAccessContexts.allAllowedReading(LocaleChain.ofTags("en"),

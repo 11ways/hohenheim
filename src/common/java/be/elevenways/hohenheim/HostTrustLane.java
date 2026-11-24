@@ -8,7 +8,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * One trust relationship a controller keeps with a host: the declaring home of the trust-lane vocabulary.
  *
- * AIDEV-NOTE: the lane token is ALSO the row-action lane id ServerTrustActions composes its action
+ * AIDEV-NOTE: the lane token is ALSO the row-action lane id HostTrustActions composes its action
  * ids from ({@code host_key} / {@code incus_cert}), so it never changes. TrustLaneView carries the
  * MEMBER and the host overview's trust card reads its title and client-material label off it ({@code
  * lane.lane.title}), so no template branches over lane literals. The member crosses the web boundary as

@@ -179,7 +179,7 @@ public final class InstanceFigures {
                 // A refused port spelling publishes nothing; the deploy says why.
             }
             return new Target(instance.get(InstanceModel.ID), probe, port,
-                lanes.apply(instance.get(InstanceModel.SERVER_ID)),
+                lanes.apply(instance.get(InstanceModel.HOST_ID)),
                 InstanceStatus.forToken(instance.get(InstanceModel.STATUS)));
         }
     }
@@ -232,7 +232,7 @@ public final class InstanceFigures {
         Map<Integer, Subscription> subscriptions = new LinkedHashMap<>();
         for (Row instance : instances) {
             Target target = Target.of(instance, serverId -> lanes.computeIfAbsent(serverId,
-                PublishedPortProbe::forServer));
+                PublishedPortProbe::forHost));
             if (target == null) {
                 continue;
             }
@@ -518,7 +518,7 @@ public final class InstanceFigures {
             Target fresh;
             try {
                 Row instance = Models.get(InstanceModel.class).findById(this.instanceId);
-                fresh = instance == null ? null : Target.of(instance, PublishedPortProbe::forServer);
+                fresh = instance == null ? null : Target.of(instance, PublishedPortProbe::forHost);
             } catch (RuntimeException unreadable) {
                 Blast.log("FIGURE: instance", this.instanceId, "could not be read again:", unreadable.getMessage());
                 return this.target;

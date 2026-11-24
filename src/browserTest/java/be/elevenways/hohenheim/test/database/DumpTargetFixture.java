@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.database.DatabaseContentLock;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -94,7 +94,7 @@ public final class DumpTargetFixture implements AutoCloseable {
         row.set(DatabaseModel.DB_PASSWORD, "s3cret");
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         databases.save(row);
         return row;
     }

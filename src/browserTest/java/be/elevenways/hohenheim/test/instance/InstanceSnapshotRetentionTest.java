@@ -17,7 +17,6 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.test.RecordedChanges;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -505,7 +504,7 @@ class InstanceSnapshotRetentionTest {
             database.set(DatabaseModel.DB_NAME, "appdb");
             database.set(DatabaseModel.DB_USER, "appuser");
             database.set(DatabaseModel.DB_PASSWORD, "snapshot-secret-password-1");
-            database.set(DatabaseModel.SERVER_ID, hostId);
+            database.set(DatabaseModel.HOST_ID, hostId);
             database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             Models.get(DatabaseModel.class).save(database);
             int databaseId = database.get(DatabaseModel.ID);
@@ -559,7 +558,7 @@ class InstanceSnapshotRetentionTest {
             FakeNativeDaemons.FakeVolumeSnapshotKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image",
             "volumes", Map.of("data", "/var/data")));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }
@@ -569,7 +568,7 @@ class InstanceSnapshotRetentionTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

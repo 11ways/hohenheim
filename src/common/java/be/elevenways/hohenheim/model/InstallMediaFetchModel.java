@@ -37,7 +37,7 @@ public class InstallMediaFetchModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     /** The Incus host whose managed pool receives the medium. */
-    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id").build());
+    public static final IntegerField HOST_ID = SCHEMA.addField(IntegerField.builder().name("server_id").build());
 
     /** The medium's volume name on that host. */
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
@@ -73,7 +73,7 @@ public class InstallMediaFetchModel extends Model {
 
     /** Keyed by the host, so a host's Install media part hears its own fetches only. */
     @Override
-    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(SERVER_ID); }
+    public @NonNull List<Field<?, ?>> getChangeKeyFields() { return List.of(HOST_ID); }
 
     /** Plumbing: recorded, kept out of people's feeds. */
     public static final HistoryBehaviour HISTORY =

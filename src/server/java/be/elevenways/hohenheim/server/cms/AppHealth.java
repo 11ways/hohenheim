@@ -5,20 +5,10 @@ import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.ports.StreamProtocol;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -198,7 +188,7 @@ final class AppHealth {
         for (Row instance : instances) {
             AttentionSubject cause = instanceVerdict(instance, facts, false, null).cause();
             Microcopy refusal = OwnedInstances.placementReasonOf(instance, false, null);
-            if (cause != null && ServerModel.MODEL_ID.equals(cause.model()) && refusal != null) {
+            if (cause != null && HostModel.MODEL_ID.equals(cause.model()) && refusal != null) {
                 // The gate's own words, never the verdict's headline: a held app whose site is broken on its own
                 // (HTTPS forced without a certificate) leads with that site, while the host still holds it back.
                 held.merge(cause.id(), new HeldBack(1, refusal),
@@ -688,7 +678,7 @@ final class AppHealth {
             Verdict verdict = siteVerdict(site, facts, delegated, viewer);
             AttentionSubject cause = verdict.cause();
             boolean workloads = cause != null
-                && (InstanceModel.MODEL_ID.equals(cause.model()) || ServerModel.MODEL_ID.equals(cause.model()));
+                && (InstanceModel.MODEL_ID.equals(cause.model()) || HostModel.MODEL_ID.equals(cause.model()));
             if (verdict.health().tone() == HealthTone.BROKEN && !workloads) {
                 return spokenFor(verdict.health(), site);
             }

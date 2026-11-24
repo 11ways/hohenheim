@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -36,14 +36,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the stored preflight report must reach a page, and the list cell must be structured.
  *
  * AIDEV-NOTE: the defects this pins, pre-fix (2026-08-11):
- * ONE, rendering the detail form ran {@code ServerService.probeAndStore} as a side effect
+ * ONE, rendering the detail form ran {@code HostService.probeAndStore} as a side effect
  * of computing the {@code live_overview} pseudo-field, overwriting health columns on a
  * page VIEW. TWO, six more Computed pseudo-fields flattened structured, timestamped trust
  * and kernel evidence into localized sentences on the edit form. THREE, the per-check
  * preflight report {@code HostPreflight.store} persists was rendered NOWHERE -- the
  * overview subpage answering 404 was the literal proof. All three failed pre-fix.
  */
-class ServerOverviewTest extends HohenheimTestBase {
+class HostOverviewTest extends HohenheimTestBase {
 
     /** The quarantine alert's own title copy, which identifies the band. */
     private static final String QUARANTINE_TITLE = "This host is quarantined";
@@ -55,11 +55,11 @@ class ServerOverviewTest extends HohenheimTestBase {
      * {@code not_pinned} onto a freshly enrolled host just because somebody LOOKED at it.
      */
     @Test
-    void renderingTheServerDetailFormIsSideEffectFree() throws Exception {
+    void renderingTheHostDetailFormIsSideEffectFree() throws Exception {
         // 1. Enroll a remote host that has never been probed: health columns clean.
         int hostId = enrollHost("overview-side-effect");
-        Row host = Models.get(ServerModel.class).findById(hostId);
-        assertThat((String) host.get(ServerModel.LAST_ERROR_KIND))
+        Row host = Models.get(HostModel.class).findById(hostId);
+        assertThat((String) host.get(HostModel.LAST_ERROR_KIND))
             .as("step 1: a never-probed host carries no error kind").isNull();
 
         // 2. THE DEFECT. Render the detail form and read the record back.
@@ -67,11 +67,11 @@ class ServerOverviewTest extends HohenheimTestBase {
         HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
         assertThat(detail.statusCode()).as("step 2: the detail form renders").isEqualTo(200);
 
-        Row after = Models.get(ServerModel.class).findById(hostId);
-        assertThat((String) after.get(ServerModel.LAST_ERROR_KIND))
+        Row after = Models.get(HostModel.class).findById(hostId);
+        assertThat((String) after.get(HostModel.LAST_ERROR_KIND))
             .withFailMessage("step 2: rendering the detail form overwrote the host's"
                 + " health columns (last_error_kind = '%s') -- a page view ran a live"
-                + " probe as a side effect", after.get(ServerModel.LAST_ERROR_KIND))
+                + " probe as a side effect", after.get(HostModel.LAST_ERROR_KIND))
             .isNull();
         assertThat(DockerClient.constructionCount())
             .as("step 2: and no daemon client was constructed for a page view")
@@ -240,7 +240,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         //    assertion rather than a "band exists" one), and work no person did stays in the log and off the card
         //    (hourly "System changed local Server" heartbeat rows once filled it). The fixture verb is a listed one:
         //    a reconcile's correction is internal and no feed lists it whoever made it.
-        var servers = Models.get(ServerModel.class);
+        var servers = Models.get(HostModel.class);
         History.event(servers, hostId, mediaFact("system bookkeeping fixture"));
         Object bookkeeping = latestActionId(hostId);
         Principal operator = TenantConduits.operator().principal();
@@ -268,7 +268,7 @@ class ServerOverviewTest extends HohenheimTestBase {
 
     /** The newest action id written about one server id, or null. */
     private static @Nullable String latestActionId(int recordId) {
-        List<RecordedChanges.Recorded> history = RecordedChanges.of(Models.get(ServerModel.class), recordId);
+        List<RecordedChanges.Recorded> history = RecordedChanges.of(Models.get(HostModel.class), recordId);
         return history.isEmpty() ? null : history.get(history.size() - 1).actionId();
     }
 
@@ -321,7 +321,7 @@ class ServerOverviewTest extends HohenheimTestBase {
     }
 
     /**
-     * The workloads table lists what {@code ServerModel.refuseRemovalWhileOwned} counts,
+     * The workloads table lists what {@code HostModel.refuseRemovalWhileOwned} counts,
      * so drain/cordon/delete refusals are legible BEFORE they fire.
      */
     @Test
@@ -332,7 +332,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, "overview-holder");
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         instances.save(row);
         Integer instanceId = instances.find()
             .where(InstanceModel.NAME.eq("overview-holder")).first().get(InstanceModel.ID);
@@ -357,10 +357,10 @@ class ServerOverviewTest extends HohenheimTestBase {
     @Test
     void theQuarantineBannerIsLoudAndOffersOnlyTheRepinCeremony() throws Exception {
         int hostId = enrollHost("overview-quarantine");
-        Row host = Models.get(ServerModel.class).findById(hostId);
-        host.set(ServerModel.QUARANTINED_AT, Now.instant());
-        host.set(ServerModel.QUARANTINE_REASON, "host key contradicted the pinned identity");
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).findById(hostId);
+        host.set(HostModel.QUARANTINED_AT, Now.instant());
+        host.set(HostModel.QUARANTINE_REASON, "host key contradicted the pinned identity");
+        Models.get(HostModel.class).save(host);
 
         HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
         String body = overview.body();
@@ -373,10 +373,10 @@ class ServerOverviewTest extends HohenheimTestBase {
             .as("no clear-quarantine action exists anywhere -- repin IS the ceremony")
             .doesNotContainIgnoringCase("clear_quarantine");
 
-        Row cleared = Models.get(ServerModel.class).findById(hostId);
-        cleared.set(ServerModel.QUARANTINED_AT, (Instant) null);
-        cleared.set(ServerModel.QUARANTINE_REASON, (String) null);
-        Models.get(ServerModel.class).save(cleared);
+        Row cleared = Models.get(HostModel.class).findById(hostId);
+        cleared.set(HostModel.QUARANTINED_AT, (Instant) null);
+        cleared.set(HostModel.QUARANTINE_REASON, (String) null);
+        Models.get(HostModel.class).save(cleared);
         assertThat(adminGet("/admin/servers/" + hostId + "/page/overview").body())
             .as("positive anchor: an unquarantined host renders no banner")
             .doesNotContain(QUARANTINE_TITLE);
@@ -387,7 +387,7 @@ class ServerOverviewTest extends HohenheimTestBase {
      * not the old fully-resolved English sentence.
      */
     @Test
-    void theServersListRendersAStructuredStatusCell() throws Exception {
+    void theHostsListRendersAStructuredStatusCell() throws Exception {
         HttpResponse<String> list = adminGet("/admin/servers");
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body())
@@ -403,8 +403,8 @@ class ServerOverviewTest extends HohenheimTestBase {
         var create = adminPostForm("/admin/servers/new",
             "name=" + name + "&ssh_target=nobody%40" + name + ".hohenheim-test.invalid");
         assertThat(create.statusCode()).as("host %s enrolls", name).isIn(200, 302, 303);
-        Row host = Models.get(ServerModel.class).findByName(name);
+        Row host = Models.get(HostModel.class).findByName(name);
         assertThat(host).as("host %s exists after enrolment", name).isNotNull();
-        return host.get(ServerModel.ID);
+        return host.get(HostModel.ID);
     }
 }

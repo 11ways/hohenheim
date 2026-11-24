@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
@@ -71,12 +71,12 @@ class HostDiskAttentionTest {
 
                 // 4. Hosts: only a FRESH reading over the threshold speaks; a stale one is no evidence and a roomy one
                 //    is silence. Each item leads to its host.
-                int full = host(made, "disk-full", ServerModel.MODE_SSH, new DiskSpace(100 * GIB, 4 * GIB),
+                int full = host(made, "disk-full", HostModel.MODE_SSH, new DiskSpace(100 * GIB, 4 * GIB),
                     Now.instant());
-                int warm = host(made, "disk-warm", ServerModel.MODE_SSH, new DiskSpace(100 * GIB, 13 * GIB),
+                int warm = host(made, "disk-warm", HostModel.MODE_SSH, new DiskSpace(100 * GIB, 13 * GIB),
                     Now.instant());
-                host(made, "disk-roomy", ServerModel.MODE_SSH, new DiskSpace(100 * GIB, 60 * GIB), Now.instant());
-                host(made, "disk-stale", ServerModel.MODE_SSH, new DiskSpace(100 * GIB, 1 * GIB),
+                host(made, "disk-roomy", HostModel.MODE_SSH, new DiskSpace(100 * GIB, 60 * GIB), Now.instant());
+                host(made, "disk-stale", HostModel.MODE_SSH, new DiskSpace(100 * GIB, 1 * GIB),
                     Now.instant().minus(Duration.ofDays(30)));
                 List<String> hosts = raised(true, store -> new DiskSpace(100 * GIB, 50 * GIB), new ArrayList<>())
                     .stream().filter(item -> item.contains(" on disk-")).toList();
@@ -93,7 +93,7 @@ class HostDiskAttentionTest {
 
                 // 6. A controller disk that cannot be measured covers nothing: a LOCAL host on it still speaks from
                 //    its own stored reading, and no controller item is guessed.
-                int local = host(made, "disk-local", ServerModel.MODE_LOCAL, new DiskSpace(100 * GIB, 2 * GIB),
+                int local = host(made, "disk-local", HostModel.MODE_LOCAL, new DiskSpace(100 * GIB, 2 * GIB),
                     Now.instant());
                 assertThat(raised(true, store -> null, new ArrayList<>()))
                     .as("step 6: the unmeasured controller says nothing, the full local host still errs")
@@ -102,7 +102,7 @@ class HostDiskAttentionTest {
                         + ADVICE + " -> /admin/servers/" + local + "/open");
             } finally {
                 for (int id : made) {
-                    HardDeletes.byId(Models.get(ServerModel.class), id);
+                    HardDeletes.byId(Models.get(HostModel.class), id);
                 }
             }
         });
@@ -128,13 +128,13 @@ class HostDiskAttentionTest {
 
     /** A host of {@code mode} carrying a stored disk reading taken at {@code at}. */
     private static int host(List<Integer> made, String name, String mode, DiskSpace space, Instant at) {
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.MODE, mode);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.MODE, mode);
         HostDisk.record(row, space, at);
         servers.save(row);
-        int id = row.get(ServerModel.ID);
+        int id = row.get(HostModel.ID);
         made.add(id);
         return id;
     }

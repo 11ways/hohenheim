@@ -9,8 +9,8 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -397,7 +397,7 @@ class VerifyWorkloadIsolationTest {
         Row stack = stacks.createEmptyRow();
         stack.set(StackModel.NAME, stackName);
         stack.set(StackModel.ENABLED, true);
-        stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+        stack.set(StackModel.HOST_ID, HostModel.localHostId());
         stacks.save(stack);
         StackServiceModel services = Models.get(StackServiceModel.class);
         Row service = services.createEmptyRow();
@@ -443,7 +443,7 @@ class VerifyWorkloadIsolationTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name + "-" + System.nanoTime());
         row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
@@ -462,7 +462,7 @@ class VerifyWorkloadIsolationTest {
                     Row row = Models.get(InstanceModel.class).createEmptyRow();
                     row.set(InstanceModel.NAME, "db-" + name);
                     row.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-                    row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    row.set(InstanceModel.HOST_ID, HostModel.localHostId());
                     row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
                     row.set(InstanceModel.SETTINGS, Map.of(
                         "engine", "redis", "image", "redis:7-alpine", "ephemeral", true));
@@ -483,7 +483,7 @@ class VerifyWorkloadIsolationTest {
         row.set(DatabaseModel.DB_PASSWORD, "pw");
         row.set(DatabaseModel.DB_NAME, "app");
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         Models.get(DatabaseModel.class).save(row);
         return row.get(DatabaseModel.ID);
     }

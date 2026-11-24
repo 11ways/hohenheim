@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
@@ -107,7 +107,7 @@ public interface HostShell {
     }
 
     /** The shell for an inventoried host record. */
-    static @NonNull HostShell forServer(@NonNull Row server) {
+    static @NonNull HostShell forHost(@NonNull Row server) {
         return new ProcessHostShell(server);
     }
 
@@ -142,8 +142,8 @@ public interface HostShell {
 
         @Override
         public boolean elevated() {
-            if (this.server != null && ServerModel.hasSshLane(this.server)) {
-                String target = String.valueOf((Object) this.server.get(ServerModel.SSH_TARGET));
+            if (this.server != null && HostModel.hasSshLane(this.server)) {
+                String target = String.valueOf((Object) this.server.get(HostModel.SSH_TARGET));
                 return target.startsWith("root@");
             }
             return SystemUsers.daemonRunsAsRoot();
@@ -199,7 +199,7 @@ public interface HostShell {
         }
 
         private @NonNull List<String> argvFor(@NonNull String script) {
-            return this.server != null && ServerModel.hasSshLane(this.server)
+            return this.server != null && HostModel.hasSshLane(this.server)
                 ? sshArgv(this.server, script)
                 : List.of("sh", "-c", script);
         }
@@ -233,7 +233,7 @@ public interface HostShell {
                 return HostKeys.sshArgv(server, List.of("sh", "-c", quote(script)));
             } catch (RuntimeException refusal) {
                 // An unpinned host cannot be reached at all; that refusal is the verdict.
-                Blast.log("HostShell: cannot reach host", server.get(ServerModel.NAME),
+                Blast.log("HostShell: cannot reach host", server.get(HostModel.NAME),
                     "-", refusal.getMessage());
                 return List.of();
             }

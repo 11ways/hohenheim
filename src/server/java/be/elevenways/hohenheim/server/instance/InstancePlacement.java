@@ -3,10 +3,9 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.PlacementRefusal;
@@ -135,7 +134,7 @@ public final class InstancePlacement {
         }
 
         private static @NonNull Set<String> runtimesOf(@Nullable InstanceKindHandler handler) {
-            return handler != null ? handler.supportedRuntimes() : Set.of(ServerModel.RUNTIME_DOCKER);
+            return handler != null ? handler.supportedRuntimes() : Set.of(HostModel.RUNTIME_DOCKER);
         }
 
         int footprintMb() {
@@ -192,10 +191,10 @@ public final class InstancePlacement {
         if (requested != null && (ctx == null || HohenheimAccess.isAdmin(ctx))) {
             return requested;
         }
-        if (ctx == null && workload.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
+        if (ctx == null && workload.supportedRuntimes().contains(HostModel.RUNTIME_DOCKER)) {
             // The implicit local daemon is a DOCKER host; a kind that CANNOT run on Docker
             // has no implicit default and walks the chooser even here.
-            return ServerModel.localServerId();
+            return HostModel.localHostId();
         }
         return chooseForOwner(HohenheimAccess.packSubjects(
             HohenheimAccess.creationOwnerSubjects(ctx)), workload);
@@ -238,11 +237,11 @@ public final class InstancePlacement {
         long largestFreeMb = -1;
         int footprint = workload.footprintMb();
 
-        for (Row server : Models.get(ServerModel.class).find()
-                .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
-            Integer serverId = server.get(ServerModel.ID);
+        for (Row server : Models.get(HostModel.class).find()
+                .orderBy(HostModel.ID, SortOrder.ASC).all()) {
+            Integer serverId = server.get(HostModel.ID);
             if (serverId == null || serverId.equals(excludeServerId)
-                    || !workload.supportedRuntimes().contains(ServerModel.runtimeOf(server))) {
+                    || !workload.supportedRuntimes().contains(HostModel.runtimeOf(server))) {
                 continue;
             }
             if (!acceptsTenantWorkload(serverId, bucket, workload)) {
@@ -307,7 +306,7 @@ public final class InstancePlacement {
 
     /** @return the chooser's refusal of a host it cannot ration: no memory reading inside the freshness bound */
     private static @NonNull Microcopy capacityUnproven(int serverId) {
-        return PlacementRefusal.CAPACITY_UNPROVEN.text().withArg("name", ServerModel.labelOf(serverId));
+        return PlacementRefusal.CAPACITY_UNPROVEN.text().withArg("name", HostModel.labelOf(serverId));
     }
 
     /**
@@ -326,15 +325,15 @@ public final class InstancePlacement {
      * @return the first refusal in the gate's own words, null when an ordinary new app could land here
      */
     public static @Nullable Microcopy hostRefusal(@NonNull Row server) {
-        Integer serverId = server.get(ServerModel.ID);
+        Integer serverId = server.get(HostModel.ID);
         if (serverId == null) {
             return PlacementRefusal.NOT_ADMITTED.text()
-                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)));
+                .withArg("name", String.valueOf((Object) server.get(HostModel.NAME)));
         }
-        Row resident = Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(serverId)).first();
+        Row resident = Models.get(InstanceModel.class).find().where(InstanceModel.HOST_ID.eq(serverId)).first();
         String owner = resident == null ? null : resident.get(InstanceModel.QUOTA_BUCKET);
         Microcopy first = null;
-        String runtime = ServerModel.runtimeOf(server);
+        String runtime = HostModel.runtimeOf(server);
         for (WorkloadIsolation isolation : InstanceKinds.isolationsOn(runtime)) {
             Microcopy refusal = HostAdmission.instancePlacementRefusal(serverId, isolation, owner);
             if (refusal == null) {
@@ -383,10 +382,10 @@ public final class InstancePlacement {
      */
     public static @Nullable Microcopy kindRefusalOn(int serverId, @NonNull InstanceKindHandler kind,
                                                     @Nullable String bucket, @NonNull Map<String, Object> settings) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
+        Row server = Models.get(HostModel.class).findById(serverId);
         if (server != null) {
-            Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(ServerModel.NAME)),
-                ServerModel.runtimeOf(server), kind.supportedRuntimes());
+            Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(HostModel.NAME)),
+                HostModel.runtimeOf(server), kind.supportedRuntimes());
             if (runtime != null) {
                 return runtime;
             }
@@ -396,7 +395,7 @@ public final class InstancePlacement {
             return admission;
         }
         try {
-            kind.requirePlaceableOn(String.valueOf((Object) server.get(ServerModel.NAME)), settings);
+            kind.requirePlaceableOn(String.valueOf((Object) server.get(HostModel.NAME)), settings);
             return null;
         } catch (Violations refused) {
             List<Violation> all = refused.all();
@@ -469,7 +468,7 @@ public final class InstancePlacement {
             return KindGate.OK;
         }
         try {
-            String serverName = ServerModel.nameOf(serverId);
+            String serverName = HostModel.nameOf(serverId);
             workload.handler().requirePlaceableOn(serverName, workload.settings());
             if (!workload.arrivesWhole()) {
                 workload.handler().requireImageOn(serverName, workload.settings());

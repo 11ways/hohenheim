@@ -3,15 +3,14 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,27 +31,27 @@ class HostTrustReleaseTest {
     @Test
     void removingAnIncusHostGivesBackOnlyItsOwnTrustEntry() throws Exception {
         // 1. An https Incus host with its own client identity holds one trust entry: its certificate's fingerprint.
-        Row host = Models.get(ServerModel.class).createEmptyRow();
-        host.set(ServerModel.NAME, "trust-release-host");
-        host.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        host.set(ServerModel.INCUS_URL, "https://192.0.2.10:8443");
-        Models.get(ServerModel.class).save(host);
+        Row host = Models.get(HostModel.class).createEmptyRow();
+        host.set(HostModel.NAME, "trust-release-host");
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        host.set(HostModel.INCUS_URL, "https://192.0.2.10:8443");
+        Models.get(HostModel.class).save(host);
         IncusTrust.rotateIdentity(host);
         String fingerprint = IncusTrust.ownEntryOf(host);
         assertThat(fingerprint).as("step 1: the entry is the client certificate's fingerprint")
             .isEqualTo(IncusTrust.fingerprintOf(host.get(HostTrustSlot.INCUS_TLS.clientPublic())));
 
         // 2. Its delete dialog names that entry and the command that removes it when the host cannot be reached.
-        Microcopy body = ServerParts.deleteBody(host).body();
+        Microcopy body = HostParts.deleteBody(host).body();
         assertThat(body.key()).as("step 2: the Incus host's dialog speaks of its trust entry")
             .isEqualTo("delete_confirm_incus_trust");
         assertThat(body.args().get("fingerprint")).as("step 2: naming its exact fingerprint").isEqualTo(fingerprint);
 
         // 3. A host that holds no trust entry (a Docker host) keeps the plain dialog.
-        Row docker = Models.get(ServerModel.class).createEmptyRow();
-        docker.set(ServerModel.NAME, "trust-release-docker");
+        Row docker = Models.get(HostModel.class).createEmptyRow();
+        docker.set(HostModel.NAME, "trust-release-docker");
         assertThat(IncusTrust.ownEntryOf(docker)).as("step 3: a Docker host holds no entry").isNull();
-        assertThat(ServerParts.deleteBody(docker).body().key()).isEqualTo("delete_confirm");
+        assertThat(HostParts.deleteBody(docker).body().key()).isEqualTo("delete_confirm");
 
         // 4. The release removes exactly the controller's own entry; another client's stays.
         FakeIncusTransport daemon = new FakeIncusTransport();

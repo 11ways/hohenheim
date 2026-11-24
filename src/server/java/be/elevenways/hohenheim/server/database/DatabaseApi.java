@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -270,7 +270,7 @@ public final class DatabaseApi {
             // Operator facts: which engine row serves it, on which host, and the ceilings
             // booked against that host's budget. A shared record carries none of its own.
             entry.put("engine_id", database.get(DatabaseModel.ENGINE_ID));
-            entry.put("server", ServerModel.nameOf(database.get(DatabaseModel.SERVER_ID)));
+            entry.put("server", HostModel.nameOf(database.get(DatabaseModel.HOST_ID)));
             entry.put("ephemeral", Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL)));
             entry.put(InstanceKindFields.MEMORY_LIMIT_MB, database.get(DatabaseModel.MEMORY_LIMIT_MB));
             // The ceiling the record RUNS under, which memory_limit_mb alone never told:
@@ -322,7 +322,7 @@ public final class DatabaseApi {
         entry.put("name", engine.get(DatabaseEngineModel.NAME));
         entry.put("engine", String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)));
         entry.put("image", Objects.toString(engine.get(DatabaseEngineModel.IMAGE), ""));
-        entry.put("server", ServerModel.nameOf(engine.get(DatabaseEngineModel.SERVER_ID)));
+        entry.put("server", HostModel.nameOf(engine.get(DatabaseEngineModel.HOST_ID)));
         entry.put(InstanceKindFields.MEMORY_LIMIT_MB, engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB));
         entry.put(InstanceKindFields.CPU_LIMIT, engine.get(DatabaseEngineModel.CPU_LIMIT));
         entry.put("databases", engineId == null ? 0 : DatabaseEngines.databasesOn(engineId).size());

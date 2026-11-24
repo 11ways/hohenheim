@@ -394,7 +394,7 @@ class InstanceSnapshotBackupLiveTest {
                 long quotaBefore = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 InstanceBackups.Restored outcome =
                     backups.restoreToNew(backupId, "backup-clone",
-                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID));
+                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.HOST_ID));
                 assertThat(outcome.describeLosses())
                     .as("step 3: the restore reports itself COMPLETE, and says so as data"
                         + " rather than by staying silent")

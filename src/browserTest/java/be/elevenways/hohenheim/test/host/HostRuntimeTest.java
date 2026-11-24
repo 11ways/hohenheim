@@ -5,10 +5,9 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
@@ -21,11 +20,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.List;
 import java.util.Map;
 
@@ -57,15 +54,15 @@ class HostRuntimeTest {
     }
 
     private static Row incusHost(String name, String url) {
-        ServerModel model = Models.get(ServerModel.class);
+        HostModel model = Models.get(HostModel.class);
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
-            row.set(ServerModel.NAME, name);
+            row.set(HostModel.NAME, name);
         }
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.INCUS_URL, url);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_INCUS);
+        row.set(HostModel.INCUS_URL, url);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
         model.save(row);
         return model.findByName(name);
     }
@@ -73,24 +70,24 @@ class HostRuntimeTest {
     @Test
     void theRuntimeDeclarationDrivesIdentityClientAndPlacementDecisions() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
+            HostService servers = new HostService();
 
             // 1. Which shapes carry a WIRE identity to pin: both remote transports do,
             //    neither local socket does.
             Row incusRemote = incusHost("rt-remote", "https://192.0.2.9:8443");
             Row incusLocal = incusHost("rt-local", "unix://");
             servers.ensureLocal();
-            Row dockerLocal = Models.get(ServerModel.class).findByName("local");
-            assertThat(ServerModel.requiresPinnedIdentity(incusRemote))
+            Row dockerLocal = Models.get(HostModel.class).findByName("local");
+            assertThat(HostModel.requiresPinnedIdentity(incusRemote))
                 .as("step 1: incus-over-https requires a pinned identity").isTrue();
-            assertThat(ServerModel.requiresPinnedIdentity(incusLocal))
+            assertThat(HostModel.requiresPinnedIdentity(incusLocal))
                 .as("step 1: incus-over-unix does not").isFalse();
-            assertThat(ServerModel.requiresPinnedIdentity(dockerLocal))
+            assertThat(HostModel.requiresPinnedIdentity(dockerLocal))
                 .as("step 1: the local docker daemon does not").isFalse();
-            Row modeless = Models.get(ServerModel.class).createEmptyRow();
-            modeless.set(ServerModel.NAME, "rt-modeless");
-            modeless.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-            assertThat(ServerModel.requiresPinnedIdentity(modeless))
+            Row modeless = Models.get(HostModel.class).createEmptyRow();
+            modeless.set(HostModel.NAME, "rt-modeless");
+            modeless.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+            assertThat(HostModel.requiresPinnedIdentity(modeless))
                 .as("step 1: a docker host whose mode is unknown fails closed and needs a pin")
                 .isTrue();
 
@@ -120,10 +117,10 @@ class HostRuntimeTest {
             //    workloads and NEVER docker ones, and with no admitted docker host the
             //    docker runtime is a named placement refusal.
             Row admitted = incusHost("rt-local", "unix://");
-            admitted.set(ServerModel.PREFLIGHT_OK, true);
-            admitted.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            admitted.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-            Models.get(ServerModel.class).save(admitted);
+            admitted.set(HostModel.PREFLIGHT_OK, true);
+            admitted.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+            admitted.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+            Models.get(HostModel.class).save(admitted);
             HostFixtures.acknowledgePosture(admitted);
             // The eligible set is HostAdmission's own, so this host must satisfy every
             // gate a deploy would: a PROVEN kernel-truth lane and a measured memory
@@ -135,12 +132,12 @@ class HostRuntimeTest {
                     HostPreflight.STATUS_PASS, true, "kernel lane proven")),
                 Map.of("mem_total", 4L * 1024 * 1024 * 1024), true, Now.instant(), null));
             assertThat(InstancePlacement.chooseForOwner("",
-                    InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_INCUS)))
+                    InstancePlacement.Workload.forRuntime(HostModel.RUNTIME_INCUS)))
                 .as("step 4: the incus runtime lands on the admitted incus host")
-                .isEqualTo((int) admitted.get(ServerModel.ID));
+                .isEqualTo((int) admitted.get(HostModel.ID));
             assertThat(catchThrowable(() ->
                     InstancePlacement.chooseForOwner("",
-                        InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_DOCKER))))
+                        InstancePlacement.Workload.forRuntime(HostModel.RUNTIME_DOCKER))))
                 .as("step 4: the docker runtime refuses rather than landing there")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -153,7 +150,7 @@ class HostRuntimeTest {
             instance.set(InstanceModel.NAME, "mismatched");
             instance.set(InstanceModel.KIND, "hohenheim:docker_container");
             instance.set(InstanceModel.SETTINGS, Map.of("image", "alpine"));
-            instance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
+            instance.set(InstanceModel.HOST_ID, admitted.get(HostModel.ID));
             Throwable mismatch = catchThrowable(() -> Models.get(InstanceModel.class).save(instance));
             assertThat(mismatch)
                 .as("step 5: a docker kind saved onto an incus host is a named refusal")
@@ -165,7 +162,7 @@ class HostRuntimeTest {
                 .as("step 5: worded with the runtimes' names and no article in front of them")
                 .contains("runs only on Docker hosts").contains("runs Incus");
             // Falsify it: the guard refuses the MISMATCH, not the write.
-            instance.set(InstanceModel.SERVER_ID, dockerLocal.get(ServerModel.ID));
+            instance.set(InstanceModel.HOST_ID, dockerLocal.get(HostModel.ID));
             Models.get(InstanceModel.class).save(instance);
             assertThat((Object) instance.get(InstanceModel.ID))
                 .as("step 5: the same record saves onto the docker host")
@@ -176,7 +173,7 @@ class HostRuntimeTest {
             //     mismatched row can still exist by the time a deploy resolves it.
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instance.get(InstanceModel.ID)))
-                .assign(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID))
+                .assign(InstanceModel.HOST_ID, admitted.get(HostModel.ID))
                 .updateAll();
             assertThat(catchThrowable(() -> new InstanceService()
                     .resolve(instance.get(InstanceModel.ID))))
@@ -196,7 +193,7 @@ class HostRuntimeTest {
             incusInstance.set(InstanceModel.NAME, "snapshotless");
             incusInstance.set(InstanceModel.KIND, "hohenheim:system_container");
             incusInstance.set(InstanceModel.SETTINGS, Map.of("image", "alpine/3.22"));
-            incusInstance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
+            incusInstance.set(InstanceModel.HOST_ID, admitted.get(HostModel.ID));
             Models.get(InstanceModel.class).save(incusInstance);
             assertThat(catchThrowable(() -> new InstanceSnapshots()
                     .create(incusInstance.get(InstanceModel.ID), null)))

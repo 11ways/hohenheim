@@ -1,12 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -14,7 +13,6 @@ import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -26,7 +24,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
@@ -597,7 +594,7 @@ final class InstanceOperationGuard {
         long booked = InstanceCapacity.sourceBookedOf(stored);
         long reserved = InstanceCapacity.windowReservedOf(stored);
         land(leases, instanceId, sourceServerId, instanceName, isOutcome(status), query -> query
-                .assign(InstanceModel.SERVER_ID, targetServerId)
+                .assign(InstanceModel.HOST_ID, targetServerId)
                 .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
                 .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
                 .assign(InstanceModel.CAPACITY_MB, (int) reserved)
@@ -692,7 +689,7 @@ final class InstanceOperationGuard {
         if (matched == 0) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_fenced_out")
                 .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
+                .withArg("server", HostModel.nameOf(serverId)));
         }
     }
 
@@ -701,11 +698,11 @@ final class InstanceOperationGuard {
      * local daemon, so the local host matches both spellings; any other host matches only its own id.
      */
     private static @NonNull Criteria hostScope(int serverId) {
-        if (serverId == ServerModel.localServerId()) {
+        if (serverId == HostModel.localHostId()) {
             return Criteria.or(
-                InstanceModel.SERVER_ID.isNull(),
-                InstanceModel.SERVER_ID.eq(serverId));
+                InstanceModel.HOST_ID.isNull(),
+                InstanceModel.HOST_ID.eq(serverId));
         }
-        return InstanceModel.SERVER_ID.eq(serverId);
+        return InstanceModel.HOST_ID.eq(serverId);
     }
 }

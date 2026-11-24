@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
@@ -66,7 +66,7 @@ public final class EngineHandles {
                     Row row = Models.get(InstanceModel.class).createEmptyRow();
                     row.set(InstanceModel.NAME, "db-" + name);
                     row.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-                    row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    row.set(InstanceModel.HOST_ID, HostModel.localHostId());
                     row.set(InstanceModel.STATUS, status);
                     row.set(InstanceModel.SETTINGS, Map.of("engine", engineToken,
                         "ephemeral", true));
@@ -113,7 +113,7 @@ public final class EngineHandles {
                     Row row = Models.get(InstanceModel.class).createEmptyRow();
                     row.set(InstanceModel.NAME, "dbengine-" + name);
                     row.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-                    row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    row.set(InstanceModel.HOST_ID, HostModel.localHostId());
                     row.set(InstanceModel.STATUS, status);
                     row.set(InstanceModel.SETTINGS, settings);
                     Models.get(InstanceModel.class).save(row);

@@ -4,9 +4,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -27,7 +27,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,15 +77,15 @@ class IncusHostLiveTest {
     @Test
     void theTrustCeremonyEnrollmentPreflightAndMismatchAllRunAgainstTheRealDaemon() {
         Db.run(datasource, () -> {
-            ServerService servers = new ServerService();
-            ServerModel model = Models.get(ServerModel.class);
+            HostService servers = new HostService();
+            HostModel model = Models.get(HostModel.class);
             Row enrolled = remote.enrol(HOST);
             // This class is about TRUST, not placement, so the record declares the
             // operator-only posture it actually has: no tenant workload ever lands here.
             // That is also the live proof of the OTHER half of the kernel-truth decision
             // (2026-08-07) -- a host accepting no tenant workloads needs no lane to read
             // its kernel through, and still enrols, confirms, preflights and admits.
-            enrolled.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            enrolled.set(HostModel.POSTURE, HostModel.POSTURE_TRUSTED_ONLY);
             model.save(enrolled);
             Row host = model.findByName(HOST);
             String enrolledFingerprint = null;
@@ -100,7 +99,7 @@ class IncusHostLiveTest {
 
                 // 2. Unpinned = not connectable at all, typed as not_pinned before any
                 //    TLS trust decision could exist.
-                ServerService.Summary unpinned = servers.probeAndStore(HOST);
+                HostService.Summary unpinned = servers.probeAndStore(HOST);
                 assertThat(unpinned.reachable())
                     .as("step 2: an unpinned incus host is not reached").isFalse();
                 assertThat(unpinned.errorKind())
@@ -128,9 +127,9 @@ class IncusHostLiveTest {
 
                 // 5. A scanned pin is UNVERIFIED and blocks admission by name.
                 Row pinned = model.findByName(HOST);
-                assertThat((Boolean) pinned.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
+                assertThat((Boolean) pinned.get(HostModel.INCUS_SERVER_CERT_VERIFIED))
                     .as("step 5: scanned = unverified").isFalse();
-                pinned.set(ServerModel.PREFLIGHT_OK, true);
+                pinned.set(HostModel.PREFLIGHT_OK, true);
                 model.save(pinned);
                 assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(pinned)))
                     .as("step 5: admit refuses an unconfirmed certificate")
@@ -199,9 +198,9 @@ class IncusHostLiveTest {
                 //    the REMOTE machine's facts over the pinned+identified lane.
                 Row ready = model.findByName(HOST);
                 HostAdmission.requireAdmittable(ready);
-                ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+                ready.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
                 model.save(ready);
-                ServerService.Summary reached = servers.probeAndStore(HOST);
+                HostService.Summary reached = servers.probeAndStore(HOST);
                 assertThat(reached.reachable())
                     .as("step 9: the daemon is reached (%s)", reached.errorDetail()).isTrue();
                 assertThat(reached.daemonVersion())
@@ -212,15 +211,15 @@ class IncusHostLiveTest {
                 // 10. The pin now names a DIFFERENT certificate: fail CLOSED, classified
                 //     host_key_changed, quarantined, nothing re-pinned.
                 Row seen = model.findByName(HOST);
-                String realPin = seen.get(ServerModel.INCUS_SERVER_CERT);
+                String realPin = seen.get(HostModel.INCUS_SERVER_CERT);
                 String decoy = decoyCertificatePem();
                 assertThat(decoy).as("step 10: the decoy really is a different certificate")
                     .isNotEqualTo(realPin);
-                seen.set(ServerModel.INCUS_SERVER_CERT, decoy);
-                seen.set(ServerModel.INCUS_SERVER_CERT_FINGERPRINT,
+                seen.set(HostModel.INCUS_SERVER_CERT, decoy);
+                seen.set(HostModel.INCUS_SERVER_CERT_FINGERPRINT,
                     IncusTrust.fingerprintOf(decoy));
                 model.save(seen);
-                ServerService.Summary changed = servers.probeAndStore(HOST);
+                HostService.Summary changed = servers.probeAndStore(HOST);
                 assertThat(changed.reachable())
                     .as("step 10: a pin that does not match the offer reaches nothing")
                     .isFalse();
@@ -229,10 +228,10 @@ class IncusHostLiveTest {
                         changed.errorDetail())
                     .isEqualTo("host_key_changed");
                 Row quarantined = model.findByName(HOST);
-                assertThat((String) quarantined.get(ServerModel.ADMISSION))
+                assertThat((String) quarantined.get(HostModel.ADMISSION))
                     .as("step 10: the admitted host is quarantined to blocked")
-                    .isEqualTo(ServerModel.ADMISSION_BLOCKED);
-                assertThat((Boolean) quarantined.get(ServerModel.PREFLIGHT_OK))
+                    .isEqualTo(HostModel.ADMISSION_BLOCKED);
+                assertThat((Boolean) quarantined.get(HostModel.PREFLIGHT_OK))
                     .as("step 10: its preflight verdict is dropped").isFalse();
 
                 // 11. A rescan records the REAL certificate as EVIDENCE and heals nothing.
@@ -243,19 +242,19 @@ class IncusHostLiveTest {
                     .as("step 11: naming the certificate the real daemon offers")
                     .isEqualTo(remote.fingerprint());
                 Row afterRescan = model.findByName(HOST);
-                assertThat((String) afterRescan.get(ServerModel.INCUS_SERVER_CERT))
+                assertThat((String) afterRescan.get(HostModel.INCUS_SERVER_CERT))
                     .as("step 11: and STILL nothing re-pinned it").isEqualTo(decoy);
 
                 // 12. Recovery is the explicit repin, landing back at the bottom of the
                 //     ceremony, after which the daemon is reachable again.
                 IncusTrust.repin(afterRescan);
                 Row repinned = model.findByName(HOST);
-                assertThat((String) repinned.get(ServerModel.INCUS_SERVER_CERT_FINGERPRINT))
+                assertThat((String) repinned.get(HostModel.INCUS_SERVER_CERT_FINGERPRINT))
                     .as("step 12: the repin adopts the real certificate")
                     .isEqualTo(remote.fingerprint());
-                assertThat((Boolean) repinned.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
+                assertThat((Boolean) repinned.get(HostModel.INCUS_SERVER_CERT_VERIFIED))
                     .as("step 12: unconfirmed again").isFalse();
-                ServerService.Summary recovered = servers.probeAndStore(HOST);
+                HostService.Summary recovered = servers.probeAndStore(HOST);
                 assertThat(recovered.reachable())
                     .as("step 12: the re-pinned lane reaches the daemon again (%s)",
                         recovered.errorDetail())

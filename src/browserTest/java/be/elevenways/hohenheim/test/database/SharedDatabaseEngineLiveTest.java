@@ -7,11 +7,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -20,8 +16,8 @@ import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -146,10 +142,10 @@ class SharedDatabaseEngineLiveTest {
             // 1. Two shared databases, created synchronously: both active, both SHARED,
             //    both naming the same engine.
             service.create(nameA, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, "usera",
-                passwordA, dbA, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                passwordA, dbA, false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(nameB, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, "userb",
-                passwordB, dbB, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                passwordB, dbB, false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DatabaseService.Detail detailA = service.detail(nameA);
             DatabaseService.Detail detailB = service.detail(nameB);
@@ -163,7 +159,7 @@ class SharedDatabaseEngineLiveTest {
             // 2. There is exactly ONE engine container, and it is what serves BOTH -- the
             //    entire point of the change, asserted at the daemon rather than inferred.
             Row engineRow = Models.get(DatabaseEngineModel.class)
-                .findOnHost(ServerModel.localServerId(), "mongo");
+                .findOnHost(HostModel.localHostId(), "mongo");
             assertThat(engineRow).as("step 2: the host has a mongo engine row").isNotNull();
             engineId = engineRow.get(DatabaseEngineModel.ID);
             engineVolume = EngineHost.ofEngine(engineRow).dataVolume();
@@ -312,7 +308,7 @@ class SharedDatabaseEngineLiveTest {
         try {
             // 1. A DEDICATED, volume-backed mongo with a workload attached and running.
             service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user, password,
-                database, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                database, false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_DEDICATED);
             Row record = Models.get(DatabaseModel.class).findByName(name);
             int databaseId = record.get(DatabaseModel.ID);
@@ -337,7 +333,7 @@ class SharedDatabaseEngineLiveTest {
             //     very user name the dedicated record carries. The move must not
             //     re-credential it; the dedicated record's user is renamed instead.
             service.create(squatterName, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user,
-                "squatpw1234-shared", "squat", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                "squatpw1234-shared", "squat", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
 
             // 2. Three documents through the dedicated container, as its own root user.
@@ -393,7 +389,7 @@ class SharedDatabaseEngineLiveTest {
             //     kept the data leaves under a name no record describes) refuses the move by name: the dump carries
             //     --clean, so loading it there would replace those contents. They stay as they were.
             Row sharedEngine = Models.get(DatabaseEngineModel.class)
-                .findOnHost(ServerModel.localServerId(), "mongo");
+                .findOnHost(HostModel.localHostId(), "mongo");
             String sharedHandle = EngineHandles.ofEngine(sharedEngine);
             mongoRoot(sharedEngine, docker, sharedHandle,
                 "db.getSiblingDB('" + database + "').leftover.insertOne({kept: 1});");
@@ -414,13 +410,13 @@ class SharedDatabaseEngineLiveTest {
             //     because the engine is booked against the memory the dedicated container
             //     is about to give back -- a full host must never refuse the very move
             //     that frees it (the robbedoes trap of 2026-09-02).
-            long booked = InstanceCapacity.bookedMbOn(ServerModel.localServerId());
+            long booked = InstanceCapacity.bookedMbOn(HostModel.localHostId());
             long engineMb = ManagedDatabase.Engine.MONGO.sharedFootprintMb();
             HostFixtures.makeLocalPlaceable(booked + engineMb - 1 + Zenit.SETTINGS_VALUES
                 .getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB));
-            assertThat(InstanceCapacity.bookableMbOn(ServerModel.localServerId(),
-                    InstanceCapacity.budgetMbOf(Models.get(ServerModel.class)
-                        .findById(ServerModel.localServerId()))))
+            assertThat(InstanceCapacity.bookableMbOn(HostModel.localHostId(),
+                    InstanceCapacity.budgetMbOf(Models.get(HostModel.class)
+                        .findById(HostModel.localHostId()))))
                 .as("step 2c: the host cannot take the engine beside the dedicated container")
                 .isLessThan(booked + engineMb);
 
@@ -444,7 +440,7 @@ class SharedDatabaseEngineLiveTest {
                 .isNotEqualTo(user);
 
             Row engineRow = Models.get(DatabaseEngineModel.class)
-                .findOnHost(ServerModel.localServerId(), "mongo");
+                .findOnHost(HostModel.localHostId(), "mongo");
             engineId = engineRow.get(DatabaseEngineModel.ID);
             engineVolume = EngineHost.ofEngine(engineRow).dataVolume();
             String engine = EngineHandles.ofEngine(engineRow);
@@ -560,10 +556,10 @@ class SharedDatabaseEngineLiveTest {
         try {
             // 1. One shared database per SQL engine, created synchronously.
             service.create(mysqlName, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser",
-                password, mysqlDatabase, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                password, mysqlDatabase, false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(postgresName, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
-                "pguser", password, postgresDatabase, false, ServerService.LOCAL_HOST_NAME,
+                "pguser", password, postgresDatabase, false, HostService.LOCAL_HOST_NAME,
                 ResourceLimits.none(), DatabaseModel.PLACEMENT_SHARED);
             assertThat(service.detail(mysqlName).placement())
                 .as("step 1: the mysql record is shared")
@@ -576,7 +572,7 @@ class SharedDatabaseEngineLiveTest {
             //     create script would have re-credentialed the first record's user.
             assertThatThrownBy(() -> service.create(mysqlName + "b",
                     ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser", "otherpw1234-shared",
-                    "mysharedb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                    "mysharedb", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.PLACEMENT_SHARED))
                 .as("step 1b: the same logical user on one engine is refused")
                 .isInstanceOf(Violations.class)
@@ -585,9 +581,9 @@ class SharedDatabaseEngineLiveTest {
                 .as("step 1b: and no record was written").isNull();
 
             Row mysqlEngine = Models.get(DatabaseEngineModel.class)
-                .findOnHost(ServerModel.localServerId(), "mysql");
+                .findOnHost(HostModel.localHostId(), "mysql");
             Row postgresEngine = Models.get(DatabaseEngineModel.class)
-                .findOnHost(ServerModel.localServerId(), "postgres");
+                .findOnHost(HostModel.localHostId(), "postgres");
             mysqlEngineId = mysqlEngine.get(DatabaseEngineModel.ID);
             postgresEngineId = postgresEngine.get(DatabaseEngineModel.ID);
             mysqlVolume = EngineHost.ofEngine(mysqlEngine).dataVolume();
@@ -629,7 +625,7 @@ class SharedDatabaseEngineLiveTest {
             // 3b. TENANT ISOLATION. A second postgres record's role cannot even CONNECT to
             //     the first record's database: PUBLIC's connect is revoked on create.
             service.create(postgresOther, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
-                "pgother", password, "pgother", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                "pgother", password, "pgother", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DockerClient.ExecResult crossPg = docker.exec(pgHandle, List.of("psql",
                 "-U", "pgother", "-d", postgresDatabase, "-tA", "-c", "SELECT id FROM probe"),
@@ -643,10 +639,10 @@ class SharedDatabaseEngineLiveTest {
             // 3c. MySQL: "_" is a GRANT wildcard, so a grant on my_wild used to reach a
             //     database named myxwild on the same engine. The escaped grant does not.
             service.create(mysqlWild, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "wilduser",
-                password, "my_wild", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                password, "my_wild", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(mysqlVictim, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "victimuser",
-                password, "myxwild", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
+                password, "myxwild", false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DockerClient.ExecResult victimWrite = docker.exec(myHandle, List.of("mysql",
                 "-u", "victimuser", "myxwild", "-e",
@@ -877,7 +873,7 @@ class SharedDatabaseEngineLiveTest {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

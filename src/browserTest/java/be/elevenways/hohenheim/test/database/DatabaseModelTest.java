@@ -2,21 +2,18 @@ package be.elevenways.hohenheim.test.database;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -56,12 +53,12 @@ class DatabaseModelTest {
             row.set(DatabaseModel.DB_PASSWORD, "secret123");
             row.set(DatabaseModel.DB_NAME, "appdb");
             row.set(DatabaseModel.EPHEMERAL, false);
-            row.set(DatabaseModel.SERVER_ID, edgeServerId());
+            row.set(DatabaseModel.HOST_ID, edgeServerId());
             model.save(row);
 
             Row reloaded = model.findByName("blog");
             assertThat(reloaded).isNotNull();
-            assertThat((Integer) reloaded.get(DatabaseModel.SERVER_ID)).isEqualTo(edgeServerId());
+            assertThat((Integer) reloaded.get(DatabaseModel.HOST_ID)).isEqualTo(edgeServerId());
             assertThat((String) reloaded.get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((String) reloaded.get(DatabaseModel.IMAGE)).isEqualTo("postgres:17-alpine");
             assertThat((String) reloaded.get(DatabaseModel.DB_USER)).isEqualTo("appuser");
@@ -299,12 +296,12 @@ class DatabaseModelTest {
             engines.save(row);
             Row reloaded = engines.findFirst(DatabaseEngineModel.NAME, "mongo-local");
             assertThat(reloaded).as("step 2: the ordinary spelling saves").isNotNull();
-            assertThat((Integer) reloaded.get(DatabaseEngineModel.SERVER_ID))
+            assertThat((Integer) reloaded.get(DatabaseEngineModel.HOST_ID))
                 .as("step 2: the host FK defaults to the local daemon")
-                .isEqualTo(ServerModel.localServerId());
-            assertThat(engines.findOnHost(ServerModel.localServerId(), "mongo"))
+                .isEqualTo(HostModel.localHostId());
+            assertThat(engines.findOnHost(HostModel.localHostId(), "mongo"))
                 .as("step 2: and it is THE mongo engine of that host").isNotNull();
-            assertThat(engines.findOnHost(ServerModel.localServerId(), "mysql"))
+            assertThat(engines.findOnHost(HostModel.localHostId(), "mysql"))
                 .as("step 2: while a kind nobody created has none").isNull();
         });
     }
@@ -312,17 +309,17 @@ class DatabaseModelTest {
     /** The named test server's row id, created as an SSH host on first use. */
     private static int edgeServerIdNamed(String name) {
         if ("local".equals(name)) {
-            return ServerModel.localServerId();
+            return HostModel.localHostId();
         }
-        ServerModel servers = Models.get(ServerModel.class);
+        HostModel servers = Models.get(HostModel.class);
         Row row = servers.findByName(name);
         if (row == null) {
             row = servers.createEmptyRow();
-            row.set(ServerModel.NAME, name);
-            row.set(ServerModel.MODE, ServerModel.MODE_SSH);
+            row.set(HostModel.NAME, name);
+            row.set(HostModel.MODE, HostModel.MODE_SSH);
             servers.save(row);
         }
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     private static int edgeServerId() {

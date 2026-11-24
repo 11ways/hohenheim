@@ -81,7 +81,7 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
-    public static final ParameterDefinition<Integer> SERVER_ID = ParameterDefinition.builder(Integer.class)
+    public static final ParameterDefinition<Integer> HOST_ID = ParameterDefinition.builder(Integer.class)
         .name("serverId")
         .stringResolver(Integer::parseInt)
         .build();
@@ -486,10 +486,10 @@ public class HohenheimEndpoints {
      * provenance is arbitrary bootable code and the fetch makes the CONTROLLER an
      * outbound HTTP client of an arbitrary origin: who may do that is its own answer.
      */
-    public static final Endpoint<Object> SERVERS_MEDIA_FETCH = Endpoint.<Object>builder()
+    public static final Endpoint<Object> HOST_MEDIA_FETCH = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("servers_media_fetch"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addStatic("servers").addDelimiter().addParameter(HOST_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("fetch").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
@@ -500,19 +500,19 @@ public class HohenheimEndpoints {
      * disk and never buffered, so this route carries no form at all (the name travels in
      * the query string). The counterpart to FETCH for media that has no public URL.
      */
-    public static final Endpoint<Object> SERVERS_MEDIA_UPLOAD = Endpoint.<Object>builder()
+    public static final Endpoint<Object> HOST_MEDIA_UPLOAD = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("servers_media_upload"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addStatic("servers").addDelimiter().addParameter(HOST_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("upload").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
-    public static final Endpoint<Object> SERVERS_MEDIA_DELETE = Endpoint.<Object>builder()
+    public static final Endpoint<Object> HOST_MEDIA_DELETE = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("servers_media_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addStatic("servers").addDelimiter().addParameter(HOST_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("delete").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
@@ -1313,7 +1313,7 @@ public class HohenheimEndpoints {
         .identifier(HohenheimIds.id("api_v1_host"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
-            .addStatic("hosts").addDelimiter().addParameter(SERVER_ID).build())
+            .addStatic("hosts").addDelimiter().addParameter(HOST_ID).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();

@@ -2,13 +2,13 @@ package be.elevenways.hohenheim.test.host;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -54,10 +54,10 @@ class HostRemovalAgreementTest {
     void theDeleteButtonIsDeadExactlyWhenTheRemovalRefuses() {
         Db.run(datasource, () -> {
             AccessContext operator = TenantConduits.operator();
-            Row host = Models.get(ServerModel.class).createEmptyRow();
-            host.set(ServerModel.NAME, "agree-host");
-            Models.get(ServerModel.class).save(host);
-            int hostId = host.get(ServerModel.ID);
+            Row host = Models.get(HostModel.class).createEmptyRow();
+            host.set(HostModel.NAME, "agree-host");
+            Models.get(HostModel.class).save(host);
+            int hostId = host.get(HostModel.ID);
 
             // 1. POSITIVE ANCHOR: an unreferenced host is offered alive.
             assertThat(deleteReason(host, operator))
@@ -69,7 +69,7 @@ class HostRemovalAgreementTest {
             engine.set(DatabaseEngineModel.NAME, "agree-engine");
             engine.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
             engine.set(DatabaseEngineModel.IMAGE, "postgres:16");
-            engine.set(DatabaseEngineModel.SERVER_ID, hostId);
+            engine.set(DatabaseEngineModel.HOST_ID, hostId);
             engine.set(DatabaseEngineModel.ROOT_USER, "root");
             engine.set(DatabaseEngineModel.ROOT_PASSWORD, "agree-root-pw");
             engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -83,7 +83,7 @@ class HostRemovalAgreementTest {
             assertThat(byEngine.args().get("workloads"))
                 .as("step 2: and counting it in the total").isEqualTo(1L);
             assertThat(violationKeyOf(catchThrowable(() ->
-                    Models.get(ServerModel.class).delete((Object) hostId))))
+                    Models.get(HostModel.class).delete((Object) hostId))))
                 .as("step 2: the removal refuses the same host").isEqualTo("server_in_use");
             Models.get(DatabaseEngineModel.class).delete(engine.get(DatabaseEngineModel.ID));
 
@@ -94,21 +94,21 @@ class HostRemovalAgreementTest {
             assertThat(byPort.args().get("ports")).as("step 3: naming the claim, as a counted phrase")
                 .isEqualTo(HohenheimCounts.of("port_claims", 1L));
             assertThat(violationKeyOf(catchThrowable(() ->
-                    Models.get(ServerModel.class).delete((Object) hostId))))
+                    Models.get(HostModel.class).delete((Object) hostId))))
                 .as("step 3: and the removal refuses it too").isEqualTo("server_in_use");
 
             // 4. Released, the host is offered alive again and really goes.
             PortLedger.releaseKey(PortLedger.claimKeyOf(hostId, "", 47811, "tcp"));
             assertThat(deleteReason(host, operator))
                 .as("step 4: with nothing left the delete is available again").isNull();
-            Models.get(ServerModel.class).delete((Object) hostId);
-            assertThat(Models.get(ServerModel.class).findById(hostId))
+            Models.get(HostModel.class).delete((Object) hostId);
+            assertThat(Models.get(HostModel.class).findById(hostId))
                 .as("step 4: and the removal the button promised goes through").isNull();
         });
     }
 
     private static Microcopy deleteReason(Row row, AccessContext access) {
-        OperationPipeline.Offer offer = OperationPipeline.offer(ServerParts.DELETE, access, row);
+        OperationPipeline.Offer offer = OperationPipeline.offer(HostParts.DELETE, access, row);
         if (offer instanceof OperationPipeline.Offer.Unavailable unavailable) return unavailable.reason();
         assertThat(offer).as("an available delete is admitted, not silently hidden")
             .isInstanceOf(OperationPipeline.Offer.Available.class);
@@ -119,20 +119,20 @@ class HostRemovalAgreementTest {
     @Test
     void concurrentFirstCallsCreateTheLocalHostOnce() throws Exception {
         // 1. Start from a store with NO local host row (the boot seed may have planted one).
-        Db.run(datasource, () -> Models.get(ServerModel.class).find()
-            .where(ServerModel.NAME.eq(ServerModel.LOCAL_HOST_NAME)).delete());
+        Db.run(datasource, () -> Models.get(HostModel.class).find()
+            .where(HostModel.NAME.eq(HostModel.LOCAL_HOST_NAME)).delete());
         assertThat(Db.supply(datasource, () ->
-                Models.get(ServerModel.class).findByName(ServerModel.LOCAL_HOST_NAME)))
+                Models.get(HostModel.class).findByName(HostModel.LOCAL_HOST_NAME)))
             .as("step 1: the local host row is gone").isNull();
 
         // 2. Eight first calls behind one barrier.
         Set<Integer> ids = new HashSet<>(Racers.race("eight first calls for the local host",
-            Duration.ofSeconds(30), 8, slot -> Db.supply(datasource, ServerModel::localServerId)).values());
+            Duration.ofSeconds(30), 8, slot -> Db.supply(datasource, HostModel::localHostId)).values());
 
         // 3. Every caller got the same row, and exactly one exists.
         assertThat(ids).as("step 3: every racing caller resolved the same id").hasSize(1);
-        assertThat(Db.supply(datasource, () -> Models.get(ServerModel.class).find()
-                .where(ServerModel.NAME.eq(ServerModel.LOCAL_HOST_NAME)).count()))
+        assertThat(Db.supply(datasource, () -> Models.get(HostModel.class).find()
+                .where(HostModel.NAME.eq(HostModel.LOCAL_HOST_NAME)).count()))
             .as("step 3: and exactly one local host row was written").isEqualTo(1L);
     }
 

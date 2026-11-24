@@ -4,6 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -49,7 +50,6 @@ import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -814,7 +814,7 @@ class InstanceOperationSerializationTest {
             // 3. The automatic teardowns keep the budget: refused by name, untried.
             EngineHost engine = new EngineHost(DatabaseEngineModel.MODEL_ID, engineId, "held-engine",
                 ManagedDatabase.Engine.POSTGRES, null, false, "root", "secret", "postgres",
-                ServerModel.canonicalServerId(hostId), ResourceLimits.of(null, null), true);
+                HostModel.canonicalHostId(hostId), ResourceLimits.of(null, null), true);
             assertUnfinished(() -> unchecked(() -> StackInstances.destroyFor(serviceId)),
                 "step 3: a stack deploy's prune is refused");
             assertUnfinished(() -> unchecked(() -> DatabaseInstances.destroyFor(engine, false)),
@@ -1042,7 +1042,7 @@ class InstanceOperationSerializationTest {
         Row engine = Models.get(DatabaseEngineModel.class).createEmptyRow();
         engine.set(DatabaseEngineModel.NAME, name);
         engine.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
-        engine.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+        engine.set(DatabaseEngineModel.HOST_ID, HostModel.localHostId());
         engine.set(DatabaseEngineModel.ROOT_USER, "root");
         engine.set(DatabaseEngineModel.ROOT_PASSWORD, "shared-root-pw");
         engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
@@ -1074,7 +1074,7 @@ class InstanceOperationSerializationTest {
         row.set(DatabaseModel.DB_NAME, identifier);
         row.set(DatabaseModel.DB_USER, identifier);
         row.set(DatabaseModel.DB_PASSWORD, "database-pw");
-        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.HOST_ID, HostModel.localHostId());
         row.set(DatabaseModel.PLACEMENT, engine == null
             ? DatabaseModel.PLACEMENT_DEDICATED : DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engine == null ? null : engine.get(DatabaseEngineModel.ID));
@@ -1244,7 +1244,7 @@ class InstanceOperationSerializationTest {
         Db.run(datasource, () -> {
             new InstanceService(rival, () -> {}).assignRuntimeRole(id, InstanceModel.ROLE_SERVING);
             // The host stays free for the stale holder: what refuses its write must be the record's claim alone.
-            rival.release(ServerModel.canonicalServerId(hostId));
+            rival.release(HostModel.canonicalHostId(hostId));
         });
 
         // 3. The stale holder's late write is refused by name, and the rival's outcome stands.

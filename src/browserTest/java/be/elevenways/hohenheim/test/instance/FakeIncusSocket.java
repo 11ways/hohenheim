@@ -22,7 +22,7 @@ import java.util.Map;
 
 /**
  * A {@link FakeIncusTransport} served on a unix socket, so a host row whose {@code incus_url} names the socket is
- * addressed through the PRODUCTION client lane ({@code IncusClients.forServer}) instead of a substituted client.
+ * addressed through the PRODUCTION client lane ({@code IncusClients.forHost}) instead of a substituted client.
  *
  * AIDEV-NOTE: one request per connection, answered with {@code Connection: close}: the shape the stream transport
  * speaks. A request naming its upload ({@code X-Incus-Name}) is served by {@link FakeIncusTransport#exchangeUpload},

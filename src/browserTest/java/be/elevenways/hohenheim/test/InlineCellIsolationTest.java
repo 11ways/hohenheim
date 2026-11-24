@@ -2,29 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.source.GithubProviderKind;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceFileModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.model.InstanceSnapshotModel;
-import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.instance.ReadinessKind;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
@@ -356,7 +335,7 @@ class InlineCellIsolationTest extends HohenheimHttpTestBase {
         // guard reads that as a leaked column, correctly, because it cannot tell a
         // one-time backfill from one. A real instance always carries a host: the create
         // form defaults it to the local daemon.
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);

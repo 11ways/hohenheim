@@ -343,7 +343,7 @@ class WorkspaceVolumeMountTest {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, KIND);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<String, Object>());
-        row.set(InstanceModel.SERVER_ID, hostId);
+        row.set(InstanceModel.HOST_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, image.get(RuntimeImageModel.ID));
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);

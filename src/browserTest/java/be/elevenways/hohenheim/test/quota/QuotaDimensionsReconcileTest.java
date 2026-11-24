@@ -8,8 +8,8 @@ import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.cms.SubjectTag;
@@ -69,7 +69,7 @@ class QuotaDimensionsReconcileTest {
 
         // 1. A create that lands spends one database slot.
         service.insertRecord("recon-one", ManagedDatabase.Engine.POSTGRES, null, "app", "pw", "app",
-            false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+            false, HostService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
             DatabaseModel.PLACEMENT_DEDICATED, null);
         assertThat(Quotas.usedOf(databaseBucket))
             .as("step 1: the landed create holds one slot").isEqualTo(before + 1);
@@ -78,7 +78,7 @@ class QuotaDimensionsReconcileTest {
         //    with the insert: no row, no slot.
         FAIL_NEXT_DATABASE_WRITE.set(true);
         Throwable lost = catchThrowable(() -> service.insertRecord("recon-two",
-            ManagedDatabase.Engine.POSTGRES, null, "app2", "pw", "app2", false, ServerService.LOCAL_HOST_NAME,
+            ManagedDatabase.Engine.POSTGRES, null, "app2", "pw", "app2", false, HostService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE, DatabaseModel.PLACEMENT_DEDICATED,
             null));
         assertThat(lost).as("step 2: the injected failure reached the caller").isNotNull();

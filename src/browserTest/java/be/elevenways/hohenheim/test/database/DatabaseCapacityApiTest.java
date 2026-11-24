@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -85,9 +85,9 @@ class DatabaseCapacityApiTest extends HohenheimHttpTestBase {
         for (Row row : engines.find().where(DatabaseEngineModel.NAME.startsWith(PREFIX)).all()) {
             engines.delete(row.get(DatabaseEngineModel.ID));
         }
-        Model servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
-            servers.delete(row.get(ServerModel.ID));
+        Model servers = Models.get(HostModel.class);
+        for (Row row : servers.find().where(HostModel.NAME.startsWith(PREFIX)).all()) {
+            servers.delete(row.get(HostModel.ID));
         }
     }
 
@@ -187,20 +187,20 @@ class DatabaseCapacityApiTest extends HohenheimHttpTestBase {
     // -- fixtures -------------------------------------------------------------
 
     private static int host(String name) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** A shared engine ROW declaring a 1024 MB ceiling; no container is ever provisioned. */
@@ -210,7 +210,7 @@ class DatabaseCapacityApiTest extends HohenheimHttpTestBase {
         row.set(DatabaseEngineModel.NAME, name);
         row.set(DatabaseEngineModel.ENGINE, DatabaseModel.ENGINE_POSTGRES);
         row.set(DatabaseEngineModel.IMAGE, "postgres:16");
-        row.set(DatabaseEngineModel.SERVER_ID, serverId);
+        row.set(DatabaseEngineModel.HOST_ID, serverId);
         row.set(DatabaseEngineModel.ROOT_USER, "root");
         row.set(DatabaseEngineModel.ROOT_PASSWORD, PREFIX + "root-pw");
         row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, 1024);
@@ -228,7 +228,7 @@ class DatabaseCapacityApiTest extends HohenheimHttpTestBase {
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.DB_USER, "appuser");
         row.set(DatabaseModel.DB_PASSWORD, PREFIX + "secret-pw");
-        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.HOST_ID, serverId);
         row.set(DatabaseModel.PLACEMENT, engineId == null
             ? DatabaseModel.PLACEMENT_DEDICATED : DatabaseModel.PLACEMENT_SHARED);
         row.set(DatabaseModel.ENGINE_ID, engineId);

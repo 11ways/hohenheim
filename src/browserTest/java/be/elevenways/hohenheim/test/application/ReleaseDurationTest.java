@@ -1,11 +1,7 @@
 package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.OperationStatus;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -73,7 +69,7 @@ class ReleaseDurationTest extends HohenheimHttpTestBase {
         row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
-        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.HOST_ID, HostModel.localHostId());
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

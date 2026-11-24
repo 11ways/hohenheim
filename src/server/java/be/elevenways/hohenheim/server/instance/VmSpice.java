@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusSpice;
 import be.elevenways.pepperglass.session.SessionOptions;
@@ -20,7 +20,7 @@ public interface VmSpice {
 
     /** The seam a test points at a scripted SPICE server. */
     PlatformSeam<VmSpice> SEAM = PlatformSeam.withDefault(VmSpice.class,
-        (serverName, handle, takeOver) -> incus(new ServerService().incusClientFor(serverName), handle, takeOver));
+        (serverName, handle, takeOver) -> incus(new HostService().incusClientFor(serverName), handle, takeOver));
 
     /**
      * Opens the instance's VGA console on its Incus daemon, released by ending that console.

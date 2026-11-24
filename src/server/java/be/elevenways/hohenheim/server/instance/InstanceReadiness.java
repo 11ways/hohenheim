@@ -83,7 +83,7 @@ public final class InstanceReadiness {
 
     /**
      * {@link #await(Row, InstanceStatus)} through the probe lane of the workload's host;
-     * a deploy passes {@code PublishedPortProbe.forServer(serverId)}, because the port is
+     * a deploy passes {@code PublishedPortProbe.forHost(serverId)}, because the port is
      * published on THAT host's loopback.
      *
      * @throws Violations {@code readiness_timed_out} or {@code readiness_needs_port}

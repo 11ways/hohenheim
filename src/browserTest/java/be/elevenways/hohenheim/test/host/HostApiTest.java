@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -72,16 +72,16 @@ class HostApiTest extends HohenheimHttpTestBase {
                 HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         });
-        Model servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
-            servers.delete(row.get(ServerModel.ID));
+        Model servers = Models.get(HostModel.class);
+        for (Row row : servers.find().where(HostModel.NAME.startsWith(PREFIX)).all()) {
+            servers.delete(row.get(HostModel.ID));
         }
     }
 
     @Test
     void theHostLedgerIsReadableWithoutABrowserAndMatchesTheCapacityService() throws Exception {
         HostCapacityView ledger = InstanceCapacity.viewOf(
-            Models.get(ServerModel.class).findById(hostId), hostId);
+            Models.get(HostModel.class).findById(hostId), hostId);
         long booked = InstanceCapacity.bookedMbOn(hostId);
         long workloadBooked = InstanceCapacity.bookedMbOf(
             Models.get(InstanceModel.class).findById(instanceId));
@@ -99,7 +99,7 @@ class HostApiTest extends HohenheimHttpTestBase {
             .isEqualTo(200);
         assertThat(list.body()).as("step 1: naming the seeded host and its admission state")
             .contains("\"name\":\"" + PREFIX + "host\"")
-            .contains("\"admission\":\"" + ServerModel.ADMISSION_ADMITTED + "\"");
+            .contains("\"admission\":\"" + HostModel.ADMISSION_ADMITTED + "\"");
 
         // 2. The single-host form, where the numbers can be pinned exactly: every one of
         //    them is the capacity service's own answer, never a second computation.
@@ -143,20 +143,20 @@ class HostApiTest extends HohenheimHttpTestBase {
     // -- fixtures -------------------------------------------------------------
 
     private static int host(String name) {
-        Model servers = Models.get(ServerModel.class);
+        Model servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.PREFLIGHT_OK, true);
+        row.set(HostModel.NAME, name);
+        row.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        row.set(HostModel.MODE, HostModel.MODE_LOCAL);
+        row.set(HostModel.POSTURE, HostModel.POSTURE_SHARED_CONTAINER);
+        row.set(HostModel.ADMISSION, HostModel.ADMISSION_ADMITTED);
+        row.set(HostModel.PREFLIGHT_OK, true);
         servers.save(row);
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return row.get(ServerModel.ID);
+        return row.get(HostModel.ID);
     }
 
     /** A stopped container declaring 512 MB, so its booking is a number the test knows. */
@@ -165,7 +165,7 @@ class HostApiTest extends HohenheimHttpTestBase {
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
-        row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.HOST_ID, serverId);
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest",
             "memory_limit_mb", 512));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);

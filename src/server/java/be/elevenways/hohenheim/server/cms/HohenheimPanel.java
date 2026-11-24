@@ -167,7 +167,7 @@ public final class HohenheimPanel extends Panel {
         // preflight/trust live on this resource -- an instances-only node
         // without it cannot place anything.
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            peers.add(ServerParts.admin());
+            peers.add(HostParts.admin());
             peers.add(ReconcileFindingParts.admin());
         }
         // The Hohenheims this one is linked to, this server first: installation-wide, on every node.
@@ -227,7 +227,7 @@ public final class HohenheimPanel extends Panel {
             present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
         // In tab order: the linked Hohenheim servers, then this server's hosts (only where host workloads run).
         addCluster(peers, cluster("servers", HohenheimSlugs.Cluster.CLUSTER, "server", 40),
-            HohenheimSlugs.LINKED_SERVERS, HohenheimSlugs.SERVERS);
+            HohenheimSlugs.LINKED_SERVERS, HohenheimSlugs.HOSTS);
         // In tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),
             HohenheimSlugs.DOMAINS,
