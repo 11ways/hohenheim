@@ -10,8 +10,8 @@ import java.time.Duration;
 
 /**
  * The calls one Hohenheim makes to another it is linked to: join, status and leave; from a master, the
- * generations and rows of the kinds it keeps a record of; and from a managed server the nudge that it changed and
- * the code numbers it wants.
+ * generations and rows of the kinds it keeps a record of and the tool calls it carries for a person; and from a
+ * managed server the nudge that it changed and the code numbers it wants.
  *
  * AIDEV-NOTE: machine endpoints whose credential is in the request, so each route authenticates itself (no login
  * gate, no CSRF): the join code for join, the link key ({@code Authorization: Bearer}) for every other call. The
@@ -39,6 +39,11 @@ public final class ClusterEndpoints {
     private static final RateLimitPolicy RECORDS_LIMIT = RateLimitPolicy.of(1200, Duration.ofMinutes(1))
         .keyBy(RateLimitPolicy.KeyBy.IP)
         .named("hh_cluster_records");
+
+    /** Tool calls one address may carry per minute: an assistant's calls about one server's things, one each. */
+    private static final RateLimitPolicy TOOL_LIMIT = RateLimitPolicy.of(600, Duration.ofMinutes(1))
+        .keyBy(RateLimitPolicy.KeyBy.IP)
+        .named("hh_cluster_tool");
 
     /** A master asks this server to be managed by it, presenting a join code this server issued. */
     public static final Endpoint<Object> JOIN = Endpoint.<Object>builder()
@@ -104,6 +109,18 @@ public final class ClusterEndpoints {
             .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("codes").build())
         .authenticatesItself()
         .rateLimit(LINK_LIMIT)
+        .build();
+
+    /**
+     * A master carries an assistant's tool call about this server's things, naming the person who asks by the sign-in
+     * both servers share: only its master may, and the call runs as that person's own account here.
+     */
+    public static final Endpoint<Object> TOOL = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("cluster_tool"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("tool").build())
+        .authenticatesItself()
+        .rateLimit(TOOL_LIMIT)
         .build();
 
     private ClusterEndpoints() {

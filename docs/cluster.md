@@ -52,6 +52,7 @@ Linked servers are reached on the public internet only, unless the host declares
 | rows | `/api/cluster/rows` | the key of this server's master | one page of one kind's rows: `before`, `after` (the kind's generation around the page), `rows` (`key`, `code`, `title`, `document`) and `next` |
 | changed | `/api/cluster/changed` | the key of a server this one manages | `asked`; the master syncs that server |
 | codes | `/api/cluster/codes` | the key this server presents to its master; at joining also the master's `ticket` in the body | `blocks`: per prefix `prefix`, `first`, `last`; or `refusal` |
+| tool | `/api/cluster/tool` | the key of this server's master | `answer`: the tool's `text`, `error`, `images` (`data`, `mime_type`) and `structured`; or `refusal` |
 
 The join body carries `code`, the master's `name`, `base_url`, `token`, `build`, `key` (the key the managed
 server presents to the master) and `ticket` (see "One code per thing"). A join refusal answers one of `no_such_code`,
@@ -68,6 +69,13 @@ server's master: a request with no key, with an API key or any other bearer that
 answers 401; a server this one manages, presenting its own valid key, answers 403. Changed and codes answer only a
 server this one manages (codes also the server a valid ticket names) and 403 to its master. A refusal names its
 reason's code alone.
+
+A tool body carries `realm` and `subjects` (who asks, see "Assistants"), `server` (the assistant connection's name),
+`tool`, `arguments` as the assistant sent them and `scopes` (those of the caller's key on the master); the master's
+`Accept-Language` carries the caller's languages. Tool answers only this server's master (401, then 403 as
+generations); a body it cannot read is 400, a connection this build does not serve 404, a person it cannot name
+422 with `refusal` `other_realm` or `no_account`, and scopes not admitting the connection 403. A tool call may take
+up to three minutes (a command run in an app answers within two).
 
 ## Checking each other
 
@@ -179,6 +187,31 @@ adds the joined server's row (`CodeGrants.joined`). A refused or abandoned join 
 never handed out again, and the master answers that a code among them lives on no linked server.
 A join the managed server kept while the master never recorded it (the master's add lost the answer) leaves the
 managed server's codes in such a void grant as well: the master answers that they live on no linked server.
+
+## Assistants
+
+An assistant connects to the master only. A tool call naming things by their codes (`read AP12`, `history S20`,
+`app_set_variable AP12`, `run_read RUN8`) runs where those things live: a code of the master runs there and sends
+nothing; codes of one linked server are carried to it (tool) and its answer comes back unchanged; codes of two
+servers, or of the master and a linked server, are refused with "The records this call names are kept on different
+servers". `list` and every call naming no code run on the master.
+
+A carried call runs on the linked server as the same person's own account there, with that account's rights,
+narrowed by the scopes of the key the assistant used on the master. Both servers name the person by the Proteus
+sign-in they share: the realm (the Proteus endpoint and realm client, compared on both sides) and the person's
+subjects in it, never an e-mail address. Refused, with nothing read or written on the linked server:
+
+- a caller with no Proteus sign-in on the master (a password-only account, a key of no person): "Acting on Kuifje
+  from here needs a person who signs in with Proteus, here and on Kuifje";
+- a person with no enabled account on the linked server: "You have no account on Kuifje. Sign in there with Proteus
+  once";
+- a linked server signing people in with another realm, or with none.
+
+A master's administrator is nothing on a linked server without an own account there, and a linked server's key
+speaks for nobody on its master. The linked server's history credits the person, through a credential named after
+the master (an app password named "Robbedoes"). A silent server answers "Kuifje does not answer; nothing was
+changed"; a change sent without an answer says it may or may not have been made. After a carried change the master
+brings its record of that server in step before it answers.
 
 ## Removing
 

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.protoblast.common.time.Now;
@@ -80,6 +81,23 @@ public final class ClusterRecords {
      */
     public static boolean awaitIdle(@NonNull Duration timeout) {
         return SYNCS.awaitIdle(timeout);
+    }
+
+    /**
+     * Brings the record of a server this server manages in step now, on the calling thread, outside any transaction:
+     * after a change this server asked of it and before it answers. A sync another process or a nudge holds is waited
+     * for (the server's lease), so the record holds at least what that server had once this returns.
+     *
+     * AIDEV-NOTE: a sync that fails is logged by its class alone and asked again in the background; the change it
+     * follows was made, so the caller's answer stands.
+     */
+    static void syncNow(@NonNull UUID server) {
+        try {
+            sync(server);
+        } catch (RuntimeException failed) {
+            Blast.log("CLUSTER: a sync after a carried change failed -", failed.getClass().getSimpleName());
+            request(server);
+        }
     }
 
     /** @return the key the record of a linked server is kept under */

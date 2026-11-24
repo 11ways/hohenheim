@@ -7,23 +7,37 @@ import be.elevenways.hohenheim.cluster.ClusterEndpoints;
 import be.elevenways.hohenheim.cluster.JoinRefusal;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
+import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.cms.ClusterAttention;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
+import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.Uuids;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
+import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
+import be.elevenways.zenit.ai.server.mcp.host.McpScopes;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.ZenitAuthPrincipalKind;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.code.CodeGrantModel;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
@@ -40,6 +54,9 @@ import be.elevenways.zenit.common.peer.PeerModelSyncModel;
 import be.elevenways.zenit.common.peer.PeerRecordModel;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.security.CredentialPresets;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.delivery.DeliveryChannel;
@@ -85,6 +102,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
@@ -121,6 +139,13 @@ class LinkedServersJourneyTest {
 
     /** The master's own site, so its numbers run past the ones a fresh Kuifje had. */
     private static final String OWN_SITE = "cluster-codes-own-site";
+
+    /** The master's own site in the journey of carried tool calls. */
+    private static final String CARRIED_SITE = "cluster-carried-own-site";
+
+    /** The Proteus subject of the person signed in on both servers, and of one signed in on the master alone. */
+    private static final String PERSON = "4242";
+    private static final String STRANGER = "5151";
 
     @RegisterExtension
     static final ServedApp APP = HohenheimServedApp.app()
@@ -179,7 +204,7 @@ class LinkedServersJourneyTest {
         }
         HardDeletes.where(Models.get(NotificationChannelModel.class),
             NotificationChannelModel.NAME.eq("cluster-alerts"));
-        HardDeletes.where(Models.get(SiteModel.class), SiteModel.NAME.eq(OWN_SITE));
+        HardDeletes.where(Models.get(SiteModel.class), SiteModel.NAME.in(List.of(OWN_SITE, CARRIED_SITE)));
         awaitSyncs();
         for (Row linked : Models.get(LinkedServerModel.class).find().all()) {
             ClusterRecords.forget(linked.get(LinkedServerModel.ID));
@@ -207,7 +232,7 @@ class LinkedServersJourneyTest {
             String earlyCode = after("code ", kuifje.ask("code " + SiteModel.MODEL_ID + " " + early));
             assertThat(Integer.parseInt(after("renumbers ", kuifje.ask("renumbers"))))
                 .as("step 1: the join card counts every coded thing on Kuifje").isEqualTo(codesOf(kuifje).size());
-            String ownSite = masterSite();
+            String ownSite = masterSite(OWN_SITE);
             add(codeOf(kuifje.ask("offer")));
             awaitSyncs();
             Row server = only();
@@ -407,6 +432,167 @@ class LinkedServersJourneyTest {
         }
     }
 
+    /**
+     * An assistant connected to the master works on Kuifje's app by its code as if it lived on the master: the call
+     * is carried to Kuifje and runs there as the same person's own account, found by the Proteus sign-in both servers
+     * share, its answer unchanged; a change made there is in the master's record before the answer, and Kuifje's
+     * history credits the person through the master. A code of the master never leaves it; a call naming both
+     * servers' things, a person with no account on Kuifje or no Proteus sign-in here, another realm and a silent
+     * Kuifje are refused in words, with nothing written there; and Kuifje's key cannot speak for anybody on its master.
+     */
+    @Test
+    void aToolCallAboutKuifjesAppRunsThereAsThePerson(@TempDir Path directory, TestReporter reporter)
+            throws Exception {
+        ForkedHohenheim kuifje = boot(directory, directory.resolve("kuifje.db"), true, reporter);
+        relay.retarget(kuifje.port());
+        Runnable proteusOff = proteusOn();
+        try {
+            // 1. Kuifje is linked and holds an app; the master names Kuifje as where its code lives. The master's
+            //    administrator signed in with Proteus on both servers, as the same subject; a key of the "Hohenheim
+            //    assistant" preset connects to the master.
+            add(codeOf(kuifje.ask("offer")));
+            awaitSyncs();
+            String peer = ClusterRecords.peerKey(only());
+            String[] app = after("app ", kuifje.ask("app carried-app")).split(" ");
+            String appKey = app[0];
+            String appCode = app[1];
+            settle(kuifje);
+            assertThat(CodeHomes.peerOf(appCode)).as("step 1: the app lives on Kuifje").isEqualTo(peer);
+            // A run's code is a code like any other: Kuifje numbers its runs from its master's blocks, so run_read of a
+            // run started there is carried there as an app's code is.
+            assertThat(Long.parseLong(after("left ", kuifje.ask("left RUN")))).as("step 1: Kuifje numbers its runs"
+                + " from its master's blocks").isPositive();
+            UUID operatorId = TenantConduits.operatorUser().get(UserModel.ID);
+            ForkedHohenheim.linkProteus(operatorId, PERSON);
+            String person = after("person ", kuifje.ask("person " + PERSON));
+            McpHostServer server = McpHostServers.routed(HohenheimMcpModule.SERVER_NAME);
+            CredentialPresets.Preset preset = server.credentialPreset(TenantConduits.operator());
+            assertThat(preset).as("step 1: the preset is offered").isNotNull();
+            List<String> scopes = ApiKeyService.presetScopes(TenantConduits.operator(), preset);
+            McpHttpSession master = McpHttpSession.open(McpHttpSession.endpoint(APP.port(),
+                HohenheimMcpModule.SERVER_NAME), bearer(ApiKeyService.create(TenantConduits.operator(), operatorId,
+                "cluster-carried", scopes, null).plaintext()));
+
+            // 2. A read of Kuifje's app on the master answers what Kuifje's own connection answers the same person
+            //    holding a key of the same scopes there.
+            McpHttpSession.Answer read = master.call("read", Map.of("ids", List.of(appCode)));
+            assertThat(read.error()).as("step 2: read " + read.text()).isFalse();
+            McpHttpSession own = McpHttpSession.open(McpHttpSession.endpoint(kuifje.port(),
+                HohenheimMcpModule.SERVER_NAME), bearer(after("mcp-key ", kuifje.ask("mcp-key "
+                + String.join(",", scopes)))));
+            assertThat(read.text()).as("step 2: Kuifje's own answer").contains(appCode)
+                .isEqualTo(own.call("read", Map.of("ids", List.of(appCode))).text());
+
+            // 3. A write on the master is made on Kuifje: the master's record of Kuifje is in step when it answers,
+            //    and Kuifje's history credits the person, through the master.
+            McpHttpSession.Answer set = master.call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
+                Map.of("id", appCode, "key", "GREETING", "plain_value", "carried"));
+            assertThat(set.error()).as("step 3: set " + set.text()).isFalse();
+            assertThat(kuifje.ask("variables " + appKey)).as("step 3: written on Kuifje")
+                .isEqualTo("variables GREETING=carried");
+            assertThat(kept(peer)).as("step 3: the master's record is in step").isEqualTo(kuifje.ask("counts"));
+            assertThat(kuifje.ask("last-action")).as("step 3: Kuifje credits the person through the master")
+                .isEqualTo("action " + person + " " + PrincipalRef.account(UUID.fromString(person)).storedKind() + " "
+                    + ZenitAuthPrincipalKind.HOST_CREDENTIAL.id() + " " + Uuids.v5(UUID.fromString(person),
+                    "Robbedoes"));
+            settle(kuifje);
+
+            // 4. A code of the master's own site is read on the master: nothing is sent to Kuifje. A read naming that
+            //    site and Kuifje's app is refused in words, and nothing is sent either.
+            String ownCode = RecordCodes.codeUnjudged(SiteModel.MODEL_ID, masterSite(CARRIED_SITE));
+            int sent = relay.accepted();
+            McpHttpSession.Answer here = master.call("read", Map.of("ids", List.of(ownCode)));
+            assertThat(here.error()).as("step 4: read here " + here.text()).isFalse();
+            assertThat(here.text()).as("step 4: the master's site").contains(CARRIED_SITE);
+            McpHttpSession.Answer both = master.call("read", Map.of("ids", List.of(appCode, ownCode)));
+            assertThat(both.error()).as("step 4: both servers refused").isTrue();
+            assertThat(both.text()).as("step 4: in words").isEqualTo("The records this call names are kept on"
+                + " different servers. Name the records of one server per call.");
+            assertThat(relay.accepted()).as("step 4: no call reached Kuifje").isEqualTo(sent);
+
+            // 5. A person with a Proteus sign-in here and no account on Kuifje is refused in words, and Kuifje writes
+            //    nothing; a person without a Proteus sign-in here is refused before anything is sent.
+            UUID stranger = ApiSupport.user("cluster-stranger@cluster.test", "Cluster Stranger");
+            ForkedHohenheim.linkProteus(stranger, STRANGER);
+            McpHttpSession.Answer refused = McpHttpSession.open(McpHttpSession.endpoint(APP.port(),
+                HohenheimMcpModule.SERVER_NAME), bearer(ApiKeyService.create(stranger, "cluster-stranger",
+                List.of(McpScopes.server(HohenheimMcpModule.SERVER_NAME), "*"), null).plaintext()))
+                .call(InstanceVariableOperations.SET_VARIABLE.assistantName(),
+                    Map.of("id", appCode, "key", "GREETING", "plain_value", "stranger"));
+            assertThat(refused.error()).as("step 5: refused").isTrue();
+            assertThat(refused.text()).as("step 5: in words")
+                .isEqualTo("You have no account on Kuifje. Sign in there with Proteus once; nothing was changed.");
+            assertThat(kuifje.ask("variables " + appKey)).as("step 5: Kuifje wrote nothing")
+                .isEqualTo("variables GREETING=carried");
+            UUID passwordOnly = ApiSupport.user("cluster-password@cluster.test", "Cluster Password");
+            int before = relay.accepted();
+            McpHttpSession.Answer unnamed = McpHttpSession.open(McpHttpSession.endpoint(APP.port(),
+                HohenheimMcpModule.SERVER_NAME), bearer(ApiKeyService.create(passwordOnly, "cluster-password",
+                List.of(McpScopes.server(HohenheimMcpModule.SERVER_NAME), "*"), null).plaintext()))
+                .call("read", Map.of("ids", List.of(appCode)));
+            assertThat(unnamed.text()).as("step 5: no Proteus sign-in here").isEqualTo("Acting on Kuifje from here"
+                + " needs a person who signs in with Proteus, here and on Kuifje. Sign in here with Proteus once, then"
+                + " use a key of that account.");
+            assertThat(relay.accepted()).as("step 5: nothing was sent for it").isEqualTo(before);
+
+            // 6. Kuifje, with the key it holds for its master, cannot have the master run anything as a person.
+            assertThat(kuifje.ask("tool-master " + ownCode + " " + PERSON))
+                .as("step 6: a managed server speaks for nobody on its master").isEqualTo("status 403");
+
+            // 7. A master signing people in with another realm names nobody on Kuifje.
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT, "elsewhere");
+            McpHttpSession.Answer realm = master.call("read", Map.of("ids", List.of(appCode)));
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT,
+                ForkedHohenheim.PROTEUS_REALM_CLIENT);
+            assertThat(realm.text()).as("step 7: another realm").isEqualTo("Kuifje does not sign people in with this"
+                + " server's Proteus realm, so nobody can act on it from here; nothing was changed.");
+
+            // 8. Kuifje does not answer: the call says so, naming it, and nothing is answered from the master's
+            //    record.
+            relay.retarget(closedPort());
+            McpHttpSession.Answer silent = master.call("read", Map.of("ids", List.of(appCode)));
+            relay.retarget(kuifje.port());
+            assertThat(silent.error()).as("step 8: an error").isTrue();
+            assertThat(silent.text()).as("step 8: in words").isEqualTo("Kuifje does not answer; nothing was changed.");
+
+            assertThat(remove(only())).isEqualTo(LinkedServers.Removal.LEFT.token());
+        } finally {
+            proteusOff.run();
+            kuifje.close();
+        }
+    }
+
+    /**
+     * Offers Proteus sign-in on the master in the realm Kuifje signs people in with.
+     *
+     * @return what puts the master's sign-in back as it was
+     */
+    private static Runnable proteusOn() {
+        Boolean enabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENABLED);
+        List<SettingDefinition<String>> texts = List.of(HohenheimSettings.AuthProteus.ENDPOINT,
+            HohenheimSettings.AuthProteus.REALM_CLIENT, HohenheimSettings.AuthProteus.ACCESS_KEY,
+            HohenheimSettings.AuthProteus.REQUIRED_PERMISSION);
+        Map<SettingDefinition<String>, String> before = new LinkedHashMap<>();
+        texts.forEach(setting -> before.put(setting, Zenit.SETTINGS_VALUES.getValue(setting)));
+        List<IdentityProviderRegistry.Entry> providers = new ArrayList<>();
+        IdentityProviderRegistry.all()
+            .forEach(provider -> providers.add(IdentityProviderRegistry.get(provider.slug())));
+        ForkedHohenheim.proteusSettings();
+        if (IdentityProviderRegistry.get(ProteusSignIn.SLUG) == null) {
+            ProteusSignIn.registerIfConfigured();
+        }
+        return () -> {
+            before.forEach(Zenit.SETTINGS_VALUES::setValue);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.ENABLED, enabled);
+            IdentityProviderRegistry.clear();
+            providers.forEach(entry -> IdentityProviderRegistry.register(entry.provider(), entry.sink()));
+        };
+    }
+
+    private static String[] bearer(String key) {
+        return new String[] {"Authorization", "Bearer " + key};
+    }
+
     /** @return Kuifje's current allocated codes */
     private static List<String> codesOf(ForkedHohenheim kuifje) throws Exception {
         String codes = after("codes ", kuifje.ask("codes"));
@@ -433,15 +619,15 @@ class LinkedServersJourneyTest {
             .where(CodeGrantModel.LAST.gte(number)).where(CodeGrantModel.CONFIRMED_AT.isNull()).count() == 1;
     }
 
-    /** @return the key of the master's own site, made once */
-    private static String masterSite() {
+    /** @return the key of the master's own site of that name, made once */
+    private static String masterSite(String name) {
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
-        site.set(SiteModel.NAME, OWN_SITE);
-        site.set(SiteModel.SLUG, OWN_SITE);
+        site.set(SiteModel.NAME, name);
+        site.set(SiteModel.SLUG, name);
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
-        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + OWN_SITE));
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + name));
         site.set(SiteModel.ENABLED, false);
         sites.save(site);
         return String.valueOf((Object) site.get(SiteModel.ID));

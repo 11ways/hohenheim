@@ -16,8 +16,10 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -25,8 +27,10 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.zenit.auth.model.ExternalIdentityModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.test.TestSessions;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
@@ -38,6 +42,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.code.CodeBlocks;
 import be.elevenways.zenit.common.orm.code.CodeWant;
 import be.elevenways.zenit.common.orm.code.RecordCodeModel;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.peer.SharedModels;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -77,6 +83,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -107,6 +114,34 @@ final class ForkedHohenheim implements AutoCloseable {
     private static final Duration BOOT_LIMIT = Duration.ofMinutes(3);
 
     private static final Duration ANSWER_LIMIT = Duration.ofSeconds(60);
+
+    /** The Proteus realm both servers of a journey sign people in with: its endpoint and realm client. */
+    static final String PROTEUS_ENDPOINT = "https://proteus.cluster.test/";
+    static final String PROTEUS_REALM_CLIENT = "hohenheim";
+
+    /**
+     * Sets this process's Proteus sign-in up as every server of a journey has it, so a person is named alike on both;
+     * its provider is registered by the boot that follows, or by ProteusSignIn.registerIfConfigured.
+     */
+    static void proteusSettings() {
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.ENDPOINT, PROTEUS_ENDPOINT);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT, PROTEUS_REALM_CLIENT);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.ACCESS_KEY, "realm-key");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REQUIRED_PERMISSION, "hohenheim.cluster");
+    }
+
+    /** Links an account to a Proteus subject, as its first Proteus sign-in on this server does. */
+    static void linkProteus(@NonNull UUID account, @NonNull String subject) {
+        ExternalIdentityModel identities = Models.get(ExternalIdentityModel.class);
+        Row identity = identities.createEmptyRow();
+        identity.set(ExternalIdentityModel.PROVIDER_SLUG, ProteusSignIn.SLUG);
+        identity.set(ExternalIdentityModel.SUBJECT, subject);
+        identity.set(ExternalIdentityModel.USER_ID, account);
+        identity.set(ExternalIdentityModel.LINKED_AT, Now.instant());
+        identity.set(ExternalIdentityModel.UPDATED_AT, Now.instant());
+        identities.save(identity);
+    }
 
     private final RunningProcess process;
     private final BlockingQueue<String> answers = new LinkedBlockingQueue<>();
@@ -258,6 +293,11 @@ final class ForkedHohenheim implements AutoCloseable {
 
             ServerMain.main(new String[0]);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Cluster.NAME, name);
+            // Its Proteus sign-in, the realm the journey's servers share; offered here once its settings are.
+            proteusSettings();
+            if (IdentityProviderRegistry.get(ProteusSignIn.SLUG) == null) {
+                ProteusSignIn.registerIfConfigured();
+            }
             // Its calls to the other server: that host name, over TLS, to the other server's plain port; installed
             // once the runtime holds its outbound network, before anything is served or asked.
             relay = TlsRelay.open();
@@ -464,6 +504,50 @@ final class ForkedHohenheim implements AutoCloseable {
                 // "session" signs this server's administrator in: the Cookie header its browser then sends.
                 case "session" -> "session " + SessionCookies.requestHeaderValue(Zenit.getSessionStore().get(
                     SessionToken.of(TestSessions.signedIn(TenantConduits.operatorUser().get(UserModel.ID)))));
+                // "person SUBJECT" links this server's administrator to a Proteus subject: "person <account id>".
+                case "person" -> {
+                    UUID account = TenantConduits.operatorUser().get(UserModel.ID);
+                    linkProteus(account, words[1]);
+                    yield "person " + account;
+                }
+                // "mcp-key SCOPES" mints this server's administrator a key with the comma-joined scopes.
+                case "mcp-key" -> "mcp-key " + ApiKeyService.create(TenantConduits.operatorUser().get(UserModel.ID),
+                    "cluster-carried-own", List.of(words[1].split(",")), null).plaintext();
+                // "variables APP": the app's variables as "key=value" sorted, joined by semicolons.
+                case "variables" -> {
+                    List<String> variables = new ArrayList<>();
+                    new InstanceVariables().valuesFor(Integer.parseInt(words[1]))
+                        .forEach((key, value) -> variables.add(key + "=" + value));
+                    Collections.sort(variables);
+                    yield "variables " + String.join(";", variables);
+                }
+                // The newest action recorded here: "action <actor> <actor kind> <through kind> <through>".
+                case "last-action" -> {
+                    Row action = new ActionModel(Models.get(LinkedServerModel.class).getResolvedDatasource()).find()
+                        .noCache().orderBy(ActionModel.CREATED_AT, SortOrder.DESC)
+                        .orderBy(ActionModel.ID, SortOrder.DESC).first();
+                    yield action == null ? "none" : "action " + action.get(ActionModel.ACTOR) + " "
+                        + action.get(ActionModel.ACTOR_KIND) + " " + action.get(ActionModel.THROUGH_KIND) + " "
+                        + action.get(ActionModel.THROUGH);
+                }
+                // "tool-master CODE SUBJECT": this server, with the key it holds for its master, asks that master to
+                // run a read of CODE as the person SUBJECT names: it is not their master.
+                case "tool-master" -> {
+                    Row master = LinkedServers.master();
+                    if (master == null) {
+                        yield "none";
+                    }
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("realm", ProteusSignIn.realm());
+                    body.put("subjects", List.of(words[2]));
+                    body.put("server", "hohenheim");
+                    body.put("tool", "read");
+                    body.put("arguments", Map.of("ids", List.of(words[1])));
+                    body.put("scopes", List.of("mcp:hohenheim", "*"));
+                    LinkCalls.Answer answer = LinkCalls.tool(master.get(LinkedServerModel.BASE_URL),
+                        master.get(LinkedServerModel.LINK_KEY), body, "en");
+                    yield "status " + (answer instanceof LinkCalls.Answered answered ? answered.status() : -1);
+                }
                 default -> "unknown " + command;
             };
         }

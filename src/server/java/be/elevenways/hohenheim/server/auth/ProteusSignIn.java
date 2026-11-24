@@ -11,6 +11,9 @@ import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.net.URI;
+import java.util.Locale;
+
 /**
  * The panel's Proteus sign-in, offered at boot from {@code hohenheim.auth_proteus} next to password sign-in.
  *
@@ -68,6 +71,39 @@ public final class ProteusSignIn {
     /** @return whether the last boot left a switched-on Proteus sign-in out for naming no required permission */
     public static boolean heldBack() {
         return heldBack;
+    }
+
+    /**
+     * The Proteus realm this server signs people in with: the realm client at the endpoint its provider calls, under
+     * which a realm's subject names one person. Two servers name the same person by one subject only when both answer
+     * the same realm here.
+     *
+     * AIDEV-NOTE: read from the restart-required settings the offered provider was built from, so it is the realm
+     * every Proteus identity linked since this boot came from; an identity linked under an earlier endpoint or realm
+     * client keeps its subject and is read as this realm's (the link stores no realm). Scheme and host compare
+     * without case; any other difference in how the two servers spell the endpoint reads as another realm.
+     *
+     * @return the realm, null while Proteus sign-in is not offered or its endpoint is no address
+     */
+    public static @Nullable String realm() {
+        if (IdentityProviderRegistry.get(SLUG) == null) {
+            return null;
+        }
+        String endpoint = text(HohenheimSettings.AuthProteus.ENDPOINT);
+        String realmClient = text(HohenheimSettings.AuthProteus.REALM_CLIENT);
+        if (endpoint == null || realmClient == null) {
+            return null;
+        }
+        try {
+            URI base = URI.create(endpoint.endsWith("/") ? endpoint : endpoint + "/").normalize();
+            if (base.getScheme() == null || base.getRawAuthority() == null) {
+                return null;
+            }
+            return base.getScheme().toLowerCase(Locale.ROOT) + "://" + base.getRawAuthority().toLowerCase(Locale.ROOT)
+                + base.getRawPath() + "realm/" + realmClient;
+        } catch (IllegalArgumentException unreadable) {
+            return null;
+        }
     }
 
     /** @return the setting's trimmed text, null when unset or blank */

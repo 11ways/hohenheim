@@ -37,6 +37,13 @@ final class LinkCalls {
     static final Duration DEADLINE = Duration.ofSeconds(10);
 
     /**
+     * How long one carried tool call may take: above the longest a tool answers inside its request (a command run in
+     * an app, two minutes, InstanceExec), so a slow answer is no "may or may not have arrived". A tool that takes
+     * longer runs in the background and answers its run's code at once.
+     */
+    static final Duration TOOL_DEADLINE = Duration.ofMinutes(3);
+
+    /**
      * The largest answer read, the size of one page of shared rows (PeerRecords.PAGE rows, every value of each in
      * clear): 32 MiB, so a row averages 160 KiB before a page is refused. A status answer is a few hundred bytes; the
      * one fetcher holds one limit, so the largest answer sets it.
@@ -44,6 +51,8 @@ final class LinkCalls {
     static final long MAX_ANSWER_BYTES = 32L * 1024 * 1024;
 
     private static volatile @Nullable PinnedFetcher fetcher;
+
+    private static volatile @Nullable PinnedFetcher toolFetcher;
 
     private LinkCalls() {
     }
@@ -124,14 +133,31 @@ final class LinkCalls {
         return call(baseUrl, ClusterEndpoints.CODES, body, key);
     }
 
+    /**
+     * @param key     the key this server presents to the server it manages
+     * @param locales the caller's languages, in order, as an Accept-Language header names them
+     * @return the answer of the server at {@code baseUrl} to its master carrying a tool call, in {@code body}
+     */
+    static @NonNull Answer tool(@NonNull String baseUrl, @NonNull String key, @NonNull Map<String, Object> body,
+                                @NonNull String locales) {
+        FetchRequest request = request(baseUrl, ClusterEndpoints.TOOL, body, key);
+        return send(locales.isBlank() ? request : request.withHeader("Accept-Language", locales), toolFetcher());
+    }
+
     private static @NonNull Answer call(@NonNull String baseUrl, @NonNull Endpoint<?> endpoint,
                                         @NonNull Map<String, Object> body, @Nullable String key) {
-        String url = baseUrl + endpoint.toUrl();
-        FetchRequest request = FetchRequest.postJson(url, body);
-        if (key != null) {
-            request = request.withHeader("Authorization", "Bearer " + key);
-        }
-        FetchOutcome outcome = fetcher().fetch(request);
+        return send(request(baseUrl, endpoint, body, key), fetcher());
+    }
+
+    private static @NonNull FetchRequest request(@NonNull String baseUrl, @NonNull Endpoint<?> endpoint,
+                                                 @NonNull Map<String, Object> body, @Nullable String key) {
+        FetchRequest request = FetchRequest.postJson(baseUrl + endpoint.toUrl(), body);
+        return key == null ? request : request.withHeader("Authorization", "Bearer " + key);
+    }
+
+    private static @NonNull Answer send(@NonNull FetchRequest request, @NonNull PinnedFetcher through) {
+        String url = request.url();
+        FetchOutcome outcome = through.fetch(request);
         return switch (outcome) {
             case FetchOutcome.Fetched fetched -> new Answered(fetched.status(), jsonOf(fetched.body()));
             case FetchOutcome.Refused refused -> failed(url,
@@ -169,17 +195,36 @@ final class LinkCalls {
             synchronized (LinkCalls.class) {
                 current = fetcher;
                 if (current == null) {
-                    current = PinnedFetcher.builder(OutboundUrlGuard.optingIn(
-                            HohenheimSettings.Cluster.ALLOW_PRIVATE_NETWORKS).forSchemes("https"))
-                        .connectTimeout(Duration.ofSeconds(5))
-                        .deadline(DEADLINE)
-                        .maxBodyBytes(MAX_ANSWER_BYTES)
-                        .redirects(PinnedFetcher.Redirects.response())
-                        .build();
+                    current = built(DEADLINE);
                     fetcher = current;
                 }
             }
         }
         return current;
+    }
+
+    /** @return the fetcher carried tool calls ride: the same declaration, waiting {@link #TOOL_DEADLINE} */
+    private static @NonNull PinnedFetcher toolFetcher() {
+        PinnedFetcher current = toolFetcher;
+        if (current == null) {
+            synchronized (LinkCalls.class) {
+                current = toolFetcher;
+                if (current == null) {
+                    current = built(TOOL_DEADLINE);
+                    toolFetcher = current;
+                }
+            }
+        }
+        return current;
+    }
+
+    private static @NonNull PinnedFetcher built(@NonNull Duration deadline) {
+        return PinnedFetcher.builder(OutboundUrlGuard.optingIn(HohenheimSettings.Cluster.ALLOW_PRIVATE_NETWORKS)
+                .forSchemes("https"))
+            .connectTimeout(Duration.ofSeconds(5))
+            .deadline(deadline)
+            .maxBodyBytes(MAX_ANSWER_BYTES)
+            .redirects(PinnedFetcher.Redirects.response())
+            .build();
     }
 }

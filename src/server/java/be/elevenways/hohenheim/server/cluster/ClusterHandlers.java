@@ -49,6 +49,11 @@ import java.util.Map;
  * this one manages may nudge it or be granted code numbers, or at joining the server a valid ticket of this one
  * names. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
  *
+ * AIDEV-NOTE: "tool" is the one call that speaks for a person, so it answers this server's master alone, as
+ * generations and rows do (401, then 403 for a server this one manages); who the person is and what they may do is
+ * ClusterToolCalls'. A body that cannot be read is 400, an assistant connection this build does not serve 404, a
+ * person nobody here may be named as 422 with the refusal's token, and scopes not admitting the connection 403.
+ *
  * @author Jelle De Loecker
  * @since  0.10.0
  */
@@ -63,12 +68,13 @@ public final class ClusterHandlers {
     }
 
     /**
-     * Installs the handlers of the cluster calls, the nudge that tells this server's master of a change and the
-     * numbering that takes code numbers from it.
+     * Installs the handlers of the cluster calls, the nudge that tells this server's master of a change, the
+     * numbering that takes code numbers from it and the carrier of tool calls about its managed servers' things.
      */
     public static void init() {
         ClusterNudge.install();
         ClusterCodes.install();
+        ClusterToolCalls.install();
         ClusterEndpoints.GENERATIONS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
             Map<String, Object> generations = new LinkedHashMap<>();
             SharedRows.generations(caller)
@@ -112,6 +118,7 @@ public final class ClusterHandlers {
             return new JsonResult<>(Map.of("asked", true));
         });
         ClusterEndpoints.CODES.setHandler(ClusterHandlers::codes);
+        ClusterEndpoints.TOOL.setHandler(ClusterHandlers::tool);
         ClusterEndpoints.JOIN.setHandler(ClusterHandlers::join);
         ClusterEndpoints.STATUS.setHandler(conduit -> {
             if (LinkedServers.byKey(keyOf(conduit)) == null) {
@@ -217,6 +224,40 @@ public final class ClusterHandlers {
             () -> ClusterCodes.grantJoining(granted, wants)) : ExecutionIdentity.supply(ExecutionIdentity.caller(
             AccessContext.detached(asker), CallerChannel.ofRequest(conduit)), () -> ClusterCodes.grant(granted, wants));
         return new JsonResult<>(Map.of("blocks", ClusterCodes.blocksOnWire(blocks)));
+    }
+
+    /** Runs a tool call this server's master carried, as the person it names; see the class note for each answer. */
+    private static @NonNull ActionResult<Object> tool(@NonNull Conduit conduit) {
+        Row row = LinkedServers.byKey(keyOf(conduit));
+        if (row == null) {
+            return unknownKey(conduit);
+        }
+        if (LinkedServers.roleOf(row) != LinkRole.MANAGED_BY) {
+            return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
+        }
+        Map<String, Object> body = bodyOf(conduit);
+        ClusterToolCalls.Asked asked = body == null ? null : ClusterToolCalls.asked(body);
+        if (asked == null) {
+            return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
+        }
+        ClusterToolCalls.Ran ran;
+        try {
+            ran = ClusterToolCalls.runHere(row, asked, conduit);
+        } catch (DomainRefusal refused) {
+            return refusal(conduit, refused.reason());
+        }
+        return switch (ran) {
+            case ClusterToolCalls.Answered answered ->
+                new JsonResult<>(Map.of("answer", ClusterToolCalls.wireOf(answered.response())));
+            case ClusterToolCalls.Refused refused -> {
+                conduit.setResponseStatus(422);
+                yield new JsonResult<>(Map.of("refusal", refused.refusal().token()));
+            }
+            case ClusterToolCalls.Unknown unknown -> {
+                conduit.setResponseStatus(404);
+                yield new JsonResult<>(Map.of("error", "unknown server"));
+            }
+        };
     }
 
     private static @NonNull ActionResult<Object> refused(@NonNull Conduit conduit, @NonNull JoinRefusal refusal) {
