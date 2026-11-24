@@ -320,7 +320,7 @@ class InstanceBackupsTest {
                 // 2. With BACKUPS but no create authority, the run is refused by the create funnel's name.
                 RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
                     HohenheimCapabilities.BACKUPS, true);
-                OperationRun noCreate = restoreRun(tenantRestore(backup, tenant), "step 2");
+                OperationRun noCreate = restoreRun(tenantRestore(backup, tenant), tenant, "step 2");
                 assertThat(noCreate.status()).as("step 2: refused").isEqualTo(OperationRunStatus.REFUSED);
                 assertThat(noCreate.outcome()).as("step 2: without create authority").isNotNull()
                     .extracting(Microcopy::key).isEqualTo("instance_create_not_permitted");
@@ -331,7 +331,7 @@ class InstanceBackupsTest {
                 Models.get(InstanceTemplateModel.class).find()
                     .where(InstanceTemplateModel.ID.eq(template.get(InstanceTemplateModel.ID)))
                     .assign(InstanceTemplateModel.APPROVED_AT, (Instant) null).updateAll();
-                OperationRun unapproved = restoreRun(tenantRestore(backup, tenant), "step 3");
+                OperationRun unapproved = restoreRun(tenantRestore(backup, tenant), tenant, "step 3");
                 assertThat(unapproved.status()).as("step 3: refused").isEqualTo(OperationRunStatus.REFUSED);
                 assertThat(unapproved.outcome()).as("step 3: naming the unapproved template").isNotNull()
                     .extracting(Microcopy::key).isEqualTo("template_not_approved");
@@ -347,7 +347,8 @@ class InstanceBackupsTest {
                     .filter(entry -> entry.name().equals("serverId")).findFirst().orElseThrow();
                 assertThat(((Select<?>) pick).options().resolve(EditContext.of(tenant)))
                     .as("step 4: a tenant is offered no host").isEmpty();
-                int copy = restoredInstance(restoreRun(tenantRestore(backup, tenant), "step 4"), "step 4");
+                int copy = restoredInstance(restoreRun(tenantRestore(backup, tenant), tenant, "step 4"), tenant,
+                    "step 4");
                 restored.add(copy);
                 Row copied = Models.get(InstanceModel.class).findById(copy);
                 assertThat((Integer) copied.get(InstanceModel.SERVER_ID))
@@ -953,21 +954,38 @@ class InstanceBackupsTest {
             .caller(TenantConduits.operator()).subjects(List.of(backup));
     }
 
-    /** A restore asked through its operation, waited until its background run ended. */
+    /** An operator's restore asked through its operation, waited until its background run ended. */
     private static OperationRun restoreRun(OperationRequest<Row, ?, ?> request, String step) {
-        Long run = OperationPipeline.invoke(request).run();
-        assertThat(run).as(step + ": the restore is a background run").isNotNull();
-        return PutOnlineJourneyTest.ended(run, TenantConduits.operator(), step);
+        return restoreRun(request, TenantConduits.operator(), step);
     }
 
     /**
-     * The instance a succeeded restore-to-new run made: the one record its finished step names, read as the newest.
+     * A restore asked through its operation, waited until its background run ended.
+     *
+     * AIDEV-NOTE: the run is read as {@code caller}, the request's own caller: a run is read by its starter alone
+     * unless its subject declares readers, and backups and instances declare none, so an operator never sees a
+     * tenant's run.
      */
+    private static OperationRun restoreRun(OperationRequest<Row, ?, ?> request, AccessContext caller, String step) {
+        Long run = OperationPipeline.invoke(request).run();
+        assertThat(run).as(step + ": the restore is a background run").isNotNull();
+        return PutOnlineJourneyTest.ended(run, caller, step);
+    }
+
+    /** The instance an operator's succeeded restore-to-new run made. */
     private static int restoredInstance(OperationRun run, String step) {
+        return restoredInstance(run, TenantConduits.operator(), step);
+    }
+
+    /**
+     * The instance a succeeded restore-to-new run made: the one record its finished step names, read as the newest;
+     * {@code caller} started the run, so it is the one who reads it.
+     */
+    private static int restoredInstance(OperationRun run, AccessContext caller, String step) {
         assertThat(run.status()).as(step + ": the restore run succeeded (%s)", run.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(OperationRuns.recentFor(InstanceOperations.INSTANCE, String.valueOf(newestInstanceId()), 5,
-                TenantConduits.operator())).extracting(OperationRun::id)
+                caller)).extracting(OperationRun::id)
             .as(step + ": the run is attached to the instance it made").contains(run.id());
         return newestInstanceId();
     }
