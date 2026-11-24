@@ -81,6 +81,7 @@ import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldGroup;
+import be.elevenways.zenit.common.edit.SiblingSubject;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -526,18 +527,36 @@ public final class InstanceParts {
         return Select.of(field)
             .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
             .judgedBySiblings(List.of(InstanceModel.KIND.getName(), PROJECT.getName(),
-                InstanceModel.ENVIRONMENT_ID.getName()), InstanceParts::placementSubject, InstanceParts::hostRefusal)
+                InstanceModel.ENVIRONMENT_ID.getName()), PLACEMENT, InstanceParts::hostRefusal)
             .build();
     }
 
     /**
      * What a host is judged for: the chosen kind, charged to the edited record's bucket or, on a create, to the bucket
-     * the create-into funnel charges for the chosen project or environment.
-     *
+     * the create-into funnel charges for the chosen project or environment; on submit, priced at the settings the same
+     * submit posts (the memory limit a create asks), which the render cannot know yet.
+     */
+    private static final SiblingSubject<HostSubject> PLACEMENT = new SiblingSubject<>() {
+        @Override
+        public @Nullable HostSubject subjectOf(@NonNull EditContext context, @NonNull Map<String, String> siblings) {
+            return placementSubject(context, siblings, null);
+        }
+
+        @Override
+        public @Nullable HostSubject subjectOf(@NonNull EditContext context, @NonNull Map<String, String> siblings,
+                                               @NonNull Map<String, ?> scopeValues) {
+            return placementSubject(context, siblings,
+                RawValues.mapOrNull(scopeValues.get(InstanceModel.SETTINGS.getName())));
+        }
+    };
+
+    /**
+     * @param posted the settings the submit posts, null where they are not known (the render)
      * @return null without a kind, or when the funnel refuses the chosen project (the save refuses it on that field)
      */
     private static @Nullable HostSubject placementSubject(@NonNull EditContext context,
-                                                          @NonNull Map<String, String> siblings) {
+                                                          @NonNull Map<String, String> siblings,
+                                                          @Nullable Map<String, Object> posted) {
         String kind = siblings.get(InstanceModel.KIND.getName());
         if (kind == null) {
             return null;
@@ -546,15 +565,28 @@ public final class InstanceParts {
         String bucket = stored != null ? stored.get(InstanceModel.QUOTA_BUCKET)
             : InstanceQuota.creationBucketInto(siblings.get(PROJECT.getName()),
                 siblings.get(InstanceModel.ENVIRONMENT_ID.getName()), context.accessContext());
-        return stored == null && bucket == null ? null : new HostSubject(kind, bucket);
+        return stored == null && bucket == null ? null
+            : new HostSubject(kind, bucket, posted == null ? null : Map.copyOf(withoutNulls(posted)));
+    }
+
+    /** @return the map without its null values, which an immutable copy cannot hold and a price never reads */
+    private static @NonNull Map<String, Object> withoutNulls(@NonNull Map<String, Object> values) {
+        Map<String, Object> kept = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (value != null) kept.put(key, value);
+        });
+        return kept;
     }
 
     /**
-     * A kind and the bucket its workload is charged to.
+     * A kind, the bucket its workload is charged to, and the settings it is priced at.
      *
-     * @param bucket null only for a stored record charged to none
+     * @param bucket   null only for a stored record charged to none
+     * @param settings the settings a submit posts, null where none are known: a create is then priced at its kind's
+     *                 default memory, a stored record at its own
      */
-    private record HostSubject(@NonNull String kind, @Nullable String bucket) {
+    private record HostSubject(@NonNull String kind, @Nullable String bucket,
+                               @Nullable Map<String, Object> settings) {
     }
 
     /**
@@ -574,10 +606,11 @@ public final class InstanceParts {
         if (handler == null) {
             return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", subject.kind());
         }
-        // A create's settings come in a later step, so a new workload is priced at its kind's default memory; a
-        // stored record at its own (InstancePlacement.createRefusalOn).
-        return InstancePlacement.createRefusalOn(serverId, handler, subject.bucket(),
-            stored == null ? Map.of() : InstanceModel.settingsOf(stored));
+        // Priced at what the submit asks (InstancePlacement.createRefusalOn); without it, a create at its kind's
+        // default memory and a stored record at its own.
+        Map<String, Object> settings = subject.settings() != null ? subject.settings()
+            : stored == null ? Map.of() : InstanceModel.settingsOf(stored);
+        return InstancePlacement.createRefusalOn(serverId, handler, subject.bucket(), settings);
     }
 
     /** @return the stored record the form edits, null on a create */

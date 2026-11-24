@@ -6813,7 +6813,7 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe.",
+    "text": "Host '{$name}' heeft geen ruimte voor deze app: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak geheugen van een andere app vrij of laat een extra host toe.",
     "scope": "violations"
   },
   "host_capacity_unproven": {

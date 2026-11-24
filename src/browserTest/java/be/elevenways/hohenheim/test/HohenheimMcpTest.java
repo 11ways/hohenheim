@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -21,8 +22,10 @@ import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -983,6 +986,118 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         } finally {
             local.restore();
         }
+    }
+
+    /**
+     * What a create asks is what it is judged by, a refusal names the argument that was sent, and a change writes only
+     * what it was sent: a create's memory limit decides whether its host has room, the refusal names {@code host}, and
+     * a site setting set and then cleared leaves its settings as empty as they were, its defaults still in force.
+     */
+    @Test
+    void aCreateIsJudgedByWhatItAsksAndAChangeWritesOnlyWhatItSends() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        Pattern appCodes = Pattern.compile("AP\\d+");
+        int hostId = HostFixtures.admittedDockerHost(PREFIX + "room-" + letters(), 4096);
+        // An application mounts volumes: its host needs a data root that can hold a quota.
+        VolumeBackends.store(Models.get(HostModel.class).findById(hostId),
+            new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
+        long filled = Objects.requireNonNull(InstanceCapacity.budgetMbOf(Models.get(HostModel.class)
+            .findById(hostId))) - 200;
+        InstanceCapacity.reserve(hostId, filled);
+        Integer appId = null;
+        try (FakeApps ignored = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
+                .getResolvedDatasource())) {
+            McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
+                "Test Admin");
+            String host = code(HostModel.MODEL_ID, hostId, TenantConduits.operator());
+
+            // 1. A host with 200 MB free: a create asking 256 MB is refused for 256 MB, naming the host argument and
+            //    never a stored column, a server or a workload.
+            for (String tool : List.of("app_docker_container_set", "app_application_set")) {
+                McpHttpSession.Answer refused = admin.call(tool, Map.of("name", PREFIX + "big-" + letters(),
+                    "host", host, "image", "fake/app", "tag", "v1", "container_port", 80, "memory_limit_mb", 256));
+                assertThat(refused.error()).as("step 1: " + tool + " refused: " + refused.text()).isTrue();
+                assertThat(refused.text()).as("step 1: " + tool + " names the argument and what it asked")
+                    .contains("host").contains("256").doesNotContain("server_id").doesNotContain("workload")
+                    .doesNotContain("server");
+            }
+
+            // 2. The same create asking 128 MB fits: the limit it sends decides, never its kind's default.
+            McpHttpSession.Answer created = admin.call("app_docker_container_set", Map.of("name", PREFIX + "small-"
+                + letters(), "host", host, "image", "fake/app", "tag", "v1", "container_port", 80,
+                "memory_limit_mb", 128));
+            assertThat(created.error()).as("step 2: " + created.text()).isFalse();
+            Matcher made = appCodes.matcher(created.text());
+            assertThat(made.find()).as("step 2: the answer names the app: " + created.text()).isTrue();
+            String app = made.group();
+            appId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID, app)));
+            assertThat(InstanceCapacity.bookedMbOn(hostId)).as("step 2: booked at what it asked")
+                .isEqualTo(filled + 128);
+
+            // 3. A site of the app kind whose settings are empty: one setting set is the one key stored.
+            String siteName = PREFIX + "walk-" + letters();
+            Row siteRow = Models.get(SiteModel.class).createEmptyRow();
+            siteRow.set(SiteModel.NAME, siteName);
+            siteRow.set(SiteModel.SLUG, siteName);
+            siteRow.set(SiteModel.UPSTREAM_KIND, InstanceUpstreamKind.ID.toString());
+            siteRow.set(SiteModel.INSTANCE_ID, appId);
+            siteRow.set(SiteModel.ENABLED, true);
+            siteRow.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+            siteRow.set(SiteModel.SETTINGS, new LinkedHashMap<>());
+            Models.get(SiteModel.class).save(siteRow);
+            int siteId = siteRow.get(SiteModel.ID);
+            String site = code(SiteModel.MODEL_ID, siteId, TenantConduits.operator());
+            McpHttpSession.Answer set = admin.call("site_app_set", Map.of("code", site, "idle_timeout", 900));
+            assertThat(set.error()).as("step 3: " + set.text()).isFalse();
+            assertThat(siteSettings(siteId)).as("step 3: only the setting sent is stored")
+                .containsExactly(Map.entry("idle_timeout", 900));
+
+            // 4. Cleared with null, its key goes: the settings are empty again and the defaults still apply.
+            Map<String, Object> cleared = new LinkedHashMap<>();
+            cleared.put("code", site);
+            cleared.put("idle_timeout", null);
+            McpHttpSession.Answer clearing = admin.call("site_app_set", cleared);
+            assertThat(clearing.error()).as("step 4: " + clearing.text()).isFalse();
+            Map<String, Object> settings = siteSettings(siteId);
+            assertThat(settings).as("step 4: nothing is stored, not even a null").isEmpty();
+            assertThat(RawValues.isOn(settings, InstanceUpstreamKind.WEBSOCKET_UPGRADE))
+                .as("step 4: the proxy still allows WebSockets by default").isTrue();
+            Map<String, Object> nulled = new LinkedHashMap<>();
+            nulled.put(InstanceUpstreamKind.WEBSOCKET_UPGRADE.getName(), null);
+            assertThat(RawValues.isOn(nulled, InstanceUpstreamKind.WEBSOCKET_UPGRADE))
+                .as("step 4: a stored null still reads as the default at the proxy").isTrue();
+            assertThat(InstanceUpstreamKind.schemeOf(settings)).as("step 4: and forwards over http").isEqualTo("http");
+
+            // 5. An app's setting set and then cleared with null leaves no key behind either.
+            assertThat(admin.call("app_docker_container_set", Map.of("code", app, "command", "serve --quiet"))
+                .error()).as("step 5: set").isFalse();
+            Map<String, Object> clearedCommand = new LinkedHashMap<>();
+            clearedCommand.put("code", app);
+            clearedCommand.put("command", null);
+            McpHttpSession.Answer clearedApp = admin.call("app_docker_container_set", clearedCommand);
+            assertThat(clearedApp.error()).as("step 5: cleared: " + clearedApp.text()).isFalse();
+            assertThat(RawValues.map(Models.get(InstanceModel.class).find().noCache()
+                    .where(InstanceModel.ID.eq(appId)).first().get(InstanceModel.SETTINGS)))
+                .as("step 5: the cleared command is no key at all").doesNotContainKey("command")
+                .containsEntry("memory_limit_mb", 128);
+        } finally {
+            if (appId != null) {
+                for (Row site : Models.get(SiteModel.class).find().withTrashed()
+                        .where(SiteModel.INSTANCE_ID.eq(appId)).all()) {
+                    HardDeletes.byId(Models.get(SiteModel.class), site.get(SiteModel.ID));
+                }
+                HardDeletes.byId(Models.get(InstanceModel.class), appId);
+            }
+            InstanceCapacity.release(hostId, filled);
+            HardDeletes.byId(Models.get(HostModel.class), hostId);
+        }
+    }
+
+    /** @return the site's stored settings, read past the cache */
+    private static Map<String, Object> siteSettings(int siteId) {
+        return RawValues.map(Models.get(SiteModel.class).find().noCache().where(SiteModel.ID.eq(siteId)).first()
+            .get(SiteModel.SETTINGS));
     }
 
     /**

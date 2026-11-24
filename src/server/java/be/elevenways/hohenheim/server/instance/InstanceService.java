@@ -217,6 +217,40 @@ public final class InstanceService {
     }
 
     /**
+     * THE start verb of every surface's power start: {@link #deploy(int, DeployTrigger)}, except that a workspace
+     * deploying its source comes back up with the checkout it already has.
+     *
+     * AIDEV-NOTE: found 2026-11-24 on the rehearsal host. A start of a stopped source workspace ran the whole source
+     * deploy: its bring-up started the container for the checkout, the build then failed, and power start answered
+     * that failure over a workspace that was running. A start is not a deploy: once the workspace ran, its files are in
+     * its home and only Deploy fetches and builds new ones. A workspace that never ran still deploys its source on its
+     * first start; when that fails, the container brought up for the checkout is taken down again, so the answer and
+     * the record agree.
+     *
+     * @throws Violations naming why it did not start; the workspace is then left down
+     */
+    public @NonNull InstanceStatus start(int instanceId, @NonNull DeployTrigger trigger) {
+        return operation(instanceId, () -> {
+            Row row = liveRow(instanceId);
+            if (row == null || !WorkspaceBuilds.deploysSource(row)) {
+                return deployNow(instanceId, trigger);
+            }
+            if (!InstanceModel.STATUS_CREATED.equals(row.get(InstanceModel.STATUS))) {
+                admitDeploy(instanceId, trigger);
+                return deployWorkloadNow(instanceId, trigger, null, false);
+            }
+            try {
+                return deployNow(instanceId, trigger);
+            } catch (RuntimeException failed) {
+                if (liveStatus(instanceId).state() == ContainerState.RUNNING) {
+                    stop(instanceId);
+                }
+                throw failed;
+            }
+        });
+    }
+
+    /**
      * THE deploy admission every lane asks before it spends anything: the power gate and
      * the databases-ready guard, thrown as the same named Violations on every surface.
      *

@@ -6813,7 +6813,7 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' has no room for this workload: it needs {$needed :bytes} and only {$free :bytes} of its memory budget is free. Choose a smaller memory limit, free a workload, or admit another host.",
+    "text": "Host '{$name}' has no room for this app: it needs {$needed :bytes} and only {$free :bytes} of its memory budget is free. Choose a smaller memory limit, free memory another app holds, or admit another host.",
     "scope": "violations"
   },
   "host_capacity_unproven": {

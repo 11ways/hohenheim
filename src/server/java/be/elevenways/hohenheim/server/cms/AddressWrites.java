@@ -59,6 +59,10 @@ public final class AddressWrites {
         SiteDomainModel.HSTS_ENABLED, SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
         SiteDomainModel.CUSTOM_HEADERS, SiteDomainModel.RESPONSE_HEADERS);
 
+    /** The record each linking argument names, by the address's own column; a refusal names it back. */
+    private static final Map<String, Field<?, ?>> LINKS = Map.of(SITE, SiteDomainModel.SITE_ID,
+        CERTIFICATE, SiteDomainModel.CERTIFICATE_ID);
+
     /** A create has no subject to key its command by: the request id alone answers the first result. */
     private static final OperationCommand CREATES = OperationCommand.perVerb().onDatasource("default");
 
@@ -137,8 +141,8 @@ public final class AddressWrites {
             raw.put(SiteDomainModel.CERTIFICATE_ID.getName(), String.valueOf(input.get(CERTIFICATE)));
         }
         Panel panel = panelOf(caller);
-        Object key = KindSettingsWrites.speaking(SETTINGS, "", () -> ResourceWrites.create(panel, addresses(panel),
-            KindSettingsWrites.posted(SETTINGS, raw), caller));
+        Object key = KindSettingsWrites.speaking(SETTINGS, "", LINKS, () -> ResourceWrites.create(panel,
+            addresses(panel), KindSettingsWrites.posted(SETTINGS, raw), caller));
         return Integer.valueOf(String.valueOf(key));
     }
 
@@ -163,8 +167,9 @@ public final class AddressWrites {
             .ID)));
         if (raw.isEmpty()) return KindSettingsWrites.changedLine(code, "");
         Panel panel = panelOf(caller);
-        KindSettingsWrites.speaking(SETTINGS, "", () -> ResourceWrites.update(panel, addresses(panel),
-            Objects.requireNonNull(address.get(SiteDomainModel.ID)), address, KindSettingsWrites.posted(SETTINGS, raw),
+        KindSettingsWrites.speaking(SETTINGS, "", LINKS, () -> ResourceWrites.update(panel, addresses(panel),
+            Objects.requireNonNull(address.get(SiteDomainModel.ID)), address,
+            KindSettingsWrites.posted(SETTINGS, raw),
             caller));
         return KindSettingsWrites.changedLine(code, String.join(", ", sent));
     }

@@ -65,6 +65,10 @@ public final class AppKindWrites {
     /** The argument naming the backup target an app's backups go to. */
     public static final String BACKUP_TARGET = "backup_target";
 
+    /** The record each linking argument names, by the app's own column it is written into; a refusal names it back. */
+    private static final Map<String, Field<?, ?>> LINKS = Map.of(HOST, InstanceModel.HOST_ID,
+        PROJECT, InstanceParts.PROJECT, BACKUP_TARGET, InstanceModel.BACKUP_TARGET_ID);
+
     /**
      * Creates and changes run as one command of their caller, so the same request id answers the first result.
      *
@@ -141,17 +145,15 @@ public final class AppKindWrites {
             throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, words.describe(), words);
         }
         Map<String, Object> raw = APPS.created(kind, input);
-        Object host = input.get(HOST);
-        if (host != null) raw.put(InstanceModel.HOST_ID.getName(), Integer.valueOf(String.valueOf(host)));
-        Object project = input.get(PROJECT);
-        if (project != null) raw.put(InstanceParts.PROJECT.getName(), Integer.valueOf(String.valueOf(project)));
-        Object target = input.get(BACKUP_TARGET);
-        if (target != null) raw.put(InstanceModel.BACKUP_TARGET_ID.getName(), Integer.valueOf(String.valueOf(target)));
+        LINKS.forEach((argument, column) -> {
+            Object linked = input.get(argument);
+            if (linked != null) raw.put(column.getName(), Integer.valueOf(String.valueOf(linked)));
+        });
         Map<String, Object> settings = RawValues.map(raw.get(InstanceModel.SETTINGS.getName()));
         raw.put(InstanceModel.SETTINGS.getName(), KindSettingsWrites.posted(kind.schema().getFields().values(),
             settings));
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH,
+        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS,
             () -> ResourceWrites.create(panel, instances(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -196,7 +198,10 @@ public final class AppKindWrites {
         boolean settingsSent = turned;
         for (Field<?, ?> field : kind.settings()) {
             if (!sent.contains(field.getInputName())) continue;
-            settings.put(field.getName(), input.get(field.getInputName()));
+            // Null clears a setting by taking its key away, so its kind's default applies again, never a stored null.
+            Object value = input.get(field.getInputName());
+            if (value == null) settings.remove(field.getName());
+            else settings.put(field.getName(), value);
             written.add(field.getInputName());
             settingsSent = true;
         }
@@ -211,7 +216,7 @@ public final class AppKindWrites {
         }
         if (raw.isEmpty()) return "";
         Panel panel = admin ? ApiConduits.adminPanel() : ApiConduits.managePanel();
-        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, () -> ResourceWrites.update(panel,
+        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS, () -> ResourceWrites.update(panel,
             instances(panel), Objects.requireNonNull(app.get(InstanceModel.ID)), app, raw, caller));
         return String.join(", ", written);
     }

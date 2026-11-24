@@ -346,7 +346,16 @@ public final class KindSettingsWrites {
     /** Runs a write of stored values that answers nothing, its refusals naming each field by its input name. */
     static void speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
                          @NonNull Runnable write) {
-        speaking(fields, prefix, () -> {
+        speaking(fields, prefix, Map.of(), write);
+    }
+
+    /**
+     * Runs a write of stored values that answers nothing, its refusals naming each field by its input name and each
+     * linked record's column by the argument that set it.
+     */
+    static void speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
+                         @NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Runnable write) {
+        speaking(fields, prefix, columns, () -> {
             write.run();
             return null;
         });
@@ -359,6 +368,18 @@ public final class KindSettingsWrites {
      */
     static <T> T speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
                           @NonNull Supplier<T> write) {
+        return speaking(fields, prefix, Map.of(), write);
+    }
+
+    /**
+     * Runs a write of stored values, its refusals naming each field by its input name and each linked record's column
+     * by the argument that set it, as the caller named them.
+     *
+     * @param prefix  the path the fields' values sit under in the write, empty for a record's own columns
+     * @param columns argument name to the record's own column the argument writes (a host's code into server_id)
+     */
+    static <T> T speaking(@NonNull Collection<? extends Field<?, ?>> fields, @NonNull String prefix,
+                          @NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Supplier<T> write) {
         try {
             return write.get();
         } catch (Violations refused) {
@@ -366,11 +387,14 @@ public final class KindSettingsWrites {
             for (Violation violation : refused.all()) {
                 String path = violation.path();
                 String fieldName = violation.fieldName();
-                for (Field<?, ?> field : fields) {
-                    String stored = prefix + field.getName();
+                Map<String, String> named = new LinkedHashMap<>();
+                for (Field<?, ?> field : fields) named.put(prefix + field.getName(), field.getInputName());
+                columns.forEach((argument, column) -> named.put(column.getName(), argument));
+                for (Map.Entry<String, String> name : named.entrySet()) {
+                    String stored = name.getKey();
                     if (path.equals(stored) || path.startsWith(stored + ".")) {
-                        path = field.getInputName() + path.substring(stored.length());
-                        fieldName = field.getInputName();
+                        path = name.getValue() + path.substring(stored.length());
+                        fieldName = name.getValue();
                         break;
                     }
                 }

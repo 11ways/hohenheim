@@ -296,6 +296,58 @@ class WorkspacePushPolicyTest {
             .isEqualTo(DeployTrigger.WEBHOOK);
     }
 
+    /**
+     * A power start tells the truth: a stopped workspace whose build now fails comes back up with the checkout it has
+     * and no build, and a first start whose build fails answers the failure over a workspace left down.
+     */
+    @Test
+    void aStartNeverAnswersAFailureOverAWorkspaceThatRuns() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            int id = FakeWorkspaceDaemon.sourceWorkspace("start-truth", hostId, "make");
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
+            try {
+                // 1. Its first start deploys its source, as before.
+                daemon.buildExitCode = 0;
+                assertThat(service.start(id, DeployTrigger.API).running()).as("step 1: the first start runs it")
+                    .isTrue();
+                int operations = operationCount(id);
+
+                // 2. Stopped, its build now failing: a start brings it back without a checkout or a build.
+                service.stop(id);
+                daemon.buildExitCode = 1;
+                int execs = daemon.execs.size();
+                assertThat(service.start(id, DeployTrigger.API).running()).as("step 2: started, no failure answered")
+                    .isTrue();
+                assertThat(daemon.isRunning(handle)).as("step 2: it runs").isTrue();
+                assertThat(daemon.execs).as("step 2: nothing was checked out or built").hasSize(execs);
+                assertThat(operationCount(id)).as("step 2: no deploy was recorded").isEqualTo(operations);
+                assertThat((String) Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS))
+                    .as("step 2: the record reads running").isEqualTo(InstanceModel.STATUS_RUNNING);
+
+                // 3. A workspace that never ran, whose build fails: its start answers the failure and leaves it down.
+                int fresh = FakeWorkspaceDaemon.sourceWorkspace("start-truth-fresh", hostId, "make");
+                Throwable failed = catchThrowable(() -> service.start(fresh, DeployTrigger.API));
+                assertThat(failed).as("step 3: the failed build is answered").isInstanceOf(Violations.class)
+                    .hasMessageContaining("workspace_build_failed");
+                assertThat(daemon.isRunning(ControllerScope.handle(ControllerScope.KIND_INSTANCE, fresh)))
+                    .as("step 3: the container brought up for its checkout is down again").isFalse();
+                assertThat((String) Models.get(InstanceModel.class).findById(fresh).get(InstanceModel.STATUS))
+                    .as("step 3: and the record does not read running")
+                    .isNotEqualTo(InstanceModel.STATUS_RUNNING);
+            } finally {
+                daemon.buildExitCode = 0;
+            }
+        });
+    }
+
+    private static int operationCount(int instanceId) {
+        return (int) Models.get(BuildOperationModel.class).find()
+            .where(BuildOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(BuildOperationModel.FOR_ID.eq(instanceId))
+            .count();
+    }
+
     private static Row lastOperation(int instanceId) {
         List<Row> rows = Models.get(BuildOperationModel.class).find()
             .where(BuildOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))

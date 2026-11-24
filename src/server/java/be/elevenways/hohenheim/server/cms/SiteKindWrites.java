@@ -58,6 +58,10 @@ public final class SiteKindWrites {
     /** The argument naming the access list every request of the site must pass. */
     public static final String ACCESS_LIST = "access_list";
 
+    /** The record each linking argument names, by the site's own column it is written into; a refusal names it back. */
+    private static final Map<String, Field<?, ?>> LINKS = Map.of(APP, SiteModel.INSTANCE_ID,
+        ACCESS_LIST, SiteModel.ACCESS_LIST_ID);
+
     /** What the delegated save writes: the name, the switch and the description. */
     private static final Set<String> DELEGATED = Set.of(SiteModel.NAME.getName(), SiteModel.ENABLED.getName(),
         SiteModel.DESCRIPTION.getName());
@@ -136,7 +140,7 @@ public final class SiteKindWrites {
             raw.put(SiteModel.ACCESS_LIST_ID.getName(), String.valueOf(input.get(ACCESS_LIST)));
         }
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH,
+        Object key = KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS,
             () -> ResourceWrites.create(panel, sites(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -176,18 +180,23 @@ public final class SiteKindWrites {
         raw.put(SiteModel.ACCESS_LIST_ID.getName(), idText(sent.contains(ACCESS_LIST) ? input.get(ACCESS_LIST)
             : site.get(SiteModel.ACCESS_LIST_ID)));
         raw.put(SiteModel.AUTH_PROVIDER_ID.getName(), idText(site.get(SiteModel.AUTH_PROVIDER_ID)));
-        // A setting the tool does not offer (an app site's port, which nothing honours) stays as it is stored.
-        Map<String, Object> kept = turned ? Map.of() : RawValues.map(site.get(SiteModel.SETTINGS));
+        // Only what the call sent changes: a setting it left out stays as stored (absent stays absent, so its kind's
+        // default keeps applying), and null clears one by taking its key away. A setting the tool does not offer (an
+        // app site's port, which nothing honours) stays as it is stored too, except on a site turned from another kind.
+        Map<String, Object> kept = RawValues.map(site.get(SiteModel.SETTINGS));
         Map<String, Object> settings = new LinkedHashMap<>();
         for (Field<?, ?> field : kind.schema().getFields().values()) {
-            settings.put(field.getName(), kind.settings().contains(field) ? input.get(field.getInputName())
-                : kept.get(field.getName()));
+            String name = field.getName();
+            boolean given = kind.settings().contains(field) && sent.contains(field.getInputName());
+            Object value = given ? input.get(field.getInputName())
+                : turned && !kind.settings().contains(field) ? null : kept.get(name);
+            if (value != null) settings.put(name, value);
         }
         raw.put(SiteModel.SETTINGS.getName(), settings);
         if (turned) written.add(0, SiteModel.UPSTREAM_KIND.getName());
         Panel panel = ApiConduits.adminPanel();
-        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, () -> ResourceWrites.update(panel, sites(panel),
-            Objects.requireNonNull(site.get(SiteModel.ID)), site, raw, caller));
+        KindSettingsWrites.speaking(kind.settings(), SETTINGS_PATH, LINKS, () -> ResourceWrites.update(panel,
+            sites(panel), Objects.requireNonNull(site.get(SiteModel.ID)), site, raw, caller));
         return String.join(", ", written);
     }
 

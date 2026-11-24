@@ -385,7 +385,7 @@ public final class InstanceOperationHandlers {
                 "instance " + instanceId + " uses a database that is not active", notReady);
         }
         DeployTrigger trigger = triggerOf(call.surface());
-        new InstanceService().deploy(instanceId, trigger);
+        new InstanceService().start(instanceId, trigger);
         return new PowerResult(statusOf(instanceId), trigger.word(), false);
     }
 
