@@ -1,76 +1,73 @@
 package be.elevenways.hohenheim.cluster;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.StateBadge;
-import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.text.Texts;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 /**
- * Where a linked server stands as the Servers list, the dashboard and the alerts say it: one verdict per row, read
- * from the state the probe wrote and this server's own version.
+ * Where a linked server stands as the Servers list, its page, the dashboard and the alerts say it: one verdict per
+ * row, read from the state the probe wrote and this server's own version.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-public enum LinkState implements StateBadge {
+public enum LinkState {
 
     /** It answered the last call, running this server's version. */
-    REACHABLE("reachable", BadgeVariant.SUCCESS),
+    REACHABLE("reachable", HealthTone.OK),
 
     /** Nothing was asked of it yet. */
-    NOT_CHECKED("not_checked", BadgeVariant.SECONDARY),
+    NOT_CHECKED("not_checked", HealthTone.UNKNOWN),
 
     /** The calls fail: nothing came back, or nothing readable. */
-    NOT_ANSWERING("not_answering", BadgeVariant.WARNING),
+    NOT_ANSWERING("not_answering", HealthTone.ATTENTION),
 
     /** It answers, refusing the key this server presents. */
-    REFUSING("refusing", BadgeVariant.WARNING),
+    REFUSING("refusing", HealthTone.ATTENTION),
 
     /** Another database answers at its address; nothing more is sent there. */
-    OTHER_SERVER("other_server", BadgeVariant.DESTRUCTIVE),
+    OTHER_SERVER("other_server", HealthTone.BROKEN),
 
     /** It answers, running another version than this server. */
-    OTHER_VERSION("other_version", BadgeVariant.WARNING),
+    OTHER_VERSION("other_version", HealthTone.ATTENTION),
 
     /**
      * Its database was restored to an earlier state: a kind's generation went below what this server keeps, and
      * nothing of that kind is taken until a person decides.
      */
-    RESTORED("restored", BadgeVariant.WARNING);
+    RESTORED("restored", HealthTone.ATTENTION);
 
     private final String token;
-    private final BadgeVariant variant;
+    private final HealthTone tone;
 
-    LinkState(@NonNull String token, @NonNull BadgeVariant variant) {
+    LinkState(@NonNull String token, @NonNull HealthTone tone) {
         this.token = token;
-        this.variant = variant;
+        this.tone = tone;
     }
 
-    @Override
+    /** @return the stable token a check answers and the words' key ends in */
     public @NonNull String token() {
         return this.token;
     }
 
-    @Override
-    public @NonNull BadgeVariant variant() {
-        return this.variant;
+    /** @return the verdict's tone, which colours the state's pill */
+    public @NonNull HealthTone tone() {
+        return this.tone;
     }
 
     /** @return whether the dashboard raises an attention item for a server in this state */
     public boolean needsAttention() {
-        return switch (this) {
-            case NOT_ANSWERING, REFUSING, OTHER_SERVER, OTHER_VERSION, RESTORED -> true;
-            case REACHABLE, NOT_CHECKED -> false;
-        };
+        return this.tone.needsAttention();
     }
 
     /**
@@ -108,16 +105,20 @@ public enum LinkState implements StateBadge {
         return ownVersion.equals(row.get(LinkedServerModel.BUILD)) ? REACHABLE : OTHER_VERSION;
     }
 
-    /** @return the state cell of a linked server's row: the badge, and why the calls fail under it */
-    public static @NonNull StateLineCell cell(@NonNull Row row, @NonNull String ownVersion) {
+    /**
+     * @param row        a linked server
+     * @param ownVersion this server's version, what an answering server is compared with
+     * @return the verdict of that server's row: its state in words, and why the calls fail
+     */
+    public static @NonNull RecordHealth verdict(@NonNull Row row, @NonNull String ownVersion) {
         LinkState state = of(row, ownVersion);
         LinkFailure failure = LinkFailure.byToken(row.get(LinkedServerModel.LAST_FAILURE));
-        return StateLineCell.of(state, state.label(row.get(LinkedServerModel.FAILING_SINCE)),
-            failure == null ? null : failure.label());
+        return new RecordHealth(state.tone, state.label(row.get(LinkedServerModel.FAILING_SINCE)),
+            failure == null ? null : failure.label(), List.of(), null);
     }
 
-    /** @return the state cell of this server's own row, which answers by being the one asked */
-    public static @NonNull StateLineCell ownCell() {
-        return StateLineCell.of(REACHABLE, REACHABLE.label(null), null);
+    /** @return the verdict of this server's own row, which answers by being the one asked */
+    public static @NonNull RecordHealth ownVerdict() {
+        return new RecordHealth(REACHABLE.tone, REACHABLE.label(null), null, List.of(), null);
     }
 }

@@ -48,7 +48,6 @@ import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.TextBlockWidget;
-import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -112,9 +111,6 @@ final class LinkedServerPage {
         LocaleChain locales = conduit == null ? access.locales() : conduit.getLocales();
         MessageResolver resolver = conduit == null ? null : conduit.getMessageResolver();
         List<WidgetFact> facts = new ArrayList<>();
-        facts.add(WidgetFact.badge(text(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_state"), locales,
-            resolver), new WidgetBadge(server.state().label().resolve(locales, resolver),
-            server.state().variant(), null, null, true)));
         Row linked = linkedOf(server);
         String address = linked == null ? ExternalUrls.configuredBase() : linked.get(LinkedServerModel.BASE_URL);
         facts.add(WidgetFact.of(text(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_address"), locales, resolver),

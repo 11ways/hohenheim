@@ -3,7 +3,7 @@ admission - verdict=admitted
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=note relation=false
 column note at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column health_state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column build at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column last_seen_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column apps at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false

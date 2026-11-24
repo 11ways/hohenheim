@@ -4,7 +4,7 @@
 {% declare widget: WidgetInstance %}
 {% declare data: JoinCodeShown = null %}
 {% if data != null %}
-<pl-one-time-secret variant="success" size="lg" heading={% t("linked_server_join_code", scope: "linked_server") %}
+<pl-one-time-secret variant="success" size="xl" heading={% t("linked_server_join_code", scope: "linked_server") %}
                     warning={% t("linked_server_code_shown", scope: "linked_server", until: data.until) %}
                     value={% data.code %} data-hh-join-code></pl-one-time-secret>
 {% if data.renumbered > 0 %}

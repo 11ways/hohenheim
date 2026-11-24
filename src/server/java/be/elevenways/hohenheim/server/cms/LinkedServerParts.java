@@ -5,8 +5,6 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.cluster.JoinCodeShown;
 import be.elevenways.hohenheim.cluster.LinkRole;
@@ -25,6 +23,8 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
@@ -97,23 +97,20 @@ public final class LinkedServerParts {
     /** The hidden column whose words stand as muted text under a row's name: what that server is to this one. */
     private static final String NOTE_COLUMN = "note";
 
-    /** The drawn column no field carries: the state badge with why the calls fail. */
-    private static final String STATE_COLUMN = "state";
-
     /**
      * One row of the Servers list.
      *
      * @param key        the linked server's id, or {@link #OWN_KEY} for this server
      * @param name       what the row is called
-     * @param note       the muted line under the name, null for none
-     * @param state      the state cell
+     * @param state      where it stands: the state in words and why the calls fail, read by the list's state and why
+     *                   columns and beside the title on its page
      * @param version    the version it runs, null when it never answered
      * @param lastAnswer when it last answered, null for this server and one never answering
      * @param apps       how many apps that server counts, as it last said; null before it said
      * @param sites      how many sites that server holds, as it last said; null before it said
      */
     public record ServerRow(@NonNull String key, @NonNull String name, @Nullable Microcopy note,
-                            @NonNull StateLineCell state, @Nullable String version, @Nullable Instant lastAnswer,
+                            @NonNull RecordHealth state, @Nullable String version, @Nullable Instant lastAnswer,
                             @Nullable Integer apps, @Nullable Integer sites) {
 
         /** @return whether this is this server's own row */
@@ -238,12 +235,13 @@ public final class LinkedServerParts {
             .column(ColumnSpec.fromField(LinkedServerModel.NAME).label(SERVER).subtext(NOTE_COLUMN).build())
             .column(ColumnSpec.virtual(NOTE_COLUMN, HohenheimMicrocopy.LINKED_SERVER.of("linked_server_note"))
                 .hidden().build())
-            .column(ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.LINKED_SERVER.of("linked_server_state"))
-                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
+            .column(ResourceHealth.stateColumn(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_state")))
             .column(ColumnSpec.fromField(LinkedServerModel.BUILD).build())
             .column(ColumnSpec.fromField(LinkedServerModel.LAST_SEEN_AT).build())
             .column(ColumnSpec.fromField(LinkedServerModel.APPS).build())
             .column(ColumnSpec.fromField(LinkedServerModel.SITES).build())
+            // Check now and Remove side by side in a linked server's row, as on its page.
+            .inlineRowActions(2)
             .build();
         return PanelResource.builder(HohenheimIds.id("linked_server"), HohenheimSlugs.LINKED_SERVERS, SUBJECT)
             // The cluster's own name: a record's trail then names the cluster and its landing once (Servers / Kuifje).
@@ -255,7 +253,9 @@ public final class LinkedServerParts {
             .list(ResourceList.store(table, StorePages.inMemory(table, access -> rows(),
                     (row, column) -> values(row).get(column.name())),
                     LiveFeed.of(AccessContext::isAccount, LinkedServerModel.MODEL_ID))
-                .chrome(ListChrome.MINIMAL)
+                // Add a Hohenheim server and the join code's button stand in the page's heading, the card's tool
+                // line left to what works on the rows; a row keeps Check now and Remove as buttons.
+                .chrome(ListChrome.MINIMAL.withVerbInHeader(true).withRowActionKept(true))
                 .rowLinkToTab(RecordOverview.SLUG)
                 .widgetsBelow(LinkedServerParts::joinCard)
                 .build())
@@ -264,6 +264,8 @@ public final class LinkedServerParts {
                 .values(LinkedServerParts::values)
                 .build()
                 .title(row -> Microcopy.literalOrNull(row.name())))
+            // One verdict for the list's state and why columns and the pill beside a server's name on its page.
+            .health(ResourceHealth.<ServerRow>of((row, access) -> row.state()).besideTitle())
             .tabs(ResourceTabs.of(List.of(LinkedServerPage.overview(), new LinkedServerPage.Remembered())))
             .actions(List.of(offerJoinAction(), addAction(), checkAction(), removeAction()))
             .build();
@@ -317,6 +319,10 @@ public final class LinkedServerParts {
             .build();
     }
 
+    /**
+     * Stands beside Check now, in the row and on the server's page, as a routine verb: ending a link deletes no app,
+     * site or other record on either server, and its confirmation still warns of what it ends.
+     */
     private static @NonNull PanelAction<ServerRow> removeAction() {
         return PanelAction.<ServerRow, String>places(REMOVE, ActionPlacement.ROW,
                 (request, outcome) -> {
@@ -327,7 +333,7 @@ public final class LinkedServerParts {
                 })
             .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remove"))
             .icon(Icon.of("link-slash"))
-            .style(ActionStyle.DESTRUCTIVE)
+            .inDestructiveTail(false)
             .hiddenWhen(ServerRow::own)
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remove"),
                 HohenheimMicrocopy.LINKED_SERVER.of("linked_server_remove_confirm"), ActionStyle.DESTRUCTIVE))
@@ -349,7 +355,7 @@ public final class LinkedServerParts {
     private static @NonNull ServerRow ownRow(@NonNull String version) {
         InstallationCounts counts = InstallationCounts.read();
         return new ServerRow(OWN_KEY, LinkedServers.ownName(),
-            HohenheimMicrocopy.LINKED_SERVER.of("linked_server_this_server"), LinkState.ownCell(), version, null,
+            HohenheimMicrocopy.LINKED_SERVER.of("linked_server_this_server"), LinkState.ownVerdict(), version, null,
             counts.apps(), counts.sites());
     }
 
@@ -358,7 +364,7 @@ public final class LinkedServerParts {
             String.valueOf((Object) linked.get(LinkedServerModel.NAME)),
             LinkedServers.roleOf(linked) == LinkRole.MANAGED_BY
                 ? HohenheimMicrocopy.LINKED_SERVER.of("linked_server_manages_this") : null,
-            LinkState.cell(linked, version), linked.get(LinkedServerModel.BUILD),
+            LinkState.verdict(linked, version), linked.get(LinkedServerModel.BUILD),
             linked.get(LinkedServerModel.LAST_SEEN_AT), linked.get(LinkedServerModel.APPS),
             linked.get(LinkedServerModel.SITES));
     }
@@ -391,7 +397,6 @@ public final class LinkedServerParts {
         Map<String, Object> values = new HashMap<>();
         values.put(LinkedServerModel.NAME.getName(), row.name());
         values.put(NOTE_COLUMN, row.note());
-        values.put(STATE_COLUMN, row.state());
         values.put(LinkedServerModel.BUILD.getName(), row.version());
         values.put(LinkedServerModel.LAST_SEEN_AT.getName(), row.lastAnswer());
         values.put(LinkedServerModel.APPS.getName(), row.apps());

@@ -85,6 +85,12 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             .contains("Servers");
         String tabs = page.locator("[data-cms-cluster-tabs]").first().textContent();
         assertThat(tabs).as("step 1: the Servers and Hosts tabs").contains("Servers").contains("Hosts");
+        // The page's own verbs stand in its heading, never on the card's tool line.
+        Locator heading = page.locator("pl-page-header-actions[data-cms-verbs-in-header]");
+        assertThat(heading.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+            .setName("Add a Hohenheim server")).count()).as("step 1: Add stands in the heading").isEqualTo(1);
+        assertThat(page.locator(".cms-list-card").getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+            .setName("Add a Hohenheim server")).count()).as("step 1: and not on the card's tools").isZero();
 
         // 2. This server is the first row: its name, "This server" in muted text under it (never a badge), reachable,
         //    under the column head "Server"; the list repeats no sentence of the page's own; an unmanaged server
@@ -136,6 +142,8 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
         BoundedAssertions.assertThat(shown).isVisible();
         assertThat(shown.textContent()).as("step 4: the code, once, with until when it is valid")
             .containsPattern("[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}").contains("Shown once, valid until");
+        assertThat(shown.locator("pl-code").getAttribute("size")).as("step 4: drawn at the read-off size")
+            .isEqualTo("xl");
         assertThat(shown.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Copy")).count())
             .as("step 4: the code can be copied").isPositive();
         shown.scrollIntoViewIfNeeded();
@@ -202,6 +210,10 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
                 .as("step 1: Kuifje's own apps").isEqualTo("12");
             assertThat(row.locator("pl-table-cell[data-column='sites']").textContent().trim())
                 .as("step 1: Kuifje's own sites").isEqualTo("6");
+            for (String verb : List.of("Check now", "Remove")) {
+                BoundedAssertions.assertThat(row.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+                    .setName(verb).setExact(true))).isVisible();
+            }
             shoot("servers-counts");
 
             // 2. Its name opens its page under a trail naming the Servers cluster once: its facts, then what this
@@ -214,6 +226,15 @@ class LinkedServersBrowserTest extends HohenheimTestBase {
             assertThat(page.locator("[data-cms-trail] pl-breadcrumb-item").allTextContents().stream()
                 .map(String::trim).toList()).as("step 2: Servers once, then the server")
                 .containsExactly("Servers", "Kuifje");
+            Locator head = page.locator("[data-cms-record-head]");
+            assertThat(head.locator("h1 [data-cms-record-state] [data-cms-health-state='ok']").textContent().trim())
+                .as("step 2: its state beside its name").isEqualTo("Reachable");
+            for (String verb : List.of("Check now", "Remove")) {
+                BoundedAssertions.assertThat(head.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions()
+                    .setName(verb).setExact(true))).isVisible();
+            }
+            assertThat(head.locator("[data-cms-record-overflow]").count())
+                .as("step 2: Remove stands beside Check now, no More menu holds it").isZero();
             String content = page.content();
             assertThat(content).as("step 2: its facts").contains("https://kuifje.example.test")
                 .contains("Managed from this server since");
