@@ -9,10 +9,9 @@ import java.util.List;
 /**
  * The schema changes after M004: the Hohenheim servers this one is linked to, and the join codes it issued.
  *
- * AIDEV-NOTE: PUBLISHED: declared published (HohenheimMigration.PUBLISHED, pinned in migration-pins.txt) when M006
- * opened, as the chain allows one open migration; it lands together with M006 and the live hosts apply both at their
- * next deploy. It is frozen: a schema change from now on edits M006; never edit this one again. Both tables start
- * empty: an upgraded server is linked to nothing and behaves as before. down() undoes exactly what up() did.
+ * AIDEV-NOTE: PUBLISHED: starfleet, robbedoes and kuifje applied it on 2026-11-24 (pinned in migration-pins.txt), so
+ * it is frozen; never edit this one again. Both tables start empty: an upgraded server is linked to nothing and
+ * behaves as before. down() undoes exactly what up() did.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
