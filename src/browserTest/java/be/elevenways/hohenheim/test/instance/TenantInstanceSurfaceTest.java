@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
@@ -495,10 +496,12 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .as("step 3: still nothing persisted").isZero();
 
             // 4. An operator admits a host with a posture that accepts hostile containers. A tenant is never
-            //    asked the host: one it NAMES ANYWAY is refused and nothing lands; without it, placement decides.
+            //    offered the host pick: a host it NAMES ANYWAY (the field's own input name) is refused and nothing
+            //    lands; without it, placement decides.
             admittedHostId = admittedHost();
             HttpResponse<String> named = tenantPost(createUrl, "name=" + PREFIX + "created"
-                + "&serverId=" + HostModel.localHostId() + "&" + ApiSupport.fromTemplateTransport());
+                + "&" + InstanceTemplateOperations.HOST_ID.getInputName() + "=" + HostModel.localHostId() + "&"
+                + ApiSupport.fromTemplateTransport());
             assertThat(named.statusCode()).as("step 4: a tenant-named host is refused").isEqualTo(422);
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())

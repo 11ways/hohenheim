@@ -68,7 +68,7 @@ class FormRefusalVisibilityTest extends HohenheimHttpTestBase {
         // refusal naming the bad hostnames -- pinned because a curl-only probe once read this refusal as "and then
         // nothing".
         var commaDomains = adminPostForm(ApiSupport.requestCertificateTarget(),
-            "domains=a.example.com%2Cb.example.com&challenge_type=http&" + ApiSupport.invokeTransport());
+            "hostnames=a.example.com%2Cb.example.com&challenge=http&" + ApiSupport.invokeTransport());
         assertThat(commaDomains.statusCode()).isEqualTo(422);
         assertThat(commaDomains.body())
             .as("the refusal renders in the answer itself")

@@ -106,7 +106,7 @@ class InstanceFromTemplateWizardTest extends HohenheimHttpTestBase {
         String target = ApiSupport.fromTemplateTarget(HohenheimSlugs.ADMIN, templateId);
         String transport = "&" + ApiSupport.fromTemplateTransport();
         HttpResponse<String> refused = httpPostForm(target, "name=" + PREFIX + "refused"
-            + "&serverId=" + hostId + "&variables.SITE_TITLE=" + transport,
+            + "&hostId=" + hostId + "&variables.SITE_TITLE=" + transport,
             sessionToken, csrfToken);
         assertThat(refused.statusCode()).as("step 4: a blank required variable is refused").isEqualTo(422);
         assertThat(Models.get(InstanceModel.class).find()
@@ -116,7 +116,7 @@ class InstanceFromTemplateWizardTest extends HohenheimHttpTestBase {
         // 5. The corrected submit lands, answers with the new instance in this panel, stores the typed variable and
         //    the blank secret's declared default.
         HttpResponse<String> created = httpPostForm(target, "name=" + PREFIX + "created"
-            + "&serverId=" + hostId + "&variables.SITE_TITLE=Hello" + transport,
+            + "&hostId=" + hostId + "&variables.SITE_TITLE=Hello" + transport,
             sessionToken, csrfToken);
         assertThat(created.statusCode()).as("step 5: the create lands").isIn(302, 303);
         Row instance = Models.get(InstanceModel.class).find()

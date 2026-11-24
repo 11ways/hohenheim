@@ -32,6 +32,6 @@ tab history at=0 landing=false view=false
 control EDIT%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20record_id at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=running,completed,completed_with_failures,aborted,failed,abandoned binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20fired_by at=3 kind=zenitforms:form/select input=select required=false readonly=true options=cron,manual,once binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20fired_by at=3 kind=zenitforms:form/select input=select required=false readonly=true options=cron,interval,manual,once binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 

@@ -630,7 +630,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             navigateToApp("/" + HohenheimSlugs.ADMIN + "/" + HohenheimSlugs.INSTANCES_FROM_TEMPLATE
                 + "?template=" + templateId);
             waitForHydration();
-            String templateHost = "pl-select[name='serverId']";
+            String templateHost = "pl-select[name='hostId']";
             assertThat(hostOption(templateHost, popup, hostId).getAttribute("aria-disabled"))
                 .as("step 6: the template create refuses the operator the dedicated host").isEqualTo("true");
             assertThat(hostOption(templateHost, popup, hostId).innerText()).as("step 6: with its reason")
@@ -644,11 +644,11 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             // 7. And its submit agrees: refused for the operator, landing for project one.
             String target = ApiSupport.fromTemplateTarget(HohenheimSlugs.ADMIN, templateId);
             HttpResponse<String> templateRefused = httpPostForm(target, "name=" + PREFIX + "ded-template-operator"
-                + "&serverId=" + hostId + transport, sessionToken, csrfToken);
+                + "&hostId=" + hostId + transport, sessionToken, csrfToken);
             assertThat(templateRefused.statusCode()).as("step 7: the operator's template create is refused")
                 .isEqualTo(422);
             HttpResponse<String> templateLanded = httpPostForm(target, "name=" + PREFIX + "ded-template-project"
-                + "&serverId=" + hostId + "&projectId=" + projectOneId + transport, sessionToken, csrfToken);
+                + "&hostId=" + hostId + "&projectId=" + projectOneId + transport, sessionToken, csrfToken);
             assertThat(templateLanded.statusCode()).as("step 7: project one's template create lands")
                 .isIn(302, 303);
         } finally {

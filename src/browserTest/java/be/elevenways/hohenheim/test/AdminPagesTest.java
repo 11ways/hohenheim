@@ -419,15 +419,15 @@ class AdminPagesTest extends HohenheimTestBase {
         String wildcardRefusal = ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
             .of("wildcard_requires_dns"));
         var response = adminPostForm(ApiSupport.requestCertificateTarget(),
-            "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_publisher=manual&"
+            "name=wildcard&hostnames=*.example.test&challenge=http&dns_publisher=manual&"
                 + ApiSupport.invokeTransport());
         assertThat(response.statusCode()).isEqualTo(422);
         assertThat(response.body()).contains(wildcardRefusal);
 
         // Every repeated domain value is kept, so the wildcard is still seen.
         response = adminPostForm(ApiSupport.requestCertificateTarget(),
-            "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
-                + "&challenge_type=http&dns_publisher=manual&" + ApiSupport.invokeTransport());
+            "name=wildcard&hostnames=&hostnames=example.test&hostnames=*.example.test"
+                + "&challenge=http&dns_publisher=manual&" + ApiSupport.invokeTransport());
         assertThat(response.statusCode()).isEqualTo(422);
         assertThat(response.body()).contains(wildcardRefusal);
 
@@ -631,15 +631,15 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 2. Its submit writes back into that row through the same order lane: a manual DNS-01 re-order has no
             //    record to wait on, so it is refused with the row untouched.
-            var manual = adminPostForm(reissueTarget(cert), "domains=alpha.example.test&domains=beta.example.test"
-                + "&nice_name=reissue-me-cert&challenge_type=dns&dns_publisher=manual&" + ApiSupport.invokeTransport());
+            var manual = adminPostForm(reissueTarget(cert), "hostnames=alpha.example.test&hostnames=beta.example.test"
+                + "&name=reissue-me-cert&challenge=dns&dns_publisher=manual&" + ApiSupport.invokeTransport());
             assertThat(manual.statusCode()).as("step 2: refused as input, redrawn").isEqualTo(422);
             assertThat(manual.body()).as("step 2: naming why")
                 .contains(ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
                     .of("reissue_manual_unsupported")));
 
             // 3. A row with no ACME order to repeat is refused outright, and nothing is written back to it.
-            var refused = adminPostForm(reissueTarget(uploaded), "domains=uploaded.example.test&challenge_type=http&"
+            var refused = adminPostForm(reissueTarget(uploaded), "hostnames=uploaded.example.test&challenge=http&"
                 + ApiSupport.invokeTransport());
             assertThat(refused.statusCode()).as("step 3: the manual upload cannot be re-ordered")
                 .isGreaterThanOrEqualTo(400);

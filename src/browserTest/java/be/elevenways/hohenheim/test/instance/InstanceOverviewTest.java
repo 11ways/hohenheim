@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -431,19 +432,18 @@ class InstanceOverviewTest extends HohenheimTestBase {
             assertThat(mine).as("step 1: this instance has an action").isNotNull();
             assertThat(theirs).as("step 1: the decoy has one too").isNotNull();
 
-            // 2. The band renders, and links this instance's entry.
-            String body = adminGet(overviewUrl()).body();
-            assertThat(body)
-                .as("step 2: the overview carries a Recent card")
-                .contains("data-filter-scope=\"app_overview\">Recent</pb-microcopy></pl-card-title>");
-            assertThat(body)
-                .as("step 2: it links this instance's own activity entry")
-                .contains("/admin/activity/" + mine);
+            // 2. The page shows a Recent card, and it lists this instance's own entry.
+            navigateToApp(overviewUrl());
+            waitForHydration();
+            Locator recent = page.locator("pl-card").filter(new Locator.FilterOptions().setHas(
+                page.locator("pl-card-title").getByText("Recent", new Locator.GetByTextOptions().setExact(true))));
+            assertThat(recent.count()).as("step 2: the overview shows one Recent card").isEqualTo(1);
+            assertThat(recent.locator("[href*='/admin/activity/" + mine + "']").count())
+                .as("step 2: it lists this instance's own activity entry").isEqualTo(1);
 
             // 3. And NOT the other instance's -- the read is this record's history, not the model's.
-            assertThat(body)
-                .as("step 3: another instance's activity never leaks onto this page")
-                .doesNotContain("/admin/activity/" + theirs);
+            assertThat(page.locator("[href*='/admin/activity/" + theirs + "']").count())
+                .as("step 3: another instance's activity never shows on this page").isZero();
         } finally {
             HardDeletes.row(instances, decoy);
         }

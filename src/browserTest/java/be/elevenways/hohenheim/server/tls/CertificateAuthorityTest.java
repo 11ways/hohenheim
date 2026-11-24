@@ -102,7 +102,7 @@ class CertificateAuthorityTest extends HohenheimHttpTestBase {
         // 2. And over the certificate list's request operation, which is the surface that used to accept a free-form
         //    hostname list on nothing but requiresPermission.
         HttpResponse<String> response = adminPost(
-            "challenge_type=http&dns_publisher=manual&nice_name=Unserved&domains=" + unserved);
+            "challenge=http&dns_publisher=manual&name=Unserved&hostnames=" + unserved);
         assertThat(response.statusCode())
             .describedAs("the request answers as a refusal, its input redrawn")
             .isEqualTo(422);
