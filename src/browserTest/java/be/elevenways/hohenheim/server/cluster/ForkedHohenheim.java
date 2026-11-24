@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -19,6 +20,7 @@ import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.RunningProcess;
@@ -33,6 +35,9 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.code.CodeBlocks;
+import be.elevenways.zenit.common.orm.code.CodeWant;
+import be.elevenways.zenit.common.orm.code.RecordCodeModel;
 import be.elevenways.zenit.common.peer.SharedModels;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -44,6 +49,7 @@ import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.test.support.MigratedDatabase;
@@ -54,6 +60,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -65,8 +73,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -223,11 +233,17 @@ final class ForkedHohenheim implements AutoCloseable {
     /** The child's entry point: boot, say ready, answer commands until stdin ends. */
     public static final class Child {
 
+        /** Its calls to the other server; "cut" points them at a port nothing listens on, "mend" back. */
+        private static TlsRelay relay;
+
+        /** The other server's plain HTTP port. */
+        private static int masterPort;
+
         public static void main(String[] args) throws Exception {
             Path database = Path.of(args[0]);
             String name = args[1];
             String masterHost = args[2];
-            int masterPort = Integer.parseInt(args[3]);
+            masterPort = Integer.parseInt(args[3]);
             boolean freshIdentity = Boolean.parseBoolean(args[4]);
 
             HohenheimSettingsBoot.forceDefinitions();
@@ -244,7 +260,7 @@ final class ForkedHohenheim implements AutoCloseable {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Cluster.NAME, name);
             // Its calls to the other server: that host name, over TLS, to the other server's plain port; installed
             // once the runtime holds its outbound network, before anything is served or asked.
-            TlsRelay relay = TlsRelay.open();
+            relay = TlsRelay.open();
             OutboundTlsStub stub = OutboundFixture.routeTls(masterHost, relay.port());
             relay.start(stub.serverContext(), masterPort);
             ZenitHttpServer http = ServerZenitRuntime.createServer(0);
@@ -311,7 +327,57 @@ final class ForkedHohenheim implements AutoCloseable {
                 }
                 case "probe" -> {
                     LinkedServers.sweep();
+                    // The check asks the master for code numbers in the background: that ends before the answer.
+                    ClusterCodes.awaitIdle(Duration.ofSeconds(50));
                     yield rows();
+                }
+                // "cut" makes the master stop answering, as this server sees it; "mend" makes it answer again.
+                case "cut" -> {
+                    relay.retarget(closedPort());
+                    yield "ok";
+                }
+                case "mend" -> {
+                    relay.retarget(masterPort);
+                    yield "ok";
+                }
+                // "app NAME" stores an app as a deploy does before it starts: "app <id> <code>".
+                case "app" -> {
+                    Row app = Models.get(InstanceModel.class).createEmptyRow();
+                    app.set(InstanceModel.NAME, words[1]);
+                    app.set(InstanceModel.KIND, "hohenheim:docker_container");
+                    app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+                    app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+                    Models.get(InstanceModel.class).save(app);
+                    String key = String.valueOf((Object) app.get(InstanceModel.ID));
+                    yield "app " + key + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key);
+                }
+                // "code MODEL KEY": the record's current code here.
+                case "code" -> "code " + RecordCodes.codeUnjudged(model(words[1]), words[2]);
+                // "key-of MODEL CODE": the key of the record a code, a retired spelling too, names here.
+                case "key-of" -> "key " + RecordCodes.keyOfCode(model(words[1]), words[2]);
+                // Every current allocated code here, sorted, joined by semicolons.
+                case "codes" -> {
+                    List<String> codes = new ArrayList<>();
+                    for (Row code : new RecordCodeModel(Models.get(LinkedServerModel.class).getResolvedDatasource())
+                            .find().noCache().where(RecordCodeModel.NUMBER.isNotNull())
+                            .where(RecordCodeModel.RETIRED_AT.isNull()).all()) {
+                        codes.add(code.get(RecordCodeModel.CODE));
+                    }
+                    Collections.sort(codes);
+                    yield "codes " + String.join(";", codes);
+                }
+                // How many things the join card says get a new code when this server joins.
+                case "renumbers" -> "renumbers " + ClusterCodes.renumberedAtJoin();
+                // "left PREFIX": the numbers this server's granted blocks of the prefix still hold.
+                case "left" -> {
+                    long left = 0;
+                    for (CodeWant want : CodeBlocks.wants(Models.get(LinkedServerModel.class)
+                            .getResolvedDatasource())) {
+                        if (want.prefix().equals(words[1])) {
+                            left = want.left();
+                        }
+                    }
+                    yield "left " + left;
                 }
                 case "rows" -> rows();
                 case "offset" -> {
@@ -425,6 +491,19 @@ final class ForkedHohenheim implements AutoCloseable {
         private static void answer(@NonNull String line) {
             System.out.println(MARK + line.replace('\n', ' '));
             System.out.flush();
+        }
+
+        private static @NonNull Identifier model(@NonNull String id) {
+            return Objects.requireNonNull(Identifier.tryParse(id), "a model id");
+        }
+
+        /** @return a loopback port nothing listens on */
+        private static int closedPort() {
+            try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+                return socket.getLocalPort();
+            } catch (IOException failed) {
+                throw new IllegalStateException(failed);
+            }
         }
     }
 }

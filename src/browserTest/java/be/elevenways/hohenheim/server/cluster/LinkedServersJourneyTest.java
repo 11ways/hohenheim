@@ -24,6 +24,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.orm.code.RecordCodeModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -44,6 +45,8 @@ import be.elevenways.zenit.delivery.server.transport.TransportTypes;
 import be.elevenways.zenit.notifications.server.NotificationDispatcher;
 import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.RecordCodes;
+import be.elevenways.zenit.server.peer.CodeHomes;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.peer.PeerRecords;
 import be.elevenways.zenit.server.peer.SharedRowsPage;
@@ -95,7 +98,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * join with a one-time code, check each other, alert past the outage grace when one stops and again when it answers,
  * refuse another database at the address, part with and without the other side answering, make one link at a time,
  * and refuse what the one-master rule and the join code forbid; a sweep asks silent servers at the same time. The
- * master keeps its own record of what Kuifje has, its rows read a page at a time over the link.
+ * master keeps its own record of what Kuifje has, its rows read a page at a time over the link. Kuifje takes its
+ * code numbers from the master: joining renumbers it, and it makes things from its blocks while the master is silent.
  *
  * AIDEV-NOTE: each side reaches the other the way production does, an https call through its one pinned fetcher:
  * the other's host name is an OutboundFixture TLS stub routed to a TlsRelay in front of the other's plain port. Time
@@ -111,6 +115,9 @@ class LinkedServersJourneyTest {
     private static final String CHILD_HOST = "kuifje.cluster.test";
     private static final String CHILD_ADDRESS = "https://" + CHILD_HOST;
     private static final String ALERT_HOST = "cluster-alerts.example.test";
+
+    /** The master's own site, so its numbers run past the ones a fresh Kuifje had. */
+    private static final String OWN_SITE = "cluster-codes-own-site";
 
     @RegisterExtension
     static final ServedApp APP = HohenheimServedApp.app()
@@ -169,6 +176,7 @@ class LinkedServersJourneyTest {
         }
         HardDeletes.where(Models.get(NotificationChannelModel.class),
             NotificationChannelModel.NAME.eq("cluster-alerts"));
+        HardDeletes.where(Models.get(SiteModel.class), SiteModel.NAME.eq(OWN_SITE));
         awaitSyncs();
         for (Row linked : Models.get(LinkedServerModel.class).find().all()) {
             ClusterRecords.forget(linked.get(LinkedServerModel.ID));
@@ -188,9 +196,15 @@ class LinkedServersJourneyTest {
         ForkedHohenheim kuifje = boot(directory, kuifjeDb, true, reporter);
         relay.retarget(kuifje.port());
         try {
-            // 1. Kuifje holds a site before it is linked; the add takes in everything it has, in the background,
-            //    and the kept counts per kind equal Kuifje's own; the list's Sites column is Kuifje's own count.
+            // 1. Kuifje holds a site before it is linked, and the join card counts every coded thing there as
+            //    getting a new code; the master has a site of its own. The add takes in everything Kuifje has, in the
+            //    background, and the kept counts per kind equal Kuifje's own; the list's Sites column is Kuifje's own
+            //    count.
             String early = after("site ", kuifje.ask("site early-site"));
+            String earlyCode = after("code ", kuifje.ask("code " + SiteModel.MODEL_ID + " " + early));
+            assertThat(Integer.parseInt(after("renumbers ", kuifje.ask("renumbers"))))
+                .as("step 1: the join card counts every coded thing on Kuifje").isEqualTo(codesOf(kuifje).size());
+            String ownSite = masterSite();
             add(codeOf(kuifje.ask("offer")));
             awaitSyncs();
             Row server = only();
@@ -203,6 +217,23 @@ class LinkedServersJourneyTest {
             assertThat((Object) server.get(LinkedServerModel.IN_STEP_SINCE)).as("step 1: in step").isNotNull();
             assertThat((Integer) server.get(LinkedServerModel.SITES)).as("step 1: Kuifje's own count of sites")
                 .isEqualTo(Integer.parseInt(countOf(own, SiteModel.MODEL_ID)));
+
+            // 1b. The join renumbered Kuifje: its site has a new code and the old one still names it there. No
+            //     current code of Kuifje is one of the master's, and the master answers that each of Kuifje's lives
+            //     on Kuifje and its own site here.
+            String renamed = after("code ", kuifje.ask("code " + SiteModel.MODEL_ID + " " + early));
+            assertThat(renamed).as("step 1b: the site has a new code").isNotEqualTo(earlyCode).startsWith("S");
+            assertThat(kuifje.ask("key-of " + SiteModel.MODEL_ID + " " + earlyCode))
+                .as("step 1b: the old code still names it on Kuifje").isEqualTo("key " + early);
+            List<String> kuifjeCodes = codesOf(kuifje);
+            assertThat(kuifjeCodes).as("step 1b: Kuifje's codes and the master's are disjoint").contains(renamed)
+                .doesNotContainAnyElementsOf(masterCodes());
+            for (String each : kuifjeCodes) {
+                assertThat(CodeHomes.peerOf(each)).as("step 1b: %s lives on Kuifje", each).isEqualTo(peer);
+            }
+            String ownCode = RecordCodes.codeUnjudged(SiteModel.MODEL_ID, ownSite);
+            assertThat(ownCode).as("step 1b: the master's site has a code").isNotNull();
+            assertThat(CodeHomes.peerOf(ownCode)).as("step 1b: the master's own site lives here").isNull();
 
             // 2. A site made on Kuifje through its real operation is known here at once: Kuifje nudges, the master
             //    syncs; nobody runs the minute check.
@@ -259,6 +290,31 @@ class LinkedServersJourneyTest {
             assertThat(storedDocument(peer, InstanceVariableModel.MODEL_ID, variable))
                 .as("step 4: encrypted in the master's table").doesNotContain(secret);
 
+            // 4b. The master stops answering Kuifje: an app made there still gets a code, from a block the master
+            //     granted it at the join; the master names Kuifje as where that code lives.
+            assertThat(kuifje.ask("cut")).isEqualTo("ok");
+            String appCode = after("app ", kuifje.ask("app offline-app")).split(" ")[1];
+            assertThat(appCode).as("step 4b: the app has a code").startsWith("AP");
+            assertThat(CodeHomes.peerOf(appCode)).as("step 4b: its number lies in Kuifje's blocks").isEqualTo(peer);
+
+            // 4c. With its sites' numbers used up and the master still silent, a new site is refused in the declared
+            //     words, and nothing is written.
+            long left = Long.parseLong(after("left ", kuifje.ask("left S")));
+            assertThat(left).as("step 4c: numbers left before").isPositive();
+            assertThat(kuifje.ask("sites " + left)).isEqualTo("ok");
+            String full = kuifje.ask("counts");
+            assertThat(kuifje.ask("sites 1")).as("step 4c: refused in words").isEqualTo("refused No numbers are left"
+                + " for new sites; this server gets more from its master when that answers.");
+            assertThat(kuifje.ask("counts")).as("step 4c: nothing written").isEqualTo(full);
+
+            // 4d. The master answers again: Kuifje's minute check brings a new block, and a site is made.
+            assertThat(kuifje.ask("mend")).isEqualTo("ok");
+            assertThat(kuifje.ask("probe")).as("step 4d: Kuifje reaches its master")
+                .startsWith("rows Robbedoes|managed_by|reachable|");
+            assertThat(kuifje.ask("left S")).as("step 4d: a new block").isNotEqualTo("left 0");
+            after("site ", kuifje.ask("site after-the-block"));
+            settle(kuifje);
+
             // 5. Kuifje is down: everything kept stays, and so do its counts.
             String keptBefore = kept(peer);
             Integer sitesBefore = only().get(LinkedServerModel.SITES);
@@ -305,8 +361,8 @@ class LinkedServersJourneyTest {
             //    key) is refused 403 before any call answers: the framework's CSRF guard exempts a self-authenticating
             //    call for non-interactive callers only. Generations and rows answer the called server's master
             //    alone: that administrator's own API key and a wrong key are 401; Kuifje, a server the master manages,
-            //    presenting its own valid key to the master's generations is 403. Changed answers only a server the
-            //    called one manages: the master presenting its valid key to Kuifje's changed is 403.
+            //    presenting its own valid key to the master's generations is 403. Changed and codes answer only a
+            //    server the called one manages: the master presenting its valid key to Kuifje's is 403.
             String cookie = after("session ", kuifje.ask("session"));
             String panel = "/admin/" + HohenheimSlugs.LINKED_SERVERS;
             assertThat(statusAtKuifje(kuifje, panel, cookie, false)).as("step 7: the cookie signs the administrator in")
@@ -314,7 +370,7 @@ class LinkedServersJourneyTest {
             assertThat(statusAtKuifje(kuifje, panel, null, false)).as("step 7: nobody is signed in without it")
                 .isNotEqualTo(200);
             for (Endpoint<Object> call : List.of(ClusterEndpoints.GENERATIONS, ClusterEndpoints.ROWS,
-                    ClusterEndpoints.CHANGED)) {
+                    ClusterEndpoints.CHANGED, ClusterEndpoints.CODES)) {
                 assertThat(statusAtKuifje(kuifje, call.toUrl(), cookie, true))
                     .as("step 7: %s, a signed-in administrator", call.toUrl()).isEqualTo(403);
             }
@@ -326,11 +382,15 @@ class LinkedServersJourneyTest {
                     .as("step 7: rows, no link key").isEqualTo(401);
                 assertThat(statusOf(LinkCalls.changed(CHILD_ADDRESS, key))).as("step 7: changed, no link key")
                     .isEqualTo(401);
+                assertThat(statusOf(LinkCalls.codes(CHILD_ADDRESS, key, List.of(), null)))
+                    .as("step 7: codes, no link key").isEqualTo(401);
             }
             assertThat(kuifje.ask("read-master")).as("step 7: a managed server reads nothing of its master")
                 .isEqualTo("status 403");
             assertThat(statusOf(LinkCalls.changed(CHILD_ADDRESS, masterKey)))
                 .as("step 7: a master does not nudge the server it manages").isEqualTo(403);
+            assertThat(statusOf(LinkCalls.codes(CHILD_ADDRESS, masterKey, List.of(), null)))
+                .as("step 7: a master takes no code numbers from the server it manages").isEqualTo(403);
             assertThat(statusOf(LinkCalls.generations(CHILD_ADDRESS, masterKey)))
                 .as("step 7: its master reads it").isEqualTo(200);
 
@@ -342,6 +402,37 @@ class LinkedServersJourneyTest {
         } finally {
             kuifje.close();
         }
+    }
+
+    /** @return Kuifje's current allocated codes */
+    private static List<String> codesOf(ForkedHohenheim kuifje) throws Exception {
+        String codes = after("codes ", kuifje.ask("codes"));
+        return codes.isEmpty() ? List.of() : List.of(codes.split(";"));
+    }
+
+    /** @return the master's own current allocated codes */
+    private static List<String> masterCodes() {
+        List<String> codes = new ArrayList<>();
+        for (Row code : new RecordCodeModel(Models.get(LinkedServerModel.class).getResolvedDatasource()).find()
+                .noCache().where(RecordCodeModel.NUMBER.isNotNull()).where(RecordCodeModel.RETIRED_AT.isNull())
+                .all()) {
+            codes.add(code.get(RecordCodeModel.CODE));
+        }
+        return codes;
+    }
+
+    /** @return the key of the master's own site, made once */
+    private static String masterSite() {
+        SiteModel sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.NAME, OWN_SITE);
+        site.set(SiteModel.SLUG, OWN_SITE);
+        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + OWN_SITE));
+        site.set(SiteModel.ENABLED, false);
+        sites.save(site);
+        return String.valueOf((Object) site.get(SiteModel.ID));
     }
 
     /** Makes {@code count} sites on Kuifje in one commit and waits until the master took them in. */
@@ -740,15 +831,20 @@ class LinkedServersJourneyTest {
         }
     }
 
-    /** @return a join's body as Robbedoes sends it, presenting {@code code} and a key of its own */
+    /**
+     * @return a join's body as Robbedoes sends it, presenting {@code code}, a key of its own and its ticket for the
+     *         code numbers
+     */
     private static Map<String, Object> joinBody(String code) {
+        String key = SecureTokens.randomToken(32);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code);
         body.put("name", "Robbedoes");
         body.put("base_url", "https://" + MASTER_HOST);
         body.put("token", ControllerIdentity.token());
         body.put("build", LinkedServers.ownVersion());
-        body.put("key", SecureTokens.randomToken(32));
+        body.put("key", key);
+        body.put("ticket", ClusterCodes.ticket(Uuids.v7(), key));
         return body;
     }
 

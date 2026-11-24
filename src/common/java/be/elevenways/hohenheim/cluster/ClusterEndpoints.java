@@ -9,8 +9,9 @@ import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import java.time.Duration;
 
 /**
- * The calls one Hohenheim makes to another it is linked to: join, status and leave; and, from a master, the
- * generations and rows of the kinds it keeps a record of, and from a managed server the nudge that it changed.
+ * The calls one Hohenheim makes to another it is linked to: join, status and leave; from a master, the
+ * generations and rows of the kinds it keeps a record of; and from a managed server the nudge that it changed and
+ * the code numbers it wants.
  *
  * AIDEV-NOTE: machine endpoints whose credential is in the request, so each route authenticates itself (no login
  * gate, no CSRF): the join code for join, the link key ({@code Authorization: Bearer}) for every other call. The
@@ -91,6 +92,18 @@ public final class ClusterEndpoints {
             .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("changed").build())
         .authenticatesItself()
         .rateLimit(RECORDS_LIMIT)
+        .build();
+
+    /**
+     * A managed server says how many code numbers it has left and wants: its master grants them as blocks. Only its
+     * master answers; at joining, before the master holds its row, the master's ticket in the body vouches for it.
+     */
+    public static final Endpoint<Object> CODES = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("cluster_codes"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("codes").build())
+        .authenticatesItself()
+        .rateLimit(LINK_LIMIT)
         .build();
 
     private ClusterEndpoints() {

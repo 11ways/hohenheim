@@ -17,6 +17,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -106,6 +107,21 @@ final class LinkCalls {
      */
     static @NonNull Answer changed(@NonNull String baseUrl, @Nullable String key) {
         return call(baseUrl, ClusterEndpoints.CHANGED, Map.of(), key);
+    }
+
+    /**
+     * @param key    the key this server presents to its master
+     * @param ticket the master's leave at joining, null once the master holds this server's row
+     * @return the answer of the master at {@code baseUrl} to this server asking the code numbers it wants
+     */
+    static @NonNull Answer codes(@NonNull String baseUrl, @Nullable String key,
+                                 @NonNull List<Map<String, Object>> wants, @Nullable String ticket) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("wants", wants);
+        if (ticket != null) {
+            body.put("ticket", ticket);
+        }
+        return call(baseUrl, ClusterEndpoints.CODES, body, key);
     }
 
     private static @NonNull Answer call(@NonNull String baseUrl, @NonNull Endpoint<?> endpoint,

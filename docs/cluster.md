@@ -23,8 +23,10 @@ master remembers of the servers it manages. Lists that mix servers and pages of 
    only a keyed digest is stored, in `linked_server_codes`). A reload shows it no more; the card then says a code is
    waiting.
 2. On the master, **Add a Hohenheim server** takes a name, the other server's https address and the code.
-3. The master calls the other server's **join**. Both servers now hold a row in `linked_servers`: the master one
-   with role `manages`, the managed server one with role `managed_by`.
+3. The master calls the other server's **join**. Inside the one transaction that redeems the code, the managed server
+   makes its row of the master, takes its code numbers from it (see "One code per thing") and renumbers; any failure
+   rolls all of that back and refuses the join. Both servers then hold a row in `linked_servers`: the master one with
+   role `manages`, the managed server one with role `managed_by`.
 
 Every creation of a link row, the join answered on the managed server and the add on the master, runs one at a
 time under one core lease (`hohenheim:cluster_link`), its checks inside it: one master, a managed server manages
@@ -49,19 +51,22 @@ Linked servers are reached on the public internet only, unless the host declares
 | generations | `/api/cluster/generations` | the key of this server's master | `generations`: per shared kind (model id) its stored generation |
 | rows | `/api/cluster/rows` | the key of this server's master | one page of one kind's rows: `before`, `after` (the kind's generation around the page), `rows` (`key`, `code`, `title`, `document`) and `next` |
 | changed | `/api/cluster/changed` | the key of a server this one manages | `asked`; the master syncs that server |
+| codes | `/api/cluster/codes` | the key this server presents to its master; at joining also the master's `ticket` in the body | `blocks`: per prefix `prefix`, `first`, `last`; or `refusal` |
 
-The join body carries `code`, the master's `name`, `base_url`, `token`, `build` and `key` (the key the managed
-server presents to the master). A join refusal answers one of `no_such_code`, `expired`, `too_many_tries` (429),
-`has_master`, `manages_others`, `busy` (409) or `unreadable` (422); `busy` means another server is being linked
-there at this moment. Wrong codes from one address spend a failure budget of five tries per fifteen minutes; once it
+The join body carries `code`, the master's `name`, `base_url`, `token`, `build`, `key` (the key the managed
+server presents to the master) and `ticket` (see "One code per thing"). A join refusal answers one of `no_such_code`,
+`expired`, `too_many_tries` (429), `has_master`, `manages_others`, `busy` (409), `unreadable` (422) or `codes` (502);
+`busy` means another server is being linked there at this moment, `codes` that it could not take its code numbers
+from the master. Wrong codes from one address spend a failure budget of five tries per fifteen minutes; once it
 is spent, no code is looked at. An unknown key answers 401 and names nothing.
 
 The status answer also carries `apps` and `sites`: the server's own counts, as its dashboard (Apps) and its Sites
 list count them for an administrator. A rows body carries `model`, `after` (the previous page's `next`, or null) and
 `limit` (the master asks 200 rows a page; a page answer is read up to 32 MiB). Generations and rows answer only this
 server's master: a request with no key, with an API key or any other bearer that is no link key, or with a wrong key
-answers 401; a server this one manages, presenting its own valid key, answers 403. Changed answers only a server
-this one manages and 403 to its master. A refusal names its reason's code alone.
+answers 401; a server this one manages, presenting its own valid key, answers 403. Changed and codes answer only a
+server this one manages (codes also the server a valid ticket names) and 403 to its master. A refusal names its
+reason's code alone.
 
 ## Checking each other
 
@@ -139,6 +144,36 @@ DNS zones (a secondary's refresh stamps `last_checked_at`, `last_transfer_at` an
 (every transfer and notify stamps `last_axfr_*` and `last_notify_*`), build hooks (`last_triggered_at` at every call)
 and backups and database dumps (a scheduled run adds rows and moves their status).
 
+## One code per thing
+
+A code (`AP12`, `S14`) names one thing in the whole cluster, the same on every server, with no server letter in it.
+The master draws numbers from its own sequence per prefix and hands each server it manages blocks of them in
+advance (core `CodeGrants`, `CodeBlocks`), so a managed server creates things while its master is off. Where a
+server's numbers come from is one fact, read inside every allocating transaction: it has a master and holds a block
+that master granted. Every allocation and every change of that fact hold the lease `hohenheim:cluster_codes` until
+their transaction ends, so no creation ever straddles a join or a leave.
+
+- **Joining**: the managed server counts its coded records per prefix and asks for a number for each plus one spare
+  block (codes, presenting the master's `ticket` from the join body, since the master holds no row of it yet); it
+  keeps the blocks and gives every code outside them a new number, in the join's own transaction. The old spelling
+  of a renumbered code keeps naming its thing on that server. A join that took more than half the master's call
+  deadline is refused there, so the master never gives up on a join the managed server kept. Before joining, the join
+  card counts every coded thing there as getting a new code; one whose number happens to lie inside the master's
+  blocks in fact keeps it, so the card states the most that can change.
+- **More numbers**: a prefix with fewer than half a block left asks one more block: after every creation on a
+  managed server the numbers left are compared with that mark in the background, and the minute check that reaches
+  the master asks too. With none left and the
+  master silent, a creation is refused in words ("No numbers are left for new apps; this server gets more from its
+  master when that answers.") and writes nothing.
+- **A link made before codes were cluster-wide**: at its first minute check the managed server joins the numbering
+  as a join does (asks, keeps, renumbers).
+- **Leaving**: when the link ends on the managed server, it goes back to its own sequence, raised above every number
+  it holds or was granted; its codes stay.
+- **Where a code lives**: the master answers it (core `CodeHomes.peerOf`): a shared kind's thing from its record of
+  that server, any other code by the grant that holds its number, else its own.
+
+A refused join leaves on the master only a grant nobody uses: those numbers are never handed out again.
+
 ## Removing
 
 **Remove** asks the other server to forget the link (leave) and then forgets it here, whatever the answer:
@@ -153,3 +188,4 @@ Removing a link also forgets, in the same step, everything the master kept of th
 
 Nothing to do: the new tables and columns start empty and an upgraded server is linked to nothing. A master that
 is already linked reads its servers' counts at the next check and takes in their records at the next sync.
+Both servers of a link run this version: a join from a master without the codes ticket is refused as unreadable.

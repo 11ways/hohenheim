@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.LinkedServerCodeModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
+import be.elevenways.hohenheim.server.cluster.ClusterCodes;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -400,7 +401,8 @@ public final class LinkedServerParts {
 
     /**
      * The card under the list, on a server that can get a master or has one: who manages it since when, the join code
-     * just issued (shown this once), or the one the viewer has waiting.
+     * just issued (shown this once, with how many things here get a new code when it joins), or the one the viewer has
+     * waiting.
      */
     private static @NonNull WidgetTree joinCard(@NonNull ListScope scope) {
         Microcopy title = HohenheimMicrocopy.LINKED_SERVER.of("linked_server_offer_join");
@@ -420,7 +422,8 @@ public final class LinkedServerParts {
         Secret issued = conduit == null ? null : SecretDisclosures.claim(conduit, JOIN_CODE_SCOPE);
         if (issued != null && waiting != null) {
             WidgetInstance shown = new WidgetInstance(HohenheimWidgets.JOIN_CODE.id(), Map.of())
-                .withData(new JoinCodeShown(issued.reveal(), waiting.get(LinkedServerCodeModel.EXPIRES_AT)));
+                .withData(new JoinCodeShown(issued.reveal(), waiting.get(LinkedServerCodeModel.EXPIRES_AT),
+                    ClusterCodes.renumberedAtJoin()));
             WidgetInstance card = CardWidget.of(title, new WidgetTree(List.of(shown)));
             return new WidgetTree(List.of(AdminDashboard.section(card)));
         }

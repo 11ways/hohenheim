@@ -31,6 +31,8 @@ import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.text.Texts;
@@ -116,6 +118,9 @@ public final class LinkedServers {
 
     /** How long a creation waits for another: longer than the one call an add makes while it holds the lease. */
     private static final int CREATE_WAIT_SECONDS = (int) LinkCalls.DEADLINE.plusSeconds(5).toSeconds();
+
+    /** How long a join may take here before it is refused: half the deadline the master waits for its answer. */
+    private static final Duration JOIN_ANSWER_WITHIN = LinkCalls.DEADLINE.dividedBy(2);
 
     /** How many linked servers one sweep asks at the same time; the rest wait their turn in the sweep. */
     static final int CHECKS_AT_ONCE = 8;
@@ -331,11 +336,13 @@ public final class LinkedServers {
 
     /**
      * Answers a master's join under the creation lease: the code is redeemed within the asking address's failure
-     * budget, and this server's row of its master is made, with the key this server presents to it, inside the code's
-     * transaction.
+     * budget, and inside the code's transaction this server's row of its master is made, with the key this server
+     * presents to it, and its code numbers are taken from that master (ClusterCodes.join); a failure there rolls all
+     * of it back and refuses the join.
      *
-     * @param body  the master's name, address, controller token, version, the key this server shall present to it and
-     *              the code
+     *
+     * @param body  the master's name, address, controller token, version, the key this server shall present to it, its
+     *              ticket for the code numbers and the code
      * @param scope what wrong codes are counted against: the asking address
      */
     public static @NonNull Joined acceptJoin(@NonNull Map<String, Object> body, @NonNull String scope) {
@@ -352,25 +359,41 @@ public final class LinkedServers {
             String baseUrl = baseUrlOrNull(text(body.get("base_url")));
             String token = text(body.get("token"));
             String key = text(body.get("key"));
-            if (name == null || name.length() > NAME_MAX || baseUrl == null || token == null || key == null) {
+            String ticket = text(body.get("ticket"));
+            if (name == null || name.length() > NAME_MAX || baseUrl == null || token == null || key == null
+                    || ticket == null) {
                 return new Refused(JoinRefusal.UNREADABLE);
             }
             String build = text(body.get("build"));
             String ownKey = SecureTokens.randomToken(KEY_BYTES);
-            OneTimeCodes.Redeemed<Row> redeemed = CODES.redeem(text(body.get("code")), scope, code -> {
-                Row master = Models.get(LinkedServerModel.class).createEmptyRow();
-                master.set(LinkedServerModel.ID, Uuids.v7());
-                master.set(LinkedServerModel.NAME, name);
-                master.set(LinkedServerModel.ROLE, LinkRole.MANAGED_BY.token());
-                master.set(LinkedServerModel.BASE_URL, baseUrl);
-                master.set(LinkedServerModel.LINK_KEY, key);
-                master.set(LinkedServerModel.LINK_KEY_DIGEST, digestOf(ownKey));
-                master.set(LinkedServerModel.REMOTE_TOKEN, token);
-                master.set(LinkedServerModel.BUILD, build);
-                master.set(LinkedServerModel.LAST_SEEN_AT, Now.instant());
-                Models.get(LinkedServerModel.class).insert(master, Change.PLAIN);
-                return master;
-            });
+            OneTimeCodes.Redeemed<Row> redeemed;
+            Now.Stopwatch asked = Now.stopwatch();
+            try {
+                redeemed = CODES.redeem(text(body.get("code")), scope, code -> {
+                    Row master = Models.get(LinkedServerModel.class).createEmptyRow();
+                    master.set(LinkedServerModel.ID, Uuids.v7());
+                    master.set(LinkedServerModel.NAME, name);
+                    master.set(LinkedServerModel.ROLE, LinkRole.MANAGED_BY.token());
+                    master.set(LinkedServerModel.BASE_URL, baseUrl);
+                    master.set(LinkedServerModel.LINK_KEY, key);
+                    master.set(LinkedServerModel.LINK_KEY_DIGEST, digestOf(ownKey));
+                    master.set(LinkedServerModel.REMOTE_TOKEN, token);
+                    master.set(LinkedServerModel.BUILD, build);
+                    master.set(LinkedServerModel.LAST_SEEN_AT, Now.instant());
+                    Models.get(LinkedServerModel.class).insert(master, Change.PLAIN);
+                    ClusterCodes.join(master, key, ticket);
+                    // The master waits one call deadline for this answer: a join that took half of it is given up
+                    // here, so it is never kept on this side while the master stopped waiting.
+                    if (asked.elapsedNanos() > JOIN_ANSWER_WITHIN.toNanos()) {
+                        throw new DomainRefusal(ZenitRefusalReason.SERVICE_UNAVAILABLE, "the code numbers took longer"
+                            + " than " + JOIN_ANSWER_WITHIN + " to arrive");
+                    }
+                    return master;
+                });
+            } catch (DomainRefusal noNumbers) {
+                Blast.log("CLUSTER: a join is refused, the code numbers were not taken -", noNumbers.getMessage());
+                return new Refused(JoinRefusal.CODES);
+            }
             return switch (redeemed) {
                 case OneTimeCodes.Refused<Row> refused -> new Refused(switch (refused.why()) {
                     case TOO_MANY_TRIES -> JoinRefusal.TOO_MANY_TRIES;
@@ -437,6 +460,7 @@ public final class LinkedServers {
         if (baseUrl.equalsIgnoreCase(ownBase)) {
             throw Violations.ofField("address", address, HohenheimMicrocopy.VIOLATIONS.of("linked_server_address_own"));
         }
+        UUID id = Uuids.v7();
         String theirKey = SecureTokens.randomToken(KEY_BYTES);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code == null ? "" : code);
@@ -445,6 +469,7 @@ public final class LinkedServers {
         body.put("token", ControllerIdentity.token());
         body.put("build", ownVersion());
         body.put("key", theirKey);
+        body.put("ticket", ClusterCodes.ticket(id, theirKey));
         LinkCalls.Answer answer = LinkCalls.join(baseUrl, body);
         if (!(answer instanceof LinkCalls.Answered answered)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("linked_server_join_unanswered")
@@ -456,7 +481,7 @@ public final class LinkedServers {
                 : JoinRefusal.UNREADABLE;
             throw switch (refusal) {
                 case NO_SUCH_CODE, EXPIRED, TOO_MANY_TRIES -> Violations.ofField("join_code", code, refusal.message());
-                case HAS_MASTER, MANAGES_OTHERS, BUSY, UNREADABLE -> Violations.ofForm(refusal.message());
+                case HAS_MASTER, MANAGES_OTHERS, BUSY, UNREADABLE, CODES -> Violations.ofForm(refusal.message());
             };
         }
         String token = text(joined.get("token"));
@@ -465,7 +490,7 @@ public final class LinkedServers {
             throw Violations.ofForm(JoinRefusal.UNREADABLE.message());
         }
         Row server = Models.get(LinkedServerModel.class).createEmptyRow();
-        server.set(LinkedServerModel.ID, Uuids.v7());
+        server.set(LinkedServerModel.ID, id);
         server.set(LinkedServerModel.NAME, trimmed);
         server.set(LinkedServerModel.ROLE, LinkRole.MANAGES.token());
         server.set(LinkedServerModel.BASE_URL, baseUrl);
@@ -609,8 +634,11 @@ public final class LinkedServers {
             .assign(LinkedServerModel.LAST_FAILURE, null)
             .assign(LinkedServerModel.ALERTED_AT, null)
             .updateAll();
-        if (roleOf(row) == LinkRole.MANAGES) {
-            ClusterRecords.request(row.get(LinkedServerModel.ID));
+        switch (roleOf(row)) {
+            case MANAGES -> ClusterRecords.request(row.get(LinkedServerModel.ID));
+            case MANAGED_BY -> ClusterCodes.ask();
+            case null -> {
+            }
         }
         if (won == 0 || failingSince == null || alertedAt == null) {
             return;
@@ -674,12 +702,18 @@ public final class LinkedServers {
         return Removal.KEPT_THERE;
     }
 
-    /** Removes a linked server's row and, in the same step, everything this server keeps of it. */
+    /**
+     * Removes a linked server's row and, in the same step, everything this server keeps of it; a master's row leaves
+     * this server's code numbers to its own sequence again (ClusterCodes.left).
+     */
     private static void forget(@NonNull Row row) {
         UUID id = row.get(LinkedServerModel.ID);
         Models.get(LinkedServerModel.class).getResolvedDatasource().withTransaction(transaction -> {
             Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.eq(id)).delete();
             ClusterRecords.forget(id);
+            if (roleOf(row) == LinkRole.MANAGED_BY) {
+                ClusterCodes.left();
+            }
         });
     }
 
@@ -720,8 +754,13 @@ public final class LinkedServers {
             .acquire(CREATE_KEY, CREATE_WAIT_SECONDS);
     }
 
-    private static @NonNull String digestOf(@NonNull String key) {
+    static @NonNull String digestOf(@NonNull String key) {
         return CommandPayloads.keyedDigests(DIGEST_PURPOSE, key).getFirst();
+    }
+
+    /** @return whether a stored key digest is the presented key's, under any key of the keyring */
+    static boolean keyMatches(@NonNull String digest, @NonNull String key) {
+        return CommandPayloads.keyedDigests(DIGEST_PURPOSE, key).contains(digest);
     }
 
     private static @Nullable String text(@Nullable Object value) {

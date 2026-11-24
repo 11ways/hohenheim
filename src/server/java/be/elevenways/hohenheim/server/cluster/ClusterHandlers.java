@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.code.CodeBlock;
+import be.elevenways.zenit.common.orm.code.CodeWant;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.peer.SharedRowsReader;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -30,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Answers the calls of ClusterEndpoints: join (the code is the credential), and every other call (the link key is).
@@ -43,8 +46,9 @@ import java.util.Map;
  * row says it is THIS server's master and nobody else: no key, an API key or any other bearer that is no link key,
  * and a wrong key are 401 (only a link key's digest is ever looked up); a server this one manages, presenting its own
  * valid key, is 403. The answer is read as that master (a LinkedInstallPrincipal of the one SharedRowsReader declared
- * here), and core refuses every other principal again. "changed" is the opposite way: only a server this one manages
- * may nudge it. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
+ * here), and core refuses every other principal again. "changed" and "codes" are the opposite way: only a server
+ * this one manages may nudge it or be granted code numbers, or at joining the server a valid ticket of this one
+ * names. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -59,9 +63,13 @@ public final class ClusterHandlers {
         static final SharedRowsReader READER = SharedRowsReader.declare(ClusterHandlers.class);
     }
 
-    /** Installs the handlers of the cluster calls, and the nudge that tells this server's master of a change. */
+    /**
+     * Installs the handlers of the cluster calls, the nudge that tells this server's master of a change and the
+     * numbering that takes code numbers from it.
+     */
     public static void init() {
         ClusterNudge.install();
+        ClusterCodes.install();
         ClusterEndpoints.GENERATIONS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
             Map<String, Object> generations = new LinkedHashMap<>();
             SharedRows.generations(caller)
@@ -104,6 +112,7 @@ public final class ClusterHandlers {
             ClusterRecords.request(row.get(LinkedServerModel.ID));
             return new JsonResult<>(Map.of("asked", true));
         });
+        ClusterEndpoints.CODES.setHandler(ClusterHandlers::codes);
         ClusterEndpoints.JOIN.setHandler(ClusterHandlers::join);
         ClusterEndpoints.STATUS.setHandler(conduit -> {
             if (LinkedServers.byKey(keyOf(conduit)) == null) {
@@ -171,11 +180,51 @@ public final class ClusterHandlers {
         };
     }
 
+    /**
+     * Grants a server this one manages the code numbers it wants: 401 for a key (or a ticket with it) that names no
+     * such server, 403 for this server's own master, 400 for wants that cannot be read.
+     */
+    private static @NonNull ActionResult<Object> codes(@NonNull Conduit conduit) {
+        Map<String, Object> body = bodyOf(conduit);
+        String key = keyOf(conduit);
+        String peer;
+        Principal asker;
+        if (body != null && body.get("ticket") instanceof String ticket) {
+            peer = ClusterCodes.ticketPeer(ticket, key);
+            asker = null;
+        } else {
+            Row row = LinkedServers.byKey(key);
+            if (row != null && LinkedServers.roleOf(row) != LinkRole.MANAGES) {
+                return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
+            }
+            peer = row == null ? null : ClusterRecords.peerKey(row);
+            asker = row == null ? null : StoredRecordPrincipal.resolve(LinkedServers.principalOf(row));
+            if (asker == null) {
+                peer = null;
+            }
+        }
+        if (peer == null) {
+            return unknownKey(conduit);
+        }
+        List<CodeWant> wants = body == null ? null : ClusterCodes.wantsOf(body.get("wants"));
+        if (wants == null) {
+            return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
+        }
+        String granted = peer;
+        Supplier<List<CodeBlock>> grant = () -> ClusterCodes.grant(granted, wants);
+        // At joining no linked server exists yet to act as: the ticket is the gate, as the join code is for a join.
+        List<CodeBlock> blocks = asker == null ? ExecutionIdentity.supplyAsSystem(HohenheimSystemPurposes.CLUSTER_JOIN,
+            grant) : ExecutionIdentity.supply(ExecutionIdentity.caller(AccessContext.detached(asker),
+            CallerChannel.ofRequest(conduit)), grant);
+        return new JsonResult<>(Map.of("blocks", ClusterCodes.blocksOnWire(blocks)));
+    }
+
     private static @NonNull ActionResult<Object> refused(@NonNull Conduit conduit, @NonNull JoinRefusal refusal) {
         conduit.setResponseStatus(switch (refusal) {
             case TOO_MANY_TRIES -> 429;
             case HAS_MASTER, MANAGES_OTHERS, BUSY -> 409;
             case NO_SUCH_CODE, EXPIRED, UNREADABLE -> 422;
+            case CODES -> 502;
         });
         return new JsonResult<>(Map.of("refusal", refusal.token()));
     }

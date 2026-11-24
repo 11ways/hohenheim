@@ -34,7 +34,10 @@ public enum JoinRefusal {
     BUSY("busy"),
 
     /** The request or its answer could not be read. */
-    UNREADABLE("unreadable");
+    UNREADABLE("unreadable"),
+
+    /** The server could not take its code numbers from the master, so it did not join and nothing changed. */
+    CODES("codes");
 
     private final String token;
 
