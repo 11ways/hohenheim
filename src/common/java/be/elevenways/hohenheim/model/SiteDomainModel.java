@@ -454,7 +454,10 @@ public class SiteDomainModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
-    /** A domain's change is filed on its site. */
-    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+    /**
+     * A domain's change is filed on its site, and always recorded: it is a part of its site, whose history is required,
+     * so a change made by a tool or the panel is never missing from either.
+     */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.required().changes()
         .filedOn(SiteModel.class, row -> row.get(SITE_ID)));
 }

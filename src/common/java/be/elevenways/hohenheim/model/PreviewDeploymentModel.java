@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -136,6 +137,7 @@ public class PreviewDeploymentModel extends Model {
             .build());
 
     static {
+        AssistantNoun.declare(MODEL_ID, PreviewDeploymentModel.class, "preview");
         SCHEMA.setDisplayFields(HOSTNAME);
     }
 

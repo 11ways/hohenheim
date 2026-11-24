@@ -62,9 +62,14 @@ public final class InstanceKindFields {
     }
 
     public static @NonNull StringField image() {
+        return image(HohenheimMicrocopy.HELP.of("image"));
+    }
+
+    /** @param help the kind's own words for its image, where the shared ones (a Dockerfile build) are false for it */
+    public static @NonNull StringField image(@NonNull Microcopy help) {
         return StringField.builder().name(IMAGE)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image"))
-            .help(HohenheimMicrocopy.HELP.of("image")).build();
+            .help(help).build();
     }
 
     public static @NonNull StringMapField environmentVariables() {

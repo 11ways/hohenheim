@@ -56,7 +56,7 @@ public class InstanceVolumeModel extends Model {
         RecordCodeBehaviour.allocated(MODEL_ID, "VO"));
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceVolumeModel.class, "app_volume");
+        AssistantNoun.declare(MODEL_ID, InstanceVolumeModel.class, "volume");
     }
 
     /** The volume every workspace carries: its {@code /home/site} data directory. */

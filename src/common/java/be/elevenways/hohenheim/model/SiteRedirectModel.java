@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -95,6 +96,7 @@ public class SiteRedirectModel extends Model {
             .build());
 
     static {
+        AssistantNoun.declare(MODEL_ID, SiteRedirectModel.class, "path_redirect");
         SCHEMA.setDisplayFields(FROM_PATH);
     }
 

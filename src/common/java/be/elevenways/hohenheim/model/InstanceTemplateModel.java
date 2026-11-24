@@ -66,7 +66,7 @@ public class InstanceTemplateModel extends Model {
         RecordCodeBehaviour.allocated(MODEL_ID, "TP"));
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceTemplateModel.class, "app_template");
+        AssistantNoun.declare(MODEL_ID, InstanceTemplateModel.class, "template");
     }
 
     /** {@link #REINSTALL_POLICY}: a reinstall keeps the instance's volumes and their data. */

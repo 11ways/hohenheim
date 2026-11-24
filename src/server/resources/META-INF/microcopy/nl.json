@@ -568,6 +568,14 @@
       "scope": "help"
     }
   ],
+  "docker_container_image": {
+    "text": "De image die de container draait, zoals een registry ze noemt (nginx, ghcr.io/team/app); ze wordt opgehaald, nooit gebouwd.",
+    "scope": "help"
+  },
+  "docker_container_image_tag": {
+    "text": "De tag van de op te halen image (alpine, 1.4).",
+    "scope": "help"
+  },
   "image": [
     {
       "text": "Container-image",
@@ -3307,7 +3315,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Wat deze site serveert of doorstuurt: statische bestanden, een omleiding, een adres, een instantie die je beheert, een TCP/UDP-stream, ...",
+      "text": "Wat deze site serveert of doorstuurt: statische bestanden, een omleiding, een adres, een app die u beheert, een TCP/UDP-stream, ...",
       "scope": "help"
     }
   ],
@@ -7242,15 +7250,15 @@
   },
   "instance": [
     {
-      "text": "Instantie",
+      "text": "App",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Instantie",
+      "text": "App",
       "scope": "upstream_kind"
     },
     {
-      "text": "Een instantie serveren die deze installatie beheert",
+      "text": "Een app serveren die deze installatie beheert",
       "scope": "upstream_kind_description"
     }
   ],
@@ -12544,11 +12552,11 @@
   },
   "instance_port": [
     {
-      "text": "Instantiepoort",
+      "text": "App-poort",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Welke opgegeven poort van de instantie geserveerd wordt; leeg gebruikt de enige gepubliceerde poort.",
+      "text": "Welke opgegeven poort van de app geserveerd wordt; leeg gebruikt de enige gepubliceerde poort.",
       "scope": "help"
     }
   ],

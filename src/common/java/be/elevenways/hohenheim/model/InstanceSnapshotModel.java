@@ -41,7 +41,7 @@ public class InstanceSnapshotModel extends Model {
         RecordCodeBehaviour.allocated(MODEL_ID, "SN"));
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceSnapshotModel.class, "app_snapshot");
+        AssistantNoun.declare(MODEL_ID, InstanceSnapshotModel.class, "snapshot");
     }
 
     /** The {@link #STATUS} vocabulary; each member states whether a snapshot in it can be restored. */

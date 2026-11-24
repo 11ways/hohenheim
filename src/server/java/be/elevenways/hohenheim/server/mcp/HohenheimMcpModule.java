@@ -35,7 +35,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -65,13 +67,21 @@ public final class HohenheimMcpModule implements ZenitModule {
     /** The hand-declared tools {@link #install()} built, for the coverage check. */
     private static volatile @Nullable HohenheimTools declared;
 
-    /** The models whose sources the server lists, in the order its tools are offered. */
+    /**
+     * The models whose sources the server lists, in the order its tools are offered. Deploys and builds are not among
+     * them: app_list_deploys lists an app's history, both merged, newest first (KeptFromAssistants.DEPLOY_HISTORY).
+     * Nor are variables: they carry no code, and a key reads a model's records only by a code kind or a declared read
+     * capability, which variables lack; app_list_variables lists an app's own under the app's view capability.
+     */
     private static final List<Identifier> LISTED = List.of(SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID, SiteRedirectModel.MODEL_ID, AccessListModel.MODEL_ID, AccessRuleModel.MODEL_ID,
         CertificateModel.MODEL_ID, InstanceModel.MODEL_ID, InstanceTemplateModel.MODEL_ID,
         InstanceDeviceModel.MODEL_ID, InstanceVolumeModel.MODEL_ID, InstanceDatabaseModel.MODEL_ID,
-        PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, GitProviderModel.MODEL_ID,
-        HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID, BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID);
+        InstanceBackupModel.MODEL_ID, InstanceSnapshotModel.MODEL_ID,
+        PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID,
+        DatabaseDumpModel.MODEL_ID, GitProviderModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID,
+        BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
+        DnsPeerModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -115,9 +125,11 @@ public final class HohenheimMcpModule implements ZenitModule {
     public static synchronized void install() {
         if (McpHostServers.get(SERVER_NAME) != null) return;
         List<RecordSource<?>> sources = new ArrayList<>();
+        Map<Identifier, RecordSource<?>> ownLists = ownLists();
         for (Identifier model : LISTED) {
             // A source a role leaves out (backup targets without the instance role) is no tool there.
             RecordSource<?> source = RecordSourceRegistry.INSTANCE.declaredFor(model);
+            if (source == null) source = ownLists.get(model);
             if (source != null) sources.add(source);
         }
         // AIDEV-NOTE: an operation a hand-declared tool routes (HohenheimTools) is placed there and never here, so
@@ -133,7 +145,8 @@ public final class HohenheimMcpModule implements ZenitModule {
             DatabaseParts.MOVE_TO_SHARED, DatabaseParts.FINISH_OLD_ENGINE,
             StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
-        McpToolSet.Builder set = McpToolSet.builder()
+        // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
+        McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
             .lists(sources.toArray(new RecordSource<?>[0]))
             .places(placed.toArray(new Operation<?, ?, ?>[0]))
             .answersWith(InstanceOperations.APP_UPDATE, HohenheimMcpAnswers::output)
@@ -160,11 +173,13 @@ public final class HohenheimMcpModule implements ZenitModule {
             // The opening words of the spec (scratch render.py HEAD); the version's sentence is saysVersionOnce's.
             .instructions(codes(),
                 "A HOST is a machine apps run on.",
-                "request is your own id for a call: the same id again answers the first result instead of acting"
-                    + " twice.",
+                "request is your own id for a call, a UUID: the same id again answers the first result instead of"
+                    + " acting twice.",
                 "A _set tool that takes code creates a record when code is left out and changes only what you send"
                     + " when it is given. A _set tool without code sets a thing named by its own key (a variable):"
                     + " the same key again changes it; each such tool says how its thing is taken away.",
+                "read names each setting a _set tool takes by that tool's argument, its label in brackets, so a"
+                    + " value read can be sent back as it is.",
                 "Creating an app does not deploy it: call deploy and follow its run with "
                     + OperationRunOperations.READ.assistantName() + "; describe with a code says what you can do to"
                     + " that record now, each as the exact tool call.")
@@ -174,6 +189,45 @@ public final class HohenheimMcpModule implements ZenitModule {
     /** @return the code the model's kind spells for a number, as the instructions give an example of */
     private static @NonNull String code(@NonNull Identifier model, long number) {
         return ((RecordCodeBehaviour.Allocated) Objects.requireNonNull(RecordCodeKinds.of(model))).spell(number);
+    }
+
+    /**
+     * The operator's list of each kind whose model declares no source of its own (a panel's derived one reads it, which
+     * no programmatic caller reads), registered under its own id so no panel or picker changes.
+     *
+     * AIDEV-NOTE: a model that declares its own source later is listed by that one (install prefers it); this one then
+     * goes.
+     *
+     * @return per model, its registered list
+     */
+    private static @NonNull Map<Identifier, RecordSource<?>> ownLists() {
+        Map<Identifier, RecordSource.Builder<?>> made = new LinkedHashMap<>();
+        made.put(InstanceBackupModel.MODEL_ID, RecordSource.of(InstanceBackupModel.REF).project(
+            InstanceBackupModel.STATUS, InstanceBackupModel.CREATED_AT, InstanceBackupModel.INSTANCE_ID));
+        made.put(InstanceSnapshotModel.MODEL_ID, RecordSource.of(InstanceSnapshotModel.REF).project(
+            InstanceSnapshotModel.NOTE, InstanceSnapshotModel.STATUS, InstanceSnapshotModel.CREATED_AT,
+            InstanceSnapshotModel.INSTANCE_ID));
+        made.put(DatabaseEngineModel.MODEL_ID, RecordSource.of(DatabaseEngineModel.REF)
+            .search(DatabaseEngineModel.NAME));
+        made.put(DatabaseDumpModel.MODEL_ID, RecordSource.of(DatabaseDumpModel.REF).project(DatabaseDumpModel.STATUS,
+            DatabaseDumpModel.CREATED_AT, DatabaseDumpModel.DATABASE_ID));
+        made.put(StackModel.MODEL_ID, RecordSource.of(StackModel.REF).search(StackModel.NAME));
+        made.put(DnsZoneModel.MODEL_ID, RecordSource.of(DnsZoneModel.REF).search(DnsZoneModel.ORIGIN));
+        made.put(DnsPeerModel.MODEL_ID, RecordSource.of(DnsPeerModel.REF).search(DnsPeerModel.NAME));
+        Map<Identifier, RecordSource<?>> lists = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, RecordSource.Builder<?>> kind : made.entrySet()) {
+            Identifier model = kind.getKey();
+            RecordSource.Builder<?> builder = kind.getValue();
+            if (RecordSourceRegistry.INSTANCE.declaredFor(model) != null) continue;
+            Identifier id = HohenheimIds.id(model.getPath() + "_list");
+            RecordSource<?> source = RecordSourceRegistry.INSTANCE.declaredFor(id);
+            if (source == null) {
+                source = builder.id(id).permission(HohenheimSources.ADMIN_ACCESS).build();
+                RecordSourceRegistry.INSTANCE.register(source);
+            }
+            lists.put(model, source);
+        }
+        return lists;
     }
 
     /**

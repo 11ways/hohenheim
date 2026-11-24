@@ -47,7 +47,7 @@ public class InstanceVariableModel extends Model {
     public static final ModelRef<InstanceVariableModel> REF = ModelRef.of(InstanceVariableModel.class, MODEL_ID);
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceVariableModel.class, "app_variable");
+        AssistantNoun.declare(MODEL_ID, InstanceVariableModel.class, "variable");
     }
 
     public static final Schema SCHEMA = new Schema();

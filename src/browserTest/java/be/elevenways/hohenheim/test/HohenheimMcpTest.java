@@ -44,6 +44,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
+import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpScopes;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSurface;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -251,6 +252,19 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         List<String> loose = McpCoverage.looseParameters(server, operator);
         System.out.println("MCP arguments of no declared members: " + loose);
         assertThat(loose).as("step 3: arguments of no declared shape").isSubsetOf(maps);
+        // A hand-declared tool takes no object it does not declare as an entry (an importer's provenance envelope).
+        List<String> handNames = Objects.requireNonNull(HohenheimMcpModule.declared()).tools().stream()
+            .map(McpHostTool::name).toList();
+        assertThat(McpCoverage.undeclaredObjects(server, handNames, operator))
+            .as("step 3: objects a hand-declared tool takes that are no entry of its operations").isEmpty();
+        // Every argument a create needs says so first, from the create's own declaration.
+        Map<?, ?> docker = (Map<?, ?>) McpCoverage.offered(server, operator).stream().filter(tool -> tool.name()
+            .equals("app_docker_container_set")).findFirst().orElseThrow().inputSchema(operator).get("properties");
+        assertThat(String.valueOf(((Map<?, ?>) docker.get("name")).get("description")))
+            .as("step 3: name is required to create").startsWith("Required to create.");
+        assertThat(String.valueOf(((Map<?, ?>) docker.get("image")).get("description")))
+            .as("step 3: a kind that never builds says what its image is")
+            .doesNotContain("Dockerfile");
 
         // 4. Every hand-declared tool and each of its arguments is described, in English and in Dutch.
         Set<String> declared = new HashSet<>();
@@ -363,6 +377,23 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(arguments).as("step 2: the hand-declared tools' arguments were read").isGreaterThan(100);
     }
 
+    /** The one list knows every kind the tools take or answer a code of, each by the spec's word for it. */
+    @Test
+    void theListKnowsEveryKindTheToolsName() {
+        McpHostServer server = Objects.requireNonNull(McpHostServers.get(HohenheimMcpModule.SERVER_NAME));
+        AccessContext operator = TenantConduits.operator();
+        McpHostTool list = McpCoverage.offered(server, operator).stream()
+            .filter(tool -> tool.name().equals(McpListTool.NAME)).findFirst().orElseThrow();
+        Map<?, ?> kind = (Map<?, ?>) ((Map<?, ?>) list.inputSchema(operator).get("properties")).get(McpListTool.KIND);
+        List<String> kinds = ((List<?>) kind.get("enum")).stream().map(String::valueOf).toList();
+        assertThat(kinds).as("the kinds an operator lists").contains("dns_zone", "dns_peer",
+            "backup", "snapshot", "stack", "database_engine", "database_dump",
+            "template", "volume", "preview", "path_redirect", "host_account")
+            .doesNotContain("app_template", "app_volume", "preview_deployment", "site_redirect", "system_user",
+                // An app's deploys and builds are listed by its deploy list, both merged, newest first.
+                "deploy", "build");
+    }
+
     /** The operations and sources kept from assistants, by id: a new one fails here, a tool given to one shrinks it. */
     @Test
     void theExcusesOnlyShrink() {
@@ -443,12 +474,12 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         String strangerKey = ApiKeyService.create(strangerId, PREFIX + "stranger",
             List.of(McpScopes.server("hohenheim"), "*"), null).plaintext();
         McpHttpSession.Answer refused = McpHttpSession.open(endpoint, bearer(strangerKey))
-            .call("site_pause", Map.of("id", code));
+            .call("site_pause", Map.of("code", code));
         assertThat(refused.error()).as("step 4: refused: " + refused.text()).isTrue();
         assertThat(enabled(siteId)).as("step 4: still enabled").isTrue();
 
         // 5. The operator's key switches the site off through the same operation the panel places.
-        McpHttpSession.Answer paused = session.call("site_pause", Map.of("id", code));
+        McpHttpSession.Answer paused = session.call("site_pause", Map.of("code", code));
         assertThat(paused.error()).as("step 5: " + paused.text()).isFalse();
         assertThat(enabled(siteId)).as("step 5: disabled").isFalse();
 
@@ -507,16 +538,17 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             System.out.println("A docker container app read in full (" + read.text().length() + " characters):\n"
                 + read.text());
             assertThat(read.text()).as("step 1: the container in full").contains(workerCode + " (app)")
-                .contains(workerName).contains("Container image: fake/worker").contains("Image tag: 1.4")
-                .contains("Container command: worker --queue mail").contains("Container port: 8080")
+                .contains(workerName).contains("image (Container image): fake/worker").contains("tag (Image tag): 1.4")
+                .contains("command (Container command): worker --queue mail").contains("container_port: 8080")
                 .contains("(default)").contains("Environment variables: set").contains("status: ")
                 .doesNotContain(SECRET);
 
             // 2. The operator's read of the application says its image, port and health check, its secret as set.
             McpHttpSession.Answer readShop = operatorSession.call("read", Map.of("ids", List.of(shopCode)));
             assertThat(readShop.error()).as("step 2: " + readShop.text()).isFalse();
-            assertThat(readShop.text()).as("step 2: the application in full").contains("Container image: fake/app")
-                .contains("Container port: 8080").contains("Health path: /up").contains("Environment variables: set")
+            assertThat(readShop.text()).as("step 2: the application in full")
+                .contains("image (Container image): fake/app")
+                .contains("container_port: 8080").contains("health_path: /up").contains("Environment variables: set")
                 .doesNotContain(SECRET);
 
             // 3. The customer holding the container reads what the customer panel shows him: its name and status,
@@ -639,7 +671,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .getResolvedDatasource());
             probe.reset();
             McpHttpSession.Answer deploys = session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(),
-                Map.of("id", appCode));
+                Map.of("code", appCode));
             List<Integer> fewer = List.of(probe.queriesAgainst(ReleaseOperationModel.MODEL_ID),
                 probe.queriesAgainst(BuildOperationModel.MODEL_ID));
             assertThat(deploys.error()).as("step 7: " + deploys.text()).isFalse();
@@ -649,7 +681,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             failedBuild(appId, "npm ERR! again", "exit 2");
             failedBuild(appId, "npm ERR! and again", "exit 3");
             probe.reset();
-            session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("id", appCode));
+            session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode));
             assertThat(List.of(probe.queriesAgainst(ReleaseOperationModel.MODEL_ID),
                 probe.queriesAgainst(BuildOperationModel.MODEL_ID)))
                 .as("step 7: the list reads as much with two more builds").isEqualTo(fewer);
@@ -666,7 +698,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 "set", List.of(Map.of("key", "GREETING", "value", "hello"))));
             assertThat(set.error()).as("step 8: " + set.text()).isFalse();
             String listVariables = InstanceVariableOperations.LIST_VARIABLES.assistantName();
-            assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8: the list")
+            assertThat(session.call(listVariables, Map.of("code", appCode)).text()).as("step 8: the list")
                 .contains("GREETING = hello").contains("API_TOKEN (secret, set)").doesNotContain(SECRET);
             McpHttpSession.Answer overSecret = session.call("variable_set", Map.of("owner", appCode,
                 "set", List.of(Map.of("key", "API_TOKEN", "value", "plain"))));
@@ -676,13 +708,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             McpHttpSession.Answer unset = session.call("variable_set", Map.of("owner", appCode,
                 "unset", List.of("GREETING")));
             assertThat(unset.error()).as("step 8: " + unset.text()).isFalse();
-            assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8: removed")
+            assertThat(session.call(listVariables, Map.of("code", appCode)).text()).as("step 8: removed")
                 .doesNotContain("GREETING");
             UUID viewerId = user(PREFIX + letters() + "@surface.test", "Mcp Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, appId,
                 HohenheimCapabilities.VIEW, true);
             McpHttpSession viewer = presetSession(server, endpoint, viewerId, "Mcp Viewer");
-            assertThat(viewer.call(listVariables, Map.of("id", appCode)).text()).as("step 8: a viewer lists")
+            assertThat(viewer.call(listVariables, Map.of("code", appCode)).text()).as("step 8: a viewer lists")
                 .contains("API_TOKEN (secret, set)");
             assertThat(viewer.call("variable_set", Map.of("owner", appCode,
                 "set", List.of(Map.of("key", "GREETING", "value", "hello")))).error())
@@ -696,7 +728,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(made).as("step 8b: a value was made").isNotBlank();
             assertThat(generated.text()).as("step 8b: the answer names the key, never the value")
                 .contains("SESSION_KEY").doesNotContain(made);
-            assertThat(session.call(listVariables, Map.of("id", appCode)).text()).as("step 8b: listed as a set secret")
+            assertThat(session.call(listVariables, Map.of("code", appCode)).text())
+                .as("step 8b: listed as a set secret")
                 .contains("SESSION_KEY (secret, set)").doesNotContain(made);
             assertThat(session.call("variable_set", Map.of("owner", appCode, "generate", List.of("API_TOKEN"))).error())
                 .as("step 8b: a held value is never replaced").isTrue();
@@ -724,8 +757,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             }
             for (Operation<?, ?, ?> reading : List.of(InstanceLogOperations.LIST_DEPLOYS,
                     InstanceVariableOperations.LIST_VARIABLES)) {
-                McpHttpSession.Answer foreign = session.call(reading.assistantName(), Map.of("id", otherCode));
-                McpHttpSession.Answer none = session.call(reading.assistantName(), Map.of("id", missing));
+                McpHttpSession.Answer foreign = session.call(reading.assistantName(), Map.of("code", otherCode));
+                McpHttpSession.Answer none = session.call(reading.assistantName(), Map.of("code", missing));
                 assertThat(foreign.error()).as("step 9: " + reading.assistantName() + " refused").isTrue();
                 assertThat(foreign.text().replace(otherCode, "<code>"))
                     .as("step 9: " + reading.assistantName() + " says what it says of none")
@@ -734,7 +767,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
             // 10. A backup and a snapshot are refused, without naming what he lacks.
             for (Map.Entry<String, String> withheld : Map.of("back_up", "code",
-                    Objects.requireNonNull(InstanceOperations.SNAPSHOT.assistantName()), "id").entrySet()) {
+                    Objects.requireNonNull(InstanceOperations.SNAPSHOT.assistantName()), "code").entrySet()) {
                 McpHttpSession.Answer refused = session.call(withheld.getKey(), Map.of(withheld.getValue(), appCode));
                 assertThat(refused.error()).as("step 10: " + withheld.getKey() + " refused").isTrue();
                 assertThat(refused.text()).as("step 10: without naming the capability")
@@ -766,7 +799,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .isEqualTo(DeployTrigger.API.word());
             String deployedCode = code(ReleaseOperationModel.MODEL_ID, deployed.get(ReleaseOperationModel.ID),
                 operator);
-            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("id", appCode)).text())
+            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode))
+                .text())
                 .as("step 12: his deploy list holds the new deploy").contains(deployedCode);
 
             // 13. He rolls it back the same way: a run he follows to its end, a rollback in his deploy list.
@@ -781,7 +815,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .isEqualTo(DeployTrigger.API.word());
             String rolledBackCode = code(ReleaseOperationModel.MODEL_ID, rolledBack.get(ReleaseOperationModel.ID),
                 operator);
-            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("id", appCode)).text())
+            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode))
+                .text())
                 .as("step 13: his deploy list holds the rollback").contains(rolledBackCode);
             settle("step 13");
 
@@ -880,10 +915,10 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // 4. Its read shows every setting, its variables plain and the secrets as set.
             McpHttpSession.Answer read = admin.call("read", Map.of("ids", List.of(code)));
             assertThat(read.error()).as("step 4: " + read.text()).isFalse();
-            assertThat(read.text()).as("step 4: the settings").contains("Container image: fake/app")
-                .contains("Container command: worker --queue mail");
+            assertThat(read.text()).as("step 4: the settings").contains("image (Container image): fake/app")
+                .contains("command (Container command): worker --queue mail");
             String listed = admin.call(InstanceVariableOperations.LIST_VARIABLES.assistantName(),
-                Map.of("id", code)).text();
+                Map.of("code", code)).text();
             assertThat(listed).as("step 4: the variables").contains("MODE = worker")
                 .contains("API_TOKEN (secret, set)");
             for (String secret : secrets) {
@@ -896,7 +931,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(changed.error()).as("step 5: " + changed.text()).isFalse();
             assertThat(changed.text()).as("step 5: what changed").contains("command");
             assertThat(admin.call("read", Map.of("ids", List.of(code))).text()).as("step 5: the new command")
-                .contains("Container command: worker --queue jobs").contains("Container image: fake/app");
+                .contains("command (Container command): worker --queue jobs")
+                .contains("image (Container image): fake/app");
             assertThat(admin.call("app_docker_container_set", Map.of("code", code, "host", "SR1")).text())
                 .as("step 5: a create-only argument is refused on a change").contains("host")
                 .contains("creating");
@@ -942,10 +978,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 6: the first release serves").contains("status: " + OperationRunStatus.SUCCEEDED
                     .storageKey());
             Row first = Objects.requireNonNull(ApplicationReleases.ownedServing(shopId), "step 6: one serves");
-            daemon.print(FakeDockerDaemon.handleOf(first.get(InstanceModel.ID)), "listening on 8080\n");
+            // Printed behind a terminal: its escape sequences never reach the answer, which is text.
+            daemon.print(FakeDockerDaemon.handleOf(first.get(InstanceModel.ID)),
+                "\u001b[?1049h\u001b[?1h\u001b=\u001b[32mlistening on 8080\u001b[0m\n");
             McpHttpSession.Answer log = admin.call("logs", Map.of("code", shopCode));
             assertThat(log.error()).as("step 6: " + log.text()).isFalse();
-            assertThat(log.text()).as("step 6: the log it printed").contains("listening on 8080");
+            assertThat(log.text()).as("step 6: the log it printed, as plain words").contains("listening on 8080")
+                .doesNotContain("\u001b").doesNotContain("[?1049h");
             settle("step 6");
             for (String action : List.of("stop", "start")) {
                 McpHttpSession.Answer powered = admin.call("power", Map.of("code", shopCode, "action", action));
@@ -1175,6 +1214,22 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(secure.get(SiteDomainModel.HSTS_ENABLED)).as("step 2: stored under its column").isEqualTo(true);
             assertThat(RawValues.map(secure.get(SiteDomainModel.CUSTOM_HEADERS))).as("step 2: the request header")
                 .containsEntry("X-Shop", "1");
+            // Every change a tool makes is in the record's history, as the panel's own save is.
+            McpHttpSession.Answer past = admin.call("history", Map.of("id", addressCode));
+            assertThat(past.error()).as("step 2: the address's history " + past.text()).isFalse();
+            assertThat(past.text()).as("step 2: the change is in it").contains("changed " + hostname);
+            // The one list lists a site's addresses by the site's code, and refuses a code naming nothing.
+            McpHttpSession.Answer ofSite = admin.call("list", Map.of("kind", "address", "of", siteCode));
+            assertThat(ofSite.error()).as("step 2: list kind=address of=" + siteCode + ": " + ofSite.text()).isFalse();
+            int siteKey = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(SiteModel.MODEL_ID, siteCode)));
+            long ofThatSite = Models.get(SiteDomainModel.class).find().where(SiteDomainModel.SITE_ID.eq(siteKey))
+                .count();
+            assertThat(ofSite.text()).as("step 2: the site's addresses, and no other site's").contains(addressCode)
+                .containsPattern(": " + ofThatSite + "(?![0-9])");
+            McpHttpSession.Answer ofNothing = admin.call("list", Map.of("kind", "address", "of", "S999999"));
+            assertThat(ofNothing.error()).as("step 2: of a code naming nothing is refused").isTrue();
+            assertThat(ofNothing.text()).as("step 2: naming the argument and the code").contains("of")
+                .contains("S999999");
             assertThat(admin.call("address_set", Map.of("code", addressCode, "hsts_enabled", true)).text())
                 .as("step 2: the stored name is no argument").contains("hsts_enabled");
             // The app site's own settings under their names for people.
@@ -1203,6 +1258,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // 4. An A and a TXT record in one call, in an existing zone.
             zoneId = zone(letters() + ".mcp-journey.test");
             String zone = code(DnsZoneModel.MODEL_ID, zoneId, operator);
+            McpHttpSession.Answer zones = admin.call("list", Map.of("kind", "dns_zone", "search", "mcp-journey"));
+            assertThat(zones.error()).as("step 4: list kind=dns_zone: " + zones.text()).isFalse();
+            assertThat(zones.text()).as("step 4: the zone listed by its code").contains(zone);
             McpHttpSession.Answer set = admin.call("dns_record_set", Map.of("dns_zone", zone, "records", List.of(
                 Map.of("name", "shop", "type", "A", "values", List.of(Map.of("value", "203.0.113.10"))),
                 Map.of("name", "@", "type", "TXT", "ttl", 300, "values", List.of(Map.of("value", "hello"))))));
@@ -1245,7 +1303,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 7: the header stored").containsEntry("X-Frame-Options", "DENY");
             assertThat(admin.call("describe", Map.of("code", siteCode)).text()).as("step 7: describe")
                 .contains("site_app_set code=" + siteCode).contains("delete code=" + siteCode)
-                .doesNotContain("site_proxy_set");
+                .doesNotContain("site_proxy_set")
+                .as("step 7: and what one makes on it next, the site as an argument")
+                .contains("address_set site=" + siteCode + " hostname=...");
 
             // 8. delete sends the site to the trash.
             McpHttpSession.Answer deleted = admin.call("delete", Map.of("code", siteCode));

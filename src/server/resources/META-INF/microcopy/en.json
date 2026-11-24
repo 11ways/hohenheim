@@ -568,6 +568,14 @@
       "scope": "help"
     }
   ],
+  "docker_container_image": {
+    "text": "The image the container runs, as a registry names it (nginx, ghcr.io/team/app); it is pulled, never built.",
+    "scope": "help"
+  },
+  "docker_container_image_tag": {
+    "text": "The tag of the image to pull (alpine, 1.4).",
+    "scope": "help"
+  },
   "image": [
     {
       "text": "Container image",
@@ -3307,7 +3315,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "What this site serves or forwards: static files, a redirect, an address, an instance you manage, a TCP/UDP stream, ...",
+      "text": "What this site serves or forwards: static files, a redirect, an address, an app you manage, a TCP/UDP stream, ...",
       "scope": "help"
     }
   ],
@@ -7242,15 +7250,15 @@
   },
   "instance": [
     {
-      "text": "Instance",
+      "text": "App",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Instance",
+      "text": "App",
       "scope": "upstream_kind"
     },
     {
-      "text": "Serve an instance this deployment manages",
+      "text": "Serve an app this installation manages",
       "scope": "upstream_kind_description"
     }
   ],
@@ -12544,11 +12552,11 @@
   },
   "instance_port": [
     {
-      "text": "Instance port",
+      "text": "App port",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Which declared port of the instance to serve; empty uses its single published port.",
+      "text": "Which declared port of the app to serve; empty uses its single published port.",
       "scope": "help"
     }
   ],

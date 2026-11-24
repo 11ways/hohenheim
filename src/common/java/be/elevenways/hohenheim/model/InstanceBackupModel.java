@@ -55,7 +55,7 @@ public class InstanceBackupModel extends Model {
         RecordCodeBehaviour.allocated(MODEL_ID, "BK"));
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceBackupModel.class, "app_backup");
+        AssistantNoun.declare(MODEL_ID, InstanceBackupModel.class, "backup");
     }
 
     public static final String STATUS_UPLOADING = BackupStatus.UPLOADING.key();

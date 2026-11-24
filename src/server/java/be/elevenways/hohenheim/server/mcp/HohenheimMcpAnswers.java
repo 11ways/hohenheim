@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.text.TerminalText;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -38,11 +39,15 @@ final class HohenheimMcpAnswers {
         return McpResponse.create().line("status: " + (result == null ? "unknown" : result.toString()));
     }
 
-    /** What a program, a console line or an update script printed. */
+    /**
+     * What a program, a console line or an update script printed, as the words it shows: a console behind a terminal
+     * writes escape sequences, which an answer of text never carries.
+     */
     static @NonNull McpResponse output(@NonNull McpToolContext context, @Nullable String output) {
         McpResponse response = McpResponse.create();
-        if (output == null || output.isBlank()) return response.line("output: none");
-        return response.untrusted("output", output);
+        String shown = TerminalText.plain(output);
+        if (shown.isBlank()) return response.line("output: none");
+        return response.untrusted("output", shown);
     }
 
     /** One program's exit code and what it printed. */
@@ -93,11 +98,15 @@ final class HohenheimMcpAnswers {
         return message == null ? response.line("done") : response.line(context.access().text(message));
     }
 
-    /** What a workload printed or a build or a deploy wrote; the daemon cuts a live log to the lines asked. */
+    /**
+     * What a workload printed or a build or a deploy wrote, as the words a terminal shows (a console's escape
+     * sequences gone); the daemon cuts a live log to the lines asked.
+     */
     static @NonNull McpResponse log(@NonNull McpToolContext context, @Nullable String log) {
         McpResponse response = McpResponse.create();
-        if (log == null || log.isBlank()) return response.line("log: empty");
-        return response.untrusted("log", log);
+        String shown = TerminalText.plain(log);
+        if (shown.isBlank()) return response.line("log: empty");
+        return response.untrusted("log", shown);
     }
 
     /** One page of an app's deploys, newest first, each named by its code. */

@@ -74,11 +74,13 @@ public final class DockerContainerKind implements InstanceKindHandler {
      */
     public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
-    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(InstanceKindFields.image());
+    // A container never builds: its image and tag say so in their own words, not the shared build-aware ones.
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
+        InstanceKindFields.image(HohenheimMicrocopy.HELP.of("docker_container_image")));
 
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
         StringField.builder().name("tag").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_tag"))
-            .help(HohenheimMicrocopy.HELP.of("image_tag")).build());
+            .help(HohenheimMicrocopy.HELP.of("docker_container_image_tag")).build());
 
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_command"))

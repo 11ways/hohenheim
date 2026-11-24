@@ -56,7 +56,7 @@ class UpstreamKindTest extends HohenheimTestBase {
 
         String allText = cards.allTextContents().toString();
         assertThat(allText).as("step 1: every member is named").contains("Proxy to an address", "Static files",
-            "Redirect", "Instance", "Dev namespace", "TLS passthrough", "TCP/UDP stream");
+            "Redirect", "App", "Dev namespace", "TLS passthrough", "TCP/UDP stream");
         assertThat(allText).as("step 1: every card explains itself in a sentence")
             .contains("Serve static files", "Redirect requests", "Forward requests");
         assertThat(allText).as("step 1: no workload kind survives in the upstream list")
