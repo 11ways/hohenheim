@@ -220,12 +220,11 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
     }
 
     /**
-     * Words: every operation is placed once, every Hohenheim operation says more than its label, and every argument
-     * declares its shape and its words; what is left is pinned by name, so the list can only shrink.
+     * Words: every operation is placed once and says more than its label, and every argument declares its shape and
+     * its words; what is left is pinned by name, so the list can only shrink.
      *
-     * AIDEV-NOTE: the left-overs are zenit-auth's (its account operations and fields), a template's own variables
-     * (their names are per template) and a field shown only for one choice of another, whose shape core's schema puts
-     * under its condition alone.
+     * AIDEV-NOTE: the left-overs are a template's own variables (their names are per template) and a field shown
+     * only for one choice of another, whose shape core's schema puts under its condition alone.
      */
     @Test
     void everyToolSaysWhatItDoesOnce() {
@@ -234,8 +233,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(McpCoverage.placedTwice(server)).as("operations placed by two tools").isEmpty();
         List<String> undescribed = McpCoverage.undescribed(server);
         System.out.println("MCP operations said only by their label: " + undescribed);
-        assertThat(undescribed).as("no Hohenheim operation is said only by its label")
-            .noneMatch(line -> line.contains(": hohenheim:"));
+        assertThat(undescribed).as("no operation is said only by its label").isEmpty();
         AccessContext operator = TenantConduits.operator();
         List<String> loose = McpCoverage.looseParameters(server, operator);
         List<String> bare = McpCoverage.undescribedParameters(server, operator);
@@ -246,8 +244,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(bare).as("arguments without words")
             .containsExactlyInAnyOrder("app_template_create_app.environmentId", "app_template_create_app.variables",
                 "certificate_create.dns_publisher", "address_order_certificate.dns_publisher",
-                "certificate_reissue.dns_publisher", "user_create.email", "user_create.display_name",
-                "user_invite.email", "user_invite.display_name", "user_set_picture.picture");
+                "certificate_reissue.dns_publisher");
     }
 
     /** The operations and sources kept from assistants, by id: a new one fails here, a tool given to one shrinks it. */
