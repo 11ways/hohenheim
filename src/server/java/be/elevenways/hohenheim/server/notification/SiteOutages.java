@@ -13,7 +13,6 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -278,12 +277,7 @@ public final class SiteOutages {
      * nothing another one moved meanwhile: the compare-and-set of every move a stale reading could get wrong.
      */
     private static @NonNull QueryBuilder<Row> asRead(@NonNull Row outage) {
-        QueryBuilder<Row> update = write(outage);
-        for (DateTimeField field : List.of(SiteOutageModel.UP_SEEN_AT, SiteOutageModel.DOWN_SINCE,
-                SiteOutageModel.DOWN_ALERTED_AT)) {
-            Instant read = outage.get(field);
-            update = update.and(read == null ? field.isNull() : field.eq(read));
-        }
-        return update;
+        return write(outage).and(SiteOutageModel.UP_SEEN_AT.asRead(outage))
+            .and(SiteOutageModel.DOWN_SINCE.asRead(outage)).and(SiteOutageModel.DOWN_ALERTED_AT.asRead(outage));
     }
 }

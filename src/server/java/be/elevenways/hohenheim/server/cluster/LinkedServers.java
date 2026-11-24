@@ -741,12 +741,7 @@ public final class LinkedServers {
 
     /** {@link #write} of a row whose failing_since and alerted_at are as read: the compare-and-set of an alert. */
     private static @NonNull QueryBuilder<Row> asRead(@NonNull Row row) {
-        Instant failingSince = row.get(LinkedServerModel.FAILING_SINCE);
-        Instant alertedAt = row.get(LinkedServerModel.ALERTED_AT);
-        return write(row)
-            .and(failingSince == null ? LinkedServerModel.FAILING_SINCE.isNull()
-                : LinkedServerModel.FAILING_SINCE.eq(failingSince))
-            .and(alertedAt == null ? LinkedServerModel.ALERTED_AT.isNull()
-                : LinkedServerModel.ALERTED_AT.eq(alertedAt));
+        return write(row).and(LinkedServerModel.FAILING_SINCE.asRead(row))
+            .and(LinkedServerModel.ALERTED_AT.asRead(row));
     }
 }
