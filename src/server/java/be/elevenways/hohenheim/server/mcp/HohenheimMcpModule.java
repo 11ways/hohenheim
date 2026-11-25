@@ -79,7 +79,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID,
         DatabaseDumpModel.MODEL_ID, GitProviderModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID,
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
-        DnsPeerModel.MODEL_ID);
+        DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -140,7 +140,6 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE,
             SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
             AccessRuleParts.TOGGLE,
-            StackOperations.PURGE_VOLUMES, StackOperations.RECLAIM_IMAGES,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
         // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
         McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
@@ -153,9 +152,6 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys);
-        for (var operation : HostParts.lifecycleForAssistants()) {
-            set.answersWith(operation, HohenheimMcpAnswers::said);
-        }
         tools = set.build();
         HohenheimTools hand = HohenheimTools.build();
         declared = hand;
@@ -208,6 +204,11 @@ public final class HohenheimMcpModule implements ZenitModule {
         made.put(DatabaseDumpModel.MODEL_ID, RecordSource.of(DatabaseDumpModel.REF).project(DatabaseDumpModel.STATUS,
             DatabaseDumpModel.CREATED_AT, DatabaseDumpModel.DATABASE_ID));
         made.put(StackModel.MODEL_ID, RecordSource.of(StackModel.REF).search(StackModel.NAME));
+        made.put(StackServiceModel.MODEL_ID, RecordSource.of(StackServiceModel.REF).project(StackServiceModel.NAME,
+            StackServiceModel.IMAGE, StackServiceModel.ENABLED, StackServiceModel.STACK_ID)
+            .search(StackServiceModel.NAME));
+        made.put(EnvironmentModel.MODEL_ID, RecordSource.of(EnvironmentModel.REF).project(EnvironmentModel.NAME,
+            EnvironmentModel.DESCRIPTION, EnvironmentModel.PROJECT_ID).search(EnvironmentModel.NAME));
         made.put(DnsZoneModel.MODEL_ID, RecordSource.of(DnsZoneModel.REF).search(DnsZoneModel.ORIGIN));
         made.put(DnsPeerModel.MODEL_ID, RecordSource.of(DnsPeerModel.REF).search(DnsPeerModel.NAME));
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));

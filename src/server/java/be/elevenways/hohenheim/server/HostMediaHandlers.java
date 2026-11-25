@@ -6,9 +6,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
+import be.elevenways.hohenheim.server.cms.HostMediaOperations;
 import be.elevenways.hohenheim.server.cms.HostMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
-import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -55,22 +55,12 @@ final class HostMediaHandlers {
             String name = form.getOrDefault("name", "").trim();
             String url = form.getOrDefault("url", "").trim();
             try {
-                // Every refusal an operator must read now is decided HERE, on the request
-                // thread; the download and the import then run as a background job whose
-                // stored state the Install media tab renders (and refreshes while it runs).
-                // The public-address guard, the ISO cap and the deadline are the fetcher's
-                // own and did not move.
-                media.requireFetchable(server, name, url);
-                InstallMediaFetches.start(server, name, progress ->
-                    media.transfer(server, name, url, progress, progress::importing));
+                // Every refusal an operator must read now is decided on the request thread; the download and the
+                // import then run as the background job whose stored state the Install media tab renders.
+                HohenheimFlash.success(conduit, HostMediaOperations.fetch(server, name, url));
             } catch (Violations refused) {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
-                return HandlerSupport.redirect(tab);
             }
-            // The activity row ("media_fetched") is written by the job when the medium reads
-            // back on the host, never for a fetch that is merely accepted.
-            HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_fetch_started")
-                .withArg("name", name));
             return HandlerSupport.redirect(tab);
         });
 
@@ -141,16 +131,10 @@ final class HostMediaHandlers {
             RouteTarget tab = mediaTab(serverId);
             String name = HandlerSupport.formMap(conduit).getOrDefault("name", "").trim();
             try {
-                media.delete(server, name);
+                HohenheimFlash.success(conduit, HostMediaOperations.delete(server, name));
             } catch (Violations refused) {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
-                return HandlerSupport.redirect(tab);
             }
-            History.event(Models.get(HostModel.class), serverId, Change.fact(HohenheimActivityAction.MEDIA_DELETED,
-                Map.of(HohenheimActivityAction.NAME_KEY, name)));
-            HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_deleted").withArg("name", name));
-            // Another reader's open tab redraws its part without the deleted medium.
-            HostMediaTab.poolChanged(serverId);
             return HandlerSupport.redirect(tab);
         });
     }

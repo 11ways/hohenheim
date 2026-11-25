@@ -126,7 +126,7 @@ public class HostModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).help(HohenheimMicrocopy.HELP.of("host_name")).build());
 
     /** @return whether a host name has the {@link LowercaseNames} shape; a host name has no ceiling */
     public static boolean isValidName(@Nullable String name) {
@@ -134,7 +134,8 @@ public class HostModel extends Model {
     }
     public static final EnumField MODE = SCHEMA.addField(modeField());
     public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target")
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ssh_target")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ssh_target")).help(HohenheimMicrocopy.HELP.of("host_ssh_target"))
+        .build());
 
     /** The mode field, one value per {@link HostMode} member and nothing else. */
     private static EnumField modeField() {
@@ -164,6 +165,7 @@ public class HostModel extends Model {
             .label(HohenheimMicrocopy.HOST_RUNTIME.of("incus")).color(ColorHue.GREEN))
         .defaultValue(RUNTIME_DOCKER)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime"))
+        .help(HohenheimMicrocopy.HELP.of("host_runtime"))
         .build());
 
     /**

@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.hohenheim.server.cms.DnsRecordSets;
 import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
@@ -67,6 +68,7 @@ public final class HohenheimTools extends McpToolCollection {
     private HohenheimTools() {
         for (McpHostTool tool : declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimDataTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimHostTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -117,6 +119,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(HostParts.DELETE, null)
             .route(RuntimeImageParts.DELETE, null)
             .route(ProjectParts.DELETE, null)
+            .route(EnvironmentParts.DELETE, null)
             .route(ReconcileFindingParts.REMOVE, null)
             .route(ReleasedClaimParts.LIFT, null)
             .build();
@@ -165,6 +168,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(DomainParts.CHECK_REACH, null)
             .route(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
             .route(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
+            .route(HostParts.PROBE, HohenheimMcpAnswers::said)
             .build();
         // DNS records have no code: they are read and set by their zone, each by its name and type.
         McpHostTool recordList = McpCodeTool.builder("dns_record_list", words("mcp_tool_dns_record_list"),

@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -59,12 +60,33 @@ final class HostLifecycleActions {
     /** Every operation {@link #place} declared, in order; filled before {@link #PLACED} by declaration order. */
     private static final List<Operation<Row, Void, Microcopy>> DECLARED = new ArrayList<>();
     private static final List<PanelAction<Row>> PLACED = declarePlaced();
+
+    /** Measures a host and stores what it found. */
+    static final Operation<Row, Void, Microcopy> PROBE = declared("probe_server");
+
+    /** Preflights a host and admits one waiting for admission once its required checks pass. */
+    static final Operation<Row, Void, Microcopy> CHECK = declared("check_host");
+
+    /** Stops new apps landing on an admitted host. */
+    static final Operation<Row, Void, Microcopy> CORDON = declared("cordon_server");
+
+    /** Pauses a host when it is not yet, then moves every app off it. */
+    static final Operation<Row, Void, Microcopy> DRAIN = declared("drain_server");
+
+    /** Ends a host's pause. */
+    static final Operation<Row, Void, Microcopy> UNCORDON = declared("uncordon_server");
+
+    /** Removes what other controllers left on an Incus host. */
+    static final Operation<Row, Void, Microcopy> REAP = declared("reap_controller_objects");
+
     private HostLifecycleActions() {}
     static @NonNull List<PanelAction<Row>> placed() { return PLACED; }
 
-    /** @return the host operations an assistant's tools place: every one declared here that is not kept from them */
-    static @NonNull List<Operation<Row, Void, Microcopy>> forAssistants() {
-        return DECLARED.stream().filter(operation -> operation.notForAssistants() == null).toList();
+    /** @return the operation {@link #place} declared under this id path */
+    static @NonNull Operation<Row, Void, Microcopy> declared(@NonNull String id) {
+        Identifier wanted = HohenheimIds.id(id);
+        return DECLARED.stream().filter(operation -> operation.id().equals(wanted)).findFirst()
+            .orElseThrow(() -> new IllegalStateException("No host operation " + wanted + " is declared"));
     }
 
     private static List<PanelAction<Row>> declarePlaced() {
@@ -119,6 +141,10 @@ final class HostLifecycleActions {
                     HohenheimMicrocopy.SERVER.of("cordon_confirm"), ActionStyle.DESTRUCTIVE)).build(),
             place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), verb(HohenheimVerbs.DRAIN,
                 HohenheimMicrocopy.HOHENHEIM.of("drain_server_description")), row -> {
+                // An admitted host is paused first, so no new app lands on it while the others leave.
+                if (HostModel.ADMISSION_ADMITTED.equals(row.get(HostModel.ADMISSION))) {
+                    setAdmission(row, HostModel.ADMISSION_CORDONED, HohenheimActivityAction.ADMISSION_CORDONED);
+                }
                 // AIDEV-NOTE: fenced updateAll writes fire no hook; InstanceMigrations records the moves explicitly.
                 InstanceMigrations.DrainReport report = new InstanceMigrations().drain(row.get(HostModel.ID));
                 if (report.complete()) return HohenheimMicrocopy.SERVER.of("host_drained")
@@ -128,7 +154,8 @@ final class HostLifecycleActions {
                     .withArg("moved", report.moved().size()).withArg("refused", report.refused().size())
                     .withArg("held", report.refused().stream().map(InstanceMigrations.DrainEntry::name)
                         .collect(Collectors.joining(", ")));
-            }, row -> HostModel.ADMISSION_CORDONED.equals(row.get(HostModel.ADMISSION)))
+            }, row -> HostModel.ADMISSION_CORDONED.equals(row.get(HostModel.ADMISSION))
+                || HostModel.ADMISSION_ADMITTED.equals(row.get(HostModel.ADMISSION)))
                 .icon(Icon.of("truck-arrow-right")).style(ActionStyle.DESTRUCTIVE)
                 .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("drain"),
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),

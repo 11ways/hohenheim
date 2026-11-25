@@ -6060,7 +6060,7 @@
     "scope": "violations"
   },
   "port_held_unnamed": {
-    "text": "Deze hostpoort is al geclaimd door een andere workload",
+    "text": "Deze hostpoort is al geclaimd door een andere app",
     "scope": "violations"
   },
   "depends_unknown_service": {
@@ -8996,11 +8996,11 @@
   },
   "environment_in_use": [
     {
-      "text": "Deze omgeving wordt nog gebruikt door instanties of variabelen",
+      "text": "Deze omgeving wordt nog gebruikt door apps of variabelen",
       "scope": "violations"
     },
     {
-      "text": "Deze omgeving wordt nog gebruikt door de instanties {$instances}; verplaats of verwijder ze eerst",
+      "text": "Deze omgeving wordt nog gebruikt door de apps {$instances}; verplaats of verwijder ze eerst",
       "scope": "violations",
       "holders": "instances"
     },
@@ -9010,7 +9010,7 @@
       "holders": "variables"
     },
     {
-      "text": "Deze omgeving wordt nog gebruikt door de instanties {$instances} en bevat nog de variabelen {$variables}; verplaats of verwijder ze eerst",
+      "text": "Deze omgeving wordt nog gebruikt door de apps {$instances} en bevat nog de variabelen {$variables}; verplaats of verwijder ze eerst",
       "scope": "violations",
       "holders": "both"
     }
@@ -20141,7 +20141,7 @@
   "test_backup_target_description": {"text": "Controleert of het back-updoel bereikbaar is, en antwoordt waarom niet als het niet kan; er verandert niets.", "scope": "hohenheim"},
   "test_channel_description": {"text": "Stuurt een testmelding via het meldingskanaal.", "scope": "hohenheim"},
   "cordon_server_description": {"text": "Zet de host apart: er wordt geen nieuw werk op geplaatst, terwijl wat er al draait blijft draaien.", "scope": "hohenheim"},
-  "drain_server_description": {"text": "Verhuist elke app van deze apart gezette host: elke app wordt gestopt, naar een andere host verplaatst en daar gestart. Een app die niet kan verhuizen, wordt genoemd en blijft ongemoeid.", "scope": "hohenheim"},
+  "drain_server_description": {"text": "Verhuist elke app van deze host en zet hem eerst apart als hij nog nieuwe apps aanneemt: elke app wordt gestopt, naar een andere host verplaatst en daar gestart. Een app die niet kan verhuizen, wordt genoemd en blijft ongemoeid.", "scope": "hohenheim"},
   "uncordon_server_description": {"text": "Beëindigt het apart zetten van de host, zodat er weer nieuw werk op geplaatst mag worden.", "scope": "hohenheim"},
   "reap_controller_objects_description": {"text": "Verwijdert de netwerkobjecten die andere Hohenheim-controllers op deze Incus-host achterlieten. Objecten van deze controller, en objecten die een workload nog gebruikt, worden nooit verwijderd.", "scope": "hohenheim"},
   "template_project": {"text": "Het project waartoe de nieuwe app behoort.", "scope": "help"},
@@ -20320,5 +20320,116 @@
   "backup_target_name": {"text": "De naam waaronder het doel getoond en gekozen wordt; geen twee doelen delen er een.", "scope": "help"},
   "database_password_twice": {"text": "Geef een wachtwoord of vraag een gegenereerd wachtwoord, niet allebei.", "scope": "violations"},
   "restore_new_description": {"text": "Zet de back-up terug als een nieuwe app, op de host die u kiest of een host met ruimte; de eigen app van de back-up blijft draaien.", "scope": "instance_backup"},
-  "restore_in_place_description": {"text": "Maakt eerst een verse back-up van de app van de back-up en vervangt dan de volumes van die app door die van de back-up; de instellingen, variabelen en configuratiebestanden blijven.", "scope": "instance_backup"}
+  "restore_in_place_description": {"text": "Maakt eerst een verse back-up van de app van de back-up en vervangt dan de volumes van die app door die van de back-up; de instellingen, variabelen en configuratiebestanden blijven.", "scope": "instance_backup"},
+  "mcp_tool_host_admission_set": {"text": "Beslist of een host nieuwe apps aanneemt. state=admitted voert elke voorafgaande controle uit en laat een wachtende host toe zodra de verplichte slagen, controleert een toegelaten host opnieuw, of beëindigt een pauze. state=paused houdt nieuwe apps van de host terwijl wat er draait blijft draaien; move_apps_off=true stopt ook elke app, verplaatst ze naar een andere host en start ze daar, en noemt wie niet kan verhuizen. Opnieuw toelaten brengt ze niet terug. Antwoordt wat er gebeurde, met hoeveel apps verhuisden en welke geweigerd werden.", "scope": "hohenheim"},
+  "mcp_code_host": {"text": "De host, met zijn code (SR1).", "scope": "hohenheim"},
+  "mcp_host_state": {"text": "admitted controleert en laat een wachtende host toe, controleert een toegelaten opnieuw, of beëindigt een pauze; paused neemt geen nieuwe apps.", "scope": "hohenheim"},
+  "mcp_move_apps_off": {"text": "Waar verhuist ook elke app van de host en zet hem eerst apart; alleen met state=paused.", "scope": "hohenheim"},
+  "mcp_tool_host_trust": {"text": "Pint en bevestigt de sleutel waaraan een host herkend wordt: zijn SSH-hostsleutel (kind ssh) of het certificaat van zijn Incus-daemon (kind incus). Zonder fingerprint leest het de sleutel die de host nu toont en pint die, onbevestigd; vraag de persoon van de machine de fingerprint daar te lezen ('incus info' voor Incus) en vergelijk. De gepinde fingerprint bevestigt hem; die van een GEWIJZIGDE sleutel neemt die over, onbevestigd, en de host is niet meer toegelaten. Neem een wijziging alleen over als u weet waarom. Antwoordt de fingerprint en wat er gedaan werd.", "scope": "hohenheim"},
+  "mcp_trust_kind": {"text": "ssh is de SSH-hostsleutel (een host met een SSH-doel); incus is het certificaat van de Incus-daemon (bereikt via https).", "scope": "hohenheim"},
+  "mcp_tool_host_client_key_reset": {"text": "Geeft Hohenheim een nieuwe identiteit voor een host: een nieuwe SSH-clientsleutel (kind ssh) of een nieuw Incus-clientcertificaat (kind incus). Bij SSH werkt de oude sleutel meteen niet meer en is de host onbereikbaar tot de persoon van de machine de nieuwe publieke sleutel (read toont hem) in authorized_keys op de machine zet. Bij Incus werkt het oude certificaat tot zijn vertrouwensregel op de daemon verwijderd is; schrijf het nieuwe daar in. Dit kan niet ongedaan worden. Antwoordt dat er een nieuwe sleutel of een nieuw certificaat gemaakt werd.", "scope": "hohenheim"},
+  "mcp_client_key_kind": {"text": "ssh maakt een nieuwe SSH-clientsleutel; incus maakt een nieuw Incus-clientcertificaat. Een soort die de host niet heeft, wordt geweigerd.", "scope": "hohenheim"},
+  "mcp_tool_host_leftover_cleanup": {"text": "Verwijdert van een Incus-host de gedeelde objecten (isolatie-ACL, brug voor extra netwerkkaarten, aanwezigheidsmerk) die ANDERE Hohenheim-controllers achterlieten, ook die zonder aanwezigheidsstempel, die de geplande opruiming nooit aanraakt. Objecten van deze Hohenheim worden nooit verwijderd, en de daemon weigert er een te verwijderen dat nog gebruikt wordt. Dit kan niet ongedaan worden; oude images zijn image_cleanup. Antwoordt hoeveel objecten verwijderd en hoeveel geweigerd werden.", "scope": "hohenheim"},
+  "mcp_code_incus_host": {"text": "De Incus-host, met zijn code (SR1).", "scope": "hohenheim"},
+  "mcp_tool_image_cleanup": {"text": "Start de opruiming van images op elke host die een stack draait, nu in plaats van bij de nachtelijke run: losse images en vervangen versies van de images die stacks gebruiken, worden verwijderd. Images in gebruik, en images jonger dan de minimumleeftijd die de app-instellingen bewaren, blijven; een verwijderd image wordt opnieuw opgehaald bij de volgende deploy die het nodig heeft. Alleen beheerders. Wat andere Hohenheims op een Incus-host achterlieten, is host_leftover_cleanup. Antwoordt meteen dat ze startte; wat ze verwijderde, staat alleen in het eigen logboek van Hohenheim.", "scope": "hohenheim"},
+  "mcp_tool_host_media_set": {"text": "Zet een installatiemedium (een ISO waarvan een nieuwe virtuele machine opstart) op een Incus-host door het van een publieke URL op te halen, of verwijdert er een. Het vraagt het recht om installatiemedia te beheren. Een ophaling wordt meteen gecontroleerd en downloadt dan op de achtergrond; het tabblad Installatiemedia van de host toont de voortgang. Een bestaand medium wordt nooit vervangen: verwijder het eerst. Een medium dat aan een app hangt, kan niet verwijderd worden; verwijderen kan niet ongedaan worden. Een ISO uploaden kan alleen in het paneel. Antwoordt dat de ophaling startte of het medium verwijderd werd.", "scope": "hohenheim"},
+  "mcp_code_media_host": {"text": "De Incus-host die het medium bewaart, met zijn code (SR1).", "scope": "hohenheim"},
+  "mcp_remove_media": {"text": "Waar verwijdert het medium met de naam name van de host; neemt geen url.", "scope": "hohenheim"},
+  "mcp_tool_stack_volumes_purge": {"text": "Breekt een stack af en vernietigt elk volume dat de stack bezit; volumes die buiten de stack gemaakt werden (externe namen in de koppelingen van een dienst), blijven ongemoeid. De gegevens zijn voorgoed weg; de volgende deploy bouwt de stack opnieuw op met lege volumes. De opruiming wacht in de rij van de stack; de geschiedenis van de stack toont ze zodra ze klaar is. Antwoordt dat de opruiming in de rij staat.", "scope": "hohenheim"},
+  "mcp_code_stack_purge": {"text": "De stack waarvan u de eigen volumes vernietigt (ST2).", "scope": "hohenheim"},
+  "trust_host_key": [
+    { "text": "Hostsleutel vertrouwen", "scope": "hohenheim" },
+    { "text": "{$actor} pinde of vertrouwde de SSH-hostsleutel van {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "trust_host_key_description": {"text": "Leest en pint de SSH-hostsleutel die een host toont, bevestigt de gepinde, of neemt een gewijzigde over, op de fingerprint die op de machine vergeleken werd.", "scope": "hohenheim"},
+  "trust_incus_cert": [
+    { "text": "Incus-certificaat vertrouwen", "scope": "hohenheim" },
+    { "text": "{$actor} pinde of vertrouwde het Incus-certificaat van {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "trust_incus_cert_description": {"text": "Leest en pint het certificaat dat een Incus-daemon toont, bevestigt het gepinde, of neemt een gewijzigd over, op de fingerprint die op de machine vergeleken werd.", "scope": "hohenheim"},
+  "trust_fingerprint": [
+    { "text": "Fingerprint", "scope": "hohenheim_field" },
+    { "text": "De fingerprint die u op de machine vergeleek: de gepinde bevestigt hem, de getoonde neemt die sleutel over.", "scope": "help" }
+  ],
+  "trust_fingerprint_unknown": {"text": "{$fingerprint} is noch de gepinde fingerprint noch die welke {$name} nu toont; er werd niets vertrouwd.", "scope": "violations"},
+  "fetch_host_media": [
+    { "text": "Installatiemedium ophalen", "scope": "hohenheim" },
+    { "text": "{$actor} begon een installatiemedium op {$subject} op te halen", "scope": "hohenheim", "target": "happened" }
+  ],
+  "fetch_host_media_description": {"text": "Controleert de publieke URL van een ISO en downloadt hem dan op de achtergrond naar een Incus-host als een benoemd installatiemedium.", "scope": "hohenheim"},
+  "delete_host_media": [
+    { "text": "Installatiemedium verwijderen", "scope": "hohenheim" },
+    { "text": "{$actor} verwijderde een installatiemedium van {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "delete_host_media_description": {"text": "Verwijdert een installatiemedium dat aan geen app hangt van een Incus-host.", "scope": "hohenheim"},
+  "media_name": [
+    { "text": "Naam van het medium", "scope": "hohenheim_field" },
+    { "text": "De naam van het medium, waarmee het installatiemedium-apparaat van een virtuele machine het noemt.", "scope": "help" }
+  ],
+  "media_url": [
+    { "text": "URL", "scope": "hohenheim_field" },
+    { "text": "Waar de ISO vandaan komt; een adres in een privaat netwerk wordt geweigerd.", "scope": "help" }
+  ],
+  "stack_move_deployed": {"text": "Verwijder eerst de containers van de stack voor u de stack naar een andere host verplaatst; de volgende deploy zou ze op de oude laten draaien", "scope": "violations"},
+  "stack_move_unverifiable": {"text": "Kan niet controleren of de stack geen containers meer heeft (Docker is onbereikbaar); verplaatsen geweigerd", "scope": "violations"},
+  "create_host": {"text": "Een host toevoegen", "scope": "hohenheim"},
+  "create_host_description": {"text": "Voegt een host toe via het eigen aanmaken van de pagina Hosts, en schrijft zijn Incus-certificaat in als er een vertrouwenstoken gegeven is.", "scope": "hohenheim"},
+  "change_host": {"text": "Een host wijzigen", "scope": "hohenheim"},
+  "change_host_description": {"text": "Wijzigt wat de oproep van een host meestuurt via het eigen opslaan van de pagina Hosts, of aanvaardt het risico van zijn opstelling zoals de knop Risico aanvaarden.", "scope": "hohenheim"},
+  "create_project": {"text": "Een project aanmaken", "scope": "hohenheim"},
+  "create_project_description": {"text": "Maakt een project aan via het eigen aanmaken van de pagina Projecten, met een eigen lidmaatschapsrol.", "scope": "hohenheim"},
+  "change_project": {"text": "Een project wijzigen", "scope": "hohenheim"},
+  "change_project_description": {"text": "Wijzigt de naam of beschrijving van een project via het eigen opslaan van de pagina Projecten.", "scope": "hohenheim"},
+  "create_environment": {"text": "Een omgeving aanmaken", "scope": "hohenheim"},
+  "create_environment_description": {"text": "Maakt een omgeving van een project aan via het eigen aanmaken van de pagina Omgevingen.", "scope": "hohenheim"},
+  "change_environment": {"text": "Een omgeving wijzigen", "scope": "hohenheim"},
+  "change_environment_description": {"text": "Wijzigt de naam, beschrijving of het project van een omgeving via het eigen opslaan van de pagina Omgevingen.", "scope": "hohenheim"},
+  "create_stack": {"text": "Een stack aanmaken", "scope": "hohenheim"},
+  "create_stack_description": {"text": "Maakt een stack aan via het eigen aanmaken van de pagina Stacks; er wordt niets gedeployed.", "scope": "hohenheim"},
+  "change_stack": {"text": "Een stack wijzigen", "scope": "hohenheim"},
+  "change_stack_description": {"text": "Wijzigt wat de oproep van een stack meestuurt via het eigen opslaan van de pagina Stacks; een nieuwe naam of host wordt geweigerd zolang hij containers heeft.", "scope": "hohenheim"},
+  "create_stack_service": {"text": "Een stackdienst aanmaken", "scope": "hohenheim"},
+  "create_stack_service_description": {"text": "Maakt een dienst van een stack aan via het tabblad Diensten van de stack; hij start bij de volgende deploy van de stack.", "scope": "hohenheim"},
+  "change_stack_service": {"text": "Een stackdienst wijzigen", "scope": "hohenheim"},
+  "change_stack_service_description": {"text": "Wijzigt wat de oproep van een stackdienst meestuurt via zijn eigen opslaan; het bereikt de container bij de volgende deploy van de stack.", "scope": "hohenheim"},
+  "host_thing": {"text": "een host", "scope": "hohenheim"},
+  "project_thing": {"text": "een project", "scope": "hohenheim"},
+  "environment_thing": {"text": "een omgeving", "scope": "hohenheim"},
+  "stack_thing": {"text": "een stack", "scope": "hohenheim"},
+  "stack_service_thing": {"text": "een stackdienst", "scope": "hohenheim"},
+  "mcp_tool_host_set": {"text": "Voegt een host toe (een machine waarop apps draaien: Docker via SSH, of Incus via HTTPS of zijn lokale socket) of wijzigt er een; toevoegen geeft Hohenheim volledige controle erover. Een nieuwe host neemt geen apps tot hij vertrouwd (host_trust) en toegelaten (host_admission_set) is. Twee stappen gebeuren op de machine zelf, dus vraag het aan haar persoon: de publieke clientsleutel die read toont in authorized_keys zetten (SSH), en daar de fingerprint van de host lezen om te vergelijken in host_trust. Naam, runtime, SSH-doel en Incus-URL van de lokale host veranderen niet. Antwoordt de code (SR1).", "scope": "hohenheim"},
+  "mcp_code_host_set": {"text": "De code van de host; laat weg om er een toe te voegen.", "scope": "hohenheim"},
+  "mcp_tool_project_set": {"text": "Maakt een project aan (een groep apps, sites en databases die leden en omgevingen delen) of wijzigt zijn naam en beschrijving. Wie geen beheerder is, ziet de projecten waarvan hij lid is maar kan er geen aanmaken of wijzigen. Een nieuw project krijgt een eigen lidmaatschapsrol, die later niet te verwisselen is; mensen worden lid via die rol of door delen. Omgevingen zijn environment_set. Verwijderen wordt geweigerd zolang het project nog records of omgevingen bezit. Antwoordt de code (PR3).", "scope": "hohenheim"},
+  "mcp_code_project_set": {"text": "De code van het project; laat weg om er een aan te maken.", "scope": "hohenheim"},
+  "mcp_tool_environment_set": {"text": "Maakt een omgeving van een project aan (productie, staging enzovoort: een benoemde set variabelen waarmee apps van dat project deployen) of wijzigt haar naam, beschrijving of project. Een app komt in een omgeving via haar eigen instellingen. Een omgeving die apps of variabelen nog gebruiken, kan niet naar een ander project, en verwijderen wordt geweigerd zolang ze gebruikt wordt. Antwoordt de code van de omgeving (EN4).", "scope": "hohenheim"},
+  "mcp_code_environment_set": {"text": "De code van de omgeving; laat weg om er een aan te maken.", "scope": "hohenheim"},
+  "mcp_tool_stack_set": {"text": "Maakt een stack aan (containerdiensten die samen op een host gedeployed worden, zoals een compose-project) of wijzigt er een. Aanmaken start nu niets: voeg diensten toe met stack_service_set en deploy hem dan; een stack met enabled=true waarvan geen dienst al een container heeft, wordt ook bij elke start van Hohenheim gedeployed. De naam zit in elke container-, netwerk- en volumenaam, dus een nieuwe naam wordt geweigerd zolang er containers zijn, en een nieuwe host ook: breek hem eerst af. Antwoordt de code (ST2).", "scope": "hohenheim"},
+  "mcp_code_stack_set": {"text": "De code van de stack; laat weg om er een aan te maken.", "scope": "hohenheim"},
+  "mcp_tool_stack_service_set": {"text": "Maakt een dienst van een stack aan of wijzigt er een: zijn image, commando, omgeving, extra Linux-rechten, koppelingen, poorten, afhankelijkheden, gezondheidscontrole, herstartbeleid en plafonds. Een wijziging bereikt de draaiende container pas bij de volgende deploy van de stack. De naam is de DNS-naam van de container op het stacknetwerk; een dienst waarvan een andere afhangt, kan niet hernoemd of uitgeschakeld worden. environment vervangt de hele set, zoals het formulier van het paneel. Verwijderen is delete, dat zijn container afbreekt. Antwoordt de code (SS12).", "scope": "hohenheim"},
+  "mcp_code_stack_service_set": {"text": "De code van de dienst; laat weg om er een aan te maken.", "scope": "hohenheim"},
+  "accept_posture": {"text": "De naam van de host, getypt om te aanvaarden dat zijn gedeelde containers vijandige huurders een kernel laten delen; alleen met code, op uw naam vastgelegd.", "scope": "help"},
+  "accept_posture_name": {"text": "accept_posture moet exact de naam van de host zijn ({$name}).", "scope": "violations"},
+  "host_name": {"text": "De naam van de host: kleine letters, cijfers en streepjes; 'local' is voorbehouden aan deze machine.", "scope": "help"},
+  "host_ssh_target": {"text": "Hoe Hohenheim de host via SSH bereikt, [user@]host[:port]; voor Incus een optionele beheershell.", "scope": "help"},
+  "host_runtime": {"text": "Wat apps op de host draait: docker, bereikt via ssh_target, of incus, bereikt via incus_url.", "scope": "help"},
+  "project_title": {"text": "De naam van het project, ook getoond voor de namen van zijn omgevingen.", "scope": "help"},
+  "project_about": {"text": "Vrije tekst die het project beschrijft.", "scope": "help"},
+  "environment_title": {"text": "De naam van de omgeving, buiten haar project getoond als \"<project> / <naam>\".", "scope": "help"},
+  "environment_about": {"text": "Vrije tekst die de omgeving beschrijft.", "scope": "help"},
+  "environment_project_code": {"text": "Het project waartoe ze behoort (PR3); verplaatsen wordt geweigerd zolang apps of variabelen de omgeving gebruiken.", "scope": "help"},
+  "stack_enabled": {"text": "Waar deployt de stack ook bij elke start van Hohenheim zolang geen van zijn diensten al een container heeft.", "scope": "help"},
+  "stack_registry_user": {"text": "De loginnaam voor de registry waaruit de private images van de stack gehaald worden.", "scope": "help"},
+  "stack_registry_password": {"text": "Wachtwoord of token voor de registry; versleuteld bewaard en nooit meer getoond.", "scope": "help"},
+  "stack_about": {"text": "Vrije tekst die onder de naam van de stack getoond wordt.", "scope": "help"},
+  "stack_host_code": {"text": "De host waarop de stack deployt (SR1); weggelaten, deze machine. Verplaatsen wordt geweigerd zolang hij containers heeft.", "scope": "help"},
+  "stack_service_stack_code": {"text": "De stack waartoe de nieuwe dienst behoort (ST2); dat verandert later niet.", "scope": "help"},
+  "service_enabled": {"text": "Onwaar houdt de dienst buiten de volgende deploy van de stack; geweigerd zolang een andere dienst ervan afhangt.", "scope": "help"},
+  "service_mounts": {"text": "Eigen volumes van de stack, volumes van buiten of geheugen, gekoppeld in de container; de lijst vervangt elke koppeling.", "scope": "help"},
+  "service_ports": {"text": "Poorten die de container op zijn host publiceert; een weggelaten hostpoort wordt bij de deploy toegewezen. De lijst vervangt elke poort.", "scope": "help"},
+  "service_depends_on": {"text": "Diensten van dezelfde stack waarop deze bij de deploy wacht, tot ze gestart of gezond zijn; de lijst vervangt ze allemaal.", "scope": "help"},
+  "service_health_interval": {"text": "Seconden tussen twee gezondheidscontroles van de container.", "scope": "help"},
+  "service_health_timeout": {"text": "Seconden die een gezondheidscontrole mag duren voor ze als mislukt telt.", "scope": "help"},
+  "service_health_retries": {"text": "Mislukte controles na elkaar voor de dienst als ongezond telt.", "scope": "help"},
+  "service_health_start_period": {"text": "Seconden na de start waarin mislukte controles niet tellen.", "scope": "help"},
+  "service_restart_policy": {"text": "Wanneer Docker de container herstart nadat hij stopte; no herstart hem nooit.", "scope": "help"}
 }

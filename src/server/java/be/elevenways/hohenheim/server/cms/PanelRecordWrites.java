@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -348,11 +349,12 @@ public final class PanelRecordWrites {
             }
         }
         String code = RecordCodes.codeUnjudged(this.model, String.valueOf(record.get(this.idField.getName())));
+        // A caller whose panel declares no such resource changes nothing, an entry of its own writer neither.
+        Panel panel = panelOf(caller);
+        PanelResource<Row> resource = this.resource(panel);
         @Nullable Runnable after = handled.isEmpty() || this.also == null ? null
             : this.also.judge(record, input, handled, caller);
         if (!raw.isEmpty()) {
-            Panel panel = panelOf(caller);
-            PanelResource<Row> resource = this.resource(panel);
             if (!resource.offers(ResourceVerb.UPDATE)) {
                 throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "resource " + resource.id()
                     + " offers this caller no change");
@@ -394,9 +396,16 @@ public final class PanelRecordWrites {
         return HohenheimAccess.isAdmin(caller) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
     }
 
-    /** @return the panel's resource, the one whose form the panel posts */
+    /**
+     * @return the panel's resource, the one whose form the panel posts
+     * @throws DomainRefusal forbidden for a caller whose panel declares none (an operator-only resource on /manage)
+     */
     private @NonNull PanelResource<Row> resource(@NonNull Panel panel) {
-        return Objects.requireNonNull(CmsSupport.declaredRowEntry(panel, this.slug), "the panel declares " + this.slug);
+        PanelResource<Row> resource = CmsSupport.declaredRowEntry(panel, this.slug);
+        if (resource == null) {
+            throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the caller's panel declares no " + this.slug);
+        }
+        return resource;
     }
 
     /** Declares a resource's settings, links and change entries in the order a form lists them. */
@@ -411,7 +420,7 @@ public final class PanelRecordWrites {
         private final List<FormEntry> alsoEntries = new ArrayList<>();
         private @Nullable Also also;
         private @Nullable Field<?, ?> container;
-        private final OperationCommand creates = CREATES;
+        private OperationCommand creates = CREATES;
         private OperationCommand changes = CmsCommands.TRANSACTIONAL;
 
         private Builder(@NonNull String word, @NonNull Identifier model, @NonNull SubjectType<Row> subject,
@@ -499,6 +508,14 @@ public final class PanelRecordWrites {
         /** Declares the command the change runs as, outside the receipt's transaction for a writer reaching a host. */
         public @NonNull Builder changesAs(@NonNull OperationCommand changes) {
             this.changes = changes;
+            return this;
+        }
+        /**
+         * Runs the create outside the receipt's transaction, for a resource whose create owns its write envelope and
+         * reaches a host after it (a host's enrolment spends its trust token on the daemon).
+         */
+        public @NonNull Builder createsOutsideTransaction() {
+            this.creates = CREATES.execution(CommandExecution.OUTSIDE_TRANSACTION);
             return this;
         }
 

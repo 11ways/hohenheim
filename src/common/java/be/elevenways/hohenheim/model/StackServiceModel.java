@@ -134,6 +134,7 @@ public class StackServiceModel extends Model {
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+        .help(HohenheimMicrocopy.HELP.of("service_enabled"))
         .build());
 
     public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
@@ -155,7 +156,7 @@ public class StackServiceModel extends Model {
         .secret()
         .encrypted()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment_variables"))
-        .help(HohenheimMicrocopy.HELP.of("service_environment"))
+        .help(HohenheimMicrocopy.HELP.of("service_environment")).entries(InstanceKindFields.keyValues())
         .build());
 
     /**
@@ -178,16 +179,19 @@ public class StackServiceModel extends Model {
     public static final SchemaField MOUNTS = SCHEMA.addField(
         SchemaField.builder("mounts").subSchema(MOUNT_SCHEMA).list()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("mounts"))
+            .help(HohenheimMicrocopy.HELP.of("service_mounts"))
             .build());
 
     public static final SchemaField PORTS = SCHEMA.addField(
         SchemaField.builder("ports").subSchema(PORT_SCHEMA).list()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ports"))
+            .help(HohenheimMicrocopy.HELP.of("service_ports"))
             .build());
 
     public static final SchemaField DEPENDS_ON = SCHEMA.addField(
         SchemaField.builder("depends_on").subSchema(DEPENDS_SCHEMA).list()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("depends_on"))
+            .help(HohenheimMicrocopy.HELP.of("service_depends_on"))
             .build());
 
     public static final StringField HEALTH_CMD = SCHEMA.addField(StringField.builder().name("health_cmd")
@@ -200,6 +204,7 @@ public class StackServiceModel extends Model {
             .defaultValue(10)
             .suffix("s")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_interval"))
+            .help(HohenheimMicrocopy.HELP.of("service_health_interval"))
             .build());
 
     public static final IntegerField HEALTH_TIMEOUT_SECONDS = SCHEMA.addField(
@@ -207,12 +212,14 @@ public class StackServiceModel extends Model {
             .defaultValue(5)
             .suffix("s")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_timeout"))
+            .help(HohenheimMicrocopy.HELP.of("service_health_timeout"))
             .build());
 
     public static final IntegerField HEALTH_RETRIES = SCHEMA.addField(
         IntegerField.builder().name("health_retries")
             .defaultValue(5)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_retries"))
+            .help(HohenheimMicrocopy.HELP.of("service_health_retries"))
             .build());
 
     public static final IntegerField HEALTH_START_PERIOD_SECONDS = SCHEMA.addField(
@@ -220,6 +227,7 @@ public class StackServiceModel extends Model {
             .defaultValue(0)
             .suffix("s")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_start_period"))
+            .help(HohenheimMicrocopy.HELP.of("service_health_start_period"))
             .build());
 
     public static final EnumField RESTART_POLICY = SCHEMA.addField(EnumField.builder("restart_policy")
@@ -230,6 +238,7 @@ public class StackServiceModel extends Model {
         .value("no", v -> v.displayName("Never").label(HohenheimMicrocopy.RESTART_POLICY.of("never")))
         .defaultValue("unless-stopped")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("restart_policy"))
+        .help(HohenheimMicrocopy.HELP.of("service_restart_policy"))
         .build());
 
     public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(InstanceKindFields.memoryLimit());

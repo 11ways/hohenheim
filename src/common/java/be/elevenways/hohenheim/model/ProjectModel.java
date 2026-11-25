@@ -58,10 +58,12 @@ public class ProjectModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_name"))
+        .help(HohenheimMicrocopy.HELP.of("project_title"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_description"))
+        .help(HohenheimMicrocopy.HELP.of("project_about"))
         .build());
 
     /**

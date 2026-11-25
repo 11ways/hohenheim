@@ -20,7 +20,6 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
-import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
@@ -132,8 +131,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
         "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
         "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
-        "hohenheim:rotate_host_key",
-        "hohenheim:rotate_incus_cert", "hohenheim:route_notification_events", "hohenheim:run_schedule",
+        "hohenheim:route_notification_events", "hohenheim:run_schedule",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
         "hohenheim:spamservice_mark_ham", "hohenheim:spamservice_mark_spam", "hohenheim:spamservice_rescore",
@@ -225,7 +223,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .map(operation -> operation.id().toString()).sorted().toList();
         assertThat(uncovered).as("step 1: operations no tool places and none keeps from assistants")
             .containsExactly("hohenheim:access_rule_move_down", "hohenheim:access_rule_move_up",
-                "hohenheim:delete_auth_provider", "hohenheim:delete_environment",
+                "hohenheim:delete_auth_provider",
                 "hohenheim:generate_instance_secret", "hohenheim:list_instance_variables",
                 "hohenheim:set_instance_variable", "hohenheim:site_hold_place",
                 "hohenheim:site_hold_remove", "hohenheim:site_label_place", "hohenheim:site_label_remove",
@@ -304,14 +302,15 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(HohenheimMcpModule.tools()).as("step 1: the boot module built the tools").isNotNull();
         assertThat(AssistantNoun.of(HostModel.MODEL_ID)).as("step 1: the list kind of a host").isEqualTo("host");
         List<String> names = new ArrayList<>();
-        names.add(HostParts.DELETE.assistantName());
-        names.add(StackOperations.RECLAIM_IMAGES.assistantName());
-        for (Operation<Row, Void, ?> operation : HostParts.lifecycleForAssistants()) {
-            names.add(operation.assistantName());
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            if (tool.operations().stream().anyMatch(operation -> operation.subjectType() != null
+                    && HostModel.MODEL_ID.equals(operation.subjectType().codeModel()))) {
+                names.add(tool.name());
+            }
         }
-        assertThat(names).as("step 2: every host tool is named after the host").containsExactlyInAnyOrder(
-            "host_delete", "host_reclaim_images", "host_test", "host_admit", "host_pause", "host_drain",
-            "host_resume", "host_reap");
+        assertThat(names).as("step 2: every tool acting on a host is named after the host").containsExactlyInAnyOrder(
+            "host_set", "host_admission_set", "host_trust", "host_client_key_reset", "host_leftover_cleanup",
+            "host_media_set", "delete", "test");
         assertThat(HostParts.DELETE.id().toString()).as("step 3: the stored operation id keeps its old spelling")
             .isEqualTo("hohenheim:delete_server");
     }

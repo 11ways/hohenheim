@@ -107,10 +107,35 @@ public final class HostParts {
         .gate(HohenheimSources.OPERATOR)
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
-    /** @return the host operations an assistant's tools place: probe, admit, cordon, uncordon, drain and reap */
-    public static @NonNull List<Operation<Row, Void, Microcopy>> lifecycleForAssistants() {
-        return HostLifecycleActions.forAssistants();
-    }
+    /** Measures a host now; {@code test} on a host's code. */
+    public static final Operation<Row, Void, Microcopy> PROBE = HostLifecycleActions.PROBE;
+
+    /** Preflights a host and admits one waiting for admission; an admitted or paused host is only checked again. */
+    public static final Operation<Row, Void, Microcopy> CHECK = HostLifecycleActions.CHECK;
+
+    /** Stops new apps landing on an admitted host while what runs there keeps running. */
+    public static final Operation<Row, Void, Microcopy> PAUSE = HostLifecycleActions.CORDON;
+
+    /** Pauses an admitted host, then moves every app off it. */
+    public static final Operation<Row, Void, Microcopy> MOVE_APPS_OFF = HostLifecycleActions.DRAIN;
+
+    /** Ends a host's pause. */
+    public static final Operation<Row, Void, Microcopy> RESUME = HostLifecycleActions.UNCORDON;
+
+    /** Removes the shared objects other controllers left on an Incus host. */
+    public static final Operation<Row, Void, Microcopy> CLEAN_LEFTOVERS = HostLifecycleActions.REAP;
+
+    /** Reads, confirms or adopts a host's SSH host key by the fingerprint the caller compared. */
+    public static final Operation<Row, ?, Microcopy> TRUST_SSH = HostTrustActions.TRUST_SSH;
+
+    /** Reads, confirms or adopts an Incus daemon's certificate by the fingerprint the caller compared. */
+    public static final Operation<Row, ?, Microcopy> TRUST_INCUS = HostTrustActions.TRUST_INCUS;
+
+    /** Makes a new SSH client key for one host. */
+    public static final Operation<Row, Void, Microcopy> NEW_SSH_KEY = HostTrustActions.ROTATE_SSH;
+
+    /** Makes a new Incus client certificate for one host. */
+    public static final Operation<Row, Void, Microcopy> NEW_INCUS_CERT = HostTrustActions.ROTATE_INCUS;
 
     static {
         OperationHandlers.attach(DELETE)

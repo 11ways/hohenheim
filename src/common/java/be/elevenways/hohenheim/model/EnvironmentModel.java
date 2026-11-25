@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -52,6 +53,10 @@ public class EnvironmentModel extends Model {
     public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
         SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
+    /** THE short code an environment is named by in an assistant's tools: "EN4". */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "EN"));
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField PROJECT_ID = SCHEMA.addField(
@@ -64,10 +69,12 @@ public class EnvironmentModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment_name"))
+        .help(HohenheimMicrocopy.HELP.of("environment_title"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_description"))
+        .help(HohenheimMicrocopy.HELP.of("environment_about"))
         .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

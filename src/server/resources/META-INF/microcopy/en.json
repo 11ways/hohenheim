@@ -6060,7 +6060,7 @@
     "scope": "violations"
   },
   "port_held_unnamed": {
-    "text": "This host port is already claimed by another workload",
+    "text": "This host port is already claimed by another app",
     "scope": "violations"
   },
   "depends_unknown_service": {
@@ -8996,11 +8996,11 @@
   },
   "environment_in_use": [
     {
-      "text": "This environment is still referenced by instances or variables",
+      "text": "This environment is still referenced by apps or variables",
       "scope": "violations"
     },
     {
-      "text": "This environment is still used by the instances {$instances}; move or delete them first",
+      "text": "This environment is still used by the apps {$instances}; move or delete them first",
       "scope": "violations",
       "holders": "instances"
     },
@@ -9010,7 +9010,7 @@
       "holders": "variables"
     },
     {
-      "text": "This environment is still used by the instances {$instances} and holds the variables {$variables}; move or delete them first",
+      "text": "This environment is still used by the apps {$instances} and holds the variables {$variables}; move or delete them first",
       "scope": "violations",
       "holders": "both"
     }
@@ -20141,7 +20141,7 @@
   "test_backup_target_description": {"text": "Checks whether the backup target can be reached, and answers why not when it cannot; it changes nothing.", "scope": "hohenheim"},
   "test_channel_description": {"text": "Sends a test alert through the notification channel.", "scope": "hohenheim"},
   "cordon_server_description": {"text": "Cordons the host: no new work is placed on it, while what already runs there keeps running.", "scope": "hohenheim"},
-  "drain_server_description": {"text": "Moves every app off this cordoned host: each is stopped, moved to another host and started there. An app that cannot move is named and left alone.", "scope": "hohenheim"},
+  "drain_server_description": {"text": "Moves every app off this host, pausing it first if it still takes new apps: each is stopped, moved to another host and started there. An app that cannot move is named and left alone.", "scope": "hohenheim"},
   "uncordon_server_description": {"text": "Ends the host's cordon, so new work may be placed on it again.", "scope": "hohenheim"},
   "reap_controller_objects_description": {"text": "Removes the network objects other Hohenheim controllers left on this Incus host. Objects of this controller, and objects a workload still uses, are never removed.", "scope": "hohenheim"},
   "template_project": {"text": "The project the new app belongs to.", "scope": "help"},
@@ -20320,5 +20320,116 @@
   "backup_target_name": {"text": "The name the target is listed and picked by; no two targets share one.", "scope": "help"},
   "database_password_twice": {"text": "Give a password or ask for a generated one, not both.", "scope": "violations"},
   "restore_new_description": {"text": "Restores the backup as a new app, on the host you pick or one with room; the backup's own app keeps running.", "scope": "instance_backup"},
-  "restore_in_place_description": {"text": "Takes a fresh backup of the backup's app, then replaces that app's volumes with the backup's; its settings, variables and config files stay.", "scope": "instance_backup"}
+  "restore_in_place_description": {"text": "Takes a fresh backup of the backup's app, then replaces that app's volumes with the backup's; its settings, variables and config files stay.", "scope": "instance_backup"},
+  "mcp_tool_host_admission_set": {"text": "Decides whether a host takes new apps. state=admitted runs every preflight check and admits a waiting host once the required ones pass, checks an admitted host again, or ends a pause. state=paused stops new apps landing on the host while what runs there keeps running; move_apps_off=true also stops each app, moves it to another host and starts it there, naming any that cannot move. Admitting again does not move them back. Answers what happened, with how many apps moved and which were refused.", "scope": "hohenheim"},
+  "mcp_code_host": {"text": "The host, by its code (SR1).", "scope": "hohenheim"},
+  "mcp_host_state": {"text": "admitted checks and admits a waiting host, re-checks an admitted one, or ends a pause; paused takes no new apps.", "scope": "hohenheim"},
+  "mcp_move_apps_off": {"text": "True also moves every app off the host, pausing it first; only with state=paused.", "scope": "hohenheim"},
+  "mcp_tool_host_trust": {"text": "Pins and confirms the key a host is known by: its SSH host key (kind ssh) or its Incus daemon's certificate (kind incus). Without fingerprint it reads the key the host presents now and pins it, unconfirmed; ask the machine's person to read its fingerprint on the machine ('incus info' for Incus) and compare. Giving the pinned fingerprint confirms it; giving that of a CHANGED key adopts it, unconfirmed, and unadmits the host. Adopt a change only when you know why: it is what a man-in-the-middle looks like. Answers the fingerprint and what was done.", "scope": "hohenheim"},
+  "mcp_trust_kind": {"text": "ssh is the SSH host key (a host with an SSH target); incus is the Incus daemon's certificate (reached over https).", "scope": "hohenheim"},
+  "mcp_tool_host_client_key_reset": {"text": "Gives Hohenheim a new client identity for one host: a new SSH client key (kind ssh) or a new Incus client certificate (kind incus). On SSH the old key stops at once and the host is unreachable until the machine's person puts the new public key (read shows it) in authorized_keys on the machine. On Incus the old certificate works until its trust entry is removed on the daemon; enrol the new one there. This cannot be undone. Answers that a new key or certificate was made.", "scope": "hohenheim"},
+  "mcp_client_key_kind": {"text": "ssh makes a new SSH client key; incus makes a new Incus client certificate. A kind the host lacks is refused.", "scope": "hohenheim"},
+  "mcp_tool_host_leftover_cleanup": {"text": "Removes, from one Incus host, the shared objects (isolation ACL, extra-NIC bridge, presence marker) that OTHER Hohenheim controllers left behind, including those with no presence stamp, which the scheduled sweep never touches. Objects this Hohenheim owns are never removed, and the daemon refuses to remove one still in use. This cannot be undone; old images are image_cleanup. Answers how many objects were removed and how many were refused.", "scope": "hohenheim"},
+  "mcp_code_incus_host": {"text": "The Incus host, by its code (SR1).", "scope": "hohenheim"},
+  "mcp_tool_image_cleanup": {"text": "Starts the image cleanup on every host that runs a stack, now instead of at its nightly run: dangling images and superseded versions of the images stacks use are removed. Images in use, and images newer than the minimum age the apps settings keep, stay; a removed image is pulled again by the next deploy that needs it. Administrators only. What other Hohenheims left on an Incus host is host_leftover_cleanup. Answers at once that it started; what it removed shows only in Hohenheim's own log.", "scope": "hohenheim"},
+  "mcp_tool_host_media_set": {"text": "Puts an install medium (an ISO a new virtual machine boots from) on an Incus host by fetching it from a public URL, or removes one. It needs the right to manage install media. A fetch is checked at once, then downloads in the background; the host's Install media tab shows its progress, and a virtual machine can use the medium once it is there. An existing medium is never replaced: remove it first. One attached to an app cannot be removed; removing cannot be undone. Uploading an ISO is panel-only. Answers that the fetch started or the medium was removed.", "scope": "hohenheim"},
+  "mcp_code_media_host": {"text": "The Incus host that holds the medium, by its code (SR1).", "scope": "hohenheim"},
+  "mcp_remove_media": {"text": "True removes the medium named name from the host; it takes no url.", "scope": "hohenheim"},
+  "mcp_tool_stack_volumes_purge": {"text": "Tears a stack down and destroys every volume the stack owns; volumes made outside the stack (external names in a service's mounts) are left alone. The data is gone for good; the next deploy rebuilds the stack with empty volumes. The purge is queued on the stack's worker; the stack's history shows it once it settled. Answers that the purge was queued.", "scope": "hohenheim"},
+  "mcp_code_stack_purge": {"text": "The stack whose own volumes to destroy (ST2).", "scope": "hohenheim"},
+  "trust_host_key": [
+    { "text": "Trust host key", "scope": "hohenheim" },
+    { "text": "{$actor} pinned or trusted the SSH host key of {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "trust_host_key_description": {"text": "Reads and pins the SSH host key a host presents, confirms the pinned one, or adopts a changed one, by the fingerprint compared on the machine.", "scope": "hohenheim"},
+  "trust_incus_cert": [
+    { "text": "Trust Incus certificate", "scope": "hohenheim" },
+    { "text": "{$actor} pinned or trusted the Incus certificate of {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "trust_incus_cert_description": {"text": "Reads and pins the certificate an Incus daemon presents, confirms the pinned one, or adopts a changed one, by the fingerprint compared on the machine.", "scope": "hohenheim"},
+  "trust_fingerprint": [
+    { "text": "Fingerprint", "scope": "hohenheim_field" },
+    { "text": "The fingerprint you compared on the machine: the pinned one confirms it, the presented one adopts that key.", "scope": "help" }
+  ],
+  "trust_fingerprint_unknown": {"text": "{$fingerprint} is neither the pinned fingerprint nor the one {$name} presents now; nothing was trusted.", "scope": "violations"},
+  "fetch_host_media": [
+    { "text": "Fetch install medium", "scope": "hohenheim" },
+    { "text": "{$actor} started fetching an install medium onto {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "fetch_host_media_description": {"text": "Checks an ISO's public URL, then downloads it onto an Incus host in the background as a named install medium.", "scope": "hohenheim"},
+  "delete_host_media": [
+    { "text": "Delete install medium", "scope": "hohenheim" },
+    { "text": "{$actor} deleted an install medium of {$subject}", "scope": "hohenheim", "target": "happened" }
+  ],
+  "delete_host_media_description": {"text": "Deletes an install medium no app has attached from an Incus host.", "scope": "hohenheim"},
+  "media_name": [
+    { "text": "Medium name", "scope": "hohenheim_field" },
+    { "text": "The medium's name, by which a virtual machine's install-media device names it.", "scope": "help" }
+  ],
+  "media_url": [
+    { "text": "URL", "scope": "hohenheim_field" },
+    { "text": "Where to download the ISO from; a private-network address is refused.", "scope": "help" }
+  ],
+  "stack_move_deployed": {"text": "Destroy the stack's containers before moving it to another host; the next deploy would leave them running on the old one", "scope": "violations"},
+  "stack_move_unverifiable": {"text": "Cannot verify the stack has no containers left (Docker is unreachable); move refused", "scope": "violations"},
+  "create_host": {"text": "Add a host", "scope": "hohenheim"},
+  "create_host_description": {"text": "Adds a host through the Hosts page's own create, enrolling its Incus certificate when a trust token is given.", "scope": "hohenheim"},
+  "change_host": {"text": "Change a host", "scope": "hohenheim"},
+  "change_host_description": {"text": "Changes what the call sends of a host through the Hosts page's own save, or accepts its posture's risk as the Accept risk button does.", "scope": "hohenheim"},
+  "create_project": {"text": "Create a project", "scope": "hohenheim"},
+  "create_project_description": {"text": "Creates a project through the Projects page's own create, with its own membership role.", "scope": "hohenheim"},
+  "change_project": {"text": "Change a project", "scope": "hohenheim"},
+  "change_project_description": {"text": "Changes a project's name or description through the Projects page's own save.", "scope": "hohenheim"},
+  "create_environment": {"text": "Create an environment", "scope": "hohenheim"},
+  "create_environment_description": {"text": "Creates an environment of a project through the Environments page's own create.", "scope": "hohenheim"},
+  "change_environment": {"text": "Change an environment", "scope": "hohenheim"},
+  "change_environment_description": {"text": "Changes an environment's name, description or project through the Environments page's own save.", "scope": "hohenheim"},
+  "create_stack": {"text": "Create a stack", "scope": "hohenheim"},
+  "create_stack_description": {"text": "Creates a stack through the Stacks page's own create; nothing is deployed.", "scope": "hohenheim"},
+  "change_stack": {"text": "Change a stack", "scope": "hohenheim"},
+  "change_stack_description": {"text": "Changes what the call sends of a stack through the Stacks page's own save; a rename or a new host is refused while it has containers.", "scope": "hohenheim"},
+  "create_stack_service": {"text": "Create a stack service", "scope": "hohenheim"},
+  "create_stack_service_description": {"text": "Creates a service of a stack through the stack's Services tab; it starts at the stack's next deploy.", "scope": "hohenheim"},
+  "change_stack_service": {"text": "Change a stack service", "scope": "hohenheim"},
+  "change_stack_service_description": {"text": "Changes what the call sends of a stack service through its own save; it reaches the container at the stack's next deploy.", "scope": "hohenheim"},
+  "host_thing": {"text": "a host", "scope": "hohenheim"},
+  "project_thing": {"text": "a project", "scope": "hohenheim"},
+  "environment_thing": {"text": "an environment", "scope": "hohenheim"},
+  "stack_thing": {"text": "a stack", "scope": "hohenheim"},
+  "stack_service_thing": {"text": "a stack service", "scope": "hohenheim"},
+  "mcp_tool_host_set": {"text": "Adds a host (a machine apps run on: Docker over SSH, or Incus over HTTPS or its local socket) or changes one; adding grants Hohenheim root-equivalent control of it. A new host takes no apps until trusted (host_trust) and admitted (host_admission_set). Two steps are done on the machine itself, so ask its person: put the client public key read shows in authorized_keys there (SSH), and read the host's key fingerprint there to compare in host_trust. The local host's name, runtime, SSH target and Incus URL cannot change. Answers the code (SR1).", "scope": "hohenheim"},
+  "mcp_code_host_set": {"text": "The host's code; leave out to create one.", "scope": "hohenheim"},
+  "mcp_tool_project_set": {"text": "Creates a project (a group of apps, sites and databases that share members and environments) or changes its name and description. Someone who is no administrator sees the projects they are a member of but cannot create or change one. A new project gets its own membership role, which cannot be swapped later; people join it through that role or by sharing. Environments are environment_set. Delete is refused while the project still owns records or environments. Answers the code (PR3).", "scope": "hohenheim"},
+  "mcp_code_project_set": {"text": "The project's code; leave out to create one.", "scope": "hohenheim"},
+  "mcp_tool_environment_set": {"text": "Creates an environment of a project (production, staging and so on: a named set of variables that apps of that project deploy with) or changes its name, description or project. An app joins an environment through its own settings. An environment that apps or variables still use cannot move to another project, and delete is refused while they use it. Answers the environment's code (EN4).", "scope": "hohenheim"},
+  "mcp_code_environment_set": {"text": "The environment's code; leave out to create one.", "scope": "hohenheim"},
+  "mcp_tool_stack_set": {"text": "Creates a stack (container services deployed together on one host, like a compose project) or changes one. Creating starts nothing now: add services with stack_service_set, then deploy it; a stack with enabled=true none of whose services has a container yet is also deployed at every Hohenheim start. The name is part of every container, network and volume name, so a rename is refused while containers exist, and so is a new host: tear it down first. Answers the code (ST2).", "scope": "hohenheim"},
+  "mcp_code_stack_set": {"text": "The stack's code; leave out to create one.", "scope": "hohenheim"},
+  "mcp_tool_stack_service_set": {"text": "Creates or changes one service of a stack: its image, command, environment, added Linux privileges, mounts, ports, dependencies, health check, restart policy and ceilings. A change reaches the running container only at the stack's next deploy. The name is the container's DNS name on the stack network; a service another one depends on cannot be renamed or disabled. environment replaces the whole set, as the panel's form does. Deleting is delete, which takes its container down. Answers the code (SS12).", "scope": "hohenheim"},
+  "mcp_code_stack_service_set": {"text": "The service's code; leave out to create one.", "scope": "hohenheim"},
+  "accept_posture": {"text": "The host's name, typed to accept that its shared containers let hostile tenants share one kernel; only with code, recorded against you.", "scope": "help"},
+  "accept_posture_name": {"text": "accept_posture must be the host's name exactly ({$name}).", "scope": "violations"},
+  "host_name": {"text": "The host's name: lowercase letters, digits and dashes; 'local' is reserved for this machine.", "scope": "help"},
+  "host_ssh_target": {"text": "How Hohenheim reaches the host over SSH, [user@]host[:port]; for Incus an optional admin shell.", "scope": "help"},
+  "host_runtime": {"text": "What runs apps on the host: docker, reached through ssh_target, or incus, reached through incus_url.", "scope": "help"},
+  "project_title": {"text": "The project's name, also shown in front of its environments' names.", "scope": "help"},
+  "project_about": {"text": "Free text describing the project.", "scope": "help"},
+  "environment_title": {"text": "The environment's name, shown as \"<project> / <name>\" outside its project.", "scope": "help"},
+  "environment_about": {"text": "Free text describing the environment.", "scope": "help"},
+  "environment_project_code": {"text": "The project it belongs to (PR3); a move is refused while apps or variables use the environment.", "scope": "help"},
+  "stack_enabled": {"text": "True also deploys the stack at each Hohenheim start while none of its services has a container yet.", "scope": "help"},
+  "stack_registry_user": {"text": "The login name for the registry the stack's private images are pulled from.", "scope": "help"},
+  "stack_registry_password": {"text": "Password or token for the registry; stored encrypted and never shown again.", "scope": "help"},
+  "stack_about": {"text": "Free text shown under the stack's name.", "scope": "help"},
+  "stack_host_code": {"text": "The host the stack deploys to (SR1); left out, this machine. A move is refused while it has containers.", "scope": "help"},
+  "stack_service_stack_code": {"text": "The stack the new service belongs to (ST2); it cannot change later.", "scope": "help"},
+  "service_enabled": {"text": "False keeps the service out of the stack's next deploy; refused while another service depends on it.", "scope": "help"},
+  "service_mounts": {"text": "The stack's own volumes, outside ones or memory mounted into the container; the list replaces every mount.", "scope": "help"},
+  "service_ports": {"text": "Ports the container publishes on its host; a host port left out is allocated at deploy. The list replaces every port.", "scope": "help"},
+  "service_depends_on": {"text": "Services of the same stack this one waits for at deploy, until started or healthy; the list replaces them all.", "scope": "help"},
+  "service_health_interval": {"text": "Seconds between two health checks of the container.", "scope": "help"},
+  "service_health_timeout": {"text": "Seconds one health check may take before it counts as failed.", "scope": "help"},
+  "service_health_retries": {"text": "Failed checks in a row before the service counts as unhealthy.", "scope": "help"},
+  "service_health_start_period": {"text": "Seconds after start during which failed checks do not count.", "scope": "help"},
+  "service_restart_policy": {"text": "When Docker restarts the container after it exits; no never restarts it.", "scope": "help"}
 }

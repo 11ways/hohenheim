@@ -360,9 +360,11 @@ public final class StackParts {
 
     /**
      * Names become Docker resource names: the safe shape, uniqueness, and no rename while the stack has live resources.
-     * The trimmed name is written back, so "web " passing on its trimmed copy is never stored raw.
+     * The trimmed name is written back, so "web " passing on its trimmed copy is never stored raw. A new host is
+     * refused while the stack has live resources too: the next deploy would start it there and leave the old host's
+     * containers, network and volumes running with nothing tracking them.
      *
-     * @throws Violations anchored on the name
+     * @throws Violations anchored on the name or the host
      */
     private static void validStack(@NonNull RowSave save) {
         Row row = save.row();
@@ -379,24 +381,42 @@ public final class StackParts {
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
             throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_name_taken"));
         }
-        if (existing != null && !name.equals(existing.get(StackModel.NAME))) {
+        if (existing == null) return;
+        if (!name.equals(existing.get(StackModel.NAME))) {
             // The name is embedded in every ownership label, container, network and volume name: renaming a stack
-            // with LIVE resources would orphan ALL of them. The gate is the live container count, decided on the
-            // stack's worker so it cannot interleave with a running operation.
-            // AIDEV-NOTE: a deploy QUEUED after this check but before the save persists can still race the rename;
-            // the worker check narrows the window, it cannot close it without moving the persist onto the worker.
-            Integer stackId = existing.get(StackModel.ID);
-            if (StackModel.STATUS_DEPLOYING.equals(existing.get(StackModel.STATUS))) {
-                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_deployed"));
+            // with LIVE resources would orphan ALL of them.
+            requireNothingLive(existing, "name", name, "stack_rename_deployed", "stack_rename_unverifiable");
+        }
+        Object host = row.get(StackModel.HOST_ID);
+        if (!String.valueOf(host).equals(String.valueOf((Object) existing.get(StackModel.HOST_ID)))) {
+            requireNothingLive(existing, StackModel.HOST_ID.getInputName(), host, "stack_move_deployed",
+                "stack_move_unverifiable");
+        }
+    }
+
+    /**
+     * Refuses a change of what every live resource of the stack is tied to, while it has any. The gate is the live
+     * container count, decided on the stack's worker so it cannot interleave with a running operation.
+     *
+     * AIDEV-NOTE: a deploy QUEUED after this check but before the save persists can still race the change; the worker
+     * check narrows the window, it cannot close it without moving the persist onto the worker.
+     *
+     * @throws Violations {@code deployed} while it deploys or owns containers, {@code unverifiable} when Docker cannot
+     *     say, anchored on the field changed
+     */
+    private static void requireNothingLive(@NonNull Row existing, @NonNull String field, @Nullable Object value,
+                                           @NonNull String deployed, @NonNull String unverifiable) {
+        Integer stackId = existing.get(StackModel.ID);
+        if (StackModel.STATUS_DEPLOYING.equals(existing.get(StackModel.STATUS))) {
+            throw Violations.ofField(field, value, HohenheimMicrocopy.VIOLATIONS.of(deployed));
+        }
+        try {
+            if (stackId != null && StackRuntime.get().ownedContainerCount(stackId) > 0) {
+                throw Violations.ofField(field, value, HohenheimMicrocopy.VIOLATIONS.of(deployed));
             }
-            try {
-                if (stackId != null && StackRuntime.get().ownedContainerCount(stackId) > 0) {
-                    throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_deployed"));
-                }
-            } catch (IOException dockerUnavailable) {
-                // Cannot PROVE the rename is safe: refuse rather than orphan.
-                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_unverifiable"));
-            }
+        } catch (IOException dockerUnavailable) {
+            // Cannot PROVE the change is safe: refuse rather than orphan.
+            throw Violations.ofField(field, value, HohenheimMicrocopy.VIOLATIONS.of(unverifiable));
         }
     }
 

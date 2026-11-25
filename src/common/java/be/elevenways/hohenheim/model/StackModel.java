@@ -80,6 +80,7 @@ public class StackModel extends Model {
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+        .help(HohenheimMicrocopy.HELP.of("stack_enabled"))
         .build());
 
     /** The host this stack deploys to: a {@code servers.id} FK, never a name string. */
@@ -88,23 +89,28 @@ public class StackModel extends Model {
         .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
 
+    /** Goes by "registry_host" in input: "server" names a whole Hohenheim; the stored column keeps its name. */
     public static final StringField REGISTRY_SERVER = SCHEMA.addField(StringField.builder().name("registry_server")
+        .inputName("registry_host")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_server"))
         .help(HohenheimMicrocopy.HELP.of("registry_server"))
         .build());
 
     public static final StringField REGISTRY_USER = SCHEMA.addField(StringField.builder().name("registry_user")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_user"))
+        .help(HohenheimMicrocopy.HELP.of("stack_registry_user"))
         .build());
 
     public static final StringField REGISTRY_PASSWORD = SCHEMA.addField(StringField.builder().name("registry_password")
         .secret()
         .encrypted()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_password"))
+        .help(HohenheimMicrocopy.HELP.of("stack_registry_password"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
+        .help(HohenheimMicrocopy.HELP.of("stack_about"))
         .build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
