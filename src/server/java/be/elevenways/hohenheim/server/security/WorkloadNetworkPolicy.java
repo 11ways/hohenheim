@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -62,6 +63,7 @@ public final class WorkloadNetworkPolicy {
     private final @NonNull NftChains chains;
     private final @NonNull BooleanSupplier enabled;
     private final @NonNull Supplier<PublicPorts> publicPorts;
+    private final @NonNull HostShell host;
 
     /**
      * AIDEV-NOTE: TEST SEAM and the only one. Production code never calls
@@ -87,10 +89,17 @@ public final class WorkloadNetworkPolicy {
     /** @param publicPorts the host's public ports, read at every apply and check so a stream change counts */
     public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled,
                                  @NonNull Supplier<PublicPorts> publicPorts) {
+        this(runner, enabled, publicPorts, HostShell.local());
+    }
+
+    /** @param host the shell of the host whose kernel this applier programs, which its routes are read through */
+    public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled,
+                                 @NonNull Supplier<PublicPorts> publicPorts, @NonNull HostShell host) {
         this.runner = runner;
         this.chains = new NftChains(runner, WorkloadNetworkPolicy::table);
         this.enabled = enabled;
         this.publicPorts = publicPorts;
+        this.host = host;
     }
 
     /**
@@ -118,7 +127,8 @@ public final class WorkloadNetworkPolicy {
         if (!HostMode.SSH.declaredBy(server)) {
             return PRODUCTION;
         }
-        return new WorkloadNetworkPolicy(NftRunner.forHost(server), ENABLED_SETTING, PublicPorts::web);
+        return new WorkloadNetworkPolicy(NftRunner.forHost(server), ENABLED_SETTING, PublicPorts::web,
+            HostShell.forHost(server));
     }
 
     /** @param policy the applier {@link #current()} returns, or null to restore production */
@@ -129,6 +139,11 @@ public final class WorkloadNetworkPolicy {
     /** @return whether kernel enforcement is switched on for this host */
     public boolean isEnabled() {
         return this.enabled.getAsBoolean();
+    }
+
+    /** @return the shell of the host this applier programs, the one a new network's block is chosen for */
+    public @NonNull HostShell host() {
+        return this.host;
     }
 
     /**

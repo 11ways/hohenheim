@@ -10828,6 +10828,18 @@
     "text": "Open de host",
     "scope": "attention_action"
   },
+  "networks_running_out": {
+    "text": "Nog weinig app-netwerken over op {$name}",
+    "scope": "attention_title"
+  },
+  "networks_exhausted": {
+    "text": "Geen app-netwerken meer over op {$name}",
+    "scope": "attention_title"
+  },
+  "networks_left": {
+    "text": "Er passen nog {$free :integer} netwerken in het adresbereik. Elke nieuwe app neemt er een, en nog een voor elke database die ze koppelt; verbreed {$setting} voordat er geen meer over zijn.",
+    "scope": "attention_detail"
+  },
   "control_plane_backup": [
     {
       "text": "Back-ups blijven op deze machine",
@@ -15320,6 +15332,10 @@
     "text": "Het publieke poortvenster moet boven 1024 beginnen en op of onder {$max} eindigen",
     "scope": "violations"
   },
+  "setting_network_blocks": {
+    "text": "Het adresbereik voor app-netwerken moet een privé IPv4-blok zijn, en de grootte van een app-netwerk een prefixlengte tot /{$smallest} die het in hoogstens {$most :integer} netwerken verdeelt",
+    "scope": "violations"
+  },
   "setting_ipv6_address": {
     "text": "Laat het IPv6-adres leeg om elk IPv6-adres te bedienen, of geef een adres van deze host zoals 2001:db8::1; :: en IPv4-adressen kunnen niet naast de IPv4-listener binden",
     "scope": "violations"
@@ -15428,6 +15444,12 @@
   "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minuten zonder verkeer waarna een SFTP-sessie gesloten wordt.",
   "settings.hohenheim.hosts.contact_max_age_minutes.label": "Maximale leeftijd van het hostcontact",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Aantal minuten sinds het laatste antwoord van de daemon van een host waarna er geen nieuwe workloads meer op geplaatst worden, terwijl de workloads die er al draaien ongemoeid blijven; 0 of minder heft de grens op.",
+  "settings.hohenheim.networks.address_range.label": "Adresbereik voor app-netwerken",
+  "settings.hohenheim.networks.address_range.help": "Privé IPv4-blok waaruit elk netwerk dat Hohenheim voor een app, een databasekoppeling of een build maakt een eigen klein blok neemt, voorbij elk blok dat de Docker-netwerken en routes van de host al gebruiken; bestaande netwerken houden hun adressen.",
+  "settings.hohenheim.networks.prefix_length.label": "Grootte van een app-netwerk",
+  "settings.hohenheim.networks.prefix_length.help": "Prefixlengte van het blok van elk netwerk: /27 biedt plaats aan 29 containers naast de gateway, genoeg voor de eigen containers van een app, beide kanten van een koppeling en de services van een stack.",
+  "settings.hohenheim.networks.free_warning.label": "Waarschuwing vrije app-netwerken",
+  "settings.hohenheim.networks.free_warning.help": "Het dashboard waarschuwt voor een host zodra er minder vrije netwerken dan dit in zijn adresbereik over zijn; 0 waarschuwt nooit.",
   "settings.hohenheim.incus.controller_presence_grace_hours.label": "Respijt voor controlleraanwezigheid",
   "settings.hohenheim.incus.controller_presence_grace_hours.help": "Aantal uren dat de aanwezigheidsstempel van een andere controller niet vernieuwd mag worden voordat zijn ongebruikte gedeelde objecten als achtergelaten gelden; 0 of minder schakelt het opruimen uit.",
   "settings.hohenheim.incus.reap_departed_controllers.label": "Gedeelde objecten van vertrokken controllers opruimen",
@@ -15651,6 +15673,8 @@
   "settings.hohenheim.capacity.help": "Hoeveel werklastgeheugen elke host mag dragen; plaatsing slaat een host zonder vrije ruimte of recente meting over en de reserveringsadministratie bewaakt het budget bij het schrijven",
   "settings.hohenheim.hosts.label": "Hostgezondheid",
   "settings.hohenheim.hosts.help": "Hoe lang een host niet mag antwoorden voordat het beheer zijn opgeslagen toestand niet meer als actueel beschouwt",
+  "settings.hohenheim.networks.label": "App-netwerken",
+  "settings.hohenheim.networks.help": "Waar de netwerken die Hohenheim voor apps, databasekoppelingen en builds maakt hun adressen nemen, zodat de Docker-adrespools van de host nooit beperken hoeveel apps erop draaien",
   "settings.hohenheim.incus.label": "Incus-hosts",
   "settings.hohenheim.incus.help": "Wat deze controller mag doen met gedeelde objecten die andere Hohenheim-controllers op een eveneens gebruikte Incus-daemon achterlieten",
   "settings.hohenheim.instances.label": "Instanties",
@@ -15948,7 +15972,7 @@
     "scope": "server_overview"
   },
   "fix_network_headroom": {
-    "text": "Verwijder ongebruikte containernetwerken, of verruim de standaard adrespools van de daemon.",
+    "text": "Verwijder ongebruikte containernetwerken, of verbreed hohenheim.networks.address_range.",
     "scope": "server_overview"
   },
   "fix_nftables": {
@@ -17950,12 +17974,12 @@
     "text": "Containers kunnen nieuwe rechten krijgen (no_new_privs staat niet aan): {$status}",
     "scope": "host_check"
   },
-  "finding_network_headroom": {
-    "text": "Ruimte voor nog een containernetwerk ({$count :integer} in gebruik)",
+  "finding_network_room": {
+    "text": "Ruimte voor nog {$free :integer} containernetwerken in {$range} ({$count :integer} in gebruik)",
     "scope": "host_check"
   },
-  "finding_network_headroom_low": {
-    "text": "Ruimte voor nog een containernetwerk, maar er zijn er {$count :integer} in gebruik en de standaard adrespools zijn bijna op",
+  "finding_network_room_low": {
+    "text": "Er passen nog maar {$free :integer} containernetwerken in {$range} ({$count :integer} in gebruik); verbreed hohenheim.networks.address_range",
     "scope": "host_check"
   },
   "finding_network_exhausted": {
@@ -18134,6 +18158,10 @@
   },
   "fact_networks": {
     "text": "Containernetwerken",
+    "scope": "host_check"
+  },
+  "fact_networks_free": {
+    "text": "Vrije containernetwerken",
     "scope": "host_check"
   },
   "fact_server_name": {

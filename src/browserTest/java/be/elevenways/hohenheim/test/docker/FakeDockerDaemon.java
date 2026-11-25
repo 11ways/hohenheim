@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
@@ -31,6 +32,7 @@ import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.net.IpRanges;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -85,9 +87,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * What it deliberately does NOT model, so nothing reads its green as total coverage: a
  * running container's real port binding is a real {@link HttpServer} on loopback (so the
  * engine's health probe is a genuine HTTP round trip), but there is no image, no cgroup,
- * no network namespace and no nftables. {@code DockerInstanceRuntime}, WorkloadNetworks
- * and the kernel policy are NOT exercised here -- ApplicationReleaseLiveTest remains their
- * only proof, along with "zero dropped requests through a real proxy".
+ * no network namespace and no nftables. Its networks are a store of their own (create, list,
+ * inspect, remove, with the daemon's pool and overlap refusals) that the runtime face never
+ * joins; ApplicationReleaseLiveTest remains the proof of a release on a real network, along
+ * with "zero dropped requests through a real proxy".
  */
 public final class FakeDockerDaemon implements DockerTransport, DockerStreamTransport {
 
@@ -125,7 +128,7 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     private final Map<String, Set<String>> linkMembers = new LinkedHashMap<>();
 
     /** Every daemon-facing act in order; the assertable half of "what actually happened". */
-    private final List<String> calls = new ArrayList<>();
+    private final List<String> calls = Collections.synchronizedList(new ArrayList<>());
 
     /** handle -> the HTTP status its loopback responder answers (200 unless scripted). */
     private final Map<String, Integer> health = new LinkedHashMap<>();
@@ -150,6 +153,15 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
      * create and start of either face: the daemon's own count of "never two at once".
      */
     private final Map<String, Integer> peakOwned = new LinkedHashMap<>();
+
+    /** network name -> its inspect payload, for every network a create made or a seed placed. */
+    private final Map<String, Map<String, Object>> networks = new LinkedHashMap<>();
+
+    /** How many more networks the daemon's own address pools hand out; see {@link #limitPoolPicks}. */
+    private int poolPicksLeft = Integer.MAX_VALUE;
+
+    /** How many networks the daemon's own pools handed out, which numbers the next one's block. */
+    private int poolPicks;
 
     /** One exec the daemon ran inside a container: the container, the command and its environment. */
     public record Exec(@NonNull String handle, @NonNull List<String> command, @NonNull List<String> env) {
@@ -365,6 +377,31 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     /** Whether the daemon still holds a volume under this name. */
     public boolean hasVolume(@NonNull String name) {
         return this.volumes.containsKey(name);
+    }
+
+    /**
+     * The daemon's default address pools hand out {@code count} more networks: a create past that which names no
+     * subnet is refused as Docker refuses it, with HTTP 400 "all predefined address pools have been fully subnetted".
+     */
+    public synchronized void limitPoolPicks(int count) {
+        this.poolPicksLeft = count;
+    }
+
+    /** Place a network some other tool made on the daemon, holding {@code subnet}. */
+    public synchronized void seedNetwork(@NonNull String name, @NonNull String subnet) {
+        this.networks.put(name, networkOf(name, Map.of(), subnet, null, false));
+    }
+
+    /** @return the named network's IPv4 subnet, null when the daemon holds no such network */
+    public synchronized @Nullable String subnetOf(@NonNull String name) {
+        Map<String, Object> network = this.networks.get(name);
+        return network == null ? null : String.valueOf(ipamOf(network).get("Subnet"));
+    }
+
+    /** @return the named network's gateway, null when the daemon holds no such network */
+    public synchronized @Nullable String gatewayOf(@NonNull String name) {
+        Map<String, Object> network = this.networks.get(name);
+        return network == null ? null : String.valueOf(ipamOf(network).get("Gateway"));
     }
 
     /** Whether the daemon still holds a container under this handle. */
@@ -1033,16 +1070,8 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         }
 
         // -- networks --------------------------------------------------------
-        // The fake RUNTIME owns deploys, so nothing here creates a network; the sweeps
-        // that LOOK and the teardowns that REMOVE are answered honestly with "no such network".
-        if ("GET".equals(method) && "/networks".equals(path)) {
-            return json(200, List.of());
-        }
-        if ("GET".equals(method) && path.startsWith("/networks/")) {
-            return json(404, Map.of("message", "network not found"));
-        }
-        if ("DELETE".equals(method) && path.startsWith("/networks/")) {
-            return json(404, Map.of("message", "network not found"));
+        if ("/networks".equals(path) || path.startsWith("/networks/")) {
+            return networks(method, path, body);
         }
 
         throw new IOException("FakeDockerDaemon: unhandled " + method + " " + path);
@@ -1112,6 +1141,92 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         } catch (Exception malformed) {
             throw new IOException("FakeDockerDaemon: bad JSON body: " + json, malformed);
         }
+    }
+
+    /**
+     * The network endpoints: a create names its block or takes one of the daemon's pools, and is refused as Docker
+     * refuses it when the pools are spent or its block overlaps a network the daemon holds.
+     */
+    @SuppressWarnings("unchecked")
+    private synchronized byte[] networks(@NonNull String method, @NonNull String path, @NonNull String body)
+            throws IOException {
+        if ("GET".equals(method) && "/networks".equals(path)) {
+            return json(200, new ArrayList<>(this.networks.values()));
+        }
+        if ("POST".equals(method) && "/networks/create".equals(path)) {
+            Map<String, Object> spec = parse(body);
+            String name = String.valueOf(spec.get("Name"));
+            Map<String, Object> asked = spec.get("IPAM") instanceof Map<?, ?> ipam
+                && ipam.get("Config") instanceof List<?> configs && !configs.isEmpty()
+                && configs.getFirst() instanceof Map<?, ?> config ? (Map<String, Object>) config : null;
+            String subnet;
+            String gateway;
+            if (asked == null) {
+                if (this.poolPicksLeft <= 0) {
+                    return json(400, Map.of("message", "all predefined address pools have been fully subnetted"));
+                }
+                this.poolPicksLeft--;
+                this.poolPicks++;
+                subnet = "172." + (16 + this.poolPicks) + ".0.0/16";
+                gateway = "172." + (16 + this.poolPicks) + ".0.1";
+            } else {
+                subnet = String.valueOf(asked.get("Subnet"));
+                gateway = asked.get("Gateway") == null ? null : String.valueOf(asked.get("Gateway"));
+                IpRanges.Range block = AccessRuleModel.parseNetwork(subnet);
+                for (Map<String, Object> held : this.networks.values()) {
+                    IpRanges.Range other = AccessRuleModel.parseNetwork(String.valueOf(ipamOf(held).get("Subnet")));
+                    if (block != null && other != null
+                            && (block.matches(other.network()) || other.matches(block.network()))) {
+                        return json(403, Map.of("message",
+                            "invalid pool request: Pool overlaps with other one on this address space"));
+                    }
+                }
+            }
+            Map<String, String> labels = spec.get("Labels") instanceof Map<?, ?> given
+                ? (Map<String, String>) given : Map.of();
+            this.networks.put(name,
+                networkOf(name, labels, subnet, gateway, Boolean.TRUE.equals(spec.get("Internal"))));
+            return json(201, Map.of("Id", name, "Warning", ""));
+        }
+        String name = path.substring("/networks/".length());
+        Map<String, Object> network = this.networks.get(name);
+        if ("GET".equals(method) || "DELETE".equals(method)) {
+            if (network == null) {
+                return json(404, Map.of("message", "network " + name + " not found"));
+            }
+            if ("DELETE".equals(method)) {
+                this.networks.remove(name);
+                return response(204, "", "text/plain");
+            }
+            return json(200, network);
+        }
+        throw new IOException("FakeDockerDaemon: unhandled " + method + " " + path);
+    }
+
+    /** One network as the daemon's inspect and list answer it. */
+    private static @NonNull Map<String, Object> networkOf(@NonNull String name, @NonNull Map<String, String> labels,
+                                                          @NonNull String subnet, @Nullable String gateway,
+                                                          boolean internal) {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("Subnet", subnet);
+        if (gateway != null) {
+            config.put("Gateway", gateway);
+        }
+        Map<String, Object> network = new LinkedHashMap<>();
+        network.put("Name", name);
+        network.put("Id", name);
+        network.put("Driver", "bridge");
+        network.put("EnableIPv6", false);
+        network.put("Internal", internal);
+        network.put("Labels", Map.copyOf(labels));
+        network.put("IPAM", Map.of("Driver", "default", "Config", List.of(config)));
+        network.put("Containers", Map.of());
+        return network;
+    }
+
+    private static @NonNull Map<?, ?> ipamOf(@NonNull Map<String, Object> network) {
+        return network.get("IPAM") instanceof Map<?, ?> ipam && ipam.get("Config") instanceof List<?> configs
+            && !configs.isEmpty() && configs.getFirst() instanceof Map<?, ?> config ? config : Map.of();
     }
 
     private static @NonNull String param(@NonNull String query, @NonNull String name) {

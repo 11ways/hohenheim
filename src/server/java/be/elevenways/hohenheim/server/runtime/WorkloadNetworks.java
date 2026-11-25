@@ -22,14 +22,10 @@ import java.util.Map;
  * exists (HohenheimAccess.packSubjects, already the quota ledger's bucket key); it is
  * simply not what the first slice needs.
  *
- * AIDEV-NOTE: network-per-workload has a HOST CEILING and it is Docker's, not ours. The
- * daemon's default address pool ({@code 172.17.0.0/12} in /16 chunks plus a 192.168 range)
- * runs out after roughly thirty user-defined networks, after which network creation fails
- * with "all predefined address pools have been fully subnetted" -- which surfaces as a
- * REFUSED deploy, loudly, rather than as a container quietly sharing someone else's
- * network. A host expected to run more instances than that needs
- * {@code default-address-pools} in daemon.json sized for it (e.g. base 10.0.0.0/8 with
- * size 24); that is a host-preflight item, and hohenheim does not own daemon.json.
+ * AIDEV-NOTE: network-per-workload used to have a HOST CEILING that was Docker's: its default address pools hold
+ * about thirty networks, after which a deploy failed with "all predefined address pools have been fully subnetted"
+ * (Robbedoes, 2026-11-25). A network this class creates now takes a small block Hohenheim chooses itself
+ * ({@link NetworkSubnets}); one that exists keeps the addresses it has.
  *
  * AIDEV-NOTE: the policy is applied BEFORE the container exists, which is strictly
  * stronger than the create-stopped/apply/start ordering: there is no moment at which a
@@ -111,7 +107,7 @@ public final class WorkloadNetworks {
             }
         }
         if (existing == null) {
-            docker.createNetwork(name, ownerLabels, null, null, false, internal);
+            NetworkSubnets.create(docker, policy.host(), name, ownerLabels, internal);
             created = true;
         }
 

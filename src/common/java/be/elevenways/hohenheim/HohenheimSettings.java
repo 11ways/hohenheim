@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Objects;
 import be.elevenways.zenit.auth.ProteusSignInSettings;
 import be.elevenways.zenit.common.Zenit;
@@ -15,6 +16,7 @@ import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn.Consumer;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.UnknownHostAnswer;
@@ -25,6 +27,7 @@ import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.hohenheim.net.Hostnames;
+import be.elevenways.zenit.common.net.IpRanges;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1237,6 +1240,75 @@ public class HohenheimSettings {
                 + "refusal. 0 or less removes the bound -- an explicit choice to place "
                 + "onto a host nobody has heard from")
             .build();
+    }
+
+    // --- The address blocks of the Docker networks Hohenheim creates ---
+    public abstract class Networks {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("networks")
+            .label(Microcopy.of("settings.hohenheim.networks.label"))
+            .describe(Microcopy.of("settings.hohenheim.networks.help"))
+            .icon("network-wired");
+
+        /** The smallest block a network may get: a /29 holds five containers besides its gateway. */
+        public static final int SMALLEST_PREFIX = 29;
+
+        public static final SettingDefinition<String> ADDRESS_RANGE = GROUP
+            .buildSetting("address_range", String.class)
+            .hostOnly()
+            .defaultValue("10.199.0.0/16")
+            .label("App network address range")
+            .description("Private IPv4 block every network Hohenheim creates for an app, a database link or a build"
+                + " takes its own small block from, past every block the host's Docker networks and routes already"
+                + " use. Networks that exist keep their addresses")
+            .build();
+
+        public static final SettingDefinition<Integer> PREFIX_LENGTH = GROUP
+            .buildSetting("prefix_length", Integer.class)
+            .hostOnly()
+            .defaultValue(27)
+            .label("App network size")
+            .description("Prefix length of each network's block: /27 holds 29 containers besides the gateway, which"
+                + " covers an app's own containers, the two ends of a link and the services of a stack")
+            .build();
+
+        public static final SettingDefinition<Integer> FREE_WARNING = GROUP
+            .buildSetting("free_warning", Integer.class)
+            .defaultValue(20)
+            .label("Free app networks warning")
+            .description("The dashboard warns about a host once fewer free networks than this are left in its"
+                + " address range; 0 never warns")
+            .build();
+
+        private static final MicrocopyKey BLOCK_WORDS = HohenheimMicrocopy.VIOLATIONS.copy()
+            .declareKey(Networks.class, "setting_network_blocks");
+
+        /** The most networks one range may divide into, which bounds every walk over its blocks. */
+        public static final int MOST_NETWORKS = 65536;
+
+        /**
+         * @return why a range and network size cannot be used (not a private IPv4 block, a size outside the range or
+         *         past /29, more than {@link #MOST_NETWORKS} networks), null when they can
+         */
+        public static @Nullable String problemWith(@Nullable String text, @Nullable Integer prefix) {
+            IpRanges.Range range = AccessRuleModel.parseNetwork(text);
+            if (range == null || range.network().length != 4 || IpRanges.RFC1918.stream().noneMatch(
+                    block -> block.prefixLength() <= range.prefixLength() && block.matches(range.network()))) {
+                return ADDRESS_RANGE.getPath() + " '" + text + "' is not a private IPv4 block";
+            }
+            if (prefix == null || prefix < range.prefixLength() || prefix > SMALLEST_PREFIX
+                    || (1L << (prefix - range.prefixLength())) > MOST_NETWORKS) {
+                return PREFIX_LENGTH.getPath() + " " + prefix + " does not divide " + text + " into 1 to "
+                    + MOST_NETWORKS + " networks of at least a /" + SMALLEST_PREFIX;
+            }
+            return null;
+        }
+
+        /** The range must be a private IPv4 block that the network size divides into a bounded number of networks. */
+        public static final SettingsRule BLOCKS = SettingsRule.named("hohenheim_networks_blocks")
+            .reads(ADDRESS_RANGE, PREFIX_LENGTH)
+            .check(proposed -> problemWith(proposed.get(ADDRESS_RANGE), proposed.get(PREFIX_LENGTH)))
+            .says(BLOCK_WORDS.copy().withArg("smallest", SMALLEST_PREFIX).withArg("most", MOST_NETWORKS))
+            .addTo(Zenit.SETTINGS_VALUES);
     }
 
     // --- Incus daemons shared with other controllers ---

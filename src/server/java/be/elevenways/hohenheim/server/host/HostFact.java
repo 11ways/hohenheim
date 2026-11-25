@@ -41,6 +41,8 @@ public enum HostFact {
     CONTAINERS_RUNNING(Unit.COUNT),
     IMAGES(Unit.COUNT),
     NETWORKS(Unit.COUNT),
+    /** How many more networks fit in the declared address range ({@code NetworkSubnets}), skipping what is taken. */
+    NETWORKS_FREE(Unit.COUNT),
     SERVER_NAME(Unit.TEXT),
     PROJECT(Unit.TEXT),
     DRIVER(Unit.TEXT),

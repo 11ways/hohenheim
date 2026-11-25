@@ -167,6 +167,17 @@ public final class HostProbe {
      */
     public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info,
                                      @Nullable DiskSpace disk) {
+        recordSuccess(serverName, info, disk, null);
+    }
+
+    /**
+     * {@link #recordSuccess(String, Map, DiskSpace)} with how many more networks fit in the host's address range,
+     * counted on the same contact ({@link HostFact#NETWORKS_FREE}).
+     *
+     * @param freeNetworks the count as the caller read it, outside any transaction; null records none
+     */
+    public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info,
+                                     @Nullable DiskSpace disk, @Nullable Integer freeNetworks) {
         Row server = Models.get(HostModel.class).findByName(serverName);
         if (server == null) {
             return;
@@ -182,6 +193,9 @@ public final class HostProbe {
             }
             if (disk != null) {
                 HostDisk.record(server, disk, now);
+            }
+            if (freeNetworks != null) {
+                HostPreflight.recordReadings(server, Map.of(HostFact.NETWORKS_FREE, freeNetworks), now);
             }
         }
         // A heartbeat is bookkeeping, never activity: HostModel captures none of the fields it writes.

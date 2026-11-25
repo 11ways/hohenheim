@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostStanding;
@@ -17,7 +18,10 @@ import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
+import be.elevenways.hohenheim.server.host.HostFact;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
+import be.elevenways.hohenheim.server.runtime.NetworkSubnets;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
@@ -241,6 +245,32 @@ public final class HostAttention {
     private static @NonNull Microcopy diskDetail(@NonNull DiskSpace space) {
         return HohenheimMicrocopy.ATTENTION_DETAIL.of("disk_filling").withArg("percent", space.percentUsed())
             .withArg("free", space.freeBytes()).withArg("total", space.totalBytes());
+    }
+
+    /**
+     * Every host whose fresh reading ({@link HostFact#NETWORKS_FREE}, the heartbeat's and the preflight's) leaves
+     * fewer free networks in its address range than {@code hohenheim.networks.free_warning}: a warning, an error once
+     * none is left, because then every new app and database link there is refused.
+     */
+    public static void networksRunningOut(@NonNull List<AttentionItem> items) {
+        String token = HostFact.NETWORKS_FREE.token();
+        for (Row server : Models.get(HostModel.class).find().all()) {
+            if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+                    || !(capabilities.get(token) instanceof Number reading)
+                    || !HostPreflight.measuredRecently(HostPreflight.factMeasuredAt(server, token))
+                    || !NetworkSubnets.runningOut(reading.intValue())) {
+                continue;
+            }
+            int id = server.get(HostModel.ID);
+            int free = reading.intValue();
+            items.add(item(free > 0 ? AttentionSeverity.WARNING : AttentionSeverity.ERROR, "network-wired",
+                HohenheimMicrocopy.ATTENTION_TITLE.of(free > 0 ? "networks_running_out" : "networks_exhausted")
+                    .withArg("name", server.get(HostModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("networks_left").withArg("free", free)
+                    .withArg("setting", HohenheimSettings.Networks.ADDRESS_RANGE.getPath()),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.HOSTS, id),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_host")));
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
+import be.elevenways.hohenheim.server.runtime.NetworkSubnets;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -62,9 +63,6 @@ public final class HostPreflight {
 
     /** Oldest daemon API we accept: 1.41 = Docker 20.10, the floor our request shapes assume. */
     static final String MIN_API_VERSION = "1.41";
-
-    /** User-defined network count beyond which the default address pool nears exhaustion. */
-    static final int NETWORK_HEADROOM_WARN = 25;
 
     /** The stored check carrying whether the kernel probe container ran and answered at all. */
     public static final String CONTAINER_KERNEL_CHECK = "container_kernel";
@@ -159,7 +157,7 @@ public final class HostPreflight {
             try {
                 // The SAME per-server nft lane the workload policy applier uses -- what this
                 // probe proves is what a deploy will later rely on, not a lookalike.
-                report = run(servers.clientFor(serverName), NftRunner.forHost(server));
+                report = run(servers.clientFor(serverName), NftRunner.forHost(server), HostShell.forHost(server));
             } catch (HostKeys.HostTrustException refusal) {
                 // An unpinned host cannot be probed at all -- that refusal is itself the
                 // verdict, and it must be STORED like any other, not thrown at the operator
@@ -183,8 +181,10 @@ public final class HostPreflight {
      * The probe battery against one daemon, with an injectable nft seam so tests can
      * point the nft half at a private netns while the container half runs against the
      * real daemon.
+     *
+     * @param host the shell of the daemon's host, whose routes the probe network's block must not overlap
      */
-    public static @NonNull Report run(@NonNull DockerClient docker, @NonNull NftRunner nft) {
+    public static @NonNull Report run(@NonNull DockerClient docker, @NonNull NftRunner nft, @NonNull HostShell host) {
         List<Check> checks = new ArrayList<>();
         Map<String, Object> facts = new LinkedHashMap<>();
         HostProbe.Outcome[] daemonFailure = new HostProbe.Outcome[1];
@@ -193,7 +193,7 @@ public final class HostPreflight {
         if (info != null) {
             checkApiVersion(facts, checks);
             probeContainerKernel(docker, checks);
-            checkNetworkHeadroom(docker, checks, facts);
+            checkNetworkHeadroom(docker, host, checks, facts);
         }
         checkNftables(nft, checks);
 
@@ -459,24 +459,24 @@ public final class HostPreflight {
     }
 
     /**
-     * Address-pool headroom, proven by DOING it: create one probe network and remove
-     * it. Docker's default pool exhausts after roughly 30 user-defined networks and
-     * every instance now creates one, so "could not allocate subnet" must surface
-     * here, not on a tenant deploy.
+     * Network headroom, proven by DOING it: count the free blocks of the declared range, then create one probe network
+     * through the same home a deploy creates its networks through ({@link NetworkSubnets}) and remove it.
      */
-    private static void checkNetworkHeadroom(DockerClient docker, List<Check> checks,
+    private static void checkNetworkHeadroom(DockerClient docker, HostShell host, List<Check> checks,
                                              Map<String, Object> facts) {
         String name = "hohenheim-preflight-net-" + System.nanoTime();
         int networks = 0;
         try {
             networks = docker.listNetworks().size();
             facts.put(HostFact.NETWORKS.token(), networks);
-            docker.createNetwork(name, null, null, null, false);
+            NetworkSubnets.Room room = NetworkSubnets.roomOn(docker, host);
+            facts.put(HostFact.NETWORKS_FREE.token(), room.free());
+            NetworkSubnets.create(docker, host, name, Map.of(), false);
             docker.removeNetwork(name);
-            boolean low = networks > NETWORK_HEADROOM_WARN;
+            boolean low = NetworkSubnets.runningOut(room.free());
             checks.add(Check.of("network_headroom", low ? STATUS_WARN : STATUS_PASS, true,
-                (low ? PreflightFinding.NETWORK_HEADROOM_LOW : PreflightFinding.NETWORK_HEADROOM)
-                    .with("count", networks)));
+                (low ? PreflightFinding.NETWORK_ROOM_LOW : PreflightFinding.NETWORK_ROOM)
+                    .with("count", networks, "free", room.free(), "range", room.rangeText())));
         } catch (Exception error) {
             checks.add(Check.of("network_headroom", STATUS_FAIL, true,
                 PreflightFinding.NETWORK_EXHAUSTED.with("count", networks, "error", error.getMessage())));

@@ -10828,6 +10828,18 @@
     "text": "Open the host",
     "scope": "attention_action"
   },
+  "networks_running_out": {
+    "text": "Few app networks left on {$name}",
+    "scope": "attention_title"
+  },
+  "networks_exhausted": {
+    "text": "No app networks left on {$name}",
+    "scope": "attention_title"
+  },
+  "networks_left": {
+    "text": "{$free :integer} more networks fit in its address range. Every new app takes one, and one more for each database it links to; widen {$setting} before none are left.",
+    "scope": "attention_detail"
+  },
   "control_plane_backup": [
     {
       "text": "Backups stay on this machine",
@@ -15320,6 +15332,10 @@
     "text": "The public port window must start above 1024 and end at or below {$max}",
     "scope": "violations"
   },
+  "setting_network_blocks": {
+    "text": "The app network address range must be a private IPv4 block, and the app network size a prefix length up to /{$smallest} that divides it into at most {$most :integer} networks",
+    "scope": "violations"
+  },
   "setting_ipv6_address": {
     "text": "Leave the IPv6 address empty to serve every IPv6 address, or give one address of this host such as 2001:db8::1; :: and IPv4 addresses cannot bind beside the IPv4 listener",
     "scope": "violations"
@@ -15428,6 +15444,12 @@
   "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minutes without traffic after which an SFTP session is closed.",
   "settings.hohenheim.hosts.contact_max_age_minutes.label": "Host contact maximum age",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Minutes since a host's daemon last answered after which new workloads are no longer placed on it, while workloads already on it stay untouched; 0 or less removes the bound.",
+  "settings.hohenheim.networks.address_range.label": "App network address range",
+  "settings.hohenheim.networks.address_range.help": "Private IPv4 block from which every network Hohenheim creates for an app, a database link or a build takes its own small block, past every block the host's Docker networks and routes already use; networks that exist keep their addresses.",
+  "settings.hohenheim.networks.prefix_length.label": "App network size",
+  "settings.hohenheim.networks.prefix_length.help": "Prefix length of each network's block: /27 holds 29 containers besides the gateway, enough for an app's own containers, both ends of a link and the services of a stack.",
+  "settings.hohenheim.networks.free_warning.label": "Free app networks warning",
+  "settings.hohenheim.networks.free_warning.help": "The dashboard warns about a host once fewer free networks than this are left in its address range; 0 never warns.",
   "settings.hohenheim.incus.controller_presence_grace_hours.label": "Controller presence grace",
   "settings.hohenheim.incus.controller_presence_grace_hours.help": "Hours another controller's presence stamp may go unrefreshed before its unreferenced shared objects count as abandoned; 0 or less disables reaping.",
   "settings.hohenheim.incus.reap_departed_controllers.label": "Reap departed controllers' shared objects",
@@ -15651,6 +15673,8 @@
   "settings.hohenheim.capacity.help": "How much workload memory each host is allowed to carry; placement skips a host with no headroom or no recent reading, and the reservation ledger enforces the budget at write time",
   "settings.hohenheim.hosts.label": "Host health",
   "settings.hohenheim.hosts.help": "How long a host may go without answering before the control plane stops treating its stored state as current",
+  "settings.hohenheim.networks.label": "App networks",
+  "settings.hohenheim.networks.help": "Where the networks Hohenheim creates for apps, database links and builds take their addresses, so the host's Docker address pools never limit how many apps it runs",
   "settings.hohenheim.incus.label": "Incus hosts",
   "settings.hohenheim.incus.help": "What this controller may do to the shared objects OTHER hohenheim controllers left on an Incus daemon it also uses",
   "settings.hohenheim.instances.label": "Instances",
@@ -15948,7 +15972,7 @@
     "scope": "server_overview"
   },
   "fix_network_headroom": {
-    "text": "Remove unused container networks, or widen the daemon's default address pools.",
+    "text": "Remove unused container networks, or widen hohenheim.networks.address_range.",
     "scope": "server_overview"
   },
   "fix_nftables": {
@@ -17950,12 +17974,12 @@
     "text": "Containers can gain new privileges (no_new_privs is not set): {$status}",
     "scope": "host_check"
   },
-  "finding_network_headroom": {
-    "text": "Room for another container network ({$count :integer} in use)",
+  "finding_network_room": {
+    "text": "Room for {$free :integer} more container networks in {$range} ({$count :integer} in use)",
     "scope": "host_check"
   },
-  "finding_network_headroom_low": {
-    "text": "Room for another container network, but {$count :integer} are in use and the default address pools are nearly used up",
+  "finding_network_room_low": {
+    "text": "Only {$free :integer} more container networks fit in {$range} ({$count :integer} in use); widen hohenheim.networks.address_range",
     "scope": "host_check"
   },
   "finding_network_exhausted": {
@@ -18134,6 +18158,10 @@
   },
   "fact_networks": {
     "text": "Container networks",
+    "scope": "host_check"
+  },
+  "fact_networks_free": {
+    "text": "Free container networks",
     "scope": "host_check"
   },
   "fact_server_name": {

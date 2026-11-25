@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.HostDisk;
+import be.elevenways.hohenheim.server.host.HostFact;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -23,13 +26,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A disk filling up is said on the dashboard before backups start failing: the controller's own disks and each host's
- * stored reading, one item per filesystem, each proven both ways.
+ * A disk filling up, or a host's networks running out, is said on the dashboard before backups or deploys start
+ * failing: the controller's own disks and each host's stored reading, one item per filesystem or host, each proven
+ * both ways.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -108,6 +114,39 @@ class HostDiskAttentionTest {
         });
     }
 
+    /** A host whose fresh reading leaves few free networks warns, one with none left errs, and only then. */
+    @Test
+    void aHostRunningOutOfNetworksRaisesOneItemAndOnlyThen() {
+        Db.run(APP.database(), () -> {
+            List<Integer> made = new ArrayList<>();
+            try {
+                // 1. Under the warning count warns, none left errs; roomy and stale readings say nothing.
+                int low = host(made, "nets-low", HostModel.MODE_SSH, freeNetworks(3, Now.instant()));
+                int none = host(made, "nets-none", HostModel.MODE_SSH, freeNetworks(0, Now.instant()));
+                host(made, "nets-roomy", HostModel.MODE_SSH, freeNetworks(500, Now.instant()));
+                host(made, "nets-stale", HostModel.MODE_SSH,
+                    freeNetworks(3, Now.instant().minus(Duration.ofDays(30))));
+                List<AttentionItem> items = new ArrayList<>();
+                HostAttention.networksRunningOut(items);
+                String advice = "; widen " + HohenheimSettings.Networks.ADDRESS_RANGE.getPath()
+                    + " before none are left.";
+                assertThat(words(items).stream().filter(item -> item.contains(" on nets-")).toList())
+                    .as("step 1: the low host warns, the empty one errs, nothing else")
+                    .containsExactlyInAnyOrder(
+                        "warning Few app networks left on nets-low | 3 more networks fit in its address range. Every"
+                            + " new app takes one, and one more for each database it links to" + advice
+                            + " -> /admin/hosts/" + low + "/open",
+                        "error No app networks left on nets-none | 0 more networks fit in its address range. Every"
+                            + " new app takes one, and one more for each database it links to" + advice
+                            + " -> /admin/hosts/" + none + "/open");
+            } finally {
+                for (int id : made) {
+                    HardDeletes.byId(Models.get(HostModel.class), id);
+                }
+            }
+        });
+    }
+
     /** Each item as "severity title | detail -> target", the controller's disks measured by {@code measure}. */
     private static List<String> raised(boolean hosts, Function<FileStore, @Nullable DiskSpace> measure,
                                        List<FileStore> measured) {
@@ -116,6 +155,11 @@ class HostDiskAttentionTest {
             measured.add(store);
             return measure.apply(store);
         });
+        return words(items);
+    }
+
+    /** Each item as "severity title | detail -> target", in English. */
+    private static List<String> words(List<AttentionItem> items) {
         LocaleChain english = LocaleChain.ofTags("en");
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
@@ -128,14 +172,24 @@ class HostDiskAttentionTest {
 
     /** A host of {@code mode} carrying a stored disk reading taken at {@code at}. */
     private static int host(List<Integer> made, String name, String mode, DiskSpace space, Instant at) {
+        return host(made, name, mode, row -> HostDisk.record(row, space, at));
+    }
+
+    /** A host of {@code mode} carrying the readings {@code reading} records on its row. */
+    private static int host(List<Integer> made, String name, String mode, Consumer<Row> reading) {
         HostModel servers = Models.get(HostModel.class);
         Row row = servers.createEmptyRow();
         row.set(HostModel.NAME, name);
         row.set(HostModel.MODE, mode);
-        HostDisk.record(row, space, at);
+        reading.accept(row);
         servers.save(row);
         int id = row.get(HostModel.ID);
         made.add(id);
         return id;
+    }
+
+    /** @return what records a reading of {@code free} free networks, taken at {@code at} */
+    private static Consumer<Row> freeNetworks(int free, Instant at) {
+        return row -> HostPreflight.recordReadings(row, Map.of(HostFact.NETWORKS_FREE, free), at);
     }
 }

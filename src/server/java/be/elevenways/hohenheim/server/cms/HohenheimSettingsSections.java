@@ -53,7 +53,8 @@ public enum HohenheimSettingsSections {
         HohenheimSettings.Stacks.GROUP,
         HohenheimSettings.Quota.GROUP),
     HOSTS("hosts", HohenheimMicrocopy.SETTINGS_SECTION.of("section_hosts"),
-        HohenheimSettings.Hosts.GROUP, HohenheimSettings.Capacity.GROUP, HohenheimSettings.Incus.GROUP),
+        HohenheimSettings.Hosts.GROUP, HohenheimSettings.Capacity.GROUP, HohenheimSettings.Networks.GROUP,
+        HohenheimSettings.Incus.GROUP),
     // How people sign in: the protected paths' sessions and the Proteus SSO login.
     SIGNIN("signin", HohenheimMicrocopy.SETTINGS_SECTION.of("section_signin"),
         HohenheimSettings.ProxyAuth.GROUP, HohenheimSettings.AuthProteus.GROUP),

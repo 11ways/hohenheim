@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -74,7 +75,7 @@ class HostPreflightTest {
                 HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 137);
 
             HostPreflight.Report report = HostPreflight.run(docker,
-                (args, stdin) -> netns.nftRunner().run(args, stdin));
+                (args, stdin) -> netns.nftRunner().run(args, stdin), HostShell.local());
 
             // 2. Daemon + API window.
             assertThat(report.check("daemon"))

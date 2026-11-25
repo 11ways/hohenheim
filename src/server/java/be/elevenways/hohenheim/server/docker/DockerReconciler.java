@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostDisk;
 import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.server.runtime.NetworkSubnets;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
@@ -419,9 +421,10 @@ public final class DockerReconciler {
                 results.put(serverName, sweepHost(serverName, client));
                 // The sweep IS a successful daemon contact: the scheduled reconcile
                 // doubles as the host heartbeat, so last_seen_at, the memory reading
-                // placement rations against and the disk reading stay honest without
-                // a second per-host probe loop.
-                HostProbe.recordSuccess(serverName, infoOf(client, serverName), HostDisk.measure(serverName));
+                // placement rations against, the disk reading and the free networks the
+                // dashboard warns on stay honest without a second per-host probe loop.
+                HostProbe.recordSuccess(serverName, infoOf(client, serverName), HostDisk.measure(serverName),
+                    freeNetworksOf(client, serverName));
             } catch (Exception e) {
                 Blast.log("DOCKER RECONCILE: could not sweep server", serverName, "-", e.getMessage());
                 HostProbe.recordFailure(serverName,
@@ -440,6 +443,16 @@ public final class DockerReconciler {
             return client.info();
         } catch (Exception unread) {
             Blast.log("DOCKER RECONCILE: no memory reading from", serverName, "-", unread.getMessage());
+            return null;
+        }
+    }
+
+    /** How many more networks fit in the host's address range; null when the daemon or the host could not say. */
+    private static @Nullable Integer freeNetworksOf(@NonNull DockerClient client, @NonNull String serverName) {
+        try {
+            return NetworkSubnets.roomOn(client, WorkloadNetworkPolicy.forHost(serverName).host()).free();
+        } catch (Exception unread) {
+            Blast.log("DOCKER RECONCILE: no free network count from", serverName, "-", unread.getMessage());
             return null;
         }
     }

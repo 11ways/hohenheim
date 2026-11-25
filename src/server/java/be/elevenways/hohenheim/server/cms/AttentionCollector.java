@@ -227,6 +227,7 @@ public final class AttentionCollector {
         if (HohenheimRoles.hostWorkloadsEnabled()) {
             HostAttention.hostsTakingNoApps(items, AppHealth.heldBackByHost());
             HostAttention.isolationUnenforced(items);
+            HostAttention.networksRunningOut(items);
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         HostAttention.disksFillingUp(items, HohenheimRoles.hostWorkloadsEnabled());

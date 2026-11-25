@@ -72,7 +72,9 @@ class SettingsGroupCoverageTest {
         // and read once when the server starts, while the file manager's bounds are ordinary admin settings.
         "sftp",
         // This server's name among the Hohenheims it is linked to (docs/cluster.md).
-        "cluster");
+        "cluster",
+        // The address blocks of the networks Hohenheim creates (2026-11-25).
+        "networks");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

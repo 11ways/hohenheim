@@ -56,8 +56,8 @@ public enum PreflightFinding {
     SECCOMP_OFF,
     NO_NEW_PRIVS_SET,
     NO_NEW_PRIVS_UNSET,
-    NETWORK_HEADROOM,
-    NETWORK_HEADROOM_LOW,
+    NETWORK_ROOM,
+    NETWORK_ROOM_LOW,
     NETWORK_EXHAUSTED,
     NFT_APPLIED,
     NFT_REFUSED,
@@ -98,7 +98,7 @@ public enum PreflightFinding {
     public static final String FAILURE_ARG = "failure";
 
     /** The arguments that are whole numbers (a count, a size in bytes), which the catalog words in the reader's form. */
-    public static final Set<String> NUMBER_ARGS = Set.of("count", "cpus", "memory");
+    public static final Set<String> NUMBER_ARGS = Set.of("count", "cpus", "memory", "free");
 
     /** @return the token stored on a check entry */
     public @NonNull String token() {

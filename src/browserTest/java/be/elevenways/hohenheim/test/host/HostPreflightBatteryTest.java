@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -70,7 +71,7 @@ class HostPreflightBatteryTest {
             // 1. The probe container's exec FAILS: container_kernel is a required FAIL.
             ScriptedDocker docker = new ScriptedDocker();
             docker.execExit = 1;
-            HostPreflight.Report failing = HostPreflight.run(docker, new EchoNft());
+            HostPreflight.Report failing = HostPreflight.run(docker, new EchoNft(), NO_ROUTES);
             assertThat(failing.check(HostPreflight.CONTAINER_KERNEL_CHECK).status())
                 .as("step 1: a probe that could not exec fails container_kernel")
                 .isEqualTo(HostPreflight.STATUS_FAIL);
@@ -82,7 +83,7 @@ class HostPreflightBatteryTest {
 
             // 2. The host is fixed: the SAME battery now writes container_kernel as a PASS.
             docker.execExit = 0;
-            HostPreflight.Report passing = HostPreflight.run(docker, new EchoNft());
+            HostPreflight.Report passing = HostPreflight.run(docker, new EchoNft(), NO_ROUTES);
             assertThat(passing.check(HostPreflight.CONTAINER_KERNEL_CHECK))
                 .as("step 2: a probe that answered still WRITES container_kernel").isNotNull();
             assertThat(passing.check(HostPreflight.CONTAINER_KERNEL_CHECK).status())
@@ -110,6 +111,12 @@ class HostPreflightBatteryTest {
                     .as("step 2: fact '%s' is declared, so the host page names it in words", fact)
                     .isNotNull();
             }
+            assertThat(passing.check("network_headroom").status())
+                .as("step 2: the probe network took a block of the declared range")
+                .isEqualTo(HostPreflight.STATUS_PASS);
+            assertThat(passing.facts().get(HostFact.NETWORKS_FREE.token()))
+                .as("step 2: and every /27 of the default /16 is free on a daemon with no networks and no routes")
+                .isEqualTo(2048);
 
             // 3. Stored, the stale FAIL is gone and the posture gate admits the host.
             HostPreflight.store("battery-a", passing, HostPreflight.DOCKER_BATTERY);
@@ -136,7 +143,7 @@ class HostPreflightBatteryTest {
             assertThat(catchThrowable(() -> HostAdmission.requirePreflightVerdictForPosture(stale)))
                 .as("step 4: the stale record refuses placement, as production's would")
                 .isInstanceOf(Violations.class);
-            HostPreflight.store("battery-a", HostPreflight.run(docker, new EchoNft()),
+            HostPreflight.store("battery-a", HostPreflight.run(docker, new EchoNft(), NO_ROUTES),
                 HostPreflight.DOCKER_BATTERY);
             Row healed = model.findByName("battery-a");
             assertThat(HostPreflight.storedCheckStatus(healed, "trusted"))
@@ -149,7 +156,7 @@ class HostPreflightBatteryTest {
             //    its detail names the exact reference the operator must preload.
             docker.pullRefused = true;
             int createdBefore = docker.createdImages.size();
-            HostPreflight.Report airGapped = HostPreflight.run(docker, new EchoNft());
+            HostPreflight.Report airGapped = HostPreflight.run(docker, new EchoNft(), NO_ROUTES);
             HostPreflight.Check unobtainable = airGapped.check(HostPreflight.CONTAINER_KERNEL_CHECK);
             assertThat(unobtainable.status())
                 .as("step 5: an unobtainable probe image fails container_kernel")
@@ -204,8 +211,12 @@ class HostPreflightBatteryTest {
     private static String apiStatus(String api) {
         ScriptedDocker docker = new ScriptedDocker();
         docker.apiVersion = api;
-        return HostPreflight.run(docker, new EchoNft()).check("api_version").status();
+        return HostPreflight.run(docker, new EchoNft(), NO_ROUTES).check("api_version").status();
     }
+
+    /** A host whose route table holds no route at all. */
+    private static final HostShell NO_ROUTES = (script, timeoutSeconds) -> new HostShell.Result(0,
+        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n");
 
     /** An nft lane that accepts every transaction and reads back the table it was asked for. */
     private static final class EchoNft implements NftRunner {
@@ -296,7 +307,7 @@ class HostPreflightBatteryTest {
 
         @Override
         public String createNetwork(String name, Map<String, String> labels, String subnet,
-                                    String gateway, boolean enableIpv6) {
+                                    String gateway, boolean enableIpv6, boolean internal) {
             return name;
         }
 

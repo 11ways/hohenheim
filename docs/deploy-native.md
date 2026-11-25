@@ -481,8 +481,10 @@ What is still shared, by design, and what it means:
 - The HOST PORTS a workload publishes. Two controllers cannot arbitrate a port
   between them (neither ledger can see the other's), so the second bind simply
   fails. Loud, at the daemon, not a silent overwrite.
-- Docker's default address pool (~30 user-defined networks per host) is spent
-  by both controllers together.
+- The app network address range (`hohenheim.networks.address_range`, a /27 per
+  network) is shared by both controllers: each skips the blocks the other's
+  networks hold, and two creates racing for one block end with Docker refusing
+  the second, which takes the next block.
 - A pre-namespace resource (a bare `hohenheim-instance-N` from before
   controller namespacing) is attributable to NO controller. It is never adopted and never
   removed automatically: the reconciler reports it as FOREIGN_COLLIDING with a
