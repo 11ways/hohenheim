@@ -154,16 +154,13 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceOperations.CONNECT_WEBHOOK,
             InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
             InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
-            SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.CLONE,
-            SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
+            SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.CLONE));
         // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
         McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
             .lists(sources.toArray(new RecordSource<?>[0]))
             .places(placed.toArray(new Operation<?, ?, ?>[0]))
             .answersWith(StackOperations.REFRESH, HohenheimMcpAnswers::output)
-            .answersWith(SpamserviceOperations.TEST, HohenheimMcpAnswers::output)
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
-            .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys);
         tools = set.build();
         HohenheimTools hand = HohenheimTools.build();

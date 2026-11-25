@@ -39,7 +39,9 @@ class HohenheimSettingsToolsTest extends HohenheimHttpTestBase {
 
     private static final Pattern REVISION = Pattern.compile("Revision: (\\S+)");
 
-    private static final List<String> REVIEW = List.of(SettingsOperations.REVISION, "request");
+    /** The arguments every settings write takes beside its section's settings. */
+    private static final List<String> REVIEW = List.of(SettingsOperations.REVISION, SettingsOperations.CONFIRMED,
+        "request");
 
     @Test
     void anAdministratorReadsAndChangesTheSettingsByToolsAlone() {

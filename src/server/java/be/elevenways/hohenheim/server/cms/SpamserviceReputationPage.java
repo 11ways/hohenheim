@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.server.security.ReputationScore;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -18,6 +20,13 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Plain;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -29,10 +38,54 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /** Strict reputation diagnostic with Hohenheim's weighted policy explanation. */
 public final class SpamserviceReputationPage extends PanelPage {
+
+    /** The address an explanation is asked for. */
+    private static final StringField IP = StringField.builder("ip").required()
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ip"))
+        .help(HohenheimMicrocopy.HELP.of("spam_reputation_ip")).build();
+
+    /**
+     * An address's reputation as this page explains it: the service's datasets and event counts, weighted by this
+     * installation's ban policy.
+     *
+     * @param datasets  the IP intelligence datasets that know it, as name and value rows
+     * @param negative  its negative event counts per category
+     * @param positive  its positive event counts per category
+     * @param weighted  per category, the counts, the credit and the net score the ban policy weighs
+     * @param net       the net score held against {@code threshold}
+     */
+    public record Explanation(@NonNull String ip, @NonNull String subnet, @NonNull List<Map<String, Object>> datasets,
+                              @NonNull List<Map<String, Object>> negative,
+                              @NonNull List<Map<String, Object>> positive,
+                              @NonNull List<Map<String, Object>> weighted, long net, @NonNull Object threshold,
+                              @NonNull Object positiveWeight) {
+    }
+
+    /** Explains one address's reputation, as the page does; it changes nothing. */
+    public static final Operation<Void, OperationInput.Values, Explanation> READ =
+            Operation.declare(HohenheimIds.id("read_spamservice_reputation"))
+        .happened(OperationSentences.of("read_spamservice_reputation"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("read_spamservice_reputation"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("read_spamservice_reputation_description"))
+        .noSubject()
+        .gate(HohenheimSources.OPERATOR)
+        .input(OperationInput.derived(FormSpec.builder().add(Plain.of(IP)).build()))
+        .result(Explanation.class)
+        .facts(OperationFact.READ_ONLY, OperationFact.REACHES_OUTSIDE)
+        .register();
+
+    static {
+        OperationHandlers.attach(READ)
+            .availability((none, access) -> SpamserviceOperations.connectedReason(SpamserviceManager.get()))
+            .handle(call -> SpamserviceRemoteStore.answered(() -> explain(
+                SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED),
+                String.valueOf(Objects.requireNonNull(call.input()).get(IP.getName())).trim())));
+    }
 
     private final Supplier<SpamserviceClient> clientSupplier;
 
@@ -81,20 +134,33 @@ public final class SpamserviceReputationPage extends PanelPage {
                     .asString(conduit));
             } else {
                 try {
-                    ReputationDiagnostic diagnostic = client.diagnoseReputation(ip);
-                    vars.put("result", Map.of("ip", diagnostic.ip(), "subnet", diagnostic.subnet()));
-                    vars.put("datasets", SpamserviceRemoteStore.nameValueRows(diagnostic.datasets()));
-                    vars.put("negative", categories(diagnostic.events()));
-                    vars.put("positive", categories(diagnostic.positive()));
-                    ReputationScore score = weighted(diagnostic, settings);
-                    vars.put("weighted", weightedRows(score));
-                    vars.put("net", score.net());
+                    Explanation explained = explain(client, ip);
+                    vars.put("result", Map.of("ip", explained.ip(), "subnet", explained.subnet()));
+                    vars.put("datasets", explained.datasets());
+                    vars.put("negative", explained.negative());
+                    vars.put("positive", explained.positive());
+                    vars.put("weighted", explained.weighted());
+                    vars.put("net", explained.net());
                 } catch (SpamserviceApiException failure) {
                     vars.put("error", failure.getMessage());
                 }
             }
         }
         return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_REPUTATION, vars);
+    }
+
+    /**
+     * @return the service's diagnosis of the address, weighted by this installation's ban policy
+     * @throws SpamserviceApiException when the service refuses the address or does not answer
+     */
+    static @NonNull Explanation explain(@NonNull SpamserviceClient client, @NonNull String ip) {
+        ReputationScore.Settings settings = scoreSettings();
+        ReputationDiagnostic diagnostic = client.diagnoseReputation(ip);
+        ReputationScore score = weighted(diagnostic, settings);
+        return new Explanation(diagnostic.ip(), diagnostic.subnet(),
+            SpamserviceRemoteStore.nameValueRows(diagnostic.datasets()), categories(diagnostic.events()),
+            categories(diagnostic.positive()), weightedRows(score), score.net(), settings.threshold(),
+            settings.positiveWeight());
     }
 
     private static ReputationScore weighted(ReputationDiagnostic diagnostic,

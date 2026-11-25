@@ -34,6 +34,7 @@ import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
+import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.ProjectParts;
 import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
@@ -89,6 +90,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimSettingsTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimMoveUndoTaskTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimSetupTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimSpamNotificationTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -150,7 +152,8 @@ public final class HohenheimTools extends McpToolCollection {
             .route(ProtectedPathParts.DELETE, null)
             .route(SiteRedirectParts.DELETE, null)
             .route(AuthProviderParts.DELETE, null)
-            .route(InstanceTemplateParts.DELETE, null);
+            .route(InstanceTemplateParts.DELETE, null)
+            .route(NotificationChannelParts.DELETE, null);
         // zenit-auth's people and roles are deleted here too, by their own operations, and the caller's own API keys
         // revoked.
         for (Operation<?, ?, ?> operation : AuthTools.DELETES) deletes.route(operation, null);
@@ -204,6 +207,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(DnsOperations.CHECK_HEALTH, HohenheimMcpAnswers::told)
             .route(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .route(HostParts.PROBE, HohenheimMcpAnswers::said)
+            .route(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .build();
         // DNS records have no code: they are read and set by their zone, each by its name and type.
         McpHostTool recordList = McpCodeTool.builder("dns_record_list", words("mcp_tool_dns_record_list"),

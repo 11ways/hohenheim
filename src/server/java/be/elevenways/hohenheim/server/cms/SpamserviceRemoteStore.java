@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,6 +87,21 @@ final class SpamserviceRemoteStore {
             throw new SpamserviceApiException(503, "spamservice_unavailable", "Spamservice is unavailable");
         }
         return client;
+    }
+
+    /**
+     * Runs a call of the management API for an operation, a refusal or a failure of the service becoming the
+     * operation's refusal in the service's own words, as the connection test words it.
+     *
+     * @throws Violations carrying the service's own reason
+     */
+    static <T> @NonNull T answered(@NonNull Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (SpamserviceApiException refused) {
+            throw Violations.ofForm(HohenheimMicrocopy.SPAMSERVICE.of("service_refused")
+                .withArg("reason", HohenheimViolations.reasonOf(refused)));
+        }
     }
 
     /**

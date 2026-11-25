@@ -49,7 +49,8 @@ public class NotificationChannelModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").required()
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("notification_channel_name")).build());
     public static final StringField KIND = SCHEMA.addField(StringField.builder().name("kind").build());
     public static final EnumField FORMAT = SCHEMA.addField(EnumField.builder("format")
         .required()
@@ -60,11 +61,13 @@ public class NotificationChannelModel extends Model {
         .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON")
             .label(HohenheimMicrocopy.NOTIFICATION_FORMAT.of(FORMAT_GENERIC)).icon("code").color(ColorHue.GRAY))
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("format"))
+        .help(HohenheimMicrocopy.HELP.of("notification_channel_format"))
         .build());
     // The webhook URL is a bearer capability (Slack/Discord embed the token in the path).
     public static final StringField URL = SCHEMA.addField(
         StringField.builder().name("url").secret().encrypted().required()
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("url")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("url"))
+            .help(HohenheimMicrocopy.HELP.of("notification_channel_url")).build());
     // Subscribed event tokens; empty/null = receive every event, which the help text says
     // out loud -- an empty picker otherwise reads as "subscribed to nothing".
     public static final ListField<String> EVENTS = SCHEMA.addField(

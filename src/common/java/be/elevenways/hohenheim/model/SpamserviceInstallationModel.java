@@ -45,11 +45,13 @@ public class SpamserviceInstallationModel extends Model {
         IntegerField.builder().name("id").defaultValue(SINGLETON_ID).build());
     public static final BooleanField ENABLED = SCHEMA.addField(
         BooleanField.builder("enabled").defaultValue(false)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+            .help(HohenheimMicrocopy.HELP.of("spam_service_enabled")).build());
     public static final IntegerField PORT = SCHEMA.addField(
         IntegerField.builder().name("port").defaultValue(8095)
             .validator(Range.of(MIN_PORT, MAX_PORT))
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("port")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("port"))
+        .help(HohenheimMicrocopy.HELP.of("spam_service_port")).build());
     // AIDEV-NOTE: deliberately NOT .required(). The requirement is CONDITIONAL -- only an
     // ENABLED installation needs a system user, and that is enforced where it is knowable
     // (SpamserviceManager's installation store refuses to start without a resolvable user).
@@ -62,7 +64,8 @@ public class SpamserviceInstallationModel extends Model {
     public static final IntegerField MAX_HEAP_MB = SCHEMA.addField(
         IntegerField.builder().name("max_heap_mb").defaultValue(512)
             .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB))
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_heap_mb")).byteSize(ByteUnit.MEGABYTE).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_heap_mb")).byteSize(ByteUnit.MEGABYTE)
+        .help(HohenheimMicrocopy.HELP.of("spam_service_max_heap")).build());
     public static final StringField CONTROLLER_KEY = SCHEMA.addField(
         StringField.builder().name("controller_key").secret().encrypted().filterable(false).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

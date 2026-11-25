@@ -41,6 +41,7 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.forms.common.edit.CheckMatrix;
 import be.elevenways.zenit.delivery.server.DeliveryOutcome;
@@ -86,6 +87,28 @@ public final class NotificationChannelParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(NotificationChannelModel.REF);
 
+    /**
+     * The events a channel gets, offered from the vocabulary itself so an event cannot exist and be unofferable: the
+     * panel's form and the writes an assistant calls take this one entry.
+     */
+    private static final FormEntry EVENTS_ENTRY = Array.of(NotificationChannelModel.EVENTS,
+            NotificationChannelModel.EVENTS.getItemField())
+        .options(OptionSource.of(eventOptions()))
+        .build();
+
+    /** A channel's create and change, through the channels list's own form and its before-save judgement. */
+    public static final PanelRecordWrites WRITES = PanelRecordWrites.of("notification_channel",
+            NotificationChannelModel.MODEL_ID, SUBJECT, NotificationChannelModel.ID, HohenheimSlugs.NOTIFICATIONS)
+        .settings(List.of(NotificationChannelModel.NAME))
+        .byWord(NotificationChannelModel.FORMAT)
+        .settings(List.of(NotificationChannelModel.URL))
+        .setting(EVENTS_ENTRY, NotificationChannelModel.EVENTS)
+        .build();
+
+    /** A channel's delete, through the channels list's own Delete; its alerts stop silently. */
+    public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("notification_channel",
+        SUBJECT, HohenheimSlugs.NOTIFICATIONS);
+
     /** Sends a test message through one channel; the outcome says whether it was delivered or only handed off. */
     public static final Operation<Row, Void, DeliveryOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
         .happened(OperationSentences.of("test_channel"))
@@ -128,9 +151,7 @@ public final class NotificationChannelParts {
         .add(CheckMatrix.of(ROUTES)
             .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("routes"))
             .choiceHeading(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("event"))
-            .choices(Arrays.stream(NotificationEvents.values())
-                .map(event -> FieldOption.of(event.token(), event.label()))
-                .toList())
+            .choices(eventOptions())
             .keys(OptionSource.dynamic(NotificationChannelParts::channelOptions))
             .build())
         .build();
@@ -179,6 +200,12 @@ public final class NotificationChannelParts {
     private NotificationChannelParts() {
     }
 
+    /** @return every event of the vocabulary as an option, under its own label */
+    private static @NonNull List<FieldOption<String>> eventOptions() {
+        return Arrays.stream(NotificationEvents.values())
+            .map(event -> FieldOption.of(event.token(), event.label()))
+            .toList();
+    }
     /** The grid opens on what each channel receives now: every event for a channel that stores none. */
     private static @NonNull Map<String, Object> currentRoutes() {
         Map<String, Object> routes = new LinkedHashMap<>();
@@ -241,12 +268,7 @@ public final class NotificationChannelParts {
                 .clearable(true)
                 .build())
             .add(NotificationChannelModel.URL)
-            .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField())
-                // Derived from the vocabulary itself: an event cannot exist and be unofferable.
-                .options(OptionSource.of(Arrays.stream(NotificationEvents.values())
-                    .map(event -> FieldOption.of(event.token(), event.label()))
-                    .toList()))
-                .build())
+            .add(EVENTS_ENTRY)
             .build();
         return PanelResource.builder(HohenheimIds.id("notification_channel"), HohenheimSlugs.NOTIFICATIONS, SUBJECT)
             .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("plural"))

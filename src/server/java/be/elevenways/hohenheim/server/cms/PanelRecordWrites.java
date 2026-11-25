@@ -949,6 +949,16 @@ public final class PanelRecordWrites {
         }
 
         /**
+         * Declares a setting a create and a change both take through the entry the panel's form declares for it (a
+         * list offering a vocabulary its field cannot name), so the form and the write read one declaration.
+         */
+        public @NonNull Builder setting(@NonNull FormEntry entry, @NonNull Field<?, ?> field) {
+            this.parts.add(new Part(entry.name(), field, null, null, id -> id, this.container, Takes.ALWAYS, false,
+                false, entry));
+            return this;
+        }
+
+        /**
          * Declares entries only a create takes, from which the writer fills the record's own columns before it is
          * written (a protected path's list made from the people given); it runs whether or not one was sent.
          */

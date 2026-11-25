@@ -5208,7 +5208,7 @@
     "scope": "spamservice"
   },
   "not_enabled": {
-    "text": "Spamservice is disabled. Enable it in this form and save first.",
+    "text": "Spamservice is disabled. Enable it and save first.",
     "scope": "spamservice"
   },
   "not_connected": {
@@ -8046,7 +8046,7 @@
       "scope": "instance_shell"
     },
     {
-      "text": "Spamservice is not running, so there is nothing to stop.",
+      "text": "Spamservice is not running.",
       "scope": "spamservice"
     },
     {
@@ -20249,7 +20249,7 @@
   "app_thing_static_site": {"text": "a Static site app", "scope": "hohenheim"},
   "mcp_tool_logs": {"text": "Reads a log. An app's code (AP12): the newest lines it printed, every secret value of the app masked; this works on a stopped app too. A build's code (BU60): that build's whole stored log. A deploy's code (RL77): that deploy's whole step log, which names hosts and paths and so is for administrators only. app_list_deploys names them. The log is the app's own text, marked untrusted.", "scope": "hohenheim"},
   "mcp_code_logs": {"text": "Whose log to read: an app (AP12), a build (BU60) or a deploy (RL77). A code of any other kind is refused.", "scope": "hohenheim"},
-  "mcp_tool_delete": {"text": "Deletes one record by its code; refused while the record is in use, with the reason. A delete cannot be undone, except a site (S20), which goes to the trash (site_restore brings it back; permanent removes a trashed one for good). Lost for good: a database (DB12) or engine (DE3) with its data, a volume (VO5) or disk device (DV3) with its data, a backup (BK30), snapshot (SN14) or dump (DD41) with its file. An app's volumes stay unless with_data; a host only leaves the panel; a person (U4) goes with every session, a role (RO2) only once it has no members, and one of your own API keys (AK3) is revoked. Answers what was removed.", "scope": "hohenheim"},
+  "mcp_tool_delete": {"text": "Deletes one record by its code; refused while the record is in use, with the reason. A delete cannot be undone, except a site (S20), which goes to the trash (site_restore brings it back; permanent removes a trashed one for good). Lost for good: a database (DB12) or engine (DE3) with its data, a volume (VO5) or disk device (DV3) with its data, a backup (BK30), snapshot (SN14) or dump (DD41) with its file. An app's volumes stay unless with_data; a host only leaves the panel; a person (U4) goes with every session, a role (RO2) only once it has no members, and one of your own API keys (AK3) is revoked. A notification channel (NC2) goes at once and its alerts stop silently. Answers what was removed.", "scope": "hohenheim"},
   "mcp_code_delete": {"text": "The record to delete, by the code the tools show for it.", "scope": "hohenheim"},
   "mcp_with_data": {"text": "Also removes the app's volumes and their data from the host, which cannot be undone; without it the host check lists them as leftovers.", "scope": "hohenheim"},
   "mcp_force": {"text": "Removes the record without verifying its container and volume are gone, for an unreachable host. The host check lists what survives as leftovers.", "scope": "hohenheim"},
@@ -20455,8 +20455,8 @@
   "mcp_address_certificate_order": {"text": "The address (D4) to order a certificate for: an exact name, not excluded from Let's Encrypt, on a site that is no TLS passthrough.", "scope": "hohenheim"},
   "mcp_tool_certificate_renew": {"text": "Renews a Let's Encrypt certificate now for the same names, as the nightly renewal would, or finishes its waiting manual DNS order once the TXT records are published; which one follows from the certificate. A manual order that waited past a restart of Hohenheim has expired: order again with certificate_order. Needs Let's Encrypt switched on; counts against the 5 orders and renewals an hour. Uploaded certificates are not renewed here. Answers the certificate's code, or the failure, which is also stored on the certificate.", "scope": "hohenheim"},
   "mcp_code_certificate_renew": {"text": "The certificate (C8) to renew or finish.", "scope": "hohenheim"},
-  "mcp_tool_test": {"text": "Checks something now. An address (D4): whether its name reaches this Hohenheim from outside, forgetting the last answer; read the address for the result. A DNS zone (Z7): its health, as the zone's page checks it; a secondary zone has none to check. A backup target (BT1): whether it can be reached, and why not. It changes nothing else.", "scope": "hohenheim"},
-  "mcp_code_test": {"text": "The address, DNS zone or backup target to check.", "scope": "hohenheim"},
+  "mcp_tool_test": {"text": "Checks something now. An address (D4): whether its name reaches this Hohenheim from outside, forgetting the last answer; read the address for the result. A DNS zone (Z7): its health, as the zone's page checks it; a secondary zone has none to check. A backup target (BT1): whether it can be reached, and why not. A notification channel (NC2): sends it a test alert and says whether it was delivered, only handed off or not sent. It changes nothing else.", "scope": "hohenheim"},
+  "mcp_code_test": {"text": "The address, DNS zone, backup target or notification channel to check.", "scope": "hohenheim"},
   "mcp_tool_dns_record_list": {"text": "Reads a zone's records, all or one name or type: name, type, TTL (or the zone default it uses), the value as a resolver prints it, and whether it is switched off, made by Hohenheim itself (a certificate proof) or updated by dynamic DNS. as_zone_text answers the whole zone as zone-file text instead, for administrators only. Someone who is no administrator sees the records of names they manage and records shared with them to view. A secondary zone's records are read from the server that keeps them, or from this server's copy when it cannot be asked, which the answer says first.", "scope": "hohenheim"},
   "mcp_code_dns_zone_read": {"text": "The zone (Z7, or its origin such as example.com) whose records to read.", "scope": "hohenheim"},
   "mcp_tool_dns_record_set": {"text": "Sets a zone's records: each records entry makes one name and type hold exactly its values, the other values of that name and type removed; remove: true drops the name and type, undone only by setting them again. All entries are applied together or none, with one serial bump. Records Hohenheim made itself cannot be changed. Someone who is no administrator changes only A, AAAA, CNAME, TXT, SRV and TLSA records under names they manage. A value's dyndns makes, keeps or removes its dynamic DNS update token; a token made is never in the answer: it is shown once to your account on the zone's Records tab in the panel. A secondary zone is refused, naming the server that keeps its records: set them there. Answers per name and type what was added, changed, kept and removed.", "scope": "hohenheim"},
@@ -20949,5 +20949,42 @@
   "dns_keep_ns": {"text": "Keep the file's apex NS records instead of writing the nameservers the installation declares.", "scope": "help"},
   "keyed_change_only": {"text": "{$name} renames one that exists; none is named by these keys yet.", "scope": "violations"},
   "build_hook_no_account": {"text": "A build hook's URL is shown only to the account that made it, and no account stands behind this call.", "scope": "violations"},
-  "build_hook_urls_waiting": {"text": "Build hook URLs an assistant made for you, shown only now: {$urls}", "scope": "build_hook"}
+  "build_hook_urls_waiting": {"text": "Build hook URLs an assistant made for you, shown only now: {$urls}", "scope": "build_hook"},
+  "mcp_tool_spam_service_set": {"text": "Configures the spam service this Hohenheim runs itself: whether it runs, its port, the host account it runs as and its heap size. Only what you send changes. Saving brings the running service in line in the background: spam_service_test shows whether it answers, spam_service_power starts, stops or restarts it by hand. An enabled service does not start without a host account. Its scoring settings are read with settings_read section=spam. Administrators only. Answers the settings written.", "scope": "hohenheim"},
+  "mcp_tool_spam_service_power": {"text": "Starts, stops or restarts the spam service this Hohenheim runs itself; it has no code. Start and restart need it enabled (spam_service_set enabled); stop needs it running and leaves enabled as it is. Stop and restart make the service unavailable meanwhile, and every spam tool is refused until it answers again. The work goes on in the background: spam_service_test shows when it answers. Administrators only. Answers that it was requested.", "scope": "hohenheim"},
+  "mcp_spam_service_action": {"text": "Whether to start, stop or restart the service; restart also reloads its configuration.", "scope": "hohenheim"},
+  "mcp_tool_spam_service_test": {"text": "Asks the spam service this Hohenheim runs itself for its status now; it has no code. It changes nothing in the service, but writes one activity line per check. Refused while the service is not configured, disabled, not running or not yet connected, each in its own sentence. Administrators only. Answers the status the service reports, or why it did not answer.", "scope": "hohenheim"},
+  "mcp_tool_spam_word_set": {"text": "Adds, changes or removes a scored word or phrase of the spam service's dictionary: a submission containing it weighs that many points towards spam. A word is named by itself and its word_language: the same pair again changes it, remove takes it away. Only what you send changes. The spam service must be running. A changed score or a removed word is not kept anywhere. Administrators only. Answers whether the word was added, changed or removed.", "scope": "hohenheim"},
+  "mcp_tool_spam_reputation_read": {"text": "Explains an IP address's reputation as this Hohenheim weighs it for automatic bans: the IP intelligence datasets that know it (hosting, VPN, Tor and the like, which never count towards a ban), its negative and positive security-event counts per category, the weighted score per category and the net score against the ban threshold. The spam service must be running. It changes nothing; banning is ban_set. Administrators only.", "scope": "hohenheim"},
+  "mcp_tool_notification_channel_set": {"text": "Creates or changes a notification channel (NC2): a webhook (Slack, Discord or generic JSON) this Hohenheim posts its alerts to, and which alerts it gets. A channel with no events gets every event, including ones a later version adds. Every alert also reaches every administrator's inbox. The URL goes in once and is never shown again. Send a test alert with test code=NC2; after delete its alerts silently stop. Administrators only. Answers the code.", "scope": "hohenheim"},
+  "mcp_code_notification_channel_set": {"text": "The channel's code (NC2); leave out to create one.", "scope": "hohenheim"},
+  "notification_channel_thing": {"text": "a notification channel", "scope": "hohenheim"},
+  "set_spamservice_installation_description": {"text": "Saves the spam service's installation as its form does: whether it runs, its port, its host account and its heap size; a setting left out stays as it is.", "scope": "hohenheim"},
+  "set_spamservice_word_description": {"text": "Adds, changes or removes the spam word its text and language name, as the dictionary page writes it; a setting left out stays as it is.", "scope": "hohenheim"},
+  "read_spamservice_reputation_description": {"text": "Explains one IP address's reputation as the reputation page does: its datasets, its event counts and its weighted score.", "scope": "hohenheim"},
+  "create_notification_channel": {"text": "Add a notification channel", "scope": "hohenheim"},
+  "create_notification_channel_description": {"text": "Adds a webhook notification channel through the channels list's own form.", "scope": "hohenheim"},
+  "change_notification_channel": {"text": "Change a notification channel", "scope": "hohenheim"},
+  "change_notification_channel_description": {"text": "Changes what the call sends of a notification channel through its own form; every other setting stays as it is.", "scope": "hohenheim"},
+  "delete_notification_channel": {"text": "Delete a notification channel", "scope": "hohenheim"},
+  "delete_notification_channel_description": {"text": "Deletes a notification channel through the channels list's own delete; its alerts stop silently.", "scope": "hohenheim"},
+  "spam_service_host_account": {"text": "The account on Hohenheim's own machine the service runs as, by its code (SU12); list kind=host_account lists them.", "scope": "help"},
+  "spam_service_enabled": {"text": "Whether Hohenheim runs the spam service on its own machine; off stops it.", "scope": "help"},
+  "spam_service_port": {"text": "The local port the spam service listens on.", "scope": "help"},
+  "spam_service_max_heap": {"text": "The most heap memory the spam service's Java process may use.", "scope": "help"},
+  "spam_word_word": {"text": "The word or phrase to score, as found in submitted text.", "scope": "help"},
+  "spam_word_language": {"text": "The language the word counts in, an ISO 639-3 code such as nld; left out, every language. Part of the word's key.", "scope": "help"},
+  "spam_word_score": {"text": "Points the word adds towards spam; negative points pull towards wanted mail. Needed to add a word.", "scope": "help"},
+  "spam_word_leet": {"text": "Also match the word spelled in leetspeak (v14gr4).", "scope": "help"},
+  "spam_word_remove": {"text": "Removes the word in this language.", "scope": "help"},
+  "spam_reputation_ip": {"text": "The IPv4 or IPv6 address whose reputation to explain.", "scope": "help"},
+  "notification_channel_name": {"text": "The name the channel is listed by.", "scope": "help"},
+  "notification_channel_format": {"text": "The payload shape the webhook receives; generic is plain JSON.", "scope": "help"},
+  "notification_channel_url": {"text": "The webhook URL alerts are posted to; Slack and Discord carry their token in it, so it is never shown again.", "scope": "help"},
+  "spam_word_duplicates": {"text": "{$word} is in the dictionary {$count} times for this language; remove the duplicates in the panel first.", "scope": "violations"},
+  "spam_word_score_needed": {"text": "To add a spam word, give its score.", "scope": "violations"},
+  "set_spamservice_installation": [{"text": "Set up the spam service", "scope": "hohenheim"}, {"text": "{$actor} changed the spam service's installation", "scope": "hohenheim", "target": "happened"}],
+  "set_spamservice_word": [{"text": "Set a spam word", "scope": "hohenheim"}, {"text": "{$actor} set a spam word", "scope": "hohenheim", "target": "happened"}],
+  "read_spamservice_reputation": [{"text": "Explain an IP address's reputation", "scope": "hohenheim"}, {"text": "{$actor} read the reputation of an IP address", "scope": "hohenheim", "target": "happened"}],
+  "service_refused": {"text": "The spam service refused it: {$reason}", "scope": "spamservice"}
 }

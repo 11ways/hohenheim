@@ -5208,7 +5208,7 @@
     "scope": "spamservice"
   },
   "not_enabled": {
-    "text": "Spamservice is uitgeschakeld. Schakel het in dit formulier in en bewaar eerst.",
+    "text": "Spamservice is uitgeschakeld. Schakel het in en bewaar eerst.",
     "scope": "spamservice"
   },
   "not_connected": {
@@ -8046,7 +8046,7 @@
       "scope": "instance_shell"
     },
     {
-      "text": "Spamservice draait niet, dus er valt niets te stoppen.",
+      "text": "Spamservice draait niet.",
       "scope": "spamservice"
     },
     {
@@ -20249,7 +20249,7 @@
   "app_thing_static_site": {"text": "een statische-site-app", "scope": "hohenheim"},
   "mcp_tool_logs": {"text": "Leest een log. De code van een app (AP12): de nieuwste regels die ze schreef, elke geheime waarde van de app gemaskeerd; dit werkt ook op een gestopte app. De code van een build (BU60): het hele bewaarde log van die build. De code van een deploy (RL77): het hele stappenlog van die deploy, dat hosts en paden noemt en dus alleen voor beheerders is. app_list_deploys noemt ze. Het log is de eigen tekst van de app, gemarkeerd als niet vertrouwd.", "scope": "hohenheim"},
   "mcp_code_logs": {"text": "Wiens log te lezen: een app (AP12), een build (BU60) of een deploy (RL77). Een code van een andere soort wordt geweigerd.", "scope": "hohenheim"},
-  "mcp_tool_delete": {"text": "Verwijdert een record op zijn code; geweigerd zolang het record in gebruik is, met de reden. Een verwijdering kan niet ongedaan gemaakt worden, behalve een site (S20), die naar de prullenbak gaat (site_restore haalt ze terug; permanent verwijdert een site uit de prullenbak voorgoed). Voorgoed weg: een database (DB12) of engine (DE3) met haar gegevens, een volume (VO5) of schijfapparaat (DV3) met zijn gegevens, een back-up (BK30), snapshot (SN14) of dump (DD41) met zijn bestand. De volumes van een app blijven tenzij with_data; een host verlaat alleen het paneel; een persoon (U4) gaat samen met elke sessie, een rol (RO2) pas zonder leden, en een van uw eigen API-sleutels (AK3) wordt ingetrokken. Antwoordt wat verwijderd werd.", "scope": "hohenheim"},
+  "mcp_tool_delete": {"text": "Verwijdert een record op zijn code; geweigerd zolang het record in gebruik is, met de reden. Een verwijdering kan niet ongedaan gemaakt worden, behalve een site (S20), die naar de prullenbak gaat (site_restore haalt ze terug; permanent verwijdert een site uit de prullenbak voorgoed). Voorgoed weg: een database (DB12) of engine (DE3) met haar gegevens, een volume (VO5) of schijfapparaat (DV3) met zijn gegevens, een back-up (BK30), snapshot (SN14) of dump (DD41) met zijn bestand. De volumes van een app blijven tenzij with_data; een host verlaat alleen het paneel; een persoon (U4) gaat samen met elke sessie, een rol (RO2) pas zonder leden, en een van uw eigen API-sleutels (AK3) wordt ingetrokken. Een meldingskanaal (NC2) gaat meteen weg en zijn meldingen stoppen stil. Antwoordt wat verwijderd werd.", "scope": "hohenheim"},
   "mcp_code_delete": {"text": "Het te verwijderen record, op de code die de tools ervoor tonen.", "scope": "hohenheim"},
   "mcp_with_data": {"text": "Verwijdert ook de volumes van de app en hun gegevens van de host, wat niet ongedaan kan worden; zonder dit toont de hostcontrole ze als restanten.", "scope": "hohenheim"},
   "mcp_force": {"text": "Verwijdert het record zonder na te gaan of zijn container en volume weg zijn, voor een onbereikbare host. De hostcontrole toont wat overblijft als restanten.", "scope": "hohenheim"},
@@ -20455,8 +20455,8 @@
   "mcp_address_certificate_order": {"text": "Het adres (D4) om een certificaat voor te bestellen: een exacte naam, niet uitgesloten van Let's Encrypt, op een site die geen TLS-passthrough is.", "scope": "hohenheim"},
   "mcp_tool_certificate_renew": {"text": "Vernieuwt een Let's Encrypt-certificaat nu voor dezelfde namen, zoals de nachtelijke vernieuwing zou doen, of rondt de wachtende manuele DNS-bestelling af zodra de TXT-records gepubliceerd zijn; welke van de twee volgt uit het certificaat. Een manuele bestelling die een herstart van Hohenheim overwachtte, is vervallen: bestel opnieuw met certificate_order. Let's Encrypt moet aan staan; telt mee voor de 5 bestellingen en vernieuwingen per uur. Geuploade certificaten worden hier niet vernieuwd. Antwoordt met de code van het certificaat, of de fout, die ook op het certificaat bewaard wordt.", "scope": "hohenheim"},
   "mcp_code_certificate_renew": {"text": "Het certificaat (C8) om te vernieuwen of af te ronden.", "scope": "hohenheim"},
-  "mcp_tool_test": {"text": "Controleert iets nu. Een adres (D4): of de naam van buitenaf deze Hohenheim bereikt, met het vorige antwoord vergeten; lees het adres voor de uitkomst. Een DNS-zone (Z7): haar gezondheid, zoals de pagina van de zone die controleert; een secundaire zone heeft er geen. Een back-updoel (BT1): of het bereikbaar is, en waarom niet. Het wijzigt verder niets.", "scope": "hohenheim"},
-  "mcp_code_test": {"text": "Het adres, de DNS-zone of het back-updoel om te controleren.", "scope": "hohenheim"},
+  "mcp_tool_test": {"text": "Controleert iets nu. Een adres (D4): of de naam van buitenaf deze Hohenheim bereikt, met het vorige antwoord vergeten; lees het adres voor de uitkomst. Een DNS-zone (Z7): haar gezondheid, zoals de pagina van de zone die controleert; een secundaire zone heeft er geen. Een back-updoel (BT1): of het bereikbaar is, en waarom niet. Een meldingskanaal (NC2): stuurt het een testmelding en zegt of die afgeleverd, alleen doorgegeven of niet verstuurd werd. Het wijzigt verder niets.", "scope": "hohenheim"},
+  "mcp_code_test": {"text": "Het adres, de DNS-zone, het back-updoel of het meldingskanaal om te controleren.", "scope": "hohenheim"},
   "mcp_tool_dns_record_list": {"text": "Leest de records van een zone, alle of die van een naam of type: naam, type, TTL (of de standaard van de zone die het gebruikt), de waarde zoals een resolver ze toont, en of het uitgeschakeld is, door Hohenheim zelf gemaakt (een certificaatbewijs) of bijgewerkt via dynamische DNS. as_zone_text antwoordt in plaats daarvan met de hele zone als zonebestand, alleen voor beheerders. Wie geen beheerder is, ziet de records van namen die hij beheert en de records die met hem gedeeld zijn om te bekijken. De records van een secundaire zone worden gelezen bij de server die ze bewaart, of uit de kopie op deze server als die niet bereikbaar is, wat het antwoord eerst zegt.", "scope": "hohenheim"},
   "mcp_code_dns_zone_read": {"text": "De zone (Z7, of haar origin zoals example.com) waarvan u de records leest.", "scope": "hohenheim"},
   "mcp_tool_dns_record_set": {"text": "Stelt de records van een zone in: elk item van records laat een naam en type precies zijn waarden houden, de andere waarden van die naam en dat type worden verwijderd; remove: true verwijdert de naam en het type, alleen ongedaan te maken door ze opnieuw in te stellen. Alle items worden samen toegepast of geen enkel, met een verhoging van het serienummer. Records die Hohenheim zelf maakte, kunnen niet gewijzigd worden. Wie geen beheerder is, wijzigt alleen A-, AAAA-, CNAME-, TXT-, SRV- en TLSA-records onder namen die hij beheert. De dyndns van een waarde maakt, behoudt of verwijdert haar updatetoken voor dynamische DNS; een gemaakt token staat nooit in het antwoord: het wordt eenmaal aan uw account getoond op het tabblad Records van de zone in het paneel. Een secundaire zone wordt geweigerd, met de server die haar records bewaart: stel ze daar in. Antwoordt per naam en type wat er toegevoegd, gewijzigd, behouden en verwijderd werd.", "scope": "hohenheim"},
@@ -20949,5 +20949,42 @@
   "dns_keep_ns": {"text": "Behoud de apex-NS-records van het bestand in plaats van de nameservers te schrijven die de installatie declareert.", "scope": "help"},
   "keyed_change_only": {"text": "{$name} hernoemt er een die bestaat; deze sleutels noemen er nog geen.", "scope": "violations"},
   "build_hook_no_account": {"text": "De URL van een build hook wordt alleen getoond aan het account dat hem maakte, en achter deze aanroep staat geen account.", "scope": "violations"},
-  "build_hook_urls_waiting": {"text": "Build hook-URL's die een assistent voor u maakte, alleen nu getoond: {$urls}", "scope": "build_hook"}
+  "build_hook_urls_waiting": {"text": "Build hook-URL's die een assistent voor u maakte, alleen nu getoond: {$urls}", "scope": "build_hook"},
+  "mcp_tool_spam_service_set": {"text": "Stelt de spamdienst in die deze Hohenheim zelf draait: of hij draait, zijn poort, het hostaccount waaronder hij draait en zijn heapgrootte. Alleen wat u stuurt wijzigt. Bewaren brengt de draaiende dienst op de achtergrond in lijn: spam_service_test toont of hij antwoordt, spam_service_power start, stopt of herstart hem met de hand. Een ingeschakelde dienst start niet zonder hostaccount. Zijn score-instellingen leest u met settings_read section=spam. Alleen voor beheerders. Antwoordt de geschreven instellingen.", "scope": "hohenheim"},
+  "mcp_tool_spam_service_power": {"text": "Start, stopt of herstart de spamdienst die deze Hohenheim zelf draait; hij heeft geen code. Starten en herstarten vragen dat hij ingeschakeld is (spam_service_set enabled); stoppen vraagt dat hij draait en laat enabled zoals het is. Stoppen en herstarten maken de dienst intussen onbeschikbaar, en elke spamtool wordt geweigerd tot hij weer antwoordt. Het werk loopt op de achtergrond verder: spam_service_test toont wanneer hij antwoordt. Alleen voor beheerders. Antwoordt dat het gevraagd werd.", "scope": "hohenheim"},
+  "mcp_spam_service_action": {"text": "Of de dienst start, stopt of herstart; herstarten laadt ook zijn configuratie opnieuw.", "scope": "hohenheim"},
+  "mcp_tool_spam_service_test": {"text": "Vraagt de spamdienst die deze Hohenheim zelf draait nu naar zijn status; hij heeft geen code. Het wijzigt niets in de dienst, maar schrijft per controle een activiteitsregel. Geweigerd zolang de dienst niet ingesteld, uitgeschakeld, niet actief of nog niet verbonden is, elk in een eigen zin. Alleen voor beheerders. Antwoordt de status die de dienst meldt, of waarom hij niet antwoordde.", "scope": "hohenheim"},
+  "mcp_tool_spam_word_set": {"text": "Voegt een gescoord woord of zinsdeel van het woordenboek van de spamdienst toe, wijzigt of verwijdert het: een inzending die het bevat weegt zoveel punten richting spam. Een woord heet naar zichzelf en zijn word_language: hetzelfde paar opnieuw wijzigt het, remove neemt het weg. Alleen wat u stuurt wijzigt. De spamdienst moet draaien. Een gewijzigde score of een verwijderd woord wordt nergens bewaard. Alleen voor beheerders. Antwoordt of het woord toegevoegd, gewijzigd of verwijderd werd.", "scope": "hohenheim"},
+  "mcp_tool_spam_reputation_read": {"text": "Verklaart de reputatie van een IP-adres zoals deze Hohenheim die weegt voor automatische bans: de IP-datasets die het kennen (hosting, VPN, Tor en dergelijke, die nooit meetellen voor een ban), het aantal negatieve en positieve beveiligingsgebeurtenissen per categorie, de gewogen score per categorie en de nettoscore tegenover de bandrempel. De spamdienst moet draaien. Het wijzigt niets; bannen doet ban_set. Alleen voor beheerders.", "scope": "hohenheim"},
+  "mcp_tool_notification_channel_set": {"text": "Maakt of wijzigt een meldingskanaal (NC2): een webhook (Slack, Discord of algemene JSON) waar deze Hohenheim zijn meldingen naartoe stuurt, en welke meldingen het krijgt. Een kanaal zonder gebeurtenissen krijgt elke gebeurtenis, ook die een latere versie toevoegt. Elke melding komt ook in de inbox van elke beheerder. De URL gaat er eenmaal in en wordt nooit meer getoond. Stuur een testmelding met test code=NC2; na delete stoppen zijn meldingen stil. Alleen voor beheerders. Antwoordt de code.", "scope": "hohenheim"},
+  "mcp_code_notification_channel_set": {"text": "De code van het kanaal (NC2); laat weg om er een te maken.", "scope": "hohenheim"},
+  "notification_channel_thing": {"text": "een meldingskanaal", "scope": "hohenheim"},
+  "set_spamservice_installation_description": {"text": "Bewaart de installatie van de spamdienst zoals haar formulier dat doet: of hij draait, zijn poort, zijn hostaccount en zijn heapgrootte; een weggelaten instelling blijft zoals ze is.", "scope": "hohenheim"},
+  "set_spamservice_word_description": {"text": "Voegt het spamwoord dat zijn tekst en taal noemen toe, wijzigt of verwijdert het, zoals de woordenboekpagina het schrijft; een weggelaten instelling blijft zoals ze is.", "scope": "hohenheim"},
+  "read_spamservice_reputation_description": {"text": "Verklaart de reputatie van één IP-adres zoals de reputatiepagina dat doet: zijn datasets, zijn aantallen gebeurtenissen en zijn gewogen score.", "scope": "hohenheim"},
+  "create_notification_channel": {"text": "Een meldingskanaal toevoegen", "scope": "hohenheim"},
+  "create_notification_channel_description": {"text": "Voegt een webhook-meldingskanaal toe via het eigen formulier van de kanalenlijst.", "scope": "hohenheim"},
+  "change_notification_channel": {"text": "Een meldingskanaal wijzigen", "scope": "hohenheim"},
+  "change_notification_channel_description": {"text": "Wijzigt wat de aanroep stuurt van een meldingskanaal via zijn eigen formulier; elke andere instelling blijft zoals ze is.", "scope": "hohenheim"},
+  "delete_notification_channel": {"text": "Een meldingskanaal verwijderen", "scope": "hohenheim"},
+  "delete_notification_channel_description": {"text": "Verwijdert een meldingskanaal via de eigen verwijdering van de kanalenlijst; zijn meldingen stoppen stil.", "scope": "hohenheim"},
+  "spam_service_host_account": {"text": "Het account op Hohenheims eigen machine waaronder de dienst draait, op zijn code (SU12); list kind=host_account toont ze.", "scope": "help"},
+  "spam_service_enabled": {"text": "Of Hohenheim de spamdienst op zijn eigen machine draait; uit stopt hem.", "scope": "help"},
+  "spam_service_port": {"text": "De lokale poort waarop de spamdienst luistert.", "scope": "help"},
+  "spam_service_max_heap": {"text": "Het meeste heapgeheugen dat het Java-proces van de spamdienst mag gebruiken.", "scope": "help"},
+  "spam_word_word": {"text": "Het woord of zinsdeel om te scoren, zoals het in ingezonden tekst staat.", "scope": "help"},
+  "spam_word_language": {"text": "De taal waarin het woord telt, een ISO 639-3-code zoals nld; weggelaten, elke taal. Deel van de sleutel van het woord.", "scope": "help"},
+  "spam_word_score": {"text": "Punten die het woord richting spam telt; negatieve punten trekken richting gewenste mail. Nodig om een woord toe te voegen.", "scope": "help"},
+  "spam_word_leet": {"text": "Herken het woord ook in leetspeak gespeld (v14gr4).", "scope": "help"},
+  "spam_word_remove": {"text": "Verwijdert het woord in deze taal.", "scope": "help"},
+  "spam_reputation_ip": {"text": "Het IPv4- of IPv6-adres waarvan de reputatie verklaard wordt.", "scope": "help"},
+  "notification_channel_name": {"text": "De naam waaronder het kanaal getoond wordt.", "scope": "help"},
+  "notification_channel_format": {"text": "De vorm van de inhoud die de webhook krijgt; generic is gewone JSON.", "scope": "help"},
+  "notification_channel_url": {"text": "De webhook-URL waar meldingen naartoe gaan; Slack en Discord dragen er hun token in, dus hij wordt nooit meer getoond.", "scope": "help"},
+  "spam_word_duplicates": {"text": "{$word} staat {$count} keer in het woordenboek voor deze taal; verwijder eerst de dubbels in het paneel.", "scope": "violations"},
+  "spam_word_score_needed": {"text": "Geef een score om een spamwoord toe te voegen.", "scope": "violations"},
+  "set_spamservice_installation": [{"text": "De spamdienst instellen", "scope": "hohenheim"}, {"text": "{$actor} wijzigde de installatie van de spamdienst", "scope": "hohenheim", "target": "happened"}],
+  "set_spamservice_word": [{"text": "Een spamwoord instellen", "scope": "hohenheim"}, {"text": "{$actor} stelde een spamwoord in", "scope": "hohenheim", "target": "happened"}],
+  "read_spamservice_reputation": [{"text": "De reputatie van een IP-adres verklaren", "scope": "hohenheim"}, {"text": "{$actor} las de reputatie van een IP-adres", "scope": "hohenheim", "target": "happened"}],
+  "service_refused": {"text": "De spamdienst weigerde het: {$reason}", "scope": "spamservice"}
 }

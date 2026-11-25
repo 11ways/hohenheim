@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -17,16 +20,27 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowSingleton;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationForms;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.PatchBase;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /** Local Spamservice installation singleton without exposing its controller key. */
 public final class SpamserviceInstallationResource extends RowSingleton {
@@ -51,8 +65,62 @@ public final class SpamserviceInstallationResource extends RowSingleton {
     @Override public @NonNull String standsUnder() { return HohenheimSlugs.SPAMSERVICE; }
     @Override public @NonNull Icon icon() { return Icon.of("download"); }
 
+    /** The argument naming the host account the service runs as, by its code (SU12). */
+    private static final String HOST_ACCOUNT = "host_account";
+
+    /** The installation every write of {@link #SET} goes through, as the panel's form saves it. */
+    private static final SpamserviceInstallationResource WRITER = new SpamserviceInstallationResource();
+
+    /**
+     * Saves the installation as its form does, then brings the running service in line in the background; a patch,
+     * so a setting left out stays as it is. Its host account is named by code.
+     */
+    public static final Operation<Void, OperationInput.Values, String> SET =
+            Operation.declare(HohenheimIds.id("set_spamservice_installation"))
+        .happened(OperationSentences.of("set_spamservice_installation"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("set_spamservice_installation"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("set_spamservice_installation_description"))
+        .noSubject()
+        .noun(SpamserviceInstallationModel.REF)
+        .gate(HohenheimSources.OPERATOR)
+        .input(OperationInput.derived(FormSpec.builder()
+            .add(KindSettingsWrites.entryOf(SpamserviceInstallationModel.ENABLED))
+            .add(KindSettingsWrites.entryOf(SpamserviceInstallationModel.PORT))
+            .add(OperationForms.recordId(HOST_ACCOUNT, HohenheimMicrocopy.HELP.of("spam_service_host_account"),
+                SystemUserModel.MODEL_ID, false))
+            .add(KindSettingsWrites.entryOf(SpamserviceInstallationModel.MAX_HEAP_MB))
+            .build()))
+        .result(String.class)
+        .patchable()
+        .facts(OperationFact.IDEMPOTENT)
+        .command(OperationCommand.perVerb().onDatasource("default"))
+        .register();
+
     static {
         SpamserviceOperations.init();
+        // No stored row is the base: the installation is one, so a change writes what the call sent.
+        OperationHandlers.attach(SET)
+            .patchBase(PatchBase.ofValues(SET, (none, access) -> Map.of()))
+            .handle(call -> set(Objects.requireNonNull(call.input()), call.patched(),
+                Objects.requireNonNull(call.access(), "the installation is set by its caller")));
+    }
+
+    /** @return the settings written, as a change of a record says them */
+    private static @NonNull String set(OperationInput.@NonNull Values input, @Nullable Set<String> patched,
+                                       @NonNull AccessContext caller) {
+        Set<String> sent = new LinkedHashSet<>(patched != null ? patched : input.coerced().keySet());
+        Map<String, Object> written = new LinkedHashMap<>();
+        for (String name : sent) {
+            Object value = input.get(name);
+            if (HOST_ACCOUNT.equals(name)) {
+                written.put(SpamserviceInstallationModel.SYSTEM_USER_ID.getInputName(), RawValues.positiveInt(value));
+            } else {
+                written.put(name, value);
+            }
+        }
+        Row loaded = WRITER.loadOrCreate(caller);
+        WRITER.inMutationTransaction(() -> WRITER.persist(loaded, written, caller));
+        return KindSettingsWrites.changedLine("spam service", String.join(", ", sent));
     }
 
     @Override
