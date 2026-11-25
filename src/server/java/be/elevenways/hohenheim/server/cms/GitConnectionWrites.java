@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.FieldRedaction;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
@@ -115,6 +116,7 @@ public final class GitConnectionWrites {
         Operation.declare(HohenheimIds.id("create_git_connection"))
             .label(HohenheimMicrocopy.HOHENHEIM.of("create_git_connection"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("create_git_connection_description"))
+            .happened(ChangeOp.CREATE.happened())
             .noSubject()
             // The connection resource's create decides who may, as for the panel's form.
             .gate(OperationGate.open())
@@ -130,6 +132,7 @@ public final class GitConnectionWrites {
         Operation.declare(HohenheimIds.id("change_git_connection"))
             .label(HohenheimMicrocopy.HOHENHEIM.of("change_git_connection"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("change_git_connection_description"))
+            .happened(ChangeOp.UPDATE.happened())
             .one(GitProviderOperations.PROVIDER)
             .gate(OperationGate.open())
             .input(OperationInput.derived(form(false)))
@@ -147,6 +150,7 @@ public final class GitConnectionWrites {
         Operation.declare(HohenheimIds.id("delete_git_connection"))
             .label(CmsMicrocopy.of("delete"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("delete_git_connection_description"))
+            .happened(ChangeOp.DELETE.happened())
             .icon(Icon.TRASH)
             .one(GitProviderOperations.PROVIDER)
             .verb(OperationVerb.DELETE)

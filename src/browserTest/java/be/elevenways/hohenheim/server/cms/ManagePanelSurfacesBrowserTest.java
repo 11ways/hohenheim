@@ -139,8 +139,9 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         //    state-dependent site toggle became enable_site on the disabled fixture and disable_site on the enabled
         //    one. The site rollback applies to no fixture (a static site), so no stored case carries it. The
         //    site's synthesized delete is now its delete_site operation and its Trash's restore and purge core's
-        //    archive operations, ONE on a row and MANY in the bulk bar (SiteParts), every fact but their identity and
-        //    route compared exactly.
+        //    archive operations, ONE on a row and MANY in the bulk bar (SiteParts), and a template's delete its
+        //    canonical row delete operation (InstanceTemplateParts.DELETE), every fact but their identity and route
+        //    compared exactly.
         assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(siteId)).get(SiteModel.ENABLED))
             .as("step 0: the site fixture is enabled").isTrue();
         assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(disabledSiteId))
@@ -156,7 +157,8 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
                 .synthesized(SITES, SynthesizedRowActions.DELETE, SiteWrites.DELETE.id())
                 .synthesized(SITES, SynthesizedRowActions.RESTORE, SiteWrites.RESTORE.id(),
                     SiteWrites.RESTORE_MANY.id())
-                .synthesized(SITES, SynthesizedRowActions.PURGE, SiteWrites.PURGE.id(), SiteWrites.PURGE_MANY.id()));
+                .synthesized(SITES, SynthesizedRowActions.PURGE, SiteWrites.PURGE.id(), SiteWrites.PURGE_MANY.id())
+                .synthesized(TEMPLATES, SynthesizedRowActions.DELETE, InstanceTemplateParts.DELETE.id()));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(SITES, DOMAINS, TEMPLATES)) {

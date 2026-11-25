@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -213,6 +214,7 @@ public final class PanelRecordWrites {
         this.create = Operation.declare(HohenheimIds.id("create_" + builder.word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word + "_description"))
+            .happened(ChangeOp.CREATE.happened())
             .noSubject()
             // The resource's create decides who may, as it does for the panel's form.
             .gate(OperationGate.open())
@@ -225,6 +227,7 @@ public final class PanelRecordWrites {
         this.change = Operation.declare(HohenheimIds.id("change_" + builder.word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("change_" + builder.word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("change_" + builder.word + "_description"))
+            .happened(ChangeOp.UPDATE.happened())
             .one(builder.subject)
             .gate(OperationGate.open())
             .input(OperationInput.derived(this.form(false)))

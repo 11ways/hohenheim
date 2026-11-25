@@ -8,7 +8,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * How the activity log tells that a Hohenheim operation ran: one past-tense sentence per operation, keyed by the
  * operation's id path under Hohenheim's own scope, with the arguments {@code actor} and {@code subject}.
  *
- * AIDEV-NOTE: every Hohenheim operation declares its sentence through this (or a sentence of its own); the
+ * AIDEV-NOTE: every Hohenheim operation declares its sentence through this (or a sentence of its own; a plain create,
+ * change or delete of a named thing, as PanelRecordWrites, KindSettingsWrites and GitConnectionWrites make, says core's
+ * ChangeOp sentence); the
  * OperationSentencesTest drift test derives the set from the operation registry, so an operation registered without
  * one, or a sentence missing from a shipped catalogue, fails the build.
  *

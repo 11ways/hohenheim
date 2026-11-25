@@ -140,7 +140,7 @@ class HohenheimCatalogToolsTest extends HohenheimHttpTestBase {
                 .as("step 3: a container is not changed by the VM tool").contains("app_system_container_set");
 
             // 4. A disk is attached to a device-carrying app, grown and detached at the daemon.
-            FakeDeviceDaemon.Kind.register();
+            FakeDeviceDaemon.registerKind();
             int machineId = deviceApp(PREFIX + "machine-" + tag, incusId);
             cleanUp.push(() -> {
                 HardDeletes.byId(Models.get(InstanceModel.class), machineId);
@@ -252,7 +252,7 @@ class HohenheimCatalogToolsTest extends HohenheimHttpTestBase {
     private static int deviceApp(String name, int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, FakeDeviceDaemon.Kind.ID.toString());
+        row.set(InstanceModel.KIND, FakeDeviceDaemon.KIND.toString());
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
         row.set(InstanceModel.HOST_ID, hostId);
         Models.get(InstanceModel.class).save(row);

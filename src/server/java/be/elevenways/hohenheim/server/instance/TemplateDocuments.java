@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -74,6 +75,7 @@ public final class TemplateDocuments {
             Operation.declare(HohenheimIds.id("import_template"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("import_template"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("import_template_description"))
+        .happened(OperationSentences.of("import_template"))
         .noSubject()
         .gate(HohenheimSources.OPERATOR)
         .input(OperationInput.derived(FormSpec.builder()
@@ -91,6 +93,7 @@ public final class TemplateDocuments {
     public static final Operation<Row, Void, String> EXPORT = Operation.declare(HohenheimIds.id("export_template"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("export_template"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("export_template_description"))
+        .happened(OperationSentences.of("export_template"))
         .one(InstanceTemplateOperations.TEMPLATE)
         .gate(HohenheimSources.OPERATOR)
         .result(String.class)

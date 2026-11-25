@@ -140,6 +140,7 @@ public final class DnsRecordSets {
     public static final Operation<Row, ListInput, String> LIST = Operation.declare(HohenheimIds.id("list_dns_records"))
         .label(HohenheimMicrocopy.DNS_RECORD.of("list_records"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("list_dns_records_description"))
+        .happened(OperationSentences.of("list_dns_records"))
         .icon(Icon.of("list-ul"))
         .one(DnsOperations.ZONE)
         .gate(OperationGate.open())

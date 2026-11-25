@@ -272,6 +272,7 @@ public final class SiteWrites {
         Operation.declare(HohenheimIds.id("restore_site_revision"))
             .label(HohenheimMicrocopy.HOHENHEIM.of("restore_site_revision"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("restore_site_revision_description"))
+            .happened(OperationSentences.of("restore_site_revision"))
             .one(SiteOperations.SITE)
             .gate(OperationGate.open())
             .input(OperationInput.of(FormSpec.builder().add(Plain.of(REVISION)).build(), RevisionInput.class,

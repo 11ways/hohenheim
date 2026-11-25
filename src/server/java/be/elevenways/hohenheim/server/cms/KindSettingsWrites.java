@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
+import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
@@ -228,6 +229,7 @@ public final class KindSettingsWrites {
             Operation<Void, OperationInput.Values, Integer> create = Operation.declare(HohenheimIds.id("create_" + word))
                 .label(HohenheimMicrocopy.HOHENHEIM.of("create_" + word))
                 .description(HohenheimMicrocopy.HOHENHEIM.of("create_" + word + "_description"))
+                .happened(ChangeOp.CREATE.happened())
                 .noSubject()
                 // Any account reaches the create: its writer judges the caller as the panel's create does.
                 .gate(OperationGate.open())
@@ -240,6 +242,7 @@ public final class KindSettingsWrites {
             Operation<Row, OperationInput.Values, String> change = Operation.declare(HohenheimIds.id("change_" + word))
                 .label(HohenheimMicrocopy.HOHENHEIM.of("change_" + word))
                 .description(HohenheimMicrocopy.HOHENHEIM.of("change_" + word + "_description"))
+                .happened(ChangeOp.UPDATE.happened())
                 .one(this.subject)
                 .gate(this.changeGate)
                 .input(OperationInput.derived(changed.build()))

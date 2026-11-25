@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.files;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -106,6 +107,7 @@ public final class InstanceFileOperations {
     public static final Operation<Row, PathInput, Read> READ = Operation.declare(HohenheimIds.id("read_app_file"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("app_file_read"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("app_file_read_description"))
+        .happened(OperationSentences.of("read_app_file"))
         .icon(Icon.of("folder-open"))
         .one(InstanceOperations.INSTANCE)
         .gate(InstanceOperations.gate(HohenheimCapabilities.FILES_READ))
@@ -118,6 +120,7 @@ public final class InstanceFileOperations {
     public static final Operation<Row, WriteInput, String> WRITE = Operation.declare(HohenheimIds.id("write_app_file"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("app_file_write"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("app_file_write_description"))
+        .happened(OperationSentences.of("write_app_file"))
         .icon(Icon.of("pen-to-square"))
         .one(InstanceOperations.INSTANCE)
         .gate(InstanceOperations.gate(HohenheimCapabilities.FILES_WRITE))
@@ -133,6 +136,7 @@ public final class InstanceFileOperations {
         Operation.declare(HohenheimIds.id("make_app_folder"))
             .label(HohenheimMicrocopy.HOHENHEIM.of("app_folder_make"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("app_folder_make_description"))
+            .happened(OperationSentences.of("make_app_folder"))
             .icon(Icon.of("folder-plus"))
             .one(InstanceOperations.INSTANCE)
             .gate(InstanceOperations.gate(HohenheimCapabilities.FILES_WRITE))
@@ -147,6 +151,7 @@ public final class InstanceFileOperations {
         Operation.declare(HohenheimIds.id("delete_app_file"))
             .label(HohenheimMicrocopy.HOHENHEIM.of("app_file_delete"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("app_file_delete_description"))
+            .happened(OperationSentences.of("delete_app_file"))
             .icon(Icon.TRASH)
             .one(InstanceOperations.INSTANCE)
             .gate(InstanceOperations.gate(HohenheimCapabilities.FILES_WRITE))
@@ -160,6 +165,7 @@ public final class InstanceFileOperations {
     public static final Operation<Row, MoveInput, String> MOVE = Operation.declare(HohenheimIds.id("move_app_file"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("app_file_move"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("app_file_move_description"))
+        .happened(OperationSentences.of("move_app_file"))
         .icon(Icon.of("arrow-right-arrow-left"))
         .one(InstanceOperations.INSTANCE)
         .gate(InstanceOperations.gate(HohenheimCapabilities.FILES_WRITE))

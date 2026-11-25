@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.preview.PreviewOperations;
@@ -78,6 +79,7 @@ public final class PreviewParts {
             Operation.declare(HohenheimIds.id("run_preview"))
         .label(HohenheimMicrocopy.HOHENHEIM.of("run_preview"))
         .description(HohenheimMicrocopy.HOHENHEIM.of("run_preview_description"))
+        .happened(OperationSentences.of("run_preview"))
         .noSubject()
         .gate(OperationGate.open())
         .input(OperationInput.derived(FormSpec.builder()

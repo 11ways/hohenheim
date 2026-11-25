@@ -47,12 +47,20 @@ public final class FakeDeviceDaemon {
     /** Flipped to make the next daemon call refuse (the "row must not survive" lane). */
     static volatile boolean refuses;
 
+    /** The fake kind's id, as an instance record stores it. */
+    public static final Identifier KIND = Kind.ID;
+
     private FakeDeviceDaemon() {
     }
 
     /** @return the handle the fake kind spells for an instance id */
     public static String handleOf(int instanceId) {
         return "devsurf-instance-" + instanceId;
+    }
+
+    /** Registers the fake kind, for the class that uses it. */
+    public static void registerKind() {
+        Kind.register();
     }
 
     public static final class Workload {
@@ -143,15 +151,21 @@ public final class FakeDeviceDaemon {
         }
     }
 
-    /** An incus-runtime kind whose driver DOES carry devices, with no daemon behind it. */
-    public static final class Kind implements InstanceKindHandler {
+    /**
+     * An incus-runtime kind whose driver DOES carry devices, with no daemon behind it.
+     *
+     * AIDEV-NOTE: package-private on purpose: a public InstanceKindHandler with a public constructor is found by the
+     * browserTest autoload index and registered in every test JVM, so this fake leaked into every class's kind lists
+     * and panel surfaces. Other packages reach it through {@link #KIND} and {@link #registerKind}.
+     */
+    static final class Kind implements InstanceKindHandler {
 
-        public static final Identifier ID = Identifier.of("hohenheim", "fake_device_capable");
+        static final Identifier ID = Identifier.of("hohenheim", "fake_device_capable");
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
 
-        public static void register() {
+        static void register() {
             if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new Kind());
             }
