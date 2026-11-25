@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
@@ -39,6 +40,10 @@ public class SiteAuthProviderModel extends Model {
     /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
     public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
         SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
+
+    /** THE short code a sign-in provider is named by in an assistant's tools: "SP3"; kept beside the row, no column. */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "SP"));
 
     /** PermissionSuggestionSources key: the assigned Proteus realm's vocabulary (registered server-side). */
     public static final Identifier PROTEUS_SUGGESTION_SOURCE = HohenheimIds.id("proteus_realm");

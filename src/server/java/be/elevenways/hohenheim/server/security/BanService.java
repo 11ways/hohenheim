@@ -407,7 +407,7 @@ public final class BanService {
      * row when the IP is already banned there.
      *
      * @throws IllegalArgumentException when the IP is unparseable or protected
-     *         (loopback/private/link-local or one of this server's own addresses)
+     *         (loopback/private/link-local or one of this installation's own addresses)
      */
     public synchronized @NonNull Row createBan(@NonNull String ip, @Nullable String reason,
                                                @NonNull String source,
@@ -524,6 +524,24 @@ public final class BanService {
         BanModel bans = Models.get(BanModel.class);
         List<Row> result = new ArrayList<>();
         for (Row row : bans.find().where(BanModel.ACTIVE.eq(true)).all()) {
+            if (BanModel.blockedNow(row, Now.instant())) {
+                result.add(row);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @return the bans blocking the address now, in every scope, the address normalized as a ban stores it (an IPv6
+     *     address as its /64); none for text no ban could name
+     */
+    public @NonNull List<Row> blockingNow(@NonNull String ip) {
+        String normalized = normalizeBanTarget(ip.trim());
+        if (normalized == null) {
+            return List.of();
+        }
+        List<Row> result = new ArrayList<>();
+        for (Row row : Models.get(BanModel.class).find().where(BanModel.IP.eq(normalized)).all()) {
             if (BanModel.blockedNow(row, Now.instant())) {
                 result.add(row);
             }
@@ -716,7 +734,7 @@ public final class BanService {
         }
         for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
             if (key.equals(own)) {
-                return "one of this server's own addresses";
+                return "one of this installation's own addresses";
             }
         }
         List<String> neverBan = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
@@ -747,7 +765,7 @@ public final class BanService {
         }
         for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
             if (own.indexOf(':') >= 0 && key.equals(IpLiterals.subnetKey(own))) {
-                return "contains one of this server's own addresses";
+                return "contains one of this installation's own addresses";
             }
         }
         List<String> neverBan = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);

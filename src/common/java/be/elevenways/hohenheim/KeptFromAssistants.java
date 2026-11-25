@@ -18,8 +18,8 @@ public final class KeptFromAssistants {
         + " wasted; its tool comes later, naming the record by its zone, name and type";
 
     /** A ban, which carries no code. */
-    public static final String BAN = "a ban has no code, as a never-reused number per ban would be wasted; its tool"
-        + " comes later, naming the ban by its address";
+    public static final String BAN = "a ban has no code, as a never-reused number per ban would be wasted;"
+        + " ban_set names it by its address and lifts every ban of it in force";
 
     /**
      * A background operation whose run another tenant could read: a run is read by every reader of its subject, and

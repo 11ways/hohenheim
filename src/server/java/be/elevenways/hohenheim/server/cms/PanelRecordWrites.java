@@ -131,17 +131,22 @@ public final class PanelRecordWrites {
                         @Nullable Field<?, ?> container, boolean createOnly, boolean byWord, boolean parent) {
 
         @NonNull FormEntry entry() {
-            if (this.byWord) {
-                EnumField members = (EnumField) this.field;
+            if (this.linked != null) {
+                return OperationForms.recordId(this.argument, Objects.requireNonNull(this.help), this.linked, false);
+            }
+            if (this.byWord) return wordEntry(this.argument, (EnumField) this.field, this.help);
+            // A setting a caller gives under a name of its own (a redirect's target is its target_url), or in words of
+            // its own where the field has none, worded as the field is otherwise.
+            if ((this.help != null || !this.argument.equals(this.field.getInputName()))
+                    && this.field instanceof StringField text) {
                 StringField.Builder said = StringField.builder(this.argument);
-                Microcopy label = members.getAttribute(FieldAttributes.LABEL_MICROCOPY);
-                Microcopy help = members.getAttribute(FieldAttributes.HELP);
+                Microcopy label = text.getAttribute(FieldAttributes.LABEL_MICROCOPY);
+                Microcopy help = this.help != null ? this.help : text.getAttribute(FieldAttributes.HELP);
                 if (label != null) said.label(label);
                 if (help != null) said.help(help);
-                return Select.of(said.build()).options(OptionSource.supplied(() -> wordOptions(members))).build();
+                return Plain.of(said.build());
             }
-            if (this.linked == null) return KindSettingsWrites.entryOf(this.field);
-            return OperationForms.recordId(this.argument, Objects.requireNonNull(this.help), this.linked, false);
+            return KindSettingsWrites.entryOf(this.field);
         }
 
         /**
@@ -169,7 +174,7 @@ public final class PanelRecordWrites {
     }
 
     /** @return a member's word: the path of its stored key ({@code hohenheim:ssh} is {@code ssh}) */
-    private static @NonNull String wordOf(@NonNull String key) {
+    static @NonNull String wordOf(@NonNull String key) {
         Identifier parsed = Identifier.tryParse(key);
         return parsed == null ? key : parsed.getPath();
     }
@@ -195,11 +200,38 @@ public final class PanelRecordWrites {
      * @return the stored key of the member this word spells; an unknown word is passed on as given, so the resource's
      *     own form refuses it as none of its options (the call's form already refused it as none of the words)
      */
-    private static @NonNull String keyOfWord(@NonNull EnumField field, @NonNull String word) {
+    static @NonNull String keyOfWord(@NonNull EnumField field, @NonNull String word) {
         for (EnumField.EnumValue member : field.getValues().values()) {
             if (wordOf(member.getKey()).equals(word)) return member.getKey();
         }
         return word;
+    }
+
+    /**
+     * @return the entry taking one of the enum's members under {@code argument} by its word, labelled as the field is
+     *     and helped in {@code help}, or as the field is for null
+     */
+    static @NonNull FormEntry wordEntry(@NonNull String argument, @NonNull EnumField members,
+                                        @Nullable Microcopy help) {
+        StringField.Builder said = StringField.builder(argument);
+        Microcopy label = members.getAttribute(FieldAttributes.LABEL_MICROCOPY);
+        Microcopy words = help != null ? help : members.getAttribute(FieldAttributes.HELP);
+        if (label != null) said.label(label);
+        if (words != null) said.help(words);
+        return Select.of(said.build()).options(OptionSource.supplied(() -> wordOptions(members))).build();
+    }
+
+    /** The record's own columns a create fills from entries of its own, before it is written. */
+    @FunctionalInterface
+    public interface Fill {
+
+        /**
+         * @param sent      the entries of the create this writer handles that the call sent
+         * @param parentKey the key of the fixed parent the record is created under, null for none
+         * @return the record's columns, by stored name, the create writes beside the call's own settings
+         */
+        @NonNull Map<String, Object> fill(OperationInput.@NonNull Values input, @NonNull Set<String> sent,
+                                          @Nullable Object parentKey, @NonNull AccessContext caller);
     }
 
     private final Identifier model;
@@ -210,6 +242,8 @@ public final class PanelRecordWrites {
     private final List<FormEntry> alsoEntries;
     private final @Nullable Also also;
     private final @Nullable AlsoCreated alsoCreated;
+    private final List<FormEntry> fillEntries;
+    private final @Nullable Fill fill;
     private final @Nullable Operation<Void, OperationInput.Values, Integer> create;
     private final @Nullable Operation<Row, OperationInput.Values, String> change;
     private final @Nullable Operation<Row, OperationInput.Values, String> set;
@@ -227,6 +261,8 @@ public final class PanelRecordWrites {
         this.alsoEntries = List.copyOf(builder.alsoEntries);
         this.also = builder.also;
         this.alsoCreated = builder.alsoCreated;
+        this.fillEntries = List.copyOf(builder.fillEntries);
+        this.fill = builder.fill;
         this.keyedUnder = builder.keyedUnder;
         this.keyedColumn = builder.keyedColumn;
         this.keys = List.copyOf(builder.keys);
@@ -432,6 +468,9 @@ public final class PanelRecordWrites {
         if (!creating || this.alsoCreated != null) {
             for (FormEntry entry : this.alsoEntries) form.add(entry);
         }
+        if (creating) {
+            for (FormEntry entry : this.fillEntries) form.add(entry);
+        }
         return form.build();
     }
 
@@ -514,6 +553,15 @@ public final class PanelRecordWrites {
             : this.alsoCreated.judge(input, handled, caller);
         Panel panel = panelOf(caller);
         PanelResource<Row> resource = offering(this.resource(panel), ResourceVerb.CREATE);
+        // Filled once the caller's panel offers the create, inside the create's command, so a refused create
+        // rolls back what the fill wrote.
+        if (this.fill != null) {
+            Set<String> filling = new LinkedHashSet<>();
+            for (FormEntry entry : this.fillEntries) {
+                if (input.get(entry.name()) != null) filling.add(entry.name());
+            }
+            raw.putAll(this.fill.fill(input, filling, parentKey, caller));
+        }
         Object parent = parentKey == null ? null
             : postParent(resource, raw, parentKey, Objects.requireNonNull(parentColumn, "a parent has its column"));
         Map<String, Object> posted = this.posted(resource, raw);
@@ -671,6 +719,37 @@ public final class PanelRecordWrites {
     }
 
     /**
+     * Creates a record of the resource through the caller's panel, as its form's create does, for a writer whose
+     * arguments become the record's values by a shape of their own (a sign-in provider's settings by its kind).
+     *
+     * @param stored the record's values by their stored names
+     * @return the created record's key
+     */
+    public static @NonNull Object createThrough(@NonNull String slug, @NonNull Map<String, Object> stored,
+                                                @NonNull AccessContext caller) {
+        Panel panel = panelOf(caller);
+        PanelResource<Row> resource = offering(resourceOf(panel, slug), ResourceVerb.CREATE);
+        Map<String, Object> posted = KindSettingsWrites.posted(List.of(), ApiConduits.formValues(resource, stored));
+        return ResourceWrites.create(panel, resource, posted, caller);
+    }
+
+    /**
+     * Changes a record of the resource through the caller's panel, as its form's save does, writing only what
+     * {@code stored} holds.
+     *
+     * @param key    the record's key
+     * @param stored the values written, by their stored names
+     */
+    public static void updateThrough(@NonNull String slug, @NonNull Object key, @NonNull Row record,
+                                     @NonNull Map<String, Object> stored, @NonNull AccessContext caller) {
+        Panel panel = panelOf(caller);
+        PanelResource<Row> resource = offering(resourceOf(panel, slug), ResourceVerb.UPDATE);
+        Map<String, Object> posted = edited(resource, record,
+            KindSettingsWrites.posted(List.of(), ApiConduits.formValues(resource, stored)));
+        ResourceWrites.update(panel, resource, key, record, posted, caller);
+    }
+
+    /**
      * @return the resource, once it offers the caller's panel the verb
      * @throws DomainRefusal forbidden where it does not (a read-only /manage twin), as its missing button says
      */
@@ -695,6 +774,8 @@ public final class PanelRecordWrites {
         private final List<FormEntry> alsoEntries = new ArrayList<>();
         private @Nullable Also also;
         private @Nullable AlsoCreated alsoCreated;
+        private final List<FormEntry> fillEntries = new ArrayList<>();
+        private @Nullable Fill fill;
         private @Nullable Field<?, ?> container;
         private OperationCommand creates = CREATES;
         private OperationCommand changes = CmsCommands.TRANSACTIONAL;
@@ -731,6 +812,41 @@ public final class PanelRecordWrites {
          */
         public @NonNull Builder byWord(@NonNull EnumField field) {
             this.add(field.getInputName(), field, false, true);
+            return this;
+        }
+
+        /**
+         * Declares a setting a create and a change both take under {@code argument} where the field's own input name
+         * says less than the spec's word (a redirect's {@code target} is its {@code target_url}); an enum's member is
+         * given by its word, as {@link #byWord(EnumField)} takes one.
+         */
+        public @NonNull Builder setting(@NonNull String argument, @NonNull Field<?, ?> field) {
+            return this.setting(argument, field, null);
+        }
+
+        /**
+         * {@link #setting(String, Field)} said in {@code help} where the field's own words say nothing a caller needs
+         * (a field the panel labels without help); only a text or an enum setting takes words of its own.
+         *
+         * @throws IllegalStateException for words given to a setting of another type
+         */
+        public @NonNull Builder setting(@NonNull String argument, @NonNull Field<?, ?> field,
+                                        @Nullable Microcopy help) {
+            if (help != null && !(field instanceof StringField) && !(field instanceof EnumField)) {
+                throw new IllegalStateException(field.getName() + " takes no words of its own: it is no text or enum");
+            }
+            boolean byWord = field instanceof EnumField;
+            this.parts.add(new Part(argument, field, null, help, id -> id, this.container, false, byWord, false));
+            return this;
+        }
+
+        /**
+         * Declares entries only a create takes, from which the writer fills the record's own columns before it is
+         * written (a protected path's list made from the people given); it runs whether or not one was sent.
+         */
+        public @NonNull Builder fillsOnCreate(@NonNull List<? extends FormEntry> entries, @NonNull Fill writer) {
+            this.fillEntries.addAll(entries);
+            this.fill = writer;
             return this;
         }
 

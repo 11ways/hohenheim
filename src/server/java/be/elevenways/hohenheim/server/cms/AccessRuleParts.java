@@ -87,9 +87,10 @@ public final class AccessRuleParts {
 
     private static final SubjectType<Row> LIST = SubjectType.record(AccessListModel.REF);
 
-    /** Why the adds are kept from assistants. */
-    private static final String PER_TYPE_FORM = "its form is the rule type's own fields, a password among them, which"
-        + " no tool input projects; its tool comes once one does";
+    /** Why the adds and the switch are kept from assistants. */
+    private static final String PER_TYPE_FORM = "its form is the rule type's own fields in one nested object, the"
+        + " panel's; access_rule_set adds and changes a rule by typed arguments, writing the same tree and its state as"
+        + " given";
 
     /** What a rule MEANS, the one form its edit page and both add dialogs ask. */
     private static final FormSpec FORM = FormSpec.builder()
@@ -152,6 +153,7 @@ public final class AccessRuleParts {
         .description(HohenheimMicrocopy.ACCESS_RULE.of("toggle_hint"))
         .icon(Icon.of("power-off"))
         .one(SUBJECT)
+        .notForAssistants(PER_TYPE_FORM)
         .verb(AuthAdminOperations.Verbs.TOGGLE_ENABLED)
         .gate(OperationGate.open())
         // Placed as a row action: a resubmitted click answers from the receipt instead of switching back.
@@ -284,12 +286,12 @@ public final class AccessRuleParts {
     }
 
     /** @return null when the caller may write the rule (manage on its list), else the not-found refusal */
-    private static @Nullable DomainRefusal writeRefusal(@NonNull Row rule, @NonNull AccessContext access) {
+    static @Nullable DomainRefusal writeRefusal(@NonNull Row rule, @NonNull AccessContext access) {
         return listRefusal(rule.get(AccessRuleModel.ACCESS_LIST_ID), access) == null ? null : notFound(rule);
     }
 
     /** @return null when the caller manages the list, else the not-found refusal (never an existence oracle) */
-    private static @Nullable DomainRefusal listRefusal(@Nullable Integer listId, @NonNull AccessContext access) {
+    static @Nullable DomainRefusal listRefusal(@Nullable Integer listId, @NonNull AccessContext access) {
         return HohenheimAccess.reachesRecord(access, AccessListModel.MODEL_ID, listId, HohenheimCapabilities.MANAGE)
             ? null : new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "access list " + listId + " is not reachable");
     }

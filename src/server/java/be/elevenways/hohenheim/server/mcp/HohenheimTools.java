@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.AddressWrites;
 import be.elevenways.hohenheim.server.cms.AppKindWrites;
+import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.BuildHookParts;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
@@ -82,6 +83,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimHostTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimCatalogTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimAppPartTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimSiteAccessTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -142,6 +144,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(AccessListParts.DELETE, null)
             .route(ProtectedPathParts.DELETE, null)
             .route(SiteRedirectParts.DELETE, null)
+            .route(AuthProviderParts.DELETE, null)
             .route(InstanceTemplateParts.DELETE, null);
         // zenit-auth's people and roles are deleted here too, by their own operations.
         for (Operation<?, ?, ?> operation : AuthTools.DELETES) deletes.route(operation, null);

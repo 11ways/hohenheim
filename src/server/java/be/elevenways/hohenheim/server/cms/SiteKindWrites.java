@@ -6,15 +6,18 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites.Kind;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
@@ -61,15 +64,22 @@ public final class SiteKindWrites {
     /** The argument naming the access list every request of the site must pass. */
     public static final String ACCESS_LIST = "access_list";
 
+    /** The argument naming the sign-in provider every visitor of the site must pass. */
+    public static final String SIGN_IN_PROVIDER = "sign_in_provider";
+
     /**
      * The records a site links to, each by the argument naming it and the site's own column it is written into: its app
-     * where its kind serves one, and its access list.
+     * where its kind serves one, its access list and its sign-in provider where its kind reads HTTP (a passthrough site
+     * never sees a request; a stream relays bytes, so it takes an access list of networks but no sign-in).
      */
     private static final KindSettingsWrites.Links LINKS = KindSettingsWrites.links(
         KindSettingsWrites.link(APP, HohenheimMicrocopy.HELP.of("site_app"), InstanceModel.MODEL_ID,
             SiteModel.INSTANCE_ID).onlyFor(InstanceUpstreamKind.ID::equals),
         KindSettingsWrites.link(ACCESS_LIST, HohenheimMicrocopy.HELP.of("site_access_list"), AccessListModel.MODEL_ID,
-            SiteModel.ACCESS_LIST_ID));
+            SiteModel.ACCESS_LIST_ID).onlyFor(kind -> !TlsPassthroughUpstreamKind.ID.equals(kind)),
+        KindSettingsWrites.link(SIGN_IN_PROVIDER, HohenheimMicrocopy.HELP.of("site_sign_in_provider"),
+            SiteAuthProviderModel.MODEL_ID, SiteModel.AUTH_PROVIDER_ID)
+            .onlyFor(kind -> !TlsPassthroughUpstreamKind.ID.equals(kind) && !reachedOnItsPorts(kind)));
 
     /** What the delegated save writes: the name, the switch and the description. */
     private static final Set<String> DELEGATED = Set.of(SiteModel.NAME.getName(), SiteModel.ENABLED.getName(),
@@ -106,6 +116,12 @@ public final class SiteKindWrites {
     // One site forwards every public port of one service, a list of ports (StreamPort); each create names at least one.
     public static final Kind STREAM = declare(StreamUpstreamKind.ID, StreamUpstreamKind.SETTINGS_SCHEMA,
         "site_stream_set", StreamUpstreamKind.FORWARD_HOST.getInputName(), StreamUpstreamKind.PORTS.getInputName());
+    // TLS passes through untouched to its backend, which presents its own certificate: no access list, no sign-in.
+    public static final Kind PASSTHROUGH = declare(TlsPassthroughUpstreamKind.ID,
+        TlsPassthroughUpstreamKind.SETTINGS_SCHEMA, "site_passthrough_set",
+        TlsPassthroughUpstreamKind.FORWARD_HOST.getInputName());
+    public static final Kind DEV_NAMESPACE = declare(DevNamespaceUpstreamKind.ID,
+        DevNamespaceUpstreamKind.SETTINGS_SCHEMA, "site_dev_namespace_set");
 
     private SiteKindWrites() {
     }
@@ -119,11 +135,6 @@ public final class SiteKindWrites {
                                          @NonNull String @NonNull ... needs) {
         String word = tool.substring(0, tool.length() - "_set".length());
         return SITES.kind(kind, schema, word, tool, HohenheimMicrocopy.HOHENHEIM.of("site_thing_" + word), needs);
-    }
-
-    /** @return whether a site of the kind serves one of Hohenheim's apps, so it names the app */
-    private static boolean servesApp(@NonNull Identifier kind) {
-        return LINKS.takes(APP, kind);
     }
 
     /** @return whether a site of the kind is reached on public ports of its own, never at an address */
@@ -141,11 +152,9 @@ public final class SiteKindWrites {
             RawValues.map(raw.get(SiteModel.SETTINGS.getName()))));
         Object hostname = input.get(SiteWrites.CREATE_HOSTNAME.getName());
         if (hostname != null) raw.put(SiteWrites.CREATE_HOSTNAME.getName(), hostname);
-        if (servesApp(kind.id()) && input.get(APP) != null) {
-            raw.put(SiteModel.INSTANCE_ID.getName(), String.valueOf(input.get(APP)));
-        }
-        if (input.get(ACCESS_LIST) != null) {
-            raw.put(SiteModel.ACCESS_LIST_ID.getName(), String.valueOf(input.get(ACCESS_LIST)));
+        for (KindSettingsWrites.Link link : LINKS.takenBy(kind.id())) {
+            Object given = input.get(link.argument());
+            if (given != null) raw.put(link.column().getName(), String.valueOf(given));
         }
         Panel panel = ApiConduits.adminPanel();
         Object key = KindSettingsWrites.speaking(LINKS.columns(),
@@ -183,13 +192,13 @@ public final class SiteKindWrites {
             raw.put(field.getInputName(), input.get(field.getInputName()));
         }
         raw.put(SiteModel.UPSTREAM_KIND.getName(), kind.id().toString());
-        // A site turned away from the app kind loses its app link, or the link rule refuses the save.
-        Object app = !servesApp(kind.id()) ? null : sent.contains(APP) ? input.get(APP)
-            : site.get(SiteModel.INSTANCE_ID);
-        raw.put(SiteModel.INSTANCE_ID.getName(), idText(app));
-        raw.put(SiteModel.ACCESS_LIST_ID.getName(), idText(sent.contains(ACCESS_LIST) ? input.get(ACCESS_LIST)
-            : site.get(SiteModel.ACCESS_LIST_ID)));
-        raw.put(SiteModel.AUTH_PROVIDER_ID.getName(), idText(site.get(SiteModel.AUTH_PROVIDER_ID)));
+        // A link the kind takes keeps what is stored unless the call sent it; one it does not take is cleared, or the
+        // site's rules refuse the save (a site turned from an app keeps no app, a passthrough no access list).
+        for (KindSettingsWrites.Link link : LINKS.changeable()) {
+            Object value = !link.takenBy(kind.id()) ? null : sent.contains(link.argument())
+                ? input.get(link.argument()) : site.get(link.column().getName());
+            raw.put(link.column().getName(), idText(value));
+        }
         // Only what the call sent changes: a setting it left out stays as stored (absent stays absent, so its kind's
         // default keeps applying), and null clears one by taking its key away. A setting the tool does not offer (an
         // app site's port, which nothing honours) stays as it is stored too, except on a site turned from another kind.

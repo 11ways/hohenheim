@@ -121,7 +121,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
     /** The Hohenheim operations and sources kept from assistants, sorted; a later landing removes lines, never adds. */
     private static final String[] KEPT = {
-        "hohenheim:access_rule_add", "hohenheim:access_rule_add_inside", "hohenheim:acknowledge_posture",
+        "hohenheim:access_rule_add", "hohenheim:access_rule_add_inside", "hohenheim:access_rule_toggle",
+        "hohenheim:acknowledge_posture",
         "hohenheim:build_hook_create", "hohenheim:build_hook_regenerate", "hohenheim:change_database_password",
         "hohenheim:confirm_host_key", "hohenheim:confirm_incus_cert", "hohenheim:create_game_domain",
         "hohenheim:create_site", "hohenheim:declare_volume", "hohenheim:delete_dns_record",
@@ -138,6 +139,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
         "hohenheim:spamservice_mark_ham", "hohenheim:spamservice_mark_spam", "hohenheim:spamservice_rescore",
+        "hohenheim:stop_forcing_https",
         "hohenheim:update_game_domain", "hohenheim:update_site", "source hohenheim:access_list@admin",
         "source hohenheim:access_list@admin_picker", "source hohenheim:access_rule@admin",
         "source hohenheim:access_rule@admin_picker", "source hohenheim:auth_provider@admin",
@@ -226,7 +228,6 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .map(operation -> operation.id().toString()).sorted().toList();
         assertThat(uncovered).as("step 1: operations no tool places and none keeps from assistants")
             .containsExactly("hohenheim:access_rule_move_down", "hohenheim:access_rule_move_up",
-                "hohenheim:delete_auth_provider",
                 "hohenheim:generate_instance_secret", "hohenheim:list_instance_variables",
                 "hohenheim:set_instance_variable", "hohenheim:site_hold_place",
                 "hohenheim:site_hold_remove", "hohenheim:site_label_place", "hohenheim:site_label_remove",

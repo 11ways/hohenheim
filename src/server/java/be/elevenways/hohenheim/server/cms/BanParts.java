@@ -96,7 +96,7 @@ public final class BanParts {
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BanModel.REF);
 
     /** Duration choices for a manual ban; "permanent" maps to a null TTL. */
-    private static final EnumField DURATION = EnumField.builder(DURATION_NAME)
+    static final EnumField DURATION = EnumField.builder(DURATION_NAME)
         .value("1h", v -> v.displayName("1 hour")
             .label(HohenheimMicrocopy.BAN.of("duration_1h")))
         .value("24h", v -> v.displayName("24 hours")
@@ -370,16 +370,35 @@ public final class BanParts {
     private static @NonNull Object create(@NonNull RowWriteCall call) {
         Map<String, Object> values = call.values();
         String ip = values.get(BanModel.IP.getName()) instanceof String text ? text.trim() : "";
+        requireBannable(ip);
+        Row ban = banManually(ip, values.get(BanModel.REASON.getName()), values.get(DURATION_NAME));
+        return Objects.requireNonNull(ban.get(BanModel.ID), "Ban save did not populate the id");
+    }
+
+    /**
+     * Refuses an address no manual ban may block (this installation's own, a private one, one on the never-ban list),
+     * naming the ip, as the panel's form does.
+     *
+     * @throws Violations on the ip, saying why
+     */
+    static void requireBannable(@NonNull String ip) {
         String problem = ip.isEmpty() ? "empty ip" : BanService.protectionProblem(ip);
         if (problem != null) {
             throw Violations.ofField(BanModel.IP.getName(), ip,
                 HohenheimMicrocopy.VIOLATIONS.of("ban_ip_refused").withArg("reason", problem));
         }
-        String reason = values.get(BanModel.REASON.getName()) instanceof String text && !text.isBlank()
-            ? text.trim() : null;
-        Row ban = BanService.INSTANCE.createBan(ip, reason, BanModel.SOURCE_MANUAL, null,
-            ttlOf(values.get(DURATION_NAME)));
-        return Objects.requireNonNull(ban.get(BanModel.ID), "Ban save did not populate the id");
+    }
+
+    /**
+     * Bans an address by hand, web traffic only, for one of {@link #DURATION}'s choices, as the panel's form and
+     * ban_set both do; {@link #requireBannable} asked first.
+     *
+     * @param duration a choice's key, the 24h default for null
+     * @return the ban, or the one already blocking the address (BanService keeps it unchanged)
+     */
+    static @NonNull Row banManually(@NonNull String ip, @Nullable Object reason, @Nullable Object duration) {
+        String said = reason instanceof String text && !text.isBlank() ? text.trim() : null;
+        return BanService.INSTANCE.createBan(ip, said, BanModel.SOURCE_MANUAL, null, ttlOf(duration));
     }
 
     private static @Nullable Duration ttlOf(@Nullable Object duration) {

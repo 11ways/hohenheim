@@ -278,18 +278,18 @@ class HohenheimAppPartToolsTest extends HohenheimHttpTestBase {
     }
 
     /** @return the first code of the kind an answer names */
-    private static String codeIn(String text, String prefix) {
+    static String codeIn(String text, String prefix) {
         Matcher code = Pattern.compile("\\b" + prefix + "\\d+\\b").matcher(text);
         assertThat(code.find()).as("a " + prefix + " code in: " + text).isTrue();
         return code.group();
     }
 
     /** @return the key of the record a code names */
-    private static int keyOf(Identifier model, String code) {
+    static int keyOf(Identifier model, String code) {
         return Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(model, code), code));
     }
 
-    private static Row row(Identifier model, int id) {
+    static Row row(Identifier model, int id) {
         return Objects.requireNonNull(Models.get(model).findById(id), "record " + id);
     }
 

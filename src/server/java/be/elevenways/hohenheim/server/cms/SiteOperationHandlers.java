@@ -165,6 +165,26 @@ public final class SiteOperationHandlers {
      */
     private static @NonNull Integer protectPath(@NonNull Row site, ProtectPath.@NonNull Input input,
                                                 @Nullable AccessContext access) {
+        Integer listId = dedicatedList(site, input, access);
+        ProtectedPathModel paths = Models.get(ProtectedPathModel.class);
+        Row path = paths.createEmptyRow();
+        path.set(ProtectedPathModel.SITE_ID, site.get(SiteModel.ID));
+        path.set(ProtectedPathModel.PATH, input.path());
+        path.set(ProtectedPathModel.ACCESS_LIST_ID, listId);
+        paths.save(path);
+        return path.get(ProtectedPathModel.ID);
+    }
+
+    /**
+     * Writes the list a protection of one path makes, named after the site and the path, satisfied by any of its rules,
+     * unshared and owned by the caller, one rule per person, network or provider the input names: the list both the
+     * site's "Protect a path" and protected_path_set point the path at.
+     *
+     * @return the list's key
+     * @throws Violations when the chosen method's entry is empty, before anything is written
+     */
+    static @NonNull Integer dedicatedList(@NonNull Row site, ProtectPath.@NonNull Input input,
+                                          @Nullable AccessContext access) {
         List<ProtectionRule> rules = protectionRules(input);
         AccessListModel lists = Models.get(AccessListModel.class);
         Row list = lists.createEmptyRow();
@@ -184,13 +204,7 @@ public final class SiteOperationHandlers {
             row.set(AccessRuleModel.ENABLED, true);
             ruleModel.save(row);
         }
-        ProtectedPathModel paths = Models.get(ProtectedPathModel.class);
-        Row path = paths.createEmptyRow();
-        path.set(ProtectedPathModel.SITE_ID, site.get(SiteModel.ID));
-        path.set(ProtectedPathModel.PATH, input.path());
-        path.set(ProtectedPathModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
-        paths.save(path);
-        return path.get(ProtectedPathModel.ID);
+        return list.get(AccessListModel.ID);
     }
 
     /**

@@ -85,7 +85,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
         DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID,
         InstanceFileModel.MODEL_ID, InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID,
-        RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID);
+        RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -142,8 +142,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceOperations.CONNECT_WEBHOOK,
             InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
             InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
-            SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
-            AccessRuleParts.TOGGLE,
+            SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.CLONE,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
         // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
         McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
@@ -229,6 +228,10 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceTemplateFileModel.TEMPLATE_ID).search(InstanceTemplateFileModel.CONTAINER_PATH));
         made.put(StackFileModel.MODEL_ID, RecordSource.of(StackFileModel.REF).project(StackFileModel.CONTAINER_PATH,
             StackFileModel.MODE, StackFileModel.STACK_SERVICE_ID).search(StackFileModel.CONTAINER_PATH));
+        // A sign-in provider's config holds its secrets and is never projected: a list shows its name and kind.
+        made.put(SiteAuthProviderModel.MODEL_ID, RecordSource.of(SiteAuthProviderModel.REF).project(
+            SiteAuthProviderModel.NAME, SiteAuthProviderModel.PROVIDER_TYPE, SiteAuthProviderModel.REQUIRED_PERMISSION)
+            .search(SiteAuthProviderModel.NAME));
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
         // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
         // value is never projected (a source refuses it); its kind says it is one.

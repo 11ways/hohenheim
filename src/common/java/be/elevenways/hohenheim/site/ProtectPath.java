@@ -84,6 +84,9 @@ public final class ProtectPath {
         .help(HohenheimMicrocopy.PROTECT_PATH.of("networks_help"))
         .build();
 
+    /** The networks whose visitors may pass, one per row: the panel's form and protected_path_set both take it. */
+    public static final Array<String> NETWORK_LIST = Array.of(NETWORKS, NETWORK).build();
+
     public static final IntegerField PROVIDER_ID = IntegerField.builder().name("provider_id")
         .label(HohenheimMicrocopy.PROTECT_PATH.of("provider"))
         .build();
@@ -92,7 +95,7 @@ public final class ProtectPath {
         .add(PATH)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(METHOD))
         .add(PEOPLE)
-        .add(Array.of(NETWORKS, NETWORK).build())
+        .add(NETWORK_LIST)
         .add(PROVIDER_ID)
         .showWhen(PEOPLE.name(), METHOD.getName(), METHOD_PASSWORD)
         .showWhen(NETWORKS.getName(), METHOD.getName(), METHOD_NETWORK)
@@ -124,8 +127,8 @@ public final class ProtectPath {
         .happened(HohenheimMicrocopy.PROTECT_PATH.of("happened"))
         .icon(Icon.of("lock"))
         .one(SiteOperations.SITE)
-        .notForAssistants("its form takes the passwords of the people who may pass, and an assistant is never"
-            + " sent a secret: they are typed on the site's page only")
+        .notForAssistants("its form is the panel's own (a method and its people, networks or provider); an assistant"
+            + " protects a path with protected_path_set, which writes the same dedicated list")
         .gate(OperationGate.open())
         .input(INPUT)
         .result(Integer.class)

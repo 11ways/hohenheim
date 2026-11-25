@@ -70,9 +70,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.sites.tenant-one admin sites tenant-one v2
 admission - verdict=zenit:forbidden
@@ -368,9 +368,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
 control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:stream%252Chohenheim:tls_passthrough
@@ -412,9 +412,9 @@ control EDIT%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zenitf
 control EDIT%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control EDIT%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.domains.operator.domain admin domains operator v2
 admission - verdict=admitted
@@ -1228,9 +1228,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
 control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:stream%252Chohenheim:tls_passthrough
@@ -1272,9 +1272,9 @@ control EDIT%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zenitf
 control EDIT%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control EDIT%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.sites.operator.trash admin sites operator v2
 admission - verdict=admitted
@@ -1350,9 +1350,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.sites.operator.trash.trashed.sel admin sites operator v2
 admission - verdict=admitted
@@ -1432,9 +1432,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
 control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=true options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:stream%252Chohenheim:tls_passthrough
@@ -1476,9 +1476,9 @@ control EDIT%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zenitf
 control EDIT%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=true options= binding=
 control EDIT%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=true options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=true options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
-control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=true options= binding=
+control EDIT%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 
 case admin.sites.operator.sel admin sites operator v2
 admission - verdict=admitted
@@ -1552,9 +1552,9 @@ control CREATE%20settings[hohenheim:stream]/settings.forward_host at=0 kind=zeni
 control CREATE%20settings[hohenheim:stream]/settings.ports at=1 kind=zenitforms:form/key-value input=text required=true readonly=false options= binding=
 control CREATE%20settings[hohenheim:stream]/settings.connect_timeout at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.forward_port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.domains.operator.trashed-parent admin domains operator v2
 admission - verdict=admitted

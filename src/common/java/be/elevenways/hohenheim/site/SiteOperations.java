@@ -80,6 +80,9 @@ public final class SiteOperations {
             .description(HohenheimMicrocopy.HOHENHEIM.of("stop_forcing_https_description"))
             .icon(Icon.of("unlock"))
             .one(SITE)
+            .notForAssistants("the health band's shortcut over every uncovered address of the site; an assistant"
+                + " switches forcing HTTPS off per address with address_set, as read shows each address and its"
+                + " certificate")
             .verb(HohenheimVerbs.STOP_FORCING_HTTPS)
             .gate(OperationGate.open())
             .facts(OperationFact.REACHES_OUTSIDE)

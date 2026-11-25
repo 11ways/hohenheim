@@ -20,7 +20,9 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
@@ -383,6 +385,11 @@ public final class KindSettingsWrites {
             return this.links.stream().filter(link -> !link.createOnly()).toList();
         }
 
+        /** @return the links a record of the kind takes, in declaration order */
+        @NonNull List<Link> takenBy(@NonNull Identifier kind) {
+            return this.links.stream().filter(link -> link.takenBy(kind)).toList();
+        }
+
         /** @return each link's argument to the column it writes, for {@link #speaking} */
         @NonNull Map<String, Field<?, ?>> columns() {
             Map<String, Field<?, ?>> columns = new LinkedHashMap<>();
@@ -416,6 +423,29 @@ public final class KindSettingsWrites {
         FormEntry derived = FieldFormEntryRegistry.INSTANCE.deriveEntry(field);
         return derived instanceof FormEntry.Embedded embedded && embedded.jsonSchema() == null
             ? Plain.of(field) : derived;
+    }
+
+    /** @return whether a record of the kind keeps the field inside its kind-shaped map (a rule's data, a config) */
+    static boolean takes(@NonNull SchemaField container, @NonNull String kind, @NonNull String field) {
+        Schema schema = container.resolveSchemaForSiblingValue(kind);
+        return schema != null && schema.getField(field) != null;
+    }
+
+    /**
+     * @return the refusal of an argument a record of its kind does not take, naming by their words the kinds that
+     *     take it; a secret value is never echoed
+     */
+    static @NonNull Violations appliesOnly(@NonNull String argument, @Nullable Object value,
+                                           @NonNull SchemaField container, @NonNull String field) {
+        List<String> kinds = new ArrayList<>();
+        EnumField kindField = container.resolveSiblingEnumField();
+        if (kindField != null) {
+            for (String kind : kindField.getValues().keySet()) {
+                if (takes(container, kind, field)) kinds.add(PanelRecordWrites.wordOf(kind));
+            }
+        }
+        return Violations.ofField(argument, value instanceof Secret ? null : value, HohenheimMicrocopy.VIOLATIONS
+            .of("kind_argument_applies").withArg("name", argument).withArg("kinds", String.join(" or ", kinds)));
     }
 
     /** @return what a change answers: the record's code and the names of the settings it wrote */

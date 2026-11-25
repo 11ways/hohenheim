@@ -156,15 +156,24 @@ public final class InstanceVariableOperations {
 
     /** A list of {@code {key, value}} objects, both texts; a secret one marks the list and its values write-only. */
     private static @NonNull Map<String, Object> keyValues(boolean secret) {
-        Map<String, Object> text = FormJsonSchema.property(JsonSchemaType.STRING, null, null);
-        Map<String, Object> items = FormJsonSchema.object(Map.of("key", text, "value", secret ? writeOnly(text) : text),
-            List.of("key", "value"));
-        Map<String, Object> list = FormJsonSchema.array(items);
+        Map<String, Object> list = textPairs("key", "value", secret);
         return secret ? writeOnly(list) : list;
     }
 
+    /**
+     * @param secondWriteOnly whether the second text is written and never shown again
+     * @return a list of objects of two required texts by those names
+     */
+    public static @NonNull Map<String, Object> textPairs(@NonNull String first, @NonNull String second,
+                                                         boolean secondWriteOnly) {
+        Map<String, Object> text = FormJsonSchema.property(JsonSchemaType.STRING, null, null);
+        Map<String, Object> items = FormJsonSchema.object(Map.of(first, text, second,
+            secondWriteOnly ? writeOnly(text) : text), List.of(first, second));
+        return FormJsonSchema.array(items);
+    }
+
     /** @return the node marked write-only: its value is written, never shown again */
-    private static @NonNull Map<String, Object> writeOnly(@NonNull Map<String, Object> node) {
+    public static @NonNull Map<String, Object> writeOnly(@NonNull Map<String, Object> node) {
         Map<String, Object> marked = new LinkedHashMap<>(node);
         marked.put(Keyword.WRITE_ONLY.token(), true);
         return Collections.unmodifiableMap(marked);
