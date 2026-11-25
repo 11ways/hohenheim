@@ -32,6 +32,7 @@ public final class StringVariableType implements VariableTypeHandler {
     public static final IntegerField MAX_LENGTH = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("max_length")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_max_length"))
+            .help(HohenheimMicrocopy.HELP.of("variable_longest"))
             .build());
 
     @Override

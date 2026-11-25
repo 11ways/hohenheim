@@ -7,6 +7,25 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
+import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.server.api.ApiConduits;
+import be.elevenways.zenit.auth.cms.SubjectTag;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.common.edit.Plain;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.orm.code.RecordModels;
+import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.PatchBase;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -45,6 +64,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Per-owner quota overrides from parts: the floor IS the page (list, forms, writes), because an override offers nothing
@@ -73,6 +94,47 @@ public final class InstanceQuotaParts {
         .label(InstanceQuotaModel.SUBJECTS.getAttribute(FieldAttributes.LABEL_MICROCOPY))
         .help(InstanceQuotaModel.SUBJECTS.getAttribute(FieldAttributes.HELP))
         .build();
+
+    /** The argument naming the people and roles that share one set of limits, by their codes. */
+    public static final String OWNERS_ARGUMENT = "owners";
+
+    /** The argument taking an owner's limits away. */
+    private static final String REMOVE = "remove";
+
+    /** Each cap a tool sets, by the name it gives it: an app is never called an instance. */
+    private static final Map<String, Field<?, ?>> CAPS = Map.of("max_apps", InstanceQuotaModel.MAX_INSTANCES,
+        InstanceQuotaModel.MAX_MEMORY_MB.getInputName(), InstanceQuotaModel.MAX_MEMORY_MB,
+        InstanceQuotaModel.MAX_DISK_GB.getInputName(), InstanceQuotaModel.MAX_DISK_GB,
+        InstanceQuotaModel.MAX_NICS.getInputName(), InstanceQuotaModel.MAX_NICS,
+        InstanceQuotaModel.MAX_SITES.getInputName(), InstanceQuotaModel.MAX_SITES,
+        InstanceQuotaModel.MAX_DATABASES.getInputName(), InstanceQuotaModel.MAX_DATABASES);
+
+    /**
+     * Sets one owner's limits, the owner named by its people's and roles' codes in any order: the same owner again
+     * changes them, {@code remove} takes them away, each through the operator's quota page as its form and delete do.
+     * A patch, so a limit sent as null clears it and one left out stays as it is.
+     */
+    public static final Operation<Void, OperationInput.Values, String> SET =
+            Operation.declare(HohenheimIds.id("set_quota"))
+        .happened(OperationSentences.of("set_quota"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("set_quota"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("set_quota_description"))
+        .noSubject()
+        .gate(HohenheimSources.OPERATOR)
+        .input(OperationInput.derived(setForm()))
+        .result(String.class)
+        .patchable()
+        .facts(OperationFact.IDEMPOTENT)
+        .command(OperationCommand.perVerb().onDatasource("default"))
+        .register();
+
+    static {
+        // No stored record is the base (the owners name the row), so a change writes what the call sent.
+        OperationHandlers.attach(SET)
+            .patchBase(PatchBase.ofValues(SET, (none, access) -> Map.of()))
+            .handle(call -> set(Objects.requireNonNull(call.input()), call.patched(),
+                Objects.requireNonNull(call.access(), "a quota is set by its caller")));
+    }
 
     private InstanceQuotaParts() {
     }
@@ -208,5 +270,82 @@ public final class InstanceQuotaParts {
     static @Nullable String title(@NonNull Row quota) {
         String labels = HohenheimAccess.labelSubjects(quota.get(InstanceQuotaModel.SUBJECTS));
         return labels.isEmpty() ? null : labels;
+    }
+
+    /** @return the set's form: the owner's codes, every cap under its tool name, and the removal */
+    private static @NonNull FormSpec setForm() {
+        StringField code = StringField.builder("text").build();
+        FormSpec.Builder form = FormSpec.builder().add(Array.of(ListField.builder(code).name(OWNERS_ARGUMENT)
+            .help(HohenheimMicrocopy.HELP.of("quota_owners"))
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.of(UserModel.MODEL_ID,
+                PermissionGroupModel.MODEL_ID)).build(), code).build());
+        CAPS.entrySet().stream().sorted(Map.Entry.comparingByKey())
+            .forEach(cap -> form.add(Plain.of(cap.getValue()).named(cap.getKey())));
+        return form.add(Plain.of(BooleanField.builder(REMOVE).defaultValue(false)
+            .help(HohenheimMicrocopy.HELP.of("quota_remove")).build())).build();
+    }
+
+    /**
+     * Creates, changes or removes the limits of the owner the call names, through the operator's quota page.
+     *
+     * @param sent the entries the call named, null for a full input, which names what it coerced
+     * @return what was done, with the owner's names
+     */
+    private static @NonNull String set(OperationInput.@NonNull Values input, @Nullable Set<String> sent,
+                                       @NonNull AccessContext caller) {
+        Set<String> subjects = new LinkedHashSet<>();
+        if (input.get(OWNERS_ARGUMENT) instanceof List<?> owners) {
+            for (Object owner : owners) subjects.add(subjectOf(String.valueOf(owner)));
+        }
+        String pack = HohenheimAccess.packSubjects(subjects);
+        String named = subjects.isEmpty() ? "the administrators" : HohenheimAccess.labelSubjects(pack);
+        Panel panel = ApiConduits.adminPanel();
+        PanelResource<Row> resource = Objects.requireNonNull(CmsSupport.declaredRowEntry(panel,
+            HohenheimSlugs.INSTANCE_QUOTAS), "the operator's panel declares the quota page");
+        Row found = Models.get(InstanceQuotaModel.class).find().where(InstanceQuotaModel.SUBJECTS.eq(pack)).first();
+        if (Boolean.TRUE.equals(input.get(REMOVE))) {
+            if (found == null) return "no limits of " + named + ": nothing removed";
+            ResourceWrites.delete(panel, resource, found, caller);
+            return "limits of " + named + " removed";
+        }
+        Map<String, Object> raw = new LinkedHashMap<>();
+        Set<String> given = sent != null ? sent : input.coerced().keySet();
+        for (Map.Entry<String, Field<?, ?>> cap : CAPS.entrySet()) {
+            if (given.contains(cap.getKey())) {
+                raw.put(cap.getValue().getName(), input.get(cap.getKey()));
+            }
+        }
+        Map<String, String> renamed = new LinkedHashMap<>();
+        CAPS.forEach((argument, field) -> renamed.put(field.getName(), argument));
+        if (found == null) {
+            raw.put(OWNERS.getName(), new ArrayList<>(subjects));
+            KindSettingsWrites.speaking(() -> ResourceWrites.create(panel, resource,
+                ApiConduits.formValues(resource, raw), caller), renamed);
+            return "limits of " + named + " set";
+        }
+        KindSettingsWrites.speaking(() -> {
+            ResourceWrites.update(panel, resource, Objects.requireNonNull(found.get(InstanceQuotaModel.ID)), found,
+                ApiConduits.formValues(resource, raw), caller);
+            return null;
+        }, renamed);
+        return KindSettingsWrites.changedLine("limits of " + named, String.join(", ", raw.keySet().stream()
+            .map(renamed::get).toList()));
+    }
+
+    /**
+     * Reads the owner subject a person's or a role's full id stands for.
+     *
+     * @return the subject token
+     * @throws DomainRefusal for an id of neither, which the pipeline's own read of the codes already refused
+     */
+    private static @NonNull String subjectOf(@NonNull String id) {
+        UUID key = UUID.fromString(id);
+        if (Models.get(UserModel.class).findById(key) != null) {
+            return new SubjectTag(GrantSubjectType.USER, key).token();
+        }
+        if (Models.get(PermissionGroupModel.class).findById(key) != null) {
+            return new SubjectTag(GrantSubjectType.GROUP, key).token();
+        }
+        throw new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "no person or role " + id);
     }
 }

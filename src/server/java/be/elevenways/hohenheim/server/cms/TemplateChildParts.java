@@ -35,6 +35,12 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.server.instance.variable.IntegerVariableType;
+import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
+import be.elevenways.hohenheim.server.instance.variable.SelectVariableType;
+import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
+import java.util.List;
 
 /**
  * The template's authored children: shared parent/read/write parts, each declaration's own form and list.
@@ -50,6 +56,47 @@ public final class TemplateChildParts {
 
     /** The column naming a declaration's template, the same in every declaration's list (the tab hides it). */
     public static final String OWNER_COLUMN = InstanceTemplateVariableModel.TEMPLATE_ID.getName();
+
+    /**
+     * A template's variable, named by its template and key: one call declares it, changes or renames it, or removes
+     * it, through the Contents tab's own form; the type's settings are written inside the settings map its type
+     * decides, and a new type empties them.
+     */
+    public static final PanelRecordWrites VARIABLE_WRITES = PanelRecordWrites.of("template_variable",
+            InstanceTemplateVariableModel.MODEL_ID, SubjectType.record(InstanceTemplateVariableModel.REF),
+            InstanceTemplateVariableModel.ID, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES)
+        .keyedUnder(InstanceTemplateOperations.TEMPLATE, InstanceTemplateVariableModel.TEMPLATE_ID,
+            List.of(InstanceTemplateVariableModel.KEY))
+        .renamedBy("new_key", InstanceTemplateVariableModel.KEY,
+            HohenheimMicrocopy.HELP.of("template_variable_new_key"))
+        .settings(List.of(InstanceTemplateVariableModel.LABEL, InstanceTemplateVariableModel.DESCRIPTION))
+        .byWord(InstanceTemplateVariableModel.TYPE)
+        .settings(List.of(InstanceTemplateVariableModel.REQUIRED, InstanceTemplateVariableModel.DEFAULT_VALUE))
+        .within(InstanceTemplateVariableModel.SETTINGS)
+        .settings(List.of(IntegerVariableType.MIN, IntegerVariableType.MAX, SelectVariableType.OPTIONS,
+            StringVariableType.PATTERN, StringVariableType.MAX_LENGTH))
+        // The stored setting says what the panel's switch does; a tool's boolean is named for its true state.
+        .setting("generated", SecretVariableType.GENERATE)
+        .settings(List.of(SecretVariableType.GENERATE_BYTES))
+        .removable(HohenheimMicrocopy.HELP.of("template_variable_remove"))
+        .build();
+
+    /**
+     * A template's managed database, named by its template and variable prefix: one call declares it, changes or
+     * renames it, or removes it, through the Contents tab's own form.
+     */
+    public static final PanelRecordWrites DATABASE_WRITES = PanelRecordWrites.of("template_database",
+            InstanceTemplateDatabaseModel.MODEL_ID, SubjectType.record(InstanceTemplateDatabaseModel.REF),
+            InstanceTemplateDatabaseModel.ID, HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES)
+        .keyedUnder(InstanceTemplateOperations.TEMPLATE, InstanceTemplateDatabaseModel.TEMPLATE_ID,
+            List.of(InstanceTemplateDatabaseModel.ENV_PREFIX))
+        .renamedBy("new_env_prefix", InstanceTemplateDatabaseModel.ENV_PREFIX,
+            HohenheimMicrocopy.HELP.of("template_database_new_prefix"))
+        .byWord(InstanceTemplateDatabaseModel.ENGINE)
+        .settings(List.of(InstanceTemplateDatabaseModel.IMAGE))
+        .removable(HohenheimMicrocopy.HELP.of("template_database_remove"))
+        .build();
+
     private TemplateChildParts() {}
 
     /**

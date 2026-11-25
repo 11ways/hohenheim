@@ -56,6 +56,12 @@ import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.common.edit.FormEntry;
+import be.elevenways.zenit.common.operation.OperationForms;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.TextBlockWidget;
+import be.elevenways.zenit.server.operation.RecordCodes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -146,6 +152,42 @@ public final class BuildHookParts {
         .command(COMMAND)
         .register();
 
+    /** The argument naming the app a tool's hook deploys, by its code. */
+    public static final String APP = "app";
+
+    /** The app a tool's hook is made for, named by its code; written into the hook's own column. */
+    private static final FormEntry APP_ENTRY = OperationForms.recordId(APP,
+        HohenheimMicrocopy.HELP.of("build_hook_app"), InstanceModel.MODEL_ID, BuildHookModel.INSTANCE_ID);
+
+    /**
+     * A tool's hook: made on an app named by its code, its URL never answered but parked for the caller's account on
+     * the app's Build hooks tab ({@link TokenDisclosures}), where the panel's create shows it in its toast.
+     */
+    public static final Operation<Void, OperationInput.Values, UUID> MAKE =
+            Operation.declare(HohenheimIds.id("make_build_hook"))
+        .happened(OperationSentences.of("make_build_hook"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("make_build_hook"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("make_build_hook_description"))
+        .noSubject()
+        .gate(OperationGate.open().parentCapability(APP, InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE))
+        .input(OperationInput.derived(FormSpec.builder().add(APP_ENTRY).add(BuildHookModel.NAME).build()))
+        .result(UUID.class)
+        .createdRecord(BuildHookModel.MODEL_ID, hook -> hook)
+        .command(COMMAND.onDatasource("default"))
+        .register();
+
+    /** A tool's new URL of a live hook, the old one dead at once, parked as {@link #MAKE} parks it. */
+    public static final Operation<Row, Void, UUID> REPLACE_URL =
+            Operation.declare(HohenheimIds.id("replace_build_hook_url"))
+        .happened(OperationSentences.of("replace_build_hook_url"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("replace_build_hook_url"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("replace_build_hook_url_description"))
+        .one(SUBJECT)
+        .gate(OperationGate.open())
+        .result(UUID.class)
+        .command(COMMAND)
+        .register();
+
     static {
         OperationHandlers.attach(CREATE).handle(call -> {
             HookInput input = Objects.requireNonNull(call.input(), "the hook form is the input");
@@ -165,6 +207,32 @@ public final class BuildHookParts {
                 requireManage(call);
                 BuildHooks.revoke(call.subject());
                 return null;
+            });
+        OperationHandlers.attach(MAKE).handle(call -> {
+            OperationInput.Values input = Objects.requireNonNull(call.input(), "a hook's app and name are the input");
+            AccessContext caller = Objects.requireNonNull(call.access(), "a hook is made by its caller");
+            requireShownTo(caller);
+            Object app = input.get(APP);
+            Integer instanceId = app == null ? null : Integer.valueOf(String.valueOf(app));
+            SecretResult<UUID> made;
+            try {
+                made = BuildHooks.mint(instanceId, (String) input.get(BuildHookModel.NAME.getInputName()));
+            } catch (Violations refused) {
+                throw refused.renamed(Map.of(BuildHookModel.INSTANCE_ID.getName(), APP));
+            }
+            park(caller, Objects.requireNonNull(instanceId), made);
+            return made.key();
+        });
+        OperationHandlers.attach(REPLACE_URL)
+            .applies(hook -> hook.get(BuildHookModel.REVOKED_AT) == null)
+            .authorize((hook, input, access) -> manageRefusal(managedBy(hook, access)))
+            .handle(call -> {
+                requireManage(call);
+                AccessContext caller = Objects.requireNonNull(call.access());
+                requireShownTo(caller);
+                SecretResult<UUID> renewed = BuildHooks.regenerate(call.subject());
+                park(caller, call.subject().get(BuildHookModel.INSTANCE_ID), renewed);
+                return renewed.key();
             });
     }
 
@@ -198,7 +266,44 @@ public final class BuildHookParts {
             .secondary()
             .lead(HohenheimMicrocopy.BUILD_HOOK.of("build_hooks_lead"))
             .visibleWhen((instance, access) -> BuildHooks.takesHooks(instance))
+            // A URL a tool made for this viewer's account is shown here once, as the panel's toast shows its own.
+            .widgets((instance, access) -> waiting(instance.get(InstanceModel.ID), access))
             .hide(HohenheimSlugs.BUILD_HOOKS, BuildHookModel.INSTANCE_ID.getName());
+    }
+
+    /**
+     * Refuses a call whose made URL would be shown to no account.
+     *
+     * @throws Violations before anything is made
+     */
+    private static void requireShownTo(@NonNull AccessContext caller) {
+        if (!TokenDisclosures.accountOf(caller)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("build_hook_no_account"));
+        }
+    }
+
+    /** Parks a made URL, named by its hook, for the caller's account on the app's Build hooks tab. */
+    private static void park(@NonNull AccessContext caller, int instanceId, @NonNull SecretResult<UUID> made) {
+        Row hook = Objects.requireNonNull(Models.get(BuildHookModel.class).findById(made.key()), "the hook made");
+        String code = RecordCodes.codeUnjudged(BuildHookModel.MODEL_ID, String.valueOf(made.key()));
+        Objects.requireNonNull(TokenDisclosures.BUILD_HOOKS.park(caller, instanceId, code + " "
+            + hook.get(BuildHookModel.NAME) + ": " + made.secret().reveal()), "an account stands behind the caller");
+    }
+
+    /** @return the URLs a tool made for the viewer's account on the app, once, as the tab's band; null for none */
+    private static @Nullable WidgetTree waiting(@Nullable Integer instanceId, @NonNull AccessContext viewer) {
+        String urls = instanceId == null ? null : claimWaiting(instanceId, viewer);
+        return urls == null ? null : new WidgetTree(List.of(TextBlockWidget.of(
+            HohenheimMicrocopy.BUILD_HOOK.of("build_hook_urls_waiting").withArg("urls", urls))));
+    }
+
+    /**
+     * The URLs a tool made for the viewer's account on the app, claimed once, as its Build hooks tab shows them.
+     *
+     * @return one line per hook, its code, name and URL; null for none
+     */
+    public static @Nullable String claimWaiting(int instanceId, @NonNull AccessContext viewer) {
+        return TokenDisclosures.BUILD_HOOKS.claim(viewer, instanceId);
     }
 
     /** The parts both twins share: identity, the fixed parent, the form, the list, its reads, writes and actions. */

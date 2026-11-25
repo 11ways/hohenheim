@@ -34,6 +34,7 @@ import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.SchemaField;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -76,6 +77,10 @@ import java.util.function.Function;
  * create, so a twin's smaller form takes a create that names only what it offers. A parent the child's form names
  * (one not fixed) is posted as that entry, as the form opened under it posts it.
  *
+ * AIDEV-NOTE: a change that turns the field a map's shape is chosen by (a template variable's type) starts that map
+ * empty, as the panel's form draws the new kind's settings empty: the old kind's settings would be refused as unknown
+ * keys of the new one. A keyed record's new key ({@code renamedBy}) is a change's alone, refused by name on a create.
+ *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
@@ -114,39 +119,60 @@ public final class PanelRecordWrites {
                                          @NonNull AccessContext caller);
     }
 
+    /** When a call takes an entry: on every write, only when it creates the record, or only when it changes one. */
+    private enum Takes { ALWAYS, CREATE, CHANGE }
+
     /**
      * One entry of the record: a setting written as itself, or a linked record named by code into its column.
      *
-     * @param argument   the name a caller gives it by
-     * @param field      the setting, or the column the link writes
-     * @param linked     the model a link names a record of, null for a setting
-     * @param stored     what a link writes for the record's full id
-     * @param container  the map field it is written inside (a kind's settings), null for the record's own column
-     * @param createOnly whether only a create takes it
-     * @param byWord     whether a caller names the enum's member by its word, the path of its stored key
-     * @param parent     whether the link names the fixed parent the record is created under, never a posted value
+     * @param argument  the name a caller gives it by
+     * @param field     the setting, or the column the link writes
+     * @param linked    the model a link names a record of, null for a setting
+     * @param stored    what a link writes for the record's full id
+     * @param container the map field it is written inside (a kind's settings), null for the record's own column
+     * @param takes     which writes take it
+     * @param byWord    whether a caller names the enum's member by its word, the path of its stored key
+     * @param parent    whether the link names the fixed parent the record is created under, never a posted value
+     * @param given     the entry a caller gives it by where it is no entry of its field (a key's new value, which
+     *                  the record's own form judges), null to derive it
      */
     private record Part(@NonNull String argument, @NonNull Field<?, ?> field, @Nullable Identifier linked,
                         @Nullable Microcopy help, @NonNull Function<String, Object> stored,
-                        @Nullable Field<?, ?> container, boolean createOnly, boolean byWord, boolean parent) {
+                        @Nullable Field<?, ?> container, @NonNull Takes takes, boolean byWord, boolean parent,
+                        @Nullable FormEntry given) {
+
+        /** @return whether only a create takes it */
+        boolean createOnly() {
+            return this.takes == Takes.CREATE;
+        }
+
+        /** @return whether only a change of a record that exists takes it */
+        boolean changeOnly() {
+            return this.takes == Takes.CHANGE;
+        }
 
         @NonNull FormEntry entry() {
+            if (this.given != null) return this.given;
             if (this.linked != null) {
                 return OperationForms.recordId(this.argument, Objects.requireNonNull(this.help), this.linked, false);
             }
             if (this.byWord) return wordEntry(this.argument, (EnumField) this.field, this.help);
-            // A setting a caller gives under a name of its own (a redirect's target is its target_url), or in words of
-            // its own where the field has none, worded as the field is otherwise.
-            if ((this.help != null || !this.argument.equals(this.field.getInputName()))
-                    && this.field instanceof StringField text) {
+            // A text setting said in words of its own where the field has none, worded as the field is otherwise.
+            if (this.help != null && this.field instanceof StringField text) {
                 StringField.Builder said = StringField.builder(this.argument);
                 Microcopy label = text.getAttribute(FieldAttributes.LABEL_MICROCOPY);
-                Microcopy help = this.help != null ? this.help : text.getAttribute(FieldAttributes.HELP);
                 if (label != null) said.label(label);
-                if (help != null) said.help(help);
+                said.help(this.help);
                 return Plain.of(said.build());
             }
-            return KindSettingsWrites.entryOf(this.field);
+            FormEntry derived = KindSettingsWrites.entryOf(this.field);
+            if (derived.name().equals(this.argument)) return derived;
+            // A setting a caller gives under another name than its field's (generated for generate).
+            if (!(derived instanceof Plain)) {
+                throw new IllegalStateException(this.field.getName() + " is no plain field, so it cannot be"
+                    + " given as " + this.argument);
+            }
+            return Plain.of(this.field).named(this.argument);
         }
 
         /**
@@ -433,10 +459,20 @@ public final class PanelRecordWrites {
             return this.label(found.get(this.idField.getName())) + " removed";
         }
         if (found == null) {
+            // A new key of a record that does not exist yet has nothing to rename.
+            for (Part part : this.parts) {
+                Object given = input.get(part.argument());
+                if (part.changeOnly() && given != null && !String.valueOf(given).isBlank()) {
+                    throw Violations.ofField(part.argument(), given, HohenheimMicrocopy.VIOLATIONS.of(
+                        "keyed_change_only").withArg("name", part.argument()));
+                }
+            }
             return this.label(this.created(input, caller, parentKey)) + " created";
         }
         Set<String> sent = new LinkedHashSet<>(patched != null ? patched : input.coerced().keySet());
         if (this.remove != null) sent.remove(this.remove.getName());
+        // The keys named the record; only a part renaming one writes it.
+        for (Field<?, ?> key : this.keys) sent.remove(key.getInputName());
         return this.changed(found, input, sent, caller);
     }
 
@@ -463,7 +499,7 @@ public final class PanelRecordWrites {
     private @NonNull FormSpec form(boolean creating) {
         FormSpec.Builder form = FormSpec.builder();
         for (Part part : this.parts) {
-            if (creating || !part.createOnly()) form.add(part.entry());
+            if (creating ? !part.changeOnly() : !part.createOnly()) form.add(part.entry());
         }
         if (!creating || this.alsoCreated != null) {
             for (FormEntry entry : this.alsoEntries) form.add(entry);
@@ -482,22 +518,42 @@ public final class PanelRecordWrites {
         return settings;
     }
 
-    /** @return each entry's stored path to the argument naming it, those inside a map first */
-    private @NonNull Map<String, String> named() {
+    /**
+     * @param sent the arguments the call gave, whose part names a stored path that two parts write (a key and its
+     *     new value)
+     * @return each entry's stored path to the argument naming it, those inside a map first
+     */
+    private @NonNull Map<String, String> named(@NonNull Set<String> sent) {
         Map<String, String> named = new LinkedHashMap<>();
         for (Part part : this.parts) {
-            if (part.container() != null) named.put(part.path(), part.argument());
+            if (part.container() != null) name(named, part, sent);
         }
         for (Part part : this.parts) {
-            if (part.container() == null) named.put(part.path(), part.argument());
+            if (part.container() == null) name(named, part, sent);
         }
         return named;
+    }
+
+    /** Names the part's path by its argument, unless an earlier part names it and the call did not give this one. */
+    private static void name(@NonNull Map<String, String> named, @NonNull Part part, @NonNull Set<String> sent) {
+        if (!named.containsKey(part.path()) || sent.contains(part.argument())) named.put(part.path(), part.argument());
+    }
+
+    /** @return the arguments a call gave a value for */
+    private static @NonNull Set<String> given(OperationInput.@NonNull Values input) {
+        Set<String> given = new LinkedHashSet<>();
+        input.coerced().forEach((argument, value) -> {
+            if (value != null) given.add(argument);
+        });
+        return given;
     }
 
     /**
      * Lays the value into the write: the record's own column, or the map it sits inside, as that map stands. A change
      * inside a map whose shape its record's kind decides posts that stored kind with it, as the panel's form does, so
      * the map is judged by the kind it belongs to.
+     *
+     * @param record the record a change writes over, null for a create or a map a change of its kind empties
      */
     private static void put(@NonNull Map<String, Object> raw, @NonNull Part part, @Nullable Object value,
                             @Nullable Row record) {
@@ -513,6 +569,30 @@ public final class PanelRecordWrites {
             String selector = Objects.requireNonNull(schema.getSchemaFromField());
             raw.putIfAbsent(selector, record.get(selector));
         }
+    }
+
+    /**
+     * @return the names of the maps whose shape a selector decides that the call turns to another value (a variable's
+     *     type): the panel's form draws the new kind's settings empty, so the old kind's settings go for good
+     */
+    private @NonNull Set<String> turned(@NonNull Row record, OperationInput.@NonNull Values input,
+                                        @NonNull Set<String> sent) {
+        Set<String> turned = new LinkedHashSet<>();
+        for (Part part : this.parts) {
+            if (!(part.container() instanceof SchemaField schema) || !schema.isDynamic()) continue;
+            String selector = Objects.requireNonNull(schema.getSchemaFromField());
+            for (Part chooser : this.parts) {
+                if (chooser.container() != null || !chooser.field().getName().equals(selector)
+                        || !sent.contains(chooser.argument())) {
+                    continue;
+                }
+                Object chosen = chooser.written(input.get(chooser.argument()));
+                if (!String.valueOf(chosen).equals(String.valueOf((Object) record.get(selector)))) {
+                    turned.add(schema.getName());
+                }
+            }
+        }
+        return turned;
     }
 
     /** @return the part a caller gives by this name, null for an entry a writer of its own handles */
@@ -535,7 +615,7 @@ public final class PanelRecordWrites {
         Field<?, ?> parentColumn = this.keyedColumn;
         for (Part part : this.parts) {
             Object value = input.get(part.argument());
-            if (value == null || String.valueOf(value).isBlank()) continue;
+            if (value == null || String.valueOf(value).isBlank() || part.changeOnly()) continue;
             if (part.linked() == null && value.equals(part.field().getDefaultValue())) continue;
             if (part.parent()) {
                 parentKey = part.written(value);
@@ -567,7 +647,8 @@ public final class PanelRecordWrites {
         Map<String, Object> posted = this.posted(resource, raw);
         Object key = KindSettingsWrites.speaking(() -> parent == null
             ? ResourceWrites.create(panel, resource, posted, caller)
-            : ResourceWrites.createUnder(panel, resource, parent, posted, caller), this.named());
+            : ResourceWrites.createUnder(panel, resource, parent, posted, caller),
+            this.named(given(input)));
         Integer created = Integer.valueOf(String.valueOf(key));
         if (after != null) after.accept(created);
         return created;
@@ -603,6 +684,8 @@ public final class PanelRecordWrites {
         Set<String> sent = patched != null ? patched : input.coerced().keySet();
         Map<String, Object> raw = new LinkedHashMap<>();
         Set<String> handled = new LinkedHashSet<>();
+        Set<String> turned = this.turned(record, input, sent);
+        for (String map : turned) raw.put(map, new LinkedHashMap<>());
         for (String name : sent) {
             Part part = this.part(name);
             Object value = input.get(name);
@@ -610,7 +693,8 @@ public final class PanelRecordWrites {
             if (part == null || part.createOnly()) {
                 handled.add(name);
             } else {
-                put(raw, part, part.written(value), record);
+                put(raw, part, part.written(value), part.container() != null
+                    && turned.contains(part.container().getName()) ? null : record);
             }
         }
         String code = this.label(record.get(this.idField.getName()));
@@ -626,7 +710,7 @@ public final class PanelRecordWrites {
                 ResourceWrites.update(panel, resource, Objects.requireNonNull(record.get(this.idField.getName())),
                     record, posted, caller);
                 return null;
-            }, this.named());
+            }, this.named(sent));
         }
         if (after != null) after.run();
         return KindSettingsWrites.changedLine(code, String.join(", ", sent));
@@ -801,7 +885,23 @@ public final class PanelRecordWrites {
 
         /** Declares settings a create and a change both take, each by its input name. */
         public @NonNull Builder settings(@NonNull List<? extends Field<?, ?>> fields) {
-            for (Field<?, ?> field : fields) this.add(field.getInputName(), field, false, false);
+            for (Field<?, ?> field : fields) this.add(field.getInputName(), field, Takes.ALWAYS, false);
+            return this;
+        }
+
+        /** Declares settings only a change of a record that exists takes: a create naming one is refused by name. */
+        public @NonNull Builder changeOnly(@NonNull List<? extends Field<?, ?>> fields) {
+            for (Field<?, ?> field : fields) this.add(field.getInputName(), field, Takes.CHANGE, false);
+            return this;
+        }
+
+        /**
+         * Declares the argument giving a keyed record a new value of one of its keys ({@code new_key}), judged by the
+         * record's own form as the key is; a call naming no record that exists is refused it by name.
+         */
+        public @NonNull Builder renamedBy(@NonNull String argument, @NonNull Field<?, ?> key, @NonNull Microcopy help) {
+            this.parts.add(new Part(argument, key, null, null, id -> id, this.container, Takes.CHANGE, false, false,
+                Plain.of(StringField.builder(argument).help(help).build())));
             return this;
         }
 
@@ -811,14 +911,21 @@ public final class PanelRecordWrites {
          * refused as none of the options.
          */
         public @NonNull Builder byWord(@NonNull EnumField field) {
-            this.add(field.getInputName(), field, false, true);
+            return this.byWord(field.getInputName(), field);
+        }
+
+        /** {@link #byWord(EnumField)} given by {@code argument}, where the field's input name says less (a kind). */
+        public @NonNull Builder byWord(@NonNull String argument, @NonNull EnumField field) {
+            this.add(argument, field, Takes.ALWAYS, true);
             return this;
         }
 
         /**
          * Declares a setting a create and a change both take under {@code argument} where the field's own input name
-         * says less than the spec's word (a redirect's {@code target} is its {@code target_url}); an enum's member is
-         * given by its word, as {@link #byWord(EnumField)} takes one.
+         * says less than the spec's word (a redirect's {@code target} is its {@code target_url}, {@code generated} for
+         * a secret's {@code generate}); an enum's member is given by its word, as {@link #byWord(EnumField)} takes one.
+         *
+         * @throws IllegalStateException when its form is built, for a renamed field whose entry is no plain one
          */
         public @NonNull Builder setting(@NonNull String argument, @NonNull Field<?, ?> field) {
             return this.setting(argument, field, null);
@@ -836,7 +943,8 @@ public final class PanelRecordWrites {
                 throw new IllegalStateException(field.getName() + " takes no words of its own: it is no text or enum");
             }
             boolean byWord = field instanceof EnumField;
-            this.parts.add(new Part(argument, field, null, help, id -> id, this.container, false, byWord, false));
+            this.parts.add(new Part(argument, field, null, help, id -> id, this.container, Takes.ALWAYS, byWord, false,
+                null));
             return this;
         }
 
@@ -856,13 +964,13 @@ public final class PanelRecordWrites {
          * device's {@code type} is its {@code kind}).
          */
         public @NonNull Builder createOnlyByWord(@NonNull String argument, @NonNull EnumField field) {
-            this.add(argument, field, true, true);
+            this.add(argument, field, Takes.CREATE, true);
             return this;
         }
 
         /** Declares settings only a create takes: a change naming one is refused by name. */
         public @NonNull Builder createOnly(@NonNull List<? extends Field<?, ?>> fields) {
-            for (Field<?, ?> field : fields) this.add(field.getInputName(), field, true, false);
+            for (Field<?, ?> field : fields) this.add(field.getInputName(), field, Takes.CREATE, false);
             return this;
         }
 
@@ -884,7 +992,8 @@ public final class PanelRecordWrites {
         public @NonNull Builder link(@NonNull String argument, @NonNull Microcopy help, @NonNull Field<?, ?> column,
                                      @NonNull Identifier linked, boolean createOnly,
                                      @NonNull Function<String, Object> stored) {
-            this.parts.add(new Part(argument, column, linked, help, stored, this.container, createOnly, false, false));
+            this.parts.add(new Part(argument, column, linked, help, stored, this.container,
+                createOnly ? Takes.CREATE : Takes.ALWAYS, false, false, null));
             return this;
         }
 
@@ -896,12 +1005,14 @@ public final class PanelRecordWrites {
          */
         public @NonNull Builder parent(@NonNull String argument, @NonNull Microcopy help, @NonNull Field<?, ?> column,
                                        @NonNull Identifier linked) {
-            this.parts.add(new Part(argument, column, linked, help, id -> id, this.container, true, false, true));
+            this.parts.add(new Part(argument, column, linked, help, id -> id, this.container, Takes.CREATE, false,
+                true, null));
             return this;
         }
 
-        private void add(@NonNull String argument, @NonNull Field<?, ?> field, boolean createOnly, boolean byWord) {
-            this.parts.add(new Part(argument, field, null, null, id -> id, this.container, createOnly, byWord, false));
+        private void add(@NonNull String argument, @NonNull Field<?, ?> field, @NonNull Takes takes, boolean byWord) {
+            this.parts.add(new Part(argument, field, null, null, id -> id, this.container, takes, byWord, false,
+                null));
         }
 
         /** Declares entries a change takes that the writer handles, after the record's own settings were written. */

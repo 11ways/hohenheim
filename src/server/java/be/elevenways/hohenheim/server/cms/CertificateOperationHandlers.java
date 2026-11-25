@@ -20,6 +20,8 @@ import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.server.tls.SigningRequest;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.validation.validator.Email;
 import be.elevenways.zenit.common.validation.ValidationContext;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -83,9 +85,31 @@ public final class CertificateOperationHandlers {
             .applies(cert -> CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER)))
             .availability((cert, access) -> letsEncryptUnavailable())
             .handle(call -> renewNow(call.subject()));
+        OperationHandlers.attach(CertificateOperations.SIGN).handle(call -> {
+            OperationInput.Values input = Objects.requireNonNull(call.input(), "a signing request is the input");
+            return KindSettingsWrites.speaking(() -> orderFromSigningRequest(
+                (String) input.get(CertificateOperations.SIGNING_REQUEST),
+                PrimitiveCoercion.toTrimmedTextList(input.get(CertificateOperations.DOMAINS)),
+                (String) input.get(CertificateOperations.NICE_NAME),
+                Objects.requireNonNull(call.access(), "an order has its requester")).certificateId(), renamed());
+        });
+        OperationHandlers.attach(CertificateOperations.RESIGN).handle(call -> {
+            OperationInput.Values input = Objects.requireNonNull(call.input(), "a signing request is the input");
+            return KindSettingsWrites.speaking(() -> {
+                reorderFromSigningRequest(call.subject(), (String) input.get(CertificateOperations.SIGNING_REQUEST),
+                    PrimitiveCoercion.toTrimmedTextList(input.get(CertificateOperations.DOMAINS)),
+                    Objects.requireNonNull(call.access(), "an order has its requester"));
+                return call.subject().get(CertificateModel.ID);
+            }, renamed());
+        });
     }
 
     private CertificateOperationHandlers() {
+    }
+
+    /** @return a signing-request order's refusals named by the operation's input, never by the API's csr */
+    private static @NonNull Map<String, String> renamed() {
+        return Map.of(SIGNING_REQUEST_FIELD, CertificateOperations.SIGNING_REQUEST.getName());
     }
 
     static void init() {

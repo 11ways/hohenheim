@@ -16,6 +16,12 @@ import be.elevenways.hohenheim.server.tls.CertificatePem;
 import be.elevenways.hohenheim.server.tls.SigningRequest;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
+import be.elevenways.hohenheim.test.HohenheimMcpTest;
+import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
+import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -31,6 +37,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -40,6 +47,8 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -77,6 +86,7 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
     private static final String POP = "pop." + ZONE;
     private static final String SUBMISSION = "submission." + ZONE;
     private static final String WEB = "www." + ZONE;
+    private static final String TOOL = "tool." + ZONE;
     private static final Pattern SUBJECT_ID = Pattern.compile("\"subject\"\\s*:\\s*\\{[^}]*\"id\"\\s*:\\s*\"(\\d+)\"");
 
     private static FakeAcmeServer ca;
@@ -114,6 +124,7 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         domain(mailSite, IMAP);
         domain(mailSite, POP);
         domain(mailSite, SUBMISSION);
+        domain(mailSite, TOOL);
         domain(site("csrapi-foreign"), FOREIGN);
 
         UUID mailOwner = ApiSupport.user("csrapi-mail@hohenheim.local", "Mail Host Owner");
@@ -230,6 +241,58 @@ class CertificateSigningRequestApiTest extends HohenheimHttpTestBase {
         assertThat(leafPin(after)).as("step 6: the chain now certifies the new key")
             .isEqualTo(SigningRequest.publicKeyPin(rotated.getPublic()));
         assertThat((String) after.get(CertificateModel.PRIVATE_KEY_PEM)).as("step 6: and still no key").isNull();
+    }
+
+    /**
+     * An assistant's key orders by tool what the HTTP API orders: refused without its names and for a request naming
+     * other names, by the argument at fault; issued for its own key; re-keyed from a new request on the same code.
+     */
+    @Test
+    void anAssistantOrdersAndRekeysFromItsOwnSigningRequestByTool() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        UUID adminId = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+            .get(UserModel.ID);
+        McpHttpSession admin = HohenheimMcpTest.presetSession(server, endpoint, adminId, "Test Admin");
+        KeyPair first = TestSigningRequests.rsa(2048);
+
+        // 1. A create names its hostnames; a request naming other names is refused naming the request.
+        McpHttpSession.Answer lacking = admin.call("certificate_sign", Map.of("signing_request",
+            TestSigningRequests.pem(first, List.of(TOOL))));
+        assertThat(lacking.error()).as("step 1: " + lacking.text()).isTrue();
+        assertThat(lacking.text()).as("step 1: the refusal names it").contains("hostnames");
+        McpHttpSession.Answer other = admin.call("certificate_sign", Map.of("signing_request",
+            TestSigningRequests.pem(first, List.of(TOOL)), "hostnames", List.of(TOOL, SMTP)));
+        assertThat(other.error()).as("step 1: " + other.text()).isTrue();
+        assertThat(other.text()).as("step 1: the refusal names it").contains("signing_request");
+
+        // 2. Issued for the requester's own key, which Hohenheim never holds.
+        McpHttpSession.Answer ordered = admin.call("certificate_sign", Map.of("signing_request",
+            TestSigningRequests.pem(first, List.of(TOOL)), "hostnames", List.of(TOOL), "name", "tool order"));
+        assertThat(ordered.error()).as("step 2: " + ordered.text()).isFalse();
+        assertThat(ordered.text()).as("step 2: issued").contains("issued");
+        Matcher code = Pattern.compile("\\bC\\d+\\b").matcher(ordered.text());
+        assertThat(code.find()).as("step 2: its code in " + ordered.text()).isTrue();
+        int certId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(CertificateModel.MODEL_ID,
+            code.group())));
+        Row cert = Models.get(CertificateModel.class).findById(certId);
+        assertThat((String) cert.get(CertificateModel.KEY_HOLDER)).as("step 2: the requester holds the key")
+            .isEqualTo(CertificateModel.KEY_HOLDER_REQUESTER);
+        assertThat(leafPin(cert)).as("step 2: the chain certifies the request's key")
+            .isEqualTo(SigningRequest.publicKeyPin(first.getPublic()));
+
+        // 3. Re-keyed on the same code from a new request; a name is a create's alone.
+        McpHttpSession.Answer named = admin.call("certificate_sign", Map.of("code", code.group(),
+            "signing_request", TestSigningRequests.pem(first, List.of(TOOL)), "name", "renamed"));
+        assertThat(named.error()).as("step 3: " + named.text()).isTrue();
+        assertThat(named.text()).as("step 3: the refusal names it").contains("name");
+        KeyPair second = TestSigningRequests.ec("secp256r1");
+        McpHttpSession.Answer rekeyed = admin.call("certificate_sign", Map.of("code", code.group(),
+            "signing_request", TestSigningRequests.pem(second, List.of(TOOL))));
+        assertThat(rekeyed.error()).as("step 3: " + rekeyed.text()).isFalse();
+        assertThat(leafPin(Models.get(CertificateModel.class).findById(certId)))
+            .as("step 3: the chain now certifies the new key")
+            .isEqualTo(SigningRequest.publicKeyPin(second.getPublic()));
     }
 
     /** A key that is no admin learns nothing about names it does not answer for; an admin keeps the reasons. */

@@ -88,6 +88,17 @@ public final class CertificateParts {
     /** Every certificate but the internal ACME account row; the /manage scope narrows this same base. */
     public static final RowScope ROWS = RowScope.within(HohenheimSources::notTheAcmeAccountRow);
 
+    /**
+     * An uploaded certificate's create and a stored one's change through the certificate page's own form: its listed
+     * name, its chain and key where Hohenheim holds the key, and its renewal switch, which only a change takes.
+     */
+    public static final PanelRecordWrites WRITES = PanelRecordWrites.of("certificate", CertificateModel.MODEL_ID,
+            CertificateOperations.CERTIFICATE, CertificateModel.ID, HohenheimSlugs.CERTIFICATES)
+        .setting("name", CertificateModel.NICE_NAME)
+        .settings(List.of(CertificateModel.CERTIFICATE_PEM, CertificateModel.PRIVATE_KEY_PEM))
+        .changeOnly(List.of(CertificateModel.AUTO_RENEW))
+        .build();
+
     /** Canonical O2 delete: the same model removal and hooks as the generated legacy verb. */
     public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.REF,
         SubjectArity.ONE, HohenheimSources.OPERATOR);

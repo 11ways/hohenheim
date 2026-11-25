@@ -21,6 +21,9 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.TextField;
+import be.elevenways.zenit.common.validation.validator.MaxLength;
 import be.elevenways.zenit.common.validation.Violations;
 
 import java.util.LinkedHashMap;
@@ -84,6 +87,38 @@ public final class DnsOperations {
         .description(HohenheimMicrocopy.DNS_PEER.of("negotiate_key_hint"))
         .icon(Icon.of("key")).one(PEER).verb(HohenheimVerbs.NEGOTIATE_KEY).gate(OperationGate.open())
         .result(CmsActionResult.class)
+        .command(CmsCommands.EXTERNAL).register();
+
+    /** The most zone-file text one import takes, in characters. */
+    public static final int ZONE_TEXT_MAX = 1_048_576;
+
+    /** The zone-file text an import replaces a primary zone's records with. */
+    public static final TextField ZONE_TEXT = TextField.builder("zone_text")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("zone_text"))
+        .help(HohenheimMicrocopy.HELP.of("dns_zone_text"))
+        .required()
+        .validator(MaxLength.of(ZONE_TEXT_MAX))
+        .build();
+
+    /** Whether an import keeps the file's apex NS records instead of writing the declared nameservers. */
+    public static final BooleanField KEEP_NS = BooleanField.builder("keep_ns").defaultValue(false)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("keep_ns"))
+        .help(HohenheimMicrocopy.HELP.of("dns_keep_ns"))
+        .build();
+
+    /**
+     * Replaces a primary zone's records with those of zone-file text, Hohenheim's own records kept: the zone-file
+     * tab's import form and an assistant's import alike, answered as the toast that form shows.
+     */
+    public static final Operation<Row, OperationInput.Values, CmsActionResult> IMPORT_ZONE =
+            Operation.declare(HohenheimIds.id("import_dns_zone"))
+        .happened(OperationSentences.of("import_dns_zone"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("import_dns_zone"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("import_dns_zone_description"))
+        .icon(Icon.of("file-import")).one(ZONE).gate(OperationGate.open())
+        .input(OperationInput.derived(FormSpec.builder().add(ZONE_TEXT).add(KEEP_NS).build()))
+        .result(CmsActionResult.class)
+        // The import writes its own all-or-nothing transaction and reloads what the zone serves after it.
         .command(CmsCommands.EXTERNAL).register();
 
     public record RemoteInput(String action, String record_id, String name, String type, String ttl, String value,

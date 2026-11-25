@@ -1,18 +1,16 @@
 package be.elevenways.hohenheim.server;
 
-import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.api.ApiConduits;
-import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.orm.history.Change;
-import be.elevenways.zenit.common.orm.history.History;
+import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -20,8 +18,12 @@ import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -42,50 +44,33 @@ final class DnsZoneHandlers {
             if (zone == null) {
                 return HandlerSupport.redirect(zoneList());
             }
+            BoundEndpoint<Map<String, Object>> back = zoneSubpage(zoneId, "zonefile");
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            // The tab's form posts keep_ns as any non-blank value; the operation takes it as a switch.
+            Map<String, Object> input = new LinkedHashMap<>();
+            input.put(DnsOperations.ZONE_TEXT.getName(), form.getOrDefault(DnsOperations.ZONE_TEXT.getName(), ""));
+            input.put(DnsOperations.KEEP_NS.getName(), DnsZoneFiles.ApexNsPolicy.forKeepFlag(
+                form.get(DnsOperations.KEEP_NS.getName())) == DnsZoneFiles.ApexNsPolicy.KEEP_FILE);
+            CmsActionResult result;
             try {
-                DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, AccessContext.of(conduit));
+                result = OperationPipeline.invoke(OperationRequest.of(DnsOperations.IMPORT_ZONE,
+                        ZenitPlacementSurface.HTTP_API)
+                    .caller(AccessContext.of(conduit))
+                    .subjects(List.of(zone))
+                    .form(input)).value();
             } catch (DomainRefusal readOnly) {
                 ResourceWrites.answer(conduit, readOnly);
                 return null;
-            }
-
-            BoundEndpoint<Map<String, Object>> back = zoneSubpage(zoneId, "zonefile");
-            Map<String, String> form = HandlerSupport.formMap(conduit);
-            String text = form.getOrDefault("zone_text", "");
-            if (text.isBlank()) {
-                HohenheimFlash.error(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_empty"));
-                return HandlerSupport.redirect(back);
-            }
-
-            try {
-                DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
-                    DnsZoneFiles.ApexNsPolicy.forKeepFlag(form.get("keep_ns")));
-                History.event(Models.get(DnsZoneModel.class), zoneId, Change.fact(HohenheimActivityAction.IMPORTED));
-                String notes = String.join("; ", result.notes());
-                if (!result.skipped().isEmpty()) {
-                    HohenheimFlash.warning(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_partial")
-                        .withArg("count", result.imported())
-                        .withArg("skipped", String.join("; ", result.skipped()))
-                        .withArg("notes", notes));
-                } else if (!notes.isEmpty()) {
-                    HohenheimFlash.success(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_done_notes")
-                        .withArg("count", result.imported())
-                        .withArg("notes", notes));
-                } else {
-                    HohenheimFlash.success(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_done")
-                        .withArg("count", result.imported()));
-                }
-                return HandlerSupport.redirect(back);
-            }
-            catch (Violations refused) {
+            } catch (Violations refused) {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
                 return HandlerSupport.redirect(back);
             }
-            catch (Exception e) {
-                HohenheimFlash.error(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_failed")
-                    .withArg("reason", String.valueOf(e.getMessage())));
-                return HandlerSupport.redirect(back);
+            if (result instanceof CmsActionResult.Toast toast && toast.level() == FlashLevel.WARNING) {
+                HohenheimFlash.warning(conduit, toast.message());
+            } else if (result instanceof CmsActionResult.Toast toast) {
+                HohenheimFlash.success(conduit, toast.message());
             }
+            return HandlerSupport.redirect(back);
         });
     }
 

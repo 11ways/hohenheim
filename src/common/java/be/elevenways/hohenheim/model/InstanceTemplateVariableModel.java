@@ -77,6 +77,7 @@ public class InstanceTemplateVariableModel extends Model {
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
+        .help(HohenheimMicrocopy.HELP.of("template_variable_description"))
         .build());
 
     public static final EnumField TYPE = SCHEMA.addField(
@@ -96,6 +97,7 @@ public class InstanceTemplateVariableModel extends Model {
     public static final BooleanField REQUIRED = SCHEMA.addField(BooleanField.builder("required")
         .defaultValue(false)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_required"))
+        .help(HohenheimMicrocopy.HELP.of("template_variable_required"))
         .build());
 
     /** Default value (string form; coerced through the type's field like any submission). */

@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.ListField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -198,6 +199,64 @@ public final class CertificateOperations {
         .one(CERTIFICATE)
         .verb(HohenheimVerbs.RENEW)
         .gate(OperationGate.open())
+        .result(Integer.class)
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
+        .command(CmsCommands.EXTERNAL)
+        .register();
+
+    /** The requester's own signing request, its PEM text; refusals of it name it, never the API's {@code csr}. */
+    public static final TextField SIGNING_REQUEST = TextField.builder("signing_request")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("signing_request"))
+        .help(HohenheimMicrocopy.HELP.of("certificate_signing_request"))
+        .required()
+        .build();
+
+    /**
+     * The names a signing-request order certifies, one shape for the order and its re-issue, as a tool routes both: an
+     * order without names is refused by its own lane (domain_required), a re-issue without them keeps its own.
+     */
+    private static final Array<String> SIGNED_NAMES = Array.of(DOMAINS, DOMAIN_NAME).build();
+
+    /**
+     * A certificate for the caller's own signing request, its key never here, the challenge chosen for the caller: the
+     * order the HTTP API's create places, as an operation an assistant reaches.
+     */
+    public static final Operation<Void, OperationInput.Values, Integer> SIGN =
+            Operation.declare(HohenheimIds.id("sign_certificate"))
+        .happened(OperationSentences.of("sign_certificate"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("sign_certificate"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("sign_certificate_description"))
+        .noSubject()
+        // The names' authority is the requester's, judged before anything else is told (CertificateAuthority).
+        .gate(OperationGate.open())
+        .input(OperationInput.derived(FormSpec.builder()
+            .add(SIGNING_REQUEST)
+            .add(SIGNED_NAMES)
+            .add(NICE_NAME)
+            .build()))
+        .result(Integer.class)
+        .createdRecord(CertificateModel.MODEL_ID, id -> id)
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
+        .command(CmsCommands.EXTERNAL)
+        .register();
+
+    /**
+     * A requester-held certificate issued again from a NEW signing request, the one way its key changes: the order the
+     * HTTP API's signing-request route places. Left without names, it covers what it covers now.
+     */
+    public static final Operation<Row, OperationInput.Values, Integer> RESIGN =
+            Operation.declare(HohenheimIds.id("resign_certificate"))
+        .happened(OperationSentences.of("resign_certificate"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("resign_certificate"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("resign_certificate_description"))
+        .one(CERTIFICATE)
+        .gate(OperationGate.open())
+        .input(OperationInput.derived(FormSpec.builder()
+            .add(SIGNING_REQUEST)
+            .add(SIGNED_NAMES)
+            .build()))
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE)
         .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)

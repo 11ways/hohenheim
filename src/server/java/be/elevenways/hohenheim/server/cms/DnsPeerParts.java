@@ -55,6 +55,19 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  */
 public final class DnsPeerParts {
 
+    /**
+     * A peer's create and change through the peer page's own form; its software is its {@code kind}, the field's
+     * {@code peer_type}.
+     */
+    public static final PanelRecordWrites WRITES = PanelRecordWrites.of("dns_peer", DnsPeerModel.MODEL_ID,
+            DnsOperations.PEER, DnsPeerModel.ID, HohenheimSlugs.DNS_PEERS)
+        .settings(List.of(DnsPeerModel.NAME))
+        .byWord("kind", DnsPeerModel.PEER_TYPE)
+        .settings(List.of(DnsPeerModel.TRANSFER_HOST, DnsPeerModel.TRANSFER_PORT, DnsPeerModel.TSIG_KEY_NAME,
+            DnsPeerModel.TSIG_ALGORITHM, DnsPeerModel.TSIG_SECRET, DnsPeerModel.BASE_URL, DnsPeerModel.API_KEY,
+            DnsPeerModel.MIRRORS_ALL_ZONES, DnsPeerModel.ENABLED))
+        .build();
+
     public static @NonNull PanelResource<Row> admin() {
         DnsOperations.init();
         DnsPeerParts parts = new DnsPeerParts();

@@ -35,6 +35,9 @@ final class TokenDisclosures {
     /** A dev namespace's registration token, on the site's Dev sessions tab; a new one replaces every unread one. */
     static final TokenDisclosures REGISTRATION = new TokenDisclosures("hohenheim.site_registration_token");
 
+    /** The URLs a tool made of an app's build hooks, on the app's Build hooks tab, beside unread ones. */
+    static final TokenDisclosures BUILD_HOOKS = new TokenDisclosures("hohenheim.build_hooks");
+
     private final @NonNull String place;
 
     private TokenDisclosures(@NonNull String place) {

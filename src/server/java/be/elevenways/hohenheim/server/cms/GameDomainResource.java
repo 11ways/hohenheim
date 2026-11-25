@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -38,6 +39,21 @@ import java.util.Objects;
  * @since  0.9.0
  */
 public final class GameDomainResource {
+
+    /**
+     * A game address's create and change through its page's own form: the address and both apps named by their
+     * codes, the backend's port and the switch; the funnel the form's operations run decides as for the panel.
+     */
+    public static final PanelRecordWrites WRITES = PanelRecordWrites.of("game_address", GameDomainModel.MODEL_ID,
+            GameDomainOperations.MAPPING, GameDomainModel.ID, HohenheimSlugs.GAME_DOMAINS)
+        .link("address", HohenheimMicrocopy.HELP.of("game_domain"), GameDomainModel.SITE_DOMAIN_ID,
+            SiteDomainModel.MODEL_ID, false)
+        .link("backend_app", HohenheimMicrocopy.HELP.of("game_backend"), GameDomainModel.BACKEND_INSTANCE_ID,
+            InstanceModel.MODEL_ID, false)
+        .link("proxy_app", HohenheimMicrocopy.HELP.of("game_proxy"), GameDomainModel.PROXY_INSTANCE_ID,
+            InstanceModel.MODEL_ID, false)
+        .settings(List.of(GameDomainModel.BACKEND_PORT, GameDomainModel.ENABLED))
+        .build();
 
     private GameDomainResource() {
     }

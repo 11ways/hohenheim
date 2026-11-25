@@ -164,7 +164,6 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(SpamserviceOperations.TEST, HohenheimMcpAnswers::output)
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
-            .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
             .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys);
         tools = set.build();
         HohenheimTools hand = HohenheimTools.build();

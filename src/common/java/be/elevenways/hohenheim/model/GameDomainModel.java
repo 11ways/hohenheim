@@ -79,7 +79,8 @@ public class GameDomainModel extends Model {
 
     public static final BooleanField ENABLED = SCHEMA.addField(
         BooleanField.builder("enabled").defaultValue(true)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+            .help(HohenheimMicrocopy.HELP.of("game_address_enabled")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

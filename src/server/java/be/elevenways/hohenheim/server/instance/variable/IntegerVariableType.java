@@ -25,11 +25,13 @@ public final class IntegerVariableType implements VariableTypeHandler {
     public static final IntegerField MIN = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("min")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_min"))
+            .help(HohenheimMicrocopy.HELP.of("variable_min_value"))
             .build());
 
     public static final IntegerField MAX = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("max")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_max"))
+            .help(HohenheimMicrocopy.HELP.of("variable_max_value"))
             .build());
 
     @Override

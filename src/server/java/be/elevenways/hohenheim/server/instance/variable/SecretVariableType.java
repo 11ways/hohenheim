@@ -39,6 +39,7 @@ public final class SecretVariableType implements VariableTypeHandler {
             .defaultValue(32)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_generate_bytes"))
             .suffix("bytes")
+            .help(HohenheimMicrocopy.HELP.of("variable_secret_bytes"))
             .build());
 
     @Override

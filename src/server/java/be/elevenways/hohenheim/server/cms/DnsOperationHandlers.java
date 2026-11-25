@@ -1,26 +1,38 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** Operation handlers retain DNS model funnels and gate their side effects before execution. */
 final class DnsOperationHandlers {
@@ -50,10 +62,52 @@ final class DnsOperationHandlers {
                 .permission(HohenheimPanel.ACCESS).build())
             .applies(row -> DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row)))
             .handle(call -> DnsZoneRecordsPage.forward(call.subject(), call.input()));
+        OperationHandlers.attach(DnsOperations.IMPORT_ZONE).authorize(admin())
+            .handle(call -> importZone(call.subject(), Objects.requireNonNull(call.input()),
+                Objects.requireNonNull(call.access(), "an import has its caller")));
     }
 
     private DnsOperationHandlers() {}
     static void init() {}
+
+    /**
+     * Replaces the zone's records with the zone-file text's, as the zone-file tab's import does, and records it in
+     * the zone's history.
+     *
+     * @return the toast saying how many records came in, a warning naming the lines skipped when there are any
+     * @throws Violations for blank text, a secondary zone or text that does not import
+     */
+    private static @NonNull CmsActionResult importZone(@NonNull Row zone, OperationInput.@NonNull Values input,
+                                                       @NonNull AccessContext access) {
+        int zoneId = zone.get(DnsZoneModel.ID);
+        DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, access);
+        String text = (String) input.get(DnsOperations.ZONE_TEXT);
+        if (text == null || text.isBlank()) {
+            throw Violations.ofField(DnsOperations.ZONE_TEXT.getName(), text,
+                HohenheimMicrocopy.DNS_ZONE.of("import_empty"));
+        }
+        DnsZoneFiles.ImportResult result;
+        try {
+            result = DnsZoneFiles.importText(zone, text, Boolean.TRUE.equals(input.get(DnsOperations.KEEP_NS))
+                ? DnsZoneFiles.ApexNsPolicy.KEEP_FILE : DnsZoneFiles.ApexNsPolicy.REPLACE_WITH_DECLARED);
+        } catch (Violations refused) {
+            throw refused;
+        } catch (IOException | RuntimeException failed) {
+            throw Violations.ofField(DnsOperations.ZONE_TEXT.getName(), null, HohenheimMicrocopy.DNS_ZONE
+                .of("import_failed").withArg("reason", String.valueOf(failed.getMessage())));
+        }
+        History.event(Models.get(DnsZoneModel.class), zoneId, Change.fact(HohenheimActivityAction.IMPORTED));
+        String notes = String.join("; ", result.notes());
+        if (!result.skipped().isEmpty()) {
+            return new CmsActionResult.Toast(HohenheimMicrocopy.DNS_ZONE.of("import_partial")
+                .withArg("count", result.imported()).withArg("skipped", String.join("; ", result.skipped()))
+                .withArg("notes", notes), FlashLevel.WARNING);
+        }
+        return CmsActionResult.successToast(notes.isEmpty()
+            ? HohenheimMicrocopy.DNS_ZONE.of("import_done").withArg("count", result.imported())
+            : HohenheimMicrocopy.DNS_ZONE.of("import_done_notes").withArg("count", result.imported())
+                .withArg("notes", notes));
+    }
     private static boolean address(Row row) { return DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE)); }
 
     /** An address record holding a dyndns credential, the credentials of a page of records counted in one read. */

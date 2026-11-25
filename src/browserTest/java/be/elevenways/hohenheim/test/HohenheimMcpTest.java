@@ -109,7 +109,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class HohenheimMcpTest extends HohenheimHttpTestBase {
+public class HohenheimMcpTest extends HohenheimHttpTestBase {
 
     private static final String PREFIX = "mcp-journey-";
 
@@ -2117,8 +2117,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
      * A session of a key the account mints from the "Hohenheim assistant" preset, as its API keys page does, holding
      * the scopes named beside it too ("Choose access myself" beside the preset).
      */
-    static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name,
-                                        String... extraScopes) {
+    public static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name,
+                                               String... extraScopes) {
         AccessContext account = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(accountId, name)));
         CredentialPresets.Preset preset = server.credentialPreset(account);
         assertThat(preset).as(name + " is offered the preset").isNotNull();
