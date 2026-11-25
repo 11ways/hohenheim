@@ -8,6 +8,20 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.xbill.DNS.DClass;
+import org.xbill.DNS.Flags;
+import org.xbill.DNS.Message;
+import org.xbill.DNS.Name;
+import org.xbill.DNS.OPTRecord;
+import org.xbill.DNS.Record;
+import org.xbill.DNS.Section;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.Socket;
 
 /** The DNS row fixtures the browser tests share: zones, records, peers and their links. */
 public final class DnsFixtures {
@@ -161,5 +175,45 @@ public final class DnsFixtures {
         link.set(DnsZonePeerModel.PEER_ID, peerId);
         links.save(link);
         return link.get(DnsZonePeerModel.ID);
+    }
+
+    /** Asks the server on the port one question over UDP, unsigned and without recursion unless asked. */
+    static Message udpQuery(int port, String name, int type, boolean edns, boolean rd) throws Exception {
+        Message query = Message.newQuery(Record.newRecord(Name.fromString(name + "."), type, DClass.IN));
+        if (!rd) {
+            query.getHeader().unsetFlag(Flags.RD);
+        }
+        if (edns) {
+            query.addRecord(new OPTRecord(1232, 0, 0), Section.ADDITIONAL);
+        }
+        byte[] wire = query.toWire(4096);
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.setSoTimeout(5000);
+            socket.send(new DatagramPacket(wire, wire.length, InetAddress.getByName("127.0.0.1"), port));
+            byte[] buffer = new byte[4096];
+            DatagramPacket response = new DatagramPacket(buffer, buffer.length);
+            socket.receive(response);
+            byte[] data = new byte[response.getLength()];
+            System.arraycopy(response.getData(), 0, data, 0, response.getLength());
+            return new Message(data);
+        }
+    }
+
+    /** Asks the server on the port one question over TCP, as one length-prefixed message. */
+    static Message tcpQuery(int port, String name, int type) throws Exception {
+        Message query = Message.newQuery(Record.newRecord(Name.fromString(name + "."), type, DClass.IN));
+        byte[] wire = query.toWire(65535);
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(5000);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            out.writeShort(wire.length);
+            out.write(wire);
+            out.flush();
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            int length = in.readUnsignedShort();
+            byte[] data = new byte[length];
+            in.readFully(data);
+            return new Message(data);
+        }
     }
 }

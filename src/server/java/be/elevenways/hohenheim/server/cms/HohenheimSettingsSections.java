@@ -69,7 +69,7 @@ public enum HohenheimSettingsSections {
     // what it logs, how it confines host processes.
     INSTALLATION("installation", HohenheimMicrocopy.SETTINGS_SECTION.of("section_installation"),
         HohenheimSettings.Cluster.GROUP, HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP,
-        HohenheimSettings.Logging.GROUP, HohenheimSettings.Process.GROUP);
+        HohenheimSettings.Logging.GROUP, HohenheimSettings.Traffic.GROUP, HohenheimSettings.Process.GROUP);
 
     private final String key;
     private final Microcopy label;

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -234,10 +235,14 @@ public final class DnsServer {
             byte[] wire = new byte[packet.getLength()];
             System.arraycopy(packet.getData(), packet.getOffset(), wire, 0, packet.getLength());
             InetSocketAddress client = (InetSocketAddress) packet.getSocketAddress();
+            // Started as the question arrived, so the answer's time includes its wait for a thread.
+            Now.Stopwatch started = Now.stopwatch();
 
             Runnable respond = () -> {
                 Message parsed = tryParse(wire);
                 byte[] reply;
+                // The question an answer is counted for, after it is sent: counting never delays the answer.
+                Message counted = null;
                 if (parsed != null && parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
                     // A NOTIFY is a spoofable UDP packet that costs a zone lookup and a TSIG
                     // verify: over-limit ones from one prefix are dropped (the refresh timer
@@ -278,12 +283,14 @@ public final class DnsServer {
                         case ALLOW -> { }
                     }
                     reply = this.responder.wireFor(parsed, answer, false);
+                    counted = parsed;
                 }
                 if (reply == null) {
                     return;
                 }
                 try {
                     socket.send(new DatagramPacket(reply, reply.length, client));
+                    DnsTraffic.record(counted, reply, wire.length, client.getAddress(), started);
                 }
                 catch (IOException e) {
                     if (this.running) {
@@ -411,6 +418,7 @@ public final class DnsServer {
                 byte[] wire = new byte[length];
                 in.readFully(wire);
 
+                Now.Stopwatch started = Now.stopwatch();
                 Message parsed = tryParse(wire);
                 if (parsed != null) {
                     Record question = parsed.getQuestion();
@@ -435,6 +443,7 @@ public final class DnsServer {
                 out.writeShort(reply.length);
                 out.write(reply);
                 out.flush();
+                DnsTraffic.record(parsed, reply, wire.length, socket.getInetAddress(), started);
             }
         }
         catch (IOException e) {

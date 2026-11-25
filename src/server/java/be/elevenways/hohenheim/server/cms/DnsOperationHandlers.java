@@ -117,7 +117,9 @@ final class DnsOperationHandlers {
                 .map(row -> row.get(DnsRecordModel.ID)).filter(Objects::nonNull).toList()).keySet();
         return records.stream().map(row -> address(row) && dynamic.contains(row.get(DnsRecordModel.ID))).toList();
     }
-    private static <I> Authorizer<Row, I> admin() {
+
+    /** @return THE authorizer of a zone act only an administrator may do; anyone else is told nothing of the zone */
+    static <I> Authorizer<Row, I> admin() {
         return (row, input, access) -> HohenheimAccess.isAdmin(access) ? null : concealed();
     }
     private static <I> Authorizer<Row, I> dynamic() {

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
@@ -404,20 +405,28 @@ public class SiteDispatcher implements HttpHandler {
             }
         }
 
+        // --- Traffic: counted from here, under the site the name and path chose, so every answer after it (a
+        //     wrong-path 404, an HTTPS or a site's redirect, a sign-in or access-list refusal, the upstream's own) is
+        //     counted once; the answers before it belong to no site and are not (ProxyTraffic). ---
         // --- A hostname no site serves: the operator's unknown-host answer ---
         boolean unknownHost = false;
         if (entry == null) {
-            if (resolution.hostnameKnown()) {
-                // The hostname IS configured, no path matched: a real 404,
+            RouteEntry knownBy = resolution.knownBy();
+            if (knownBy != null) {
+                // The hostname IS configured, no path matched: a real 404 of the site serving the name,
                 // never the unknown-host answer.
+                ProxyTraffic.record(exchange, HohenheimTraffic.sourceOf(knownBy.siteId), hostname, clientIp);
                 ErrorPages.send404(exchange, hostname);
                 return;
             }
+            ProxyTraffic.record(exchange, HohenheimTraffic.UNSERVED, hostname, clientIp);
             entry = unknownHosts.answer(exchange, generation, hostname, path.canonical());
             if (entry == null) {
                 return;
             }
             unknownHost = true;
+        } else {
+            ProxyTraffic.record(exchange, HohenheimTraffic.sourceOf(entry.siteId), hostname, clientIp);
         }
 
         // --- Force SSL: redirect while HTTPS termination is up, REFUSE while it is not. ---

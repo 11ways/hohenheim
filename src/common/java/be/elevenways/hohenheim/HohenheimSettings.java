@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.zenit.common.net.IpRanges;
+import be.elevenways.zenit.traffic.common.TrafficSettings;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -573,6 +574,18 @@ public class HohenheimSettings {
             .description("Days of the access log and the hostname-miss log kept; a day older than this is deleted, "
                 + "0 or less keeps every day")
             .build();
+    }
+
+    // --- Traffic ---
+    // The totals the proxy and the DNS server count, kept in files under the data path; zenit-traffic names the
+    // settings and their defaults, this group places them beside the logging under the admin tier.
+    public abstract class Traffic {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("traffic")
+            .label(Microcopy.of("settings.hohenheim.traffic.label"))
+            .describe(Microcopy.of("settings.hohenheim.traffic.help"))
+            .icon("chart-line");
+
+        public static final TrafficSettings SETTINGS = TrafficSettings.declare(GROUP);
     }
 
     // --- Storage ---

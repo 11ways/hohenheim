@@ -64,6 +64,25 @@ public final class AccessLog {
         exchange.putAttachment(STARTED, Now.stopwatch());
     }
 
+    /** The time the exchange took, frozen at its first reading. */
+    private static final AttachmentKey<Long> TOOK = AttachmentKey.create(Long.class);
+
+    /**
+     * The time the exchange took, from {@link #start} to the first reading at its completion; the access log's
+     * {@code time_ms} and the traffic totals both read it here, so the two count the same span to the same nanosecond.
+     *
+     * @return the nanoseconds taken, frozen at the first call; 0 for an exchange the proxy never started
+     */
+    public static long tookNanos(@NonNull HttpServerExchange exchange) {
+        Long took = exchange.getAttachment(TOOK);
+        if (took == null) {
+            Now.Stopwatch started = exchange.getAttachment(STARTED);
+            took = started != null ? started.realNanos() : 0L;
+            exchange.putAttachment(TOOK, took);
+        }
+        return took;
+    }
+
     /** Register a completion listener that appends one access-log line once the response is sent. */
     public void logAccess(HttpServerExchange exchange, String hostname, String clientIp, int siteId) {
         if (!HohenheimSettings.isOn(HohenheimSettings.Logging.ACCESS_TO_FILE)) {
@@ -72,14 +91,11 @@ public final class AccessLog {
 
         // The path the CLIENT asked for, captured now: strip_path rewrites the exchange's path
         // before the completion listener runs.
-        RequestPath requestPath = RequestPath.of(exchange);
-        String path = requestPath != null ? requestPath.raw() : RequestPath.rawPathOf(exchange);
-        Now.Stopwatch started = exchange.getAttachment(STARTED);
-        Now.Stopwatch took = started != null ? started : Now.stopwatch();
+        String path = RequestPath.askedOf(exchange);
 
         exchange.addExchangeCompleteListener((ex, next) -> {
             try {
-                long millis = TimeUnit.NANOSECONDS.toMillis(took.realNanos());
+                long millis = TimeUnit.NANOSECONDS.toMillis(tookNanos(ex));
                 FILE.appendTo(HohenheimSettings.Logging.ACCESS_PATH, line(ex, hostname, clientIp, path)
                     + fields(millis, siteId));
                 // One hub lookup when nobody follows the site's log; coalesced per window when someone does.

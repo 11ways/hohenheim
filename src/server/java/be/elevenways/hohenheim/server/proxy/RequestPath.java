@@ -96,6 +96,17 @@ public final class RequestPath {
     }
 
     /**
+     * The path the client asked for, captured before strip_path rewrites the exchange: what a log line and a traffic
+     * count both record.
+     *
+     * @return the attached reading's raw form, or the wire's for an exchange that never passed the dispatcher
+     */
+    static @NonNull String askedOf(@NonNull HttpServerExchange exchange) {
+        RequestPath path = of(exchange);
+        return path != null ? path.raw() : rawPathOf(exchange);
+    }
+
+    /**
      * The raw request path of this exchange as it will be forwarded (after any strip_path),
      * for a handler that echoes the path into a Location header: the encoded form keeps a
      * %3F a literal character instead of a query boundary.

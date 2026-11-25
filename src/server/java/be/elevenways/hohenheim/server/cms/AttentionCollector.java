@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
+import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -127,6 +128,7 @@ public final class AttentionCollector {
         ClusterAttention.linkedServers(items);
         controlPlaneBackupDestination(items);
         sftpServer(items);
+        traffic(items);
         proteusSignIn(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
             DnsAttention.dnsIssues(items);
@@ -170,6 +172,25 @@ public final class AttentionCollector {
         }
         items.add(item(AttentionSeverity.WARNING, "folder-tree", HohenheimMicrocopy.ATTENTION_TITLE.of("sftp_server"),
             literal(failure), sftpSettingsTarget(), HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
+    }
+
+    /**
+     * Hits the traffic counters had no room for since this process started (the totals of that time are short by that
+     * many, and a busier server needs a look), and totals that cannot be written (kept in memory until a write
+     * succeeds, lost by a restart meanwhile).
+     */
+    public static void traffic(@NonNull List<AttentionItem> items) {
+        long dropped = HohenheimTraffic.droppedHits();
+        if (dropped > 0) {
+            items.add(item(AttentionSeverity.WARNING, "chart-line",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("traffic_dropped").withArg("count", dropped),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("traffic_dropped")));
+        }
+        String unwritten = HohenheimTraffic.writeProblem();
+        if (unwritten != null) {
+            items.add(item(AttentionSeverity.WARNING, "chart-line",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("traffic_unwritten"), literal(unwritten)));
+        }
     }
 
     /** @return the settings page opened on the SFTP group, where the operator turns it on or fixes it */

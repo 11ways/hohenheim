@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.protoblast.common.thread.JobRunnerGroup;
 import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -143,6 +144,8 @@ public class ServerMain {
                     dnsServer.stop();
                 }
             }),
+            // What the stopped listeners counted is written before the files' process ends.
+            HostStep.always("traffic totals", HohenheimTraffic::stop),
             // No viewer subscribes once the ingress stopped; the daemon stats streams and their pumps end here.
             HostStep.always("instance stats streams", InstanceStats::shutdown),
             HostStep.always("secondary zone replication", () -> {

@@ -41,7 +41,7 @@ final class RouteResolver {
      */
     static RouteResolution resolve(HttpServerExchange exchange, String hostname, String requestPath,
                                    RouteTable rt) {
-        if (hostname.isEmpty()) return new RouteResolution(null, false);
+        if (hostname.isEmpty()) return new RouteResolution(null, null);
 
         String listenerIp = extractListenerAddress(exchange);
         String cacheKey = hostname + "|" + (listenerIp != null ? listenerIp : "");
@@ -50,21 +50,21 @@ final class RouteResolver {
         Long cachedAt = rt.negativeCache.get(cacheKey);
         if (cachedAt != null) {
             if (Now.millis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
-                return new RouteResolution(null, false);
+                return new RouteResolution(null, null);
             }
             rt.negativeCache.remove(cacheKey);
         }
 
-        boolean hostnameKnown = false;
+        RouteEntry knownBy = null;
 
         // 1. Exact match: bucket is pre-sorted longest path first
         List<RouteEntry> bucket = rt.exactRoutes.get(hostname);
         if (bucket != null) {
             for (RouteEntry entry : bucket) {
                 if (!entry.acceptsListener(listenerIp)) continue;
-                hostnameKnown = true;
+                if (knownBy == null) knownBy = entry;
                 if (entry.matchesPath(requestPath)) {
-                    return new RouteResolution(new RouteMatch(entry, null), true);
+                    return new RouteResolution(new RouteMatch(entry, null), null);
                 }
             }
         }
@@ -75,14 +75,14 @@ final class RouteResolver {
             RouteEntry entry = wildcardRoute.entry();
             if (!entry.acceptsListener(listenerIp)) continue;
             if (!wildcardRoute.pattern().matches(hostname)) continue;
-            hostnameKnown = true;
+            if (knownBy == null) knownBy = entry;
             if (!entry.matchesPath(requestPath)) continue;
             if (bestWildcard == null || entry.pathLength() > bestWildcard.pathLength()) {
                 bestWildcard = entry;
             }
         }
         if (bestWildcard != null) {
-            return new RouteResolution(new RouteMatch(bestWildcard, null), true);
+            return new RouteResolution(new RouteMatch(bestWildcard, null), null);
         }
 
         // 3. Regex match: hostname-level positive cache holds ALL matching routes,
@@ -104,7 +104,7 @@ final class RouteResolver {
             }
         }
         if (!regexMatches.isEmpty()) {
-            hostnameKnown = true;
+            if (knownBy == null) knownBy = regexMatches.getFirst().entry();
             RouteMatch bestRegex = null;
             for (RouteMatch candidate : regexMatches) {
                 if (!candidate.entry().matchesPath(requestPath)) continue;
@@ -114,16 +114,16 @@ final class RouteResolver {
                 }
             }
             if (bestRegex != null) {
-                return new RouteResolution(bestRegex, true);
+                return new RouteResolution(bestRegex, null);
             }
         }
 
         // 4. No match. Only a fully unknown hostname is negative-cached: a known
         //    hostname with a non-matching path must keep re-checking other paths.
-        if (!hostnameKnown && rt.negativeCache.size() < NEGATIVE_CACHE_MAX) {
+        if (knownBy == null && rt.negativeCache.size() < NEGATIVE_CACHE_MAX) {
             rt.negativeCache.put(cacheKey, Now.millis());
         }
-        return new RouteResolution(null, hostnameKnown);
+        return new RouteResolution(null, knownBy);
     }
 
     /** Every regex route matching this hostname + listener, with capture groups extracted. */
