@@ -158,12 +158,13 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(page.locator("[data-path='" + path + "'] pl-number-input [slot='suffix']").innerText().trim())
                 .isEqualTo("B");
         }
+        // A restart-required setting says so only once a saved value waits for the restart (board FO122 frame 4).
         assertThat(page.locator(
             ".cms-setting:has([data-path='signin.auth_proteus.enabled']) .cms-setting-note-restart").count())
-            .isEqualTo(1);
+            .isZero();
         assertThat(page.locator(
             ".cms-setting:has([data-path='signin.auth_proteus.authenticator']) .cms-setting-note-restart").count())
-            .isEqualTo(1);
+            .isZero();
 
         // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
         // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is
