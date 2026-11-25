@@ -1404,6 +1404,21 @@ public class HohenheimEndpoints {
         .build();
 
     /**
+     * A whole record set for a zone this instance owns, applied together or not at all: the path a peer forwards an
+     * assistant's record set on its copy of the zone by. Admin keys only (a peer's), since the forwarding server and
+     * person it names land in the zone's history; csrfExempt for the same reason as the record routes.
+     */
+    public static final Endpoint<Object> API_DNS_RECORDS_SET = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_dns_records_set"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("set-records").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .csrfExempt()
+        .build();
+
+    /**
      * Transfer-key negotiation: the caller minted a TSIG key for the two of us and
      * installs its half here. SYMMETRIC -- every instance both calls and exposes it.
      *

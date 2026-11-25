@@ -254,7 +254,8 @@ class DnsRecordApiTenantKeyTest extends HohenheimTestBase {
 
     // --- plumbing ---------------------------------------------------------------------
 
-    private static int site(String name, String slug, String hostname) {
+    /** A static site answering one exact hostname; the DNS tests that judge hostname authority share it. */
+    static int site(String name, String slug, String hostname) {
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, name);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
@@ -59,6 +60,31 @@ public final class SecondaryZoneService {
 
     public SecondaryZoneService(@NonNull DnsZoneStore store) {
         this.store = store;
+    }
+
+    /** @return the replication this server runs, null before its DNS listener started (a test, an early boot) */
+    public static @Nullable SecondaryZoneService running() {
+        DnsServer server = ServerMain.getDnsServer();
+        return server != null ? server.getSecondaryService() : null;
+    }
+
+    /**
+     * Pulls a secondary zone from its primary now, whatever its serial says, on the running replication or, without
+     * one, on a replication made for this one pull.
+     *
+     * @return whether the copy now holds what the primary serves
+     */
+    public static boolean pullNow(int zoneId) {
+        SecondaryZoneService service = running();
+        if (service != null) {
+            return service.transfer(zoneId, true);
+        }
+        SecondaryZoneService once = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+        try {
+            return once.transfer(zoneId, true);
+        } finally {
+            once.stop();
+        }
     }
 
     /** Per-zone timing kept out of the DB (recomputed at boot from the SOA). */

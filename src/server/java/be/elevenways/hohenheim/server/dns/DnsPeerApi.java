@@ -3,11 +3,16 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordSetOutcome;
+import be.elevenways.hohenheim.dns.DnsRecordSetResponse;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.zenit.common.Zenit;
@@ -41,19 +46,39 @@ import java.util.Map;
  */
 public final class DnsPeerApi {
 
-    /** A peer refusal or transport failure; {@code violationKey} is set for 422 validation refusals. */
+    /**
+     * A peer refusal or transport failure; {@code violationKey} is set for 422 validation refusals.
+     *
+     * AIDEV-NOTE: {@link #status} 0 means no HTTP answer came; {@link #sent} then tells an address refused or not
+     * reached (nothing happened there) from a request sent and never answered (it may have been applied there).
+     */
     public static final class PeerApiException extends RuntimeException {
         private final @Nullable String violationKey;
         private final @Nullable String violationField;
+        private final int status;
+        private final boolean sent;
 
         PeerApiException(String message, @Nullable String violationKey, @Nullable String violationField) {
+            this(message, violationKey, violationField, 0, false);
+        }
+
+        PeerApiException(String message, @Nullable String violationKey, @Nullable String violationField, int status,
+                         boolean sent) {
             super(message);
             this.violationKey = violationKey;
             this.violationField = violationField;
+            this.status = status;
+            this.sent = sent;
         }
 
         public @Nullable String getViolationKey() { return violationKey; }
         public @Nullable String getViolationField() { return violationField; }
+
+        /** @return the peer's HTTP status, 0 when it gave no HTTP answer */
+        public int status() { return status; }
+
+        /** @return whether the request left this server: true for any HTTP answer and for one sent unanswered */
+        public boolean sent() { return sent; }
     }
 
     /**
@@ -84,6 +109,11 @@ public final class DnsPeerApi {
         fields.addAll(DnsRecordModel.DATA_FIELD_NAMES);
         return List.copyOf(fields);
     }
+
+    /** The record-set route's fields: the entries as JSON, the forwarding server's name, the person it acts for. */
+    public static final String SET_RECORDS = "records";
+    public static final String SET_SERVER = "server";
+    public static final String SET_PERSON = "person";
 
     /** The whole exchange, DNS, connect, request and answer together. */
     private static final Duration DEADLINE = Duration.ofSeconds(15);
@@ -131,6 +161,11 @@ public final class DnsPeerApi {
         return new DnsPeerApi(baseUrl.trim(), apiKey.trim());
     }
 
+    /** @return a client for the peer owning a secondary zone, or null when it has none or is no Hohenheim peer */
+    public static @Nullable DnsPeerApi forZone(@NonNull Row zone) {
+        return forPeer(Models.get(DnsPeerModel.class).findById(zone.get(DnsZoneModel.PRIMARY_PEER_ID)));
+    }
+
     // AIDEV-NOTE: the paths below address a REMOTE peer, but a peer runs THIS software,
     // so its record API is this app's own declared route. Rendering that declaration is
     // what keeps the two ends from drifting -- a hand-copied literal is exactly the
@@ -169,6 +204,30 @@ public final class DnsPeerApi {
         request(HttpMethod.POST, HohenheimEndpoints.API_DNS_RECORD_DELETE.toUrl(Map.of(
             HohenheimEndpoints.DNS_ORIGIN, origin,
             HohenheimEndpoints.DNS_RECORD_ID, recordId)), Map.of());
+    }
+
+    /**
+     * Applies a whole record set on the owner, all entries or none, in the shape the record-set tool takes them.
+     *
+     * @param records the entries as the tool validated them
+     * @param server  the name this server announces to peers, for the owner's history
+     * @param person  the person the set is done for, null when no person stands behind it
+     * @return one outcome per entry, in the order sent
+     * @throws PeerApiException with status 404 from a peer that does not know this route (an older Hohenheim)
+     */
+    public @NonNull List<DnsRecordSetOutcome> setRecords(@NonNull String origin, @NonNull List<?> records,
+                                                         @NonNull String server, @Nullable String person) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put(SET_RECORDS, Json.stringify(records));
+        fields.put(SET_SERVER, server);
+        fields.put(SET_PERSON, person);
+        DnsRecordSetResponse response = parseQuietly(request(HttpMethod.POST, HohenheimEndpoints.API_DNS_RECORDS_SET
+            .toUrl(Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), fields), DnsRecordSetResponse.class);
+        if (response == null || response.entries() == null || response.entries().size() != records.size()) {
+            // Sent and answered, yet unreadable: the owner may have applied it, so this reads as unanswered.
+            throw new PeerApiException("Unexpected response from peer", null, null, 0, true);
+        }
+        return response.entries();
     }
 
     /**
@@ -238,12 +297,13 @@ public final class DnsPeerApi {
         FetchOutcome outcome = this.fetcher.fetch(request.withHeader("Authorization", "Bearer " + this.apiKey));
         FetchOutcome.Fetched response = switch (outcome) {
             case FetchOutcome.Fetched fetched -> fetched;
-            case FetchOutcome.Refused refused -> throw new PeerApiException(refusalOf(refused), null, null);
+            case FetchOutcome.Refused refused -> throw new PeerApiException(refusalOf(refused), null, null, 0,
+                refused.requestSent());
             case FetchOutcome.Redirected redirected -> throw new PeerApiException("Peer answered with a redirect (HTTP "
-                + redirected.status() + "), which is never followed", null, null);
+                + redirected.status() + "), which is never followed", null, null, redirected.status(), true);
             case FetchOutcome.Failed failed -> throw new PeerApiException(failed.requestSent()
                 ? "Peer did not answer (the request was sent): " + failed.reason()
-                : "Peer unreachable: " + failed.reason(), null, null);
+                : "Peer unreachable: " + failed.reason(), null, null, 0, failed.requestSent());
         };
 
         String body = new String(response.body(), StandardCharsets.UTF_8);
@@ -258,9 +318,9 @@ public final class DnsPeerApi {
                 refusal.message() != null
                     ? refusal.message()
                     : "Peer refused the edit (" + response.status() + ")",
-                refusal.key(), refusal.field());
+                refusal.key(), refusal.field(), response.status(), true);
         }
-        throw new PeerApiException("Peer returned HTTP " + response.status(), null, null);
+        throw new PeerApiException("Peer returned HTTP " + response.status(), null, null, response.status(), true);
     }
 
     /**

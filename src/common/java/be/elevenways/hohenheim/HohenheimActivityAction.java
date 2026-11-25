@@ -117,6 +117,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     REPOSITORY_DEPLOYED("repository_deployed"),
     QUARANTINE_LIFTED("quarantine_lifted"),
     HTTPS_FORCED("https_forced"),
+    /** A zone's records set through the peer API by the server holding its copy, for the person named there. */
+    RECORDS_FORWARDED("records_forwarded"),
 
     // What stamped a workload ERROR, each recorded beside the status by InstanceOperationGuard.stampError; its
     // sentence is the dashboard's crash detail, so the item says what happened instead of guessing a crash.
@@ -217,6 +219,10 @@ public enum HohenheimActivityAction implements ActivityAction {
     public static final String POSTURE_KEY = "posture";
     /** The posture warning version an acceptance was given at. */
     public static final String WARNING_VERSION_KEY = "warning_version";
+    /** The server a peer act came from, as it names itself ({@code DnsFederationKeys.localName}). */
+    public static final String SERVER_KEY = "server";
+    /** The person a peer act was done for, by the name the forwarding server knows them by. */
+    public static final String PERSON_KEY = "person";
 
     /** Whether a verb is the cause of a workload's ERROR status, and what its row's detail then holds. */
     public enum ErrorCause {
@@ -445,6 +451,8 @@ public enum HohenheimActivityAction implements ActivityAction {
                 FactShape.optionalKey(NATIVE_SNAPSHOT_KEY, CoreTypes.TEXT));
             case DRAINED -> FactShape.of(FactShape.key(MOVED_KEY, CoreTypes.INTEGER),
                 FactShape.key(REFUSED_KEY, CoreTypes.INTEGER), FactShape.key(COMPLETE_KEY, CoreTypes.BOOLEAN));
+            case RECORDS_FORWARDED -> FactShape.of(FactShape.key(SERVER_KEY, CoreTypes.TEXT),
+                FactShape.optionalKey(PERSON_KEY, CoreTypes.TEXT));
             case MIGRATED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT),
                 FactShape.key(TO_KEY, CoreTypes.TEXT));
             case SETTLED_INTERRUPTED -> FactShape.of(statusKey(FROM_KEY), statusKey(TO_KEY));
@@ -501,6 +509,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     public @NonNull List<Identifier> subjects() {
         return switch (this) {
             case IMPORTED -> List.of(DnsZoneModel.MODEL_ID, InstanceTemplateModel.MODEL_ID);
+            case RECORDS_FORWARDED -> List.of(DnsZoneModel.MODEL_ID);
             case REQUESTED, REISSUED, RENEWAL_FAILED -> List.of(CertificateModel.MODEL_ID);
             case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED, REMOVED_ORPHAN, REAPED_CONTROLLER_OBJECTS, DRAINED,
                  QUARANTINED, HOST_KEY_PINNED, HOST_KEY_VERIFIED, HOST_KEY_REPINNED, HOST_IDENTITY_ROTATED,

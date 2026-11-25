@@ -521,8 +521,11 @@ public final class TenantScopes {
         for (Row domain : domains) {
             String pattern = SiteDomainModel.canonicalHostname(domain.get(SiteDomainModel.HOSTNAME),
                 domain.get(SiteDomainModel.MATCH_TYPE));
-            HostPattern wildcard = pattern != null ? HostPattern.tryParse(pattern) : null;
-            String host = wildcard != null ? wildcard.base() : pattern;
+            HostPattern parsed = pattern != null ? HostPattern.tryParse(pattern) : null;
+            // An exact host lies where it is named, a wildcard under the literal domain after its leading label (an
+            // exact host has no base); a regex or a glob inside the domain places no host, so it reaches no zone.
+            String host = parsed == null ? null
+                : parsed.kind() == HostPattern.Kind.EXACT ? parsed.domain() : parsed.base();
             if (host != null && DnsNames.zoneContains(origin, host)) {
                 return true;
             }

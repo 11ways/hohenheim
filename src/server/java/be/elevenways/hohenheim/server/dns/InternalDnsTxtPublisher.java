@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.protoblast.common.Blast;
@@ -267,8 +266,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
         if (this.replication != null) {
             return this.replication;
         }
-        DnsServer server = ServerMain.getDnsServer();
-        return server != null ? server.getSecondaryService() : null;
+        return SecondaryZoneService.running();
     }
 
     /** @return the peer row a replicated zone pulls from, or null (a primary has none) */

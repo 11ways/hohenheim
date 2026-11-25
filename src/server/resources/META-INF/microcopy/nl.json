@@ -14326,6 +14326,31 @@
       "target": "happened"
     }
   ],
+  "records_forwarded": [
+    {
+      "text": "Records ingesteld vanaf een andere server",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Records ingesteld vanaf {$server}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_server": "true"
+    },
+    {
+      "text": "Records ingesteld vanaf {$server} voor {$person}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_server": "true",
+      "has_person": "true"
+    },
+    {
+      "text": "{$actor} stelde DNS-records van {$subject} in vanaf een andere server",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "rolled_back": [
     {
       "text": "Teruggerold",
@@ -20515,9 +20540,9 @@
   "mcp_code_certificate_renew": {"text": "Het certificaat (C8) om te vernieuwen of af te ronden.", "scope": "hohenheim"},
   "mcp_tool_test": {"text": "Controleert iets nu. Een adres (D4): of de naam van buitenaf deze Hohenheim bereikt, met het vorige antwoord vergeten; lees het adres voor de uitkomst. Een DNS-zone (Z7): haar gezondheid, zoals de pagina van de zone die controleert; een secundaire zone heeft er geen. Een back-updoel (BT1): of het bereikbaar is, en waarom niet. Een meldingskanaal (NC2): stuurt het een testmelding en zegt of die afgeleverd, alleen doorgegeven of niet verstuurd werd. Het wijzigt verder niets.", "scope": "hohenheim"},
   "mcp_code_test": {"text": "Het adres, de DNS-zone, het back-updoel of het meldingskanaal om te controleren.", "scope": "hohenheim"},
-  "mcp_tool_dns_record_list": {"text": "Leest de records van een zone, alle of die van een naam of type: naam, type, TTL (of de standaard van de zone die het gebruikt), de waarde zoals een resolver ze toont, en of het uitgeschakeld is, door Hohenheim zelf gemaakt (een certificaatbewijs) of bijgewerkt via dynamische DNS. as_zone_text antwoordt in plaats daarvan met de hele zone als zonebestand, alleen voor beheerders. Wie geen beheerder is, ziet de records van namen die hij beheert en de records die met hem gedeeld zijn om te bekijken. De records van een secundaire zone worden gelezen bij de server die ze bewaart, of uit de kopie op deze server als die niet bereikbaar is, wat het antwoord eerst zegt.", "scope": "hohenheim"},
+  "mcp_tool_dns_record_list": {"text": "Leest de records van een zone, alle of die van een naam of type: naam, type, TTL (of de standaard van de zone die het gebruikt), de waarde zoals een resolver ze toont, en of het uitgeschakeld is, door Hohenheim zelf gemaakt (een certificaatbewijs) of bijgewerkt via dynamische DNS. as_zone_text antwoordt in plaats daarvan met de hele zone als zonebestand, alleen voor beheerders. Wie geen beheerder is, ziet de records van namen die hij beheert en de records die met hem gedeeld zijn om te bekijken. De records van een secundaire zone worden gelezen bij de server die ze bewaart, of uit de kopie op deze server als die niet bereikbaar is; de eerste regel zegt welke.", "scope": "hohenheim"},
   "mcp_code_dns_zone_read": {"text": "De zone (Z7, of haar origin zoals example.com) waarvan u de records leest.", "scope": "hohenheim"},
-  "mcp_tool_dns_record_set": {"text": "Stelt de records van een zone in: elk item van records laat een naam en type precies zijn waarden houden, de andere waarden van die naam en dat type worden verwijderd; remove: true verwijdert de naam en het type, alleen ongedaan te maken door ze opnieuw in te stellen. Alle items worden samen toegepast of geen enkel, met een verhoging van het serienummer. Records die Hohenheim zelf maakte, kunnen niet gewijzigd worden. Wie geen beheerder is, wijzigt alleen A-, AAAA-, CNAME-, TXT-, SRV- en TLSA-records onder namen die hij beheert. De dyndns van een waarde maakt, behoudt of verwijdert haar updatetoken voor dynamische DNS; een gemaakt token staat nooit in het antwoord: het wordt eenmaal aan uw account getoond op het tabblad Records van de zone in het paneel. Een secundaire zone wordt geweigerd, met de server die haar records bewaart: stel ze daar in. Antwoordt per naam en type wat er toegevoegd, gewijzigd, behouden en verwijderd werd.", "scope": "hohenheim"},
+  "mcp_tool_dns_record_set": {"text": "Stelt de records van een zone in: elk item laat een naam en type precies zijn waarden houden, de andere vervallen; remove: true verwijdert naam en type. Alle items gelden samen of geen. Door Hohenheim zelf gemaakte records kunnen niet gewijzigd worden. Wie geen beheerder is, stelt alleen A, AAAA, CNAME, TXT, SRV en TLSA in onder namen die hij beheert. dyndns maakt, behoudt of verwijdert het DNS-updatetoken van een waarde; een nieuw token staat nooit in het antwoord, maar wordt eenmaal aan uw account getoond op het tabblad Records. Een secundaire zone wordt ingesteld op de server die haar records bewaart, zonder dyndns. Antwoordt wat er per naam en type veranderde.", "scope": "hohenheim"},
   "mcp_code_dns_zone_set": {"text": "De zone (Z7, of haar origin zoals example.com) waarvan u de records instelt.", "scope": "hohenheim"},
   "mcp_tool_dns_zone_set": {"text": "Maakt of wijzigt een DNS-zone waarvoor deze Hohenheim antwoordt: primair (haar records hier bewaard en bewerkt) of secundair (een kopie opgehaald bij primary_peer). Een nieuwe primaire zone krijgt een NS-record aan de top per opgegeven naamserver. secondaries wordt precies de opgesomde peers (DP2), elke nieuw opgesomde krijgt meteen het signaal om op te halen; een lege lijst verwijdert elke kopie. dnssec aanzetten maakt een ondertekeningssleutel: geef het DS-record aan de registrar. Records: dns_record_set. Alleen beheerders. Antwoordt met de code van de zone.", "scope": "hohenheim"},
   "mcp_code_dns_zone": {"text": "De zone (Z7, of haar origin zoals example.com); laat weg om er een te maken.", "scope": "hohenheim"},
@@ -20537,6 +20562,15 @@
   "dyndns_disclosure_title": {"text": "Updatetokens voor dynamische DNS", "scope": "dns_record"},
   "dyndns_disclosure_warning": {"text": "Kopieer ze nu: ze worden alleen deze keer getoond. Een router stuurt zijn token als HTTP Basic-wachtwoord.", "scope": "dns_record"},
   "listed_from_copy": {"text": "Gelezen uit de kopie op deze server: {$reason}", "scope": "dns_record"},
+  "listed_from_owner": {"text": "Gelezen bij {$peer}, die de records van deze zone bewaart.", "scope": "dns_record"},
+  "owner_unnamed": {"text": "een andere server", "scope": "dns_record"},
+  "owner_unreached": {"text": "de server die de records van deze zone bewaart, kon niet gevraagd worden", "scope": "dns_record"},
+  "forward_copy_later": {"text": "De kopie op deze server volgt bij haar volgende overdracht.", "scope": "dns_record"},
+  "dns_forward_dyndns": {"text": "Tokens voor dynamische DNS van een secundaire zone worden gemaakt op de server die haar records bewaart: stelt u ze daar in", "scope": "violations"},
+  "dns_forward_unreachable": {"text": "De records van deze zone worden bewaard op {$peer}, die niet bereikbaar was, dus er is niets gewijzigd. {$reason}", "scope": "violations"},
+  "dns_forward_unanswered": {"text": "De records van deze zone worden bewaard op {$peer}, die niet antwoordde nadat de wijziging verstuurd was: leest u ze met dns_record_list voordat u ze opnieuw verstuurt. {$reason}", "scope": "violations"},
+  "dns_forward_not_primary": {"text": "De records van deze zone worden bewaard op {$peer}, die de zone ook als kopie heeft, dus ze kunnen hier niet gewijzigd worden", "scope": "violations"},
+  "dns_forward_server_required": {"text": "Een doorgestuurde recordset noemt de server waar ze vandaan komt", "scope": "violations"},
   "restore_site_revision": [{"text": "Een siterevisie herstellen", "scope": "hohenheim"}, {"text": "{$actor} herstelde een revisie van {$subject}", "scope": "hohenheim", "target": "happened"}],
   "read_app_file": {"text": "{$actor} las een bestand van {$subject}", "scope": "hohenheim", "target": "happened"},
   "write_app_file": {"text": "{$actor} schreef een bestand van {$subject}", "scope": "hohenheim", "target": "happened"},

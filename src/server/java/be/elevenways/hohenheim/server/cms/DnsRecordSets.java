@@ -1,21 +1,28 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordSetOutcome;
 import be.elevenways.hohenheim.dns.DnsRecordView;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsRecordCodec;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsValueException;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -24,6 +31,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.JsonSchemaType;
 import be.elevenways.zenit.common.edit.JsonValue;
 import be.elevenways.zenit.common.edit.Plain;
+import be.elevenways.zenit.common.edit.submit.JsonSchemaValidator;
 import be.elevenways.zenit.common.edit.submit.JsonSchemaValidator.Keyword;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -35,6 +43,8 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.history.Change;
+import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -58,12 +68,13 @@ import java.util.Set;
  * A zone's records read and set by their natural key, a name and a type: one call makes each name and type hold
  * exactly the values it gives, all entries in one write with one serial bump.
  *
+ * The record pipeline does the writing (DnsRecordEdits' checks, DnsRowWrites' create and update, the record
  * model's tenant and generated-row guards), so a value, a name or a right refused in the panel is refused here in the
  * same words; only the diff of a name and type's rows and the single serial bump are this class's. A made dynamic DNS
  * token is never answered: it is parked for the caller's account and shown once on the zone's Records tab
- * (TokenDisclosures). A secondary zone's records are kept on its owning peer, which no call of this server carries
- * a change to: a set is refused naming that peer, a read answers the owner's records, or the local copy when the owner
- * cannot be asked.
+ * (TokenDisclosures). A secondary zone's records are kept on its owning peer: a set is judged here and applied there
+ * whole over the peer API ({@link #forward}, received by {@link #applyForwarded}), a read answers the owner's
+ * records, or the local copy when the owner cannot be asked.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -133,7 +144,9 @@ public final class DnsRecordSets {
             values -> new SetInput((List<?>) Objects.requireNonNull(values.get(RECORDS)))))
         .result(String.class)
         .facts(OperationFact.IDEMPOTENT)
-        .command(CmsCommands.TRANSACTIONAL)
+        // Its own transaction for a primary zone's rows (write); a secondary zone's set waits on the owner, which a
+        // database transaction must not be held open for.
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Reads a zone's records, or the whole zone as zone-file text. */
@@ -215,9 +228,8 @@ public final class DnsRecordSets {
     }
 
     /**
-     * Makes each entry's name and type hold exactly its values: a stored value given again is kept (its TTL, extras
-     * and switch written when they differ), one not given is removed, a new one added; removed rows go first, so a
-     * CNAME replacing other records is judged against what stays.
+     * Makes each entry's name and type hold exactly its values ({@link #write}) on a primary zone, or on the server
+     * keeping a secondary zone's records ({@link #forward}).
      *
      * @return one line per entry saying what it added, changed, kept and removed
      * @throws Violations in the record form's own words for a refused name, type, value or right; nothing is written
@@ -225,35 +237,56 @@ public final class DnsRecordSets {
     private static @NonNull String set(@NonNull Row zone, @NonNull SetInput input, @Nullable AccessContext access) {
         AccessContext caller = Objects.requireNonNull(access, "a write has its caller");
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-            // Which server keeps a zone's records is installation knowledge: only an administrator is told.
-            Row peer = HohenheimAccess.isAdmin(caller)
-                ? Models.get(DnsPeerModel.class).findById(zone.get(DnsZoneModel.PRIMARY_PEER_ID)) : null;
-            throw Violations.ofForm(peer == null ? HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone")
-                : HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone_owner")
-                    .withArg("peer", String.valueOf(peer.get(DnsPeerModel.NAME))));
+            return forward(zone, input.records(), caller);
         }
         requireTokenShownTo(input, caller);
+        // The rows and the parked tokens commit together, as they did when the whole call was one transaction.
+        return Models.get(DnsRecordModel.class).getResolvedDatasource().inTransaction(() -> {
+            Written written = write(zone, input.records(), caller);
+            List<String> said = said(written.outcomes(), caller);
+            if (!written.tokens().isEmpty()) {
+                said.addAll(parkTokens(caller, zone.get(DnsZoneModel.ID), written.tokens(), written.made()));
+            }
+            return String.join("\n", said);
+        });
+    }
+
+    /**
+     * What one write did to a zone's names and types, and the dynamic DNS tokens it made.
+     *
+     * @param tokens one line per token made, naming its record, shown only to the caller's account
+     * @param made   the name and type of each token made, in the same order
+     */
+    private record Written(@NonNull List<DnsRecordSetOutcome> outcomes, @NonNull List<String> tokens,
+                           @NonNull List<String> made) {
+    }
+
+    /**
+     * Makes each entry's name and type of a primary zone hold exactly its values: a stored value given again is kept
+     * (its TTL, extras and switch written when they differ), one not given is removed, a new one added; removed rows
+     * go first, so a CNAME replacing other records is judged against what stays.
+     *
+     * @throws Violations in the record form's own words for a refused name, type, value or right
+     */
+    private static @NonNull Written write(@NonNull Row zone, @NonNull List<?> records,
+                                          @NonNull AccessContext caller) {
         int zoneId = zone.get(DnsZoneModel.ID);
         DnsRecordParts parts = new DnsRecordParts();
         Model model = parts.model();
-        List<String> said = new ArrayList<>();
+        List<DnsRecordSetOutcome> outcomes = new ArrayList<>();
         List<String> tokens = new ArrayList<>();
         List<String> made = new ArrayList<>();
         boolean wrote = false;
-        for (Object given : input.records()) {
+        for (Object given : records) {
             Map<?, ?> entry = (Map<?, ?>) given;
             String type = String.valueOf(entry.get(TYPE));
-            String owner = DnsNames.normalizeOwner(String.valueOf(entry.get(NAME)));
-            if (owner == null) {
-                throw Violations.ofField(NAME, entry.get(NAME), HohenheimMicrocopy.VIOLATIONS.of("dns_name_format"));
-            }
+            String owner = ownerOf(entry);
             List<Row> stored = model.find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
                 .where(DnsRecordModel.NAME.eq(owner)).where(DnsRecordModel.TYPE.eq(type)).all();
             if (Boolean.TRUE.equals(entry.get(REMOVE))) {
                 for (Row row : stored) model.delete(row);
                 wrote |= !stored.isEmpty();
-                said.add(caller.text(HohenheimMicrocopy.DNS_RECORD.of("set_removed").withArg("name", owner)
-                    .withArg("type", type).withArg("count", stored.size())));
+                outcomes.add(new DnsRecordSetOutcome(owner, type, 0, 0, 0, stored.size(), true));
                 continue;
             }
             List<?> values = entry.get(VALUES) instanceof List<?> list ? list : List.of();
@@ -304,14 +337,159 @@ public final class DnsRecordSets {
                 }
             }
             wrote |= added + changed + removed > 0;
-            said.add(caller.text(HohenheimMicrocopy.DNS_RECORD.of("set_said").withArg("name", owner)
-                .withArg("type", type).withArg("added", added).withArg("changed", changed)
-                .withArg("kept", kept.size() - changed).withArg("removed", removed)));
+            outcomes.add(new DnsRecordSetOutcome(owner, type, added, changed, kept.size() - changed, removed, false));
         }
         // As the panel's writers, a zone's serial moves only when one of its records did.
         if (wrote) DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
-        if (!tokens.isEmpty()) said.addAll(parkTokens(caller, zoneId, tokens, made));
+        return new Written(outcomes, tokens, made);
+    }
+
+    /** @return the entry's name as the record pipeline stores it */
+    private static @NonNull String ownerOf(@NonNull Map<?, ?> entry) {
+        String owner = DnsNames.normalizeOwner(String.valueOf(entry.get(NAME)));
+        if (owner == null) {
+            throw Violations.ofField(NAME, entry.get(NAME), HohenheimMicrocopy.VIOLATIONS.of("dns_name_format"));
+        }
+        return owner;
+    }
+
+    /** @return one line per entry saying what it added, changed, kept and removed, in the caller's words */
+    private static @NonNull List<String> said(@NonNull List<DnsRecordSetOutcome> outcomes,
+                                              @NonNull AccessContext caller) {
+        List<String> said = new ArrayList<>();
+        for (DnsRecordSetOutcome outcome : outcomes) {
+            said.add(caller.text(outcome.dropped()
+                ? HohenheimMicrocopy.DNS_RECORD.of("set_removed").withArg("name", outcome.name())
+                    .withArg("type", outcome.type()).withArg("count", outcome.removed())
+                : HohenheimMicrocopy.DNS_RECORD.of("set_said").withArg("name", outcome.name())
+                    .withArg("type", outcome.type()).withArg("added", outcome.added())
+                    .withArg("changed", outcome.changed()).withArg("kept", outcome.kept())
+                    .withArg("removed", outcome.removed())));
+        }
+        return said;
+    }
+
+    /**
+     * Sets a secondary zone's records on the Hohenheim peer keeping them, over the peer API the Records tab forwards
+     * its edits by: judged here, applied there whole or not at all, and this server's copy pulled at once.
+     *
+     * AIDEV-NOTE: the peer's key is an operator's there, so THIS server decides who may, before anything is sent: a
+     * non-administrator is asked the record rule a write here asks ({@link TenantWrites#checkRecordCandidate} over
+     * this zone's origin), where only hostname authority can admit him, since a per-record grant names a row and
+     * this zone's rows live on the owner. A dynamic DNS token is refused: one made there would be shown to the
+     * peer's key, never to the caller. An older peer, which lacks the route, answers 404: the refusal of a zone
+     * kept elsewhere, as before.
+     *
+     * @return the owner's answer per name and type, in the caller's words
+     * @throws Violations for an entry the caller may not set, or the owner refusing, unreachable or unanswered
+     */
+    private static @NonNull String forward(@NonNull Row zone, @NonNull List<?> records,
+                                           @NonNull AccessContext caller) {
+        Row peer = Models.get(DnsPeerModel.class).findById(zone.get(DnsZoneModel.PRIMARY_PEER_ID));
+        DnsPeerApi api = DnsPeerApi.forPeer(peer);
+        if (api == null) {
+            throw keptElsewhere(peer, caller);
+        }
+        int zoneId = zone.get(DnsZoneModel.ID);
+        for (Object given : records) {
+            Map<?, ?> entry = (Map<?, ?>) given;
+            refuseDynamic(entry);
+            TenantWrites.checkRecordCandidate(zoneId, ownerOf(entry), String.valueOf(entry.get(TYPE)), null);
+        }
+        String person = TokenDisclosures.shownTo(caller);
+        List<DnsRecordSetOutcome> outcomes;
+        try {
+            outcomes = api.setRecords(zone.get(DnsZoneModel.ORIGIN), records, DnsFederationKeys.localName(),
+                person.isEmpty() ? null : person);
+        } catch (DnsPeerApi.PeerApiException refused) {
+            throw forwardRefused(refused, Objects.requireNonNull(peer, "a client has its peer"), caller);
+        }
+        List<String> said = said(outcomes, caller);
+        if (!SecondaryZoneService.pullNow(zoneId)) {
+            said.add(caller.text(HohenheimMicrocopy.DNS_RECORD.of("forward_copy_later")));
+        }
         return String.join("\n", said);
+    }
+
+    /** @return the refusal of a set on a zone whose records another server keeps, naming it to an administrator */
+    private static @NonNull Violations keptElsewhere(@Nullable Row peer, @NonNull AccessContext caller) {
+        // Which server keeps a zone's records is installation knowledge: only an administrator is told.
+        return Violations.ofForm(peer == null || !HohenheimAccess.isAdmin(caller)
+            ? HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone")
+            : HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone_owner")
+                .withArg("peer", String.valueOf(peer.get(DnsPeerModel.NAME))));
+    }
+
+    /** @return the refusal of a forwarded set the owner refused, could not be asked or did not answer */
+    private static @NonNull Violations forwardRefused(DnsPeerApi.@NonNull PeerApiException refused, @NonNull Row peer,
+                                                      @NonNull AccessContext caller) {
+        if (refused.status() == 404 || refused.status() == 405) {
+            return keptElsewhere(peer, caller);
+        }
+        if (refused.getViolationKey() != null) {
+            String field = refused.getViolationField();
+            return Violations.ofField(field == null ? RECORDS : field, null,
+                HohenheimMicrocopy.VIOLATIONS.of(refused.getViolationKey()));
+        }
+        boolean admin = HohenheimAccess.isAdmin(caller);
+        String server = admin ? String.valueOf(peer.get(DnsPeerModel.NAME))
+            : caller.text(HohenheimMicrocopy.DNS_RECORD.of("owner_unnamed"));
+        String reason = admin ? String.valueOf(refused.getMessage()) : "";
+        if (refused.status() == 409) {
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("dns_forward_not_primary")
+                .withArg("peer", server));
+        }
+        if (refused.status() == 0) {
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(refused.sent() ? "dns_forward_unanswered"
+                : "dns_forward_unreachable").withArg("peer", server).withArg("reason", reason));
+        }
+        return Violations.ofForm(HohenheimMicrocopy.DNS_REMOTE.of("peer_call_failed").withArg("reason",
+            admin ? reason : String.valueOf(refused.status())));
+    }
+
+    /** Refuses an entry asking a dynamic DNS token of a zone whose records another server keeps. */
+    private static void refuseDynamic(@NonNull Map<?, ?> entry) {
+        if (entry.get(VALUES) instanceof List<?> values) {
+            for (Object value : values) {
+                Object dyndns = value instanceof Map<?, ?> map ? map.get(DYNDNS) : null;
+                if (dyndns != null) {
+                    throw Violations.ofField(DYNDNS, dyndns, HohenheimMicrocopy.VIOLATIONS.of("dns_forward_dyndns"));
+                }
+            }
+        }
+    }
+
+    /**
+     * Applies a record set a peer forwarded for its copy of this primary zone, whole or not at all, and records in the
+     * zone's history which server sent it and for whom.
+     *
+     * @param records the entries as the peer sent them, checked against the tool's own shape first
+     * @param server  the forwarding server's name for itself
+     * @param person  the person it was done for there, null for none
+     * @return one outcome per entry, in the order sent
+     * @throws Violations for entries out of shape, a dynamic DNS token asked, or an entry the record pipeline refuses
+     */
+    public static @NonNull List<DnsRecordSetOutcome> applyForwarded(@NonNull Row zone, @Nullable Object records,
+                                                                    @NonNull AccessContext caller,
+                                                                    @NonNull String server, @Nullable String person) {
+        Violations shape = new Violations();
+        JsonSchemaValidator.validate(Objects.requireNonNull(ENTRIES.schema(), "the entries declare a schema"), records,
+            RECORDS, RECORDS, shape);
+        if (!shape.isEmpty()) {
+            throw shape;
+        }
+        List<?> entries = (List<?>) Objects.requireNonNull(records);
+        for (Object entry : entries) refuseDynamic((Map<?, ?>) entry);
+        int zoneId = zone.get(DnsZoneModel.ID);
+        Map<String, Object> told = new LinkedHashMap<>();
+        told.put(HohenheimActivityAction.SERVER_KEY, server);
+        if (person != null && !person.isBlank()) told.put(HohenheimActivityAction.PERSON_KEY, person);
+        return Models.get(DnsRecordModel.class).getResolvedDatasource().inTransaction(() -> {
+            List<DnsRecordSetOutcome> outcomes = write(zone, entries, caller).outcomes();
+            History.event(Models.get(DnsZoneModel.class), zoneId,
+                Change.fact(HohenheimActivityAction.RECORDS_FORWARDED, told));
+            return outcomes;
+        });
     }
 
     /** @return whether a value asks a token be kept or made */
@@ -431,9 +609,8 @@ public final class DnsRecordSets {
             }
             return DnsZoneFiles.export(zone);
         }
-        // An administrator reads a secondary zone's records where they are kept; anyone else, as on the panel, reads
-        // only the zone's own rows, of which a secondary has none.
-        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone)) && HohenheimAccess.isAdmin(access)) {
+        // A secondary zone's records are read where they are kept, scoped as its rows would be here.
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return secondaryList(zone, input, access);
         }
         int zoneId = zone.get(DnsZoneModel.ID);
@@ -480,18 +657,28 @@ public final class DnsRecordSets {
 
     /**
      * @return a secondary zone's records as its owning peer answers them, else as this server's copy serves them,
-     *     said first; one line per record as {@link #list} says them
+     *     which of the two said first; one line per record as {@link #list} says them, of only the names a caller who
+     *     is no administrator manages
      */
     private static @NonNull String secondaryList(@NonNull Row zone, @NonNull ListInput input,
                                                  @NonNull AccessContext access) {
         String owner = input.name() == null ? null : DnsNames.normalizeOwner(input.name());
         String wantedName = input.name() == null ? null : owner == null ? input.name() : owner;
+        String origin = zone.get(DnsZoneModel.ORIGIN);
+        boolean admin = HohenheimAccess.isAdmin(access);
+        // The record lanes' own read rule for a name: hostname authority, asked once per name of the page.
+        HostnameAuthority.Snapshot authority = admin ? null : HostnameAuthority.Snapshot.memoized(access);
         List<String> lines = new ArrayList<>();
         String zoneTtl = String.valueOf(DnsZoneModel.defaultTtlOf(zone));
         DnsZoneRecordsPage.OwnerRead read = DnsZoneRecordsPage.readOwner(zone);
         if (read.records() != null) {
+            Row peer = Models.get(DnsPeerModel.class).findById(zone.get(DnsZoneModel.PRIMARY_PEER_ID));
+            lines.add(access.text(HohenheimMicrocopy.DNS_RECORD.of("listed_from_owner").withArg("peer",
+                admin && peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME))
+                    : access.text(HohenheimMicrocopy.DNS_RECORD.of("owner_unnamed")))));
             for (DnsRecordDto record : read.records()) {
-                if (!listed(record.name(), record.type(), wantedName, input.type())) continue;
+                if (!listed(record.name(), record.type(), wantedName, input.type())
+                    || !seen(authority, access, origin, record.name())) continue;
                 StringBuilder line = new StringBuilder().append(record.name()).append(' ').append(record.type())
                     .append(' ').append(record.ttl() != null ? String.valueOf(record.ttl()) : access.text(
                         HohenheimMicrocopy.DNS_RECORD.of("ttl_zone_default").withArg("ttl", zoneTtl)))
@@ -508,15 +695,25 @@ public final class DnsRecordSets {
                 lines.add(line.toString());
             }
         } else {
+            // Why the owner could not be asked names its address: only an administrator is told.
             lines.add(access.text(HohenheimMicrocopy.DNS_RECORD.of("listed_from_copy").withArg("reason",
-                access.text(Objects.requireNonNull(read.notice(), "an unread owner says why")))));
-            for (DnsRecordView record : DnsZoneRecordsPage.replicaRecords(zone.get(DnsZoneModel.ORIGIN))) {
-                if (!listed(record.name(), record.type(), wantedName, input.type())) continue;
+                access.text(admin ? Objects.requireNonNull(read.notice(), "an unread owner says why")
+                    : HohenheimMicrocopy.DNS_RECORD.of("owner_unreached")))));
+            for (DnsRecordView record : DnsZoneRecordsPage.replicaRecords(origin)) {
+                if (!listed(record.name(), record.type(), wantedName, input.type())
+                    || !seen(authority, access, origin, record.name())) continue;
                 lines.add(record.name() + " " + record.type() + " " + record.ttl() + " " + record.value());
             }
         }
-        return lines.isEmpty() ? access.text(HohenheimMicrocopy.DNS_RECORD.of("listed_none")) : String.join("\n",
-            lines);
+        return lines.size() == 1 ? lines.getFirst() + "\n" + access.text(HohenheimMicrocopy.DNS_RECORD
+            .of("listed_none")) : String.join("\n", lines);
+    }
+
+    /** @return whether the caller may see a record of this name: an administrator always, else by hostname authority */
+    private static boolean seen(HostnameAuthority.@Nullable Snapshot authority, @NonNull AccessContext access,
+                                @NonNull String origin, @Nullable String name) {
+        return authority == null || HostnameAuthority.canManageOwnerName(authority, access,
+            DnsNames.absolute(origin, Objects.toString(name, "")));
     }
 
     /** @return whether a record of this name and type is one the read asks for */

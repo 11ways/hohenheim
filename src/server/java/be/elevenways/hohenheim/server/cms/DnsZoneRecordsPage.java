@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -417,8 +418,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
 
     /** @return the secondary zone's records as its owning peer answers them, or why it could not */
     static @NonNull OwnerRead readOwner(@NonNull Row zone) {
-        Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        DnsPeerApi api = DnsPeerApi.forZone(zone);
         if (api == null) {
             return new OwnerRead(null, HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured"));
         }
@@ -432,7 +432,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     }
 
     /**
-     * Forward a secondary zone's remote-record save or delete to its owning peer.
+     * Forward a secondary zone's remote-record save or delete to its owning peer, its copy pulled after.
      *
      * @return a toast of the owner's answer, back on this tab; a primary zone's tab has nothing to forward
      */
@@ -440,8 +440,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         if (!DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return CmsActionResult.refresh();
         }
-        Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        DnsPeerApi api = DnsPeerApi.forZone(zone);
         if (api == null) {
             return CmsActionResult.errorToast(HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured"));
         }
@@ -477,6 +476,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
                 : HohenheimMicrocopy.DNS_REMOTE.of("peer_call_failed")
                     .withArg("reason", String.valueOf(e.getMessage())));
         }
+        // The local copy follows at once, as after the assistant tool's forwarded set (DnsRecordSets.forward).
+        SecondaryZoneService.pullNow(zone.get(DnsZoneModel.ID));
         return CmsActionResult.refreshWithToast(HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"));
     }
 

@@ -9,16 +9,19 @@ import be.elevenways.hohenheim.dns.DnsRecordDeleteResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsRecordMutationResponse;
+import be.elevenways.hohenheim.dns.DnsRecordSetResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
+import be.elevenways.hohenheim.server.cms.DnsRecordSets;
 import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -172,6 +175,35 @@ final class DnsRecordApiHandlers {
             }
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.id());
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
+        });
+
+        // A peer's whole record set for its copy of a zone this instance owns: the forwarded dns_record_set.
+        HohenheimEndpoints.API_DNS_RECORDS_SET.setHandler(conduit -> {
+            ApiZone zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String server = form.get(DnsPeerApi.SET_SERVER);
+            if (server == null || server.isBlank()) {
+                return validationError(conduit, Violations.ofField(DnsPeerApi.SET_SERVER, server,
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_forward_server_required")));
+            }
+            Object records;
+            try {
+                records = Zenit.DRY.parseJsonTree(form.getOrDefault(DnsPeerApi.SET_RECORDS, ""));
+            }
+            catch (RuntimeException unreadable) {
+                records = null;
+            }
+            try {
+                return new JsonResult<Object>(new DnsRecordSetResponse(zone.zone().get(DnsZoneModel.ORIGIN),
+                    DnsRecordSets.applyForwarded(zone.zone(), records, zone.access(), server.trim(),
+                        form.get(DnsPeerApi.SET_PERSON))));
+            }
+            catch (Violations violations) {
+                return validationError(conduit, violations);
+            }
         });
     }
 

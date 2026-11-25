@@ -14326,6 +14326,31 @@
       "target": "happened"
     }
   ],
+  "records_forwarded": [
+    {
+      "text": "Records set from another server",
+      "scope": "hohenheim",
+      "target": "history_fact"
+    },
+    {
+      "text": "Records set from {$server}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_server": "true"
+    },
+    {
+      "text": "Records set from {$server} for {$person}",
+      "scope": "hohenheim",
+      "target": "history_fact",
+      "has_server": "true",
+      "has_person": "true"
+    },
+    {
+      "text": "{$actor} set DNS records of {$subject} from another server",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "rolled_back": [
     {
       "text": "Rolled back",
@@ -20515,9 +20540,9 @@
   "mcp_code_certificate_renew": {"text": "The certificate (C8) to renew or finish.", "scope": "hohenheim"},
   "mcp_tool_test": {"text": "Checks something now. An address (D4): whether its name reaches this Hohenheim from outside, forgetting the last answer; read the address for the result. A DNS zone (Z7): its health, as the zone's page checks it; a secondary zone has none to check. A backup target (BT1): whether it can be reached, and why not. A notification channel (NC2): sends it a test alert and says whether it was delivered, only handed off or not sent. It changes nothing else.", "scope": "hohenheim"},
   "mcp_code_test": {"text": "The address, DNS zone, backup target or notification channel to check.", "scope": "hohenheim"},
-  "mcp_tool_dns_record_list": {"text": "Reads a zone's records, all or one name or type: name, type, TTL (or the zone default it uses), the value as a resolver prints it, and whether it is switched off, made by Hohenheim itself (a certificate proof) or updated by dynamic DNS. as_zone_text answers the whole zone as zone-file text instead, for administrators only. Someone who is no administrator sees the records of names they manage and records shared with them to view. A secondary zone's records are read from the server that keeps them, or from this server's copy when it cannot be asked, which the answer says first.", "scope": "hohenheim"},
+  "mcp_tool_dns_record_list": {"text": "Reads a zone's records, all or one name or type: name, type, TTL (or the zone default it uses), the value as a resolver prints it, and whether it is switched off, made by Hohenheim itself (a certificate proof) or updated by dynamic DNS. as_zone_text answers the whole zone as zone-file text instead, for administrators only. Someone who is no administrator sees the records of names they manage and records shared with them to view. A secondary zone's records are read from the server that keeps them, or from this server's copy when it cannot be asked; the first line says which.", "scope": "hohenheim"},
   "mcp_code_dns_zone_read": {"text": "The zone (Z7, or its origin such as example.com) whose records to read.", "scope": "hohenheim"},
-  "mcp_tool_dns_record_set": {"text": "Sets a zone's records: each records entry makes one name and type hold exactly its values, the other values of that name and type removed; remove: true drops the name and type, undone only by setting them again. All entries are applied together or none, with one serial bump. Records Hohenheim made itself cannot be changed. Someone who is no administrator changes only A, AAAA, CNAME, TXT, SRV and TLSA records under names they manage. A value's dyndns makes, keeps or removes its dynamic DNS update token; a token made is never in the answer: it is shown once to your account on the zone's Records tab in the panel. A secondary zone is refused, naming the server that keeps its records: set them there. Answers per name and type what was added, changed, kept and removed.", "scope": "hohenheim"},
+  "mcp_tool_dns_record_set": {"text": "Sets a zone's records: each entry makes one name and type hold exactly its values, others removed; remove: true drops the name and type. All entries apply together or none. Records Hohenheim made itself cannot be changed. Someone who is no administrator sets only A, AAAA, CNAME, TXT, SRV and TLSA records under names they manage. dyndns makes, keeps or drops a value's dynamic DNS token; a new token is never answered, but shown once to your account on the zone's Records tab. A secondary zone is set on the server keeping its records, without dyndns. Answers what changed per name and type.", "scope": "hohenheim"},
   "mcp_code_dns_zone_set": {"text": "The zone (Z7, or its origin such as example.com) whose records to set.", "scope": "hohenheim"},
   "mcp_tool_dns_zone_set": {"text": "Creates or changes a DNS zone this Hohenheim answers for: primary (its records kept and edited here) or secondary (a copy pulled from primary_peer). A new primary zone gets one apex NS record per declared nameserver. secondaries becomes exactly the peers listed (DP2), each newly listed one told to pull at once; an empty list removes every copy. Turning on dnssec makes a signing key: lodge the DS record with the registrar. Records: dns_record_set. Administrators only. Answers the zone's code.", "scope": "hohenheim"},
   "mcp_code_dns_zone": {"text": "The zone (Z7, or its origin such as example.com); leave out to create one.", "scope": "hohenheim"},
@@ -20537,6 +20562,15 @@
   "dyndns_disclosure_title": {"text": "Dynamic DNS update tokens", "scope": "dns_record"},
   "dyndns_disclosure_warning": {"text": "Copy them now: they are shown only this once. A router sends its token as the HTTP Basic password.", "scope": "dns_record"},
   "listed_from_copy": {"text": "Read from this server's copy: {$reason}", "scope": "dns_record"},
+  "listed_from_owner": {"text": "Read from {$peer}, which keeps this zone's records.", "scope": "dns_record"},
+  "owner_unnamed": {"text": "another server", "scope": "dns_record"},
+  "owner_unreached": {"text": "the server that keeps this zone's records could not be asked", "scope": "dns_record"},
+  "forward_copy_later": {"text": "This server's copy follows at its next transfer.", "scope": "dns_record"},
+  "dns_forward_dyndns": {"text": "Dynamic DNS tokens of a secondary zone are made on the server that keeps its records: set them there", "scope": "violations"},
+  "dns_forward_unreachable": {"text": "This zone's records are kept on {$peer}, which could not be reached, so nothing was changed. {$reason}", "scope": "violations"},
+  "dns_forward_unanswered": {"text": "This zone's records are kept on {$peer}, which did not answer after the change was sent: read them with dns_record_list before sending it again. {$reason}", "scope": "violations"},
+  "dns_forward_not_primary": {"text": "This zone's records are kept on {$peer}, which holds the zone as a copy too, so they cannot be changed from here", "scope": "violations"},
+  "dns_forward_server_required": {"text": "A forwarded record set names the server it comes from", "scope": "violations"},
   "restore_site_revision": [{"text": "Restore a site revision", "scope": "hohenheim"}, {"text": "{$actor} restored a revision of {$subject}", "scope": "hohenheim", "target": "happened"}],
   "read_app_file": {"text": "{$actor} read a file of {$subject}", "scope": "hohenheim", "target": "happened"},
   "write_app_file": {"text": "{$actor} wrote a file of {$subject}", "scope": "hohenheim", "target": "happened"},
