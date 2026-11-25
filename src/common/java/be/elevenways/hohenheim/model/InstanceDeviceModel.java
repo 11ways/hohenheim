@@ -91,17 +91,20 @@ public class InstanceDeviceModel extends Model {
         .value(TYPE_CDROM, v -> v.displayName("Install media").icon("compact-disc")
             .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("cdrom")))
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_type"))
+        .help(HohenheimMicrocopy.HELP.of("instance_device_kind"))
         .build());
 
     // User data (a device name), never localized.
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("instance_device_name"))
         .build());
 
     /** Disk size in GB (the quota-charged amount); null for NICs. */
     public static final IntegerField SIZE_GB = SCHEMA.addField(
         IntegerField.builder().name("size_gb")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_size_gb"))
+            .help(HohenheimMicrocopy.HELP.of("instance_device_size"))
             .byteSize(ByteUnit.GIGABYTE)
             .build());
 

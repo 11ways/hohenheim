@@ -486,6 +486,16 @@ public final class PanelRecordWrites {
             return this;
         }
 
+        /**
+         * Declares an enum setting only a create takes, given by {@code argument} and its member by a plain word as
+         * {@link #byWord(EnumField)} takes one, where the field's own input name says less than the argument (a
+         * device's {@code type} is its {@code kind}).
+         */
+        public @NonNull Builder createOnlyByWord(@NonNull String argument, @NonNull EnumField field) {
+            this.add(argument, field, true, true);
+            return this;
+        }
+
         /** Declares settings only a create takes: a change naming one is refused by name. */
         public @NonNull Builder createOnly(@NonNull List<? extends Field<?, ?>> fields) {
             for (Field<?, ?> field : fields) this.add(field.getInputName(), field, true, false);

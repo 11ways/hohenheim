@@ -493,8 +493,8 @@ public final class KindSettingsWrites {
 
     /**
      * @return the values, keyed by input name, as the panel's form posts them: a map field as its key/value editor's
-     *     numbered rows of {key, value}, the shape that editor's coercion reads (zenit-forms KeyValueField), a kept
-     *     secret as itself
+     *     numbered rows of {key, value}, the shape that editor's coercion reads (zenit-forms KeyValueField), a secret
+     *     as its text
      *
      * AIDEV-NOTE: zenit-forms declares no writer of its editor's rows, only the reader; until it does, this spells
      * them with the one shared key names (MapEntryFields), as the editor's own render state does.
@@ -503,6 +503,11 @@ public final class KindSettingsWrites {
                                                @NonNull Map<String, Object> settings) {
         Map<String, Object> posted = new LinkedHashMap<>(settings);
         for (Field<?, ?> field : fields) {
+            // A secret setting goes as its text, as the panel's form posts it; the form lane seals it again.
+            if (settings.get(field.getInputName()) instanceof Secret sealed) {
+                posted.put(field.getInputName(), sealed.reveal());
+                continue;
+            }
             if (!(field instanceof StringMapField) || !(settings.get(field.getInputName()) instanceof Map<?, ?> map)) {
                 continue;
             }

@@ -65,11 +65,13 @@ public class RuntimeImageModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("runtime_image_name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(
         TextField.builder().name("description")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
+            .help(HohenheimMicrocopy.HELP.of("runtime_image_description"))
             .build());
 
     public static final StringField ICON = SCHEMA.addField(StringField.builder().name("icon")
@@ -120,6 +122,7 @@ public class RuntimeImageModel extends Model {
     public static final StringField WORKDIR = SCHEMA.addField(
         StringField.builder().name("workdir")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("workdir"))
+            .help(HohenheimMicrocopy.HELP.of("runtime_image_workdir"))
             .build());
 
     /** Interactive shell the console and exec lanes attach with. */
@@ -127,6 +130,7 @@ public class RuntimeImageModel extends Model {
         StringField.builder().name("shell")
             .defaultValue("/bin/bash")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("shell"))
+            .help(HohenheimMicrocopy.HELP.of("runtime_image_shell"))
             .build());
 
     public static final EnumField UID_MODE = SCHEMA.addField(EnumField.builder("uid_mode")
@@ -150,6 +154,7 @@ public class RuntimeImageModel extends Model {
     public static final BooleanField ENABLED = SCHEMA.addField(
         BooleanField.builder("enabled").defaultValue(true)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+            .help(HohenheimMicrocopy.HELP.of("runtime_image_enabled"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

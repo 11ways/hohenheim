@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
+import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.cms.ProjectParts;
 import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
@@ -73,6 +74,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimDataTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimHostTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimCatalogTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -128,6 +130,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(ReleasedClaimParts.LIFT, null)
             .route(GitConnectionWrites.DELETE, null)
             .route(CertificateParts.DELETE, null)
+            .route(InstanceTemplateParts.DELETE, null)
             .build();
         McpHostTool deploy = McpCodeTool.builder("deploy", words("mcp_tool_deploy"), writes())
             .code(words("mcp_code_deploy"))

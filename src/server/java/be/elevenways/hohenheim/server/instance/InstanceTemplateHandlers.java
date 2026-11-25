@@ -31,7 +31,6 @@ import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.history.Change;
-import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -120,32 +119,14 @@ public final class InstanceTemplateHandlers {
 
         HohenheimEndpoints.INSTANCE_TEMPLATES_IMPORT.setHandler(conduit -> {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            String catalogApp = HandlerSupport.submittedString(form, "catalog_app");
-            if (!catalogApp.isEmpty()) {
-                // The vendored community-scripts catalog: pinned content is copied
-                // into a NEW unapproved row; the endpoint's admin permission is what
-                // keeps script introduction an operator act.
-                try {
-                    int templateId = CommunityScripts.importApp(catalogApp);
-                    History.event(Models.get(InstanceTemplateModel.class), templateId, Change.fact(
-                        HohenheimActivityAction.IMPORTED, Map.of(HohenheimActivityAction.SOURCE_KEY,
-                            "vendored catalog: " + catalogApp)));
-                    return HandlerSupport.redirect(
-                        CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
-                } catch (Violations violations) {
-                    return importErrorText(conduit, HandlerSupport.violationMessage(violations));
-                }
-            }
-            String document = HandlerSupport.submittedString(form, "document");
-            String source = HandlerSupport.submittedString(form, "source");
-            if (document.isEmpty()) {
+            String catalogApp = HandlerSupport.submittedString(form, TemplateDocuments.CATALOG_APP);
+            String document = HandlerSupport.submittedString(form, TemplateDocuments.DOCUMENT);
+            if (catalogApp.isEmpty() && document.isEmpty()) {
                 return importError(conduit, "document_required");
             }
             try {
-                int templateId = new TemplatePortability().importDocument(document, source);
-                History.event(Models.get(InstanceTemplateModel.class), templateId, Change.fact(
-                    HohenheimActivityAction.IMPORTED, Map.of(HohenheimActivityAction.SOURCE_KEY,
-                        source.isEmpty() ? "paste" : source)));
+                int templateId = TemplateDocuments.imported(catalogApp, document,
+                    HandlerSupport.submittedString(form, TemplateDocuments.SOURCE));
                 return HandlerSupport.redirect(
                     CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
             } catch (Violations violations) {

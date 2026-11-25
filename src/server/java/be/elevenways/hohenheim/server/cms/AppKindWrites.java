@@ -10,12 +10,18 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites.Kind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.StaticSiteKind;
+import be.elevenways.hohenheim.server.instance.SystemContainerKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
+import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -66,6 +72,9 @@ public final class AppKindWrites {
     /** The argument naming the app whose serving image a Docker container runs. */
     public static final String IMAGE_APP = "image_app";
 
+    /** The argument naming the runtime image an application or a workspace runs inside. */
+    public static final String RUNTIME_IMAGE = "runtime_image";
+
     /**
      * The records an app links to, each by the argument naming it and the app's own column it is written into: its
      * host and project on a create, its backup target, and for a Docker container the app whose image it runs. A link
@@ -79,7 +88,10 @@ public final class AppKindWrites {
         KindSettingsWrites.link(BACKUP_TARGET, HohenheimMicrocopy.HELP.of("app_backup_target"),
             BackupTargetModel.MODEL_ID, InstanceModel.BACKUP_TARGET_ID),
         KindSettingsWrites.link(IMAGE_APP, HohenheimMicrocopy.HELP.of("app_image_app"), InstanceModel.MODEL_ID,
-            InstanceModel.IMAGE_APP_ID).onlyFor(DockerContainerKind.ID::equals));
+            InstanceModel.IMAGE_APP_ID).onlyFor(DockerContainerKind.ID::equals),
+        KindSettingsWrites.link(RUNTIME_IMAGE, HohenheimMicrocopy.HELP.of("app_runtime_image"),
+            RuntimeImageModel.MODEL_ID, InstanceModel.RUNTIME_IMAGE_ID)
+            .onlyFor(AppKindWrites::usesRuntimeImage));
 
     /**
      * Creates and changes run as one command of their caller, so the same request id answers the first result.
@@ -108,6 +120,10 @@ public final class AppKindWrites {
     public static final Kind APPLICATION = declare(ApplicationKind.ID, ApplicationKind.SETTINGS_SCHEMA);
     public static final Kind DOCKER_CONTAINER = declare(DockerContainerKind.ID, DockerContainerKind.SETTINGS_SCHEMA);
     public static final Kind STATIC_SITE = declare(StaticSiteKind.ID, StaticSiteKind.SETTINGS_SCHEMA);
+    public static final Kind SYSTEM_CONTAINER = declare(SystemContainerKind.ID, SystemContainerKind.SETTINGS_SCHEMA);
+    public static final Kind VM = declare(VmKind.ID, VmKind.SETTINGS_SCHEMA);
+    // A workspace runs nothing without its runtime image, so a create names one (InstanceDeclarations refuses).
+    public static final Kind WORKSPACE = declare(WorkspaceKind.ID, WorkspaceKind.SETTINGS_SCHEMA, RUNTIME_IMAGE);
 
     private AppKindWrites() {
     }
@@ -121,10 +137,21 @@ public final class AppKindWrites {
         return settings;
     }
 
-    private static @NonNull Kind declare(@NonNull Identifier kind, @NonNull Schema schema) {
+    private static @NonNull Kind declare(@NonNull Identifier kind, @NonNull Schema schema,
+                                         @NonNull String @NonNull ... needs) {
         String word = kind.getPath();
         return APPS.kind(kind, schema, word + "_app", "app_" + word + "_set",
-            HohenheimMicrocopy.HOHENHEIM.of("app_thing_" + word));
+            HohenheimMicrocopy.HOHENHEIM.of("app_thing_" + word), needs);
+    }
+
+    /**
+     * @return whether the kind's handler runs its apps inside a runtime image
+     * @throws IllegalStateException for a kind no handler is registered for yet, never read as "no image"
+     */
+    private static boolean usesRuntimeImage(@NonNull Identifier kind) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind.toString());
+        if (handler == null) throw new IllegalStateException("no handler is registered for the app kind " + kind);
+        return handler.usesRuntimeImage();
     }
 
     /** @return every kind's writes, in the order their tools are offered */

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
@@ -49,6 +50,10 @@ public class GameDomainModel extends Model {
     /** THE short code a game address is named by in an assistant's tools: "GD12". */
     public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
         RecordCodeBehaviour.allocated(MODEL_ID, "GD"));
+
+    static {
+        AssistantNoun.declare(MODEL_ID, GameDomainModel.class, "game_address");
+    }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

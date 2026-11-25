@@ -82,6 +82,7 @@ public class InstanceTemplateModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("template_name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")

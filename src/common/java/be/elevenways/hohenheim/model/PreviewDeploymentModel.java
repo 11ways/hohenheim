@@ -63,6 +63,7 @@ public class PreviewDeploymentModel extends Model {
     public static final StringField GIT_REF = SCHEMA.addField(StringField.builder().name("ref")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_ref"))
+        .help(HohenheimMicrocopy.HELP.of("preview_run_ref"))
         .build());
 
     /** Pull/merge request number when webhook-created; null for manual previews. */

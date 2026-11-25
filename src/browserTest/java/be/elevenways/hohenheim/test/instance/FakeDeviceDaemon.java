@@ -39,10 +39,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-final class FakeDeviceDaemon {
+public final class FakeDeviceDaemon {
 
     /** handle -> volumes and nics the fake daemon holds. */
-    static final Map<String, Workload> DAEMON = new ConcurrentHashMap<>();
+    public static final Map<String, Workload> DAEMON = new ConcurrentHashMap<>();
 
     /** Flipped to make the next daemon call refuse (the "row must not survive" lane). */
     static volatile boolean refuses;
@@ -51,13 +51,13 @@ final class FakeDeviceDaemon {
     }
 
     /** @return the handle the fake kind spells for an instance id */
-    static String handleOf(int instanceId) {
+    public static String handleOf(int instanceId) {
         return "devsurf-instance-" + instanceId;
     }
 
-    static final class Workload {
-        final Map<String, Integer> disks = new LinkedHashMap<>();
-        final List<String> nics = new ArrayList<>();
+    public static final class Workload {
+        public final Map<String, Integer> disks = new LinkedHashMap<>();
+        public final List<String> nics = new ArrayList<>();
         final Map<String, String> cdroms = new LinkedHashMap<>();
     }
 
@@ -144,14 +144,14 @@ final class FakeDeviceDaemon {
     }
 
     /** An incus-runtime kind whose driver DOES carry devices, with no daemon behind it. */
-    static final class Kind implements InstanceKindHandler {
+    public static final class Kind implements InstanceKindHandler {
 
-        static final Identifier ID = Identifier.of("hohenheim", "fake_device_capable");
+        public static final Identifier ID = Identifier.of("hohenheim", "fake_device_capable");
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
 
-        static void register() {
+        public static void register() {
             if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new Kind());
             }

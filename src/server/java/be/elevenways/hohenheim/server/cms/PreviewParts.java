@@ -34,6 +34,12 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationForms;
+import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,11 +47,14 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Preview inventory twins over application-owned lifecycle rows. References and hostnames are unlocalized identifiers.
@@ -54,6 +63,49 @@ import java.util.Map;
  * @since 0.1.0
  */
 public final class PreviewParts {
+
+    /** The argument naming the application a preview is built of, as an app's parts name their app. */
+    public static final String APP = CatalogRecordWrites.APP;
+
+    /**
+     * Queues a preview of one ref of an application, as the previews page's create does, answering the preview's id;
+     * the same ref again refreshes that preview.
+     *
+     * AIDEV-NOTE: the page's create posts a relation pick, this a code: both run {@link #queue}, which asks the
+     * application's MANAGE of anyone who is no administrator, as the /manage twin's create does.
+     */
+    public static final Operation<Void, OperationInput.Values, Integer> RUN =
+            Operation.declare(HohenheimIds.id("run_preview"))
+        .label(HohenheimMicrocopy.HOHENHEIM.of("run_preview"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("run_preview_description"))
+        .noSubject()
+        .gate(OperationGate.open())
+        .input(OperationInput.derived(FormSpec.builder()
+            .add(OperationForms.recordId(APP, HohenheimMicrocopy.HELP.of("preview_app"), InstanceModel.MODEL_ID,
+                true))
+            .add(KindSettingsWrites.entryOf(PreviewDeploymentModel.GIT_REF))
+            .build()))
+        .result(Integer.class)
+        .createdRecord(PreviewDeploymentModel.MODEL_ID, id -> id)
+        .facts(OperationFact.IDEMPOTENT)
+        .command(OperationCommand.perVerb().onDatasource("default"))
+        .register();
+
+    static {
+        OperationHandlers.attach(RUN).handle(call -> {
+            OperationInput.Values input = Objects.requireNonNull(call.input());
+            AccessContext caller = Objects.requireNonNull(call.access(), "a preview run has its caller");
+            Object app = input.get(APP);
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put(PreviewDeploymentModel.APPLICATION_ID.getName(),
+                app == null ? null : Integer.valueOf(String.valueOf(app)));
+            values.put(PreviewDeploymentModel.GIT_REF.getName(), input.get(PreviewDeploymentModel.GIT_REF.getName()));
+            Object queued = KindSettingsWrites.speaking(() -> queue(values, caller, !HohenheimAccess.isAdmin(caller)),
+                Map.of(PreviewDeploymentModel.APPLICATION_ID.getName(), APP));
+            return Integer.valueOf(String.valueOf(queued));
+        });
+    }
+
     private PreviewParts() {}
 
     public static @NonNull PanelResource<Row> admin() {

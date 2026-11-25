@@ -79,7 +79,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID,
         DatabaseDumpModel.MODEL_ID, GitProviderModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID,
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
-        DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID);
+        DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -134,10 +134,8 @@ public final class HohenheimMcpModule implements ZenitModule {
         // each is reached by exactly one tool and argument value (HohenheimMcpTest pins it).
         List<Operation<?, ?, ?>> placed = new ArrayList<>(List.of(
             InstanceOperations.CONNECT_WEBHOOK,
-            InstanceOperations.INSTALL, InstanceOperations.REINSTALL, InstanceOperations.CAPTURE_TEMPLATE,
             InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
             InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
-            InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE,
             SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.STOP_FORCING_HTTPS, SiteOperations.CLONE,
             AccessRuleParts.TOGGLE,
             SpamserviceOperations.START, SpamserviceOperations.STOP, SpamserviceOperations.RESTART));
@@ -145,7 +143,6 @@ public final class HohenheimMcpModule implements ZenitModule {
         McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
             .lists(sources.toArray(new RecordSource<?>[0]))
             .places(placed.toArray(new Operation<?, ?, ?>[0]))
-            .answersWith(InstanceOperations.APP_UPDATE, HohenheimMcpAnswers::output)
             .answersWith(StackOperations.REFRESH, HohenheimMcpAnswers::output)
             .answersWith(SpamserviceOperations.TEST, HohenheimMcpAnswers::output)
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
@@ -211,6 +208,9 @@ public final class HohenheimMcpModule implements ZenitModule {
             EnvironmentModel.DESCRIPTION, EnvironmentModel.PROJECT_ID).search(EnvironmentModel.NAME));
         made.put(DnsZoneModel.MODEL_ID, RecordSource.of(DnsZoneModel.REF).search(DnsZoneModel.ORIGIN));
         made.put(DnsPeerModel.MODEL_ID, RecordSource.of(DnsPeerModel.REF).search(DnsPeerModel.NAME));
+        made.put(GameDomainModel.MODEL_ID, RecordSource.of(GameDomainModel.REF).project(GameDomainModel.SITE_DOMAIN_ID,
+            GameDomainModel.BACKEND_INSTANCE_ID, GameDomainModel.PROXY_INSTANCE_ID, GameDomainModel.BACKEND_PORT,
+            GameDomainModel.ENABLED));
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
         // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
         // value is never projected (a source refuses it); its kind says it is one.

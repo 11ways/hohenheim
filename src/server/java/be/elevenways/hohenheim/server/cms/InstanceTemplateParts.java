@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -37,12 +38,15 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -59,14 +63,18 @@ import java.util.function.Predicate;
  * template tenant-selectable, so it stamps who and when and rides the activity log. The tenant catalog exists so a
  * tenant can PICK a template: name, description and version, never the recipe (settings, scripts), and no write.
  *
- * AIDEV-TODO: the admin delete stays the plain row delete until the O2 delete family offers a per-record unavailable
- * reason (opencode-24); until then a template with live instances is refused by the model funnel's
+ * AIDEV-TODO: the admin delete is the canonical row delete operation (DELETE), which offers no per-record unavailable
+ * reason yet (opencode-24); until it does, a template with live instances is refused by the model funnel's
  * InstanceCatalogGuards on submit instead of being offered dead with its count.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
 public final class InstanceTemplateParts {
+
+    /** The canonical delete: the same model removal and hooks as the catalog's row delete. */
+    public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(InstanceTemplateModel.REF,
+        SubjectArity.ONE, HohenheimSources.OPERATOR);
 
     private InstanceTemplateParts() {}
 
@@ -87,7 +95,7 @@ public final class InstanceTemplateParts {
                 .search(InstanceTemplateModel.NAME, InstanceTemplateModel.DESCRIPTION,
                     InstanceTemplateModel.INSTALL_IMAGE, InstanceTemplateModel.SOURCE)
                 .build())
-            .writes(ResourceMutations.rows().create().update().delete().build())
+            .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             .actions(List.of(createInstance(HohenheimIds.id("template_create_instance"), null), export(),
                 approve(), unapprove()))
             .tabs(ResourceTabs.<Row>of(List.of(contentsTab())).withHistory().withContributions())
