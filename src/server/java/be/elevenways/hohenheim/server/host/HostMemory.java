@@ -91,15 +91,12 @@ public final class HostMemory {
 
     /** @return the host's stored reading against its stored memory total, null when it was never measured */
     public static @Nullable Reading storedOf(@NonNull Row server) {
-        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
-                || !(capabilities.get(HostFact.MEM_TOTAL.token()) instanceof Number total)
-                || !(capabilities.get(HostFact.MEM_AVAILABLE.token()) instanceof Number available)
-                || !(capabilities.get(HostFact.SWAP_TOTAL.token()) instanceof Number swapTotal)
-                || !(capabilities.get(HostFact.SWAP_FREE.token()) instanceof Number swapFree)
-                || total.longValue() <= 0) {
+        long[] stored = HostPreflight.storedFigures(server, HostFact.MEM_TOTAL, HostFact.MEM_AVAILABLE,
+            HostFact.SWAP_TOTAL, HostFact.SWAP_FREE);
+        if (stored == null || stored[0] <= 0) {
             return null;
         }
-        return new Reading(total.longValue(), available.longValue(), swapTotal.longValue(), swapFree.longValue(),
+        return new Reading(stored[0], stored[1], stored[2], stored[3],
             HostPreflight.factMeasuredAt(server, HostFact.MEM_AVAILABLE.token()));
     }
 }

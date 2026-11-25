@@ -110,9 +110,11 @@ class HostPickRoomTest extends HohenheimHttpTestBase {
         LocaleChain english = LocaleChain.ofTags("en");
         MessageResolver resolver = Zenit.getMessageResolver();
         assertThat(HostOverviewState.capacityFacts(ledger, english, resolver).stream().map(fact -> fact.label())
-            .toList()).as("step 1c: Booked and Bookable, no Budget fact repeating its figure").containsExactly(
+            .toList()).as("step 1c: Booked, Bookable and the maximums beside them, no Budget fact repeating its figure")
+            .containsExactly(
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("booked").resolve(english, resolver),
-                HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(english, resolver));
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(english, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("maximums").resolve(english, resolver));
 
         // 2. The kind-led Where step judges the full host by the run's own booking rule at the kind's default memory:
         //    refused, naming the host, what is needed and what is free.

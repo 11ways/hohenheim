@@ -1365,7 +1365,7 @@ public class DatabaseService extends DatasourceScoped {
      * The memory ceiling a managed database actually runs under, and where that number
      * came from.
      *
-     * @param megabytes the booked ceiling (charge == cap, so this is also the cgroup cap)
+     * @param megabytes the booked ceiling (an engine states no reservation, so this is also the cgroup cap)
      * @param source    one of {@link #MEMORY_SOURCE_DECLARED}, {@link #MEMORY_SOURCE_DEFAULT},
      *                  {@link #MEMORY_SOURCE_ENGINE}
      */
@@ -1401,7 +1401,7 @@ public class DatabaseService extends DatasourceScoped {
         String source = host.shared() ? MEMORY_SOURCE_ENGINE
             : host.limits().memoryMb() != null ? MEMORY_SOURCE_DECLARED : MEMORY_SOURCE_DEFAULT;
         return new MemoryCeiling(
-            InstanceCapacity.footprintMbOf(handler, DatabaseInstances.desiredSettings(host)),
+            InstanceCapacity.maximumMbOf(handler, DatabaseInstances.desiredSettings(host)),
             source);
     }
 

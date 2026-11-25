@@ -622,11 +622,21 @@
   ],
   "memory_limit": [
     {
-      "text": "Memory limit",
+      "text": "Maximum memory",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximum memory; its host reserves the same amount. Leave blank for the default limit of its kind.",
+      "text": "Memory it may grow to; past it the kernel kills it. Leave blank for the default of its kind.",
+      "scope": "help"
+    }
+  ],
+  "memory_reserved": [
+    {
+      "text": "Reserved memory",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Memory its host books for it; it may use more, up to its maximum. A change is booked at once, restarts nothing, and reaches a running Docker app at its next deploy or restart. Leave blank to reserve its maximum.",
       "scope": "help"
     }
   ],
@@ -6833,7 +6843,11 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' has no room for this app: it needs {$needed :bytes} and only {$free :bytes} of its memory budget is free. {$held} Choose a smaller memory limit, delete or shrink an app that holds memory there, or admit another host.",
+    "text": "Host '{$name}' has no room for this app: it reserves {$needed :bytes} and only {$free :bytes} of its memory budget is free. {$held} Choose a smaller reserved memory, delete or shrink an app that holds memory there, or admit another host.",
+    "scope": "violations"
+  },
+  "memory_reserved_above_maximum": {
+    "text": "Reserved memory ({$reserved :bytes}) cannot be more than maximum memory ({$maximum :bytes}): lower the reserved memory or raise the maximum memory.",
     "scope": "violations"
   },
   "capacity_held_by": {
@@ -11350,6 +11364,7 @@
     "scope": "server_overview"
   },
   "bookable_free": {"text": "{$free :bytes} free of {$budget :bytes}", "scope": "server_overview"},
+  "maximums": {"text": "Maximums together", "scope": "server_overview"},
   "unmeasured": [
     {
       "text": "Unmeasured",
@@ -13112,7 +13127,7 @@
     "scope": "form_section"
   },
   "limits_description": {
-    "text": "A new memory or CPU limit applies when you save. On a Docker host the app restarts and is briefly down; on an Incus host it changes in place.",
+    "text": "A new maximum memory or CPU limit applies when you save. On a Docker host the app restarts and is briefly down; on an Incus host it changes in place. A new reserved memory changes what its host books at once and restarts nothing; a running app on a Docker host gets it at its next deploy or restart.",
     "scope": "form_section"
   },
   "deployment": {

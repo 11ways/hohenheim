@@ -135,6 +135,8 @@ public final class ReleaseKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     // A release is GENERATED per deploy: what a reader wants is what it runs, and the four
@@ -144,7 +146,7 @@ public final class ReleaseKind implements InstanceKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             HohenheimFormSections.limitsNote(),
-            List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+            List.of(MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.MANAGED,
             List.of(BUILT_IMAGE_ID.getName(), IMAGE_REF.getName(), SOURCE_FINGERPRINT.getName())));
     }

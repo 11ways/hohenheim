@@ -142,6 +142,8 @@ public final class ApplicationKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     /** The shortest and longest time a pre-deploy command may be given, and what an empty field gives it. */
     public static final int PRE_DEPLOY_TIMEOUT_MIN = 10;
     public static final int PRE_DEPLOY_TIMEOUT_MAX = 1800;
@@ -222,7 +224,7 @@ public final class ApplicationKind implements InstanceKindHandler {
             KEEP_RELEASES.getName())));
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, HohenheimFormSections.limitsNote(), List.of(
-                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
+                MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 CONSOLE_KIND.getName(), COMMAND.getName(), WORKDIR.getName())));
     }
 

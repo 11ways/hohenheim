@@ -664,6 +664,21 @@ public final class HostPreflight {
         return check.get(field);
     }
 
+    /** @return the stored figures of the facts, in their order; null when the host stores no number for one of them */
+    public static long @Nullable [] storedFigures(@NonNull Row server, @NonNull HostFact... facts) {
+        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
+            return null;
+        }
+        long[] figures = new long[facts.length];
+        for (int index = 0; index < facts.length; index++) {
+            if (!(capabilities.get(facts[index].token()) instanceof Number figure)) {
+                return null;
+            }
+            figures[index] = figure.longValue();
+        }
+        return figures;
+    }
+
     /**
      * When one named stored FACT was last measured.
      *

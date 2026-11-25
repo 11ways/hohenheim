@@ -76,6 +76,8 @@ public final class SystemContainerKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /**
@@ -110,7 +112,7 @@ public final class SystemContainerKind implements InstanceKindHandler {
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             HohenheimFormSections.limitsNote(),
-            List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
+            List.of(MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 ROOT_DISK_GB.getName(), NETWORK_LIMIT_MBIT.getName())));
     }
 

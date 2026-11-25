@@ -12,10 +12,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @param stale         true when a reading EXISTS but is older than the freshness bound
  *                      (so the operator sees "evidence too old", not "never measured")
  * @param budgetMb      the bookable budget (MB); 0 when unmeasured
- * @param bookedMb      what the instance tier currently holds
+ * @param bookedMb      what the instance tier currently holds: the apps' reserved amounts
  * @param bookableMb    the ceiling bookings are judged against ({@code InstanceCapacity.bookableMbOn}), not what is left
  * @param measuredAtIso when the memory reading was produced, null when never
  * @param maxAgeHours   the declared freshness bound ({@code capacity.facts_max_age_hours})
+ * @param maximumsMb    what the apps booked here may grow to together, their maximums summed; never booked
  */
 @HawkeyeClass
 public record HostCapacityView(
@@ -25,7 +26,8 @@ public record HostCapacityView(
     int bookedMb,
     int bookableMb,
     @Nullable String measuredAtIso,
-    int maxAgeHours
+    int maxAgeHours,
+    int maximumsMb
 ) {
 
     /** @return what is still free to book: the bookable ceiling minus what is booked, never below zero */

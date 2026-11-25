@@ -67,6 +67,10 @@ public final class InstanceResize {
     /**
      * Whether the new ceilings can only reach the daemon through a recreate.
      *
+     * AIDEV-NOTE: a changed {@code memory_reserved_mb} alone is NOT a recreate, by the owner's rule: the reservation is
+     * what the host books, which the write moves at once, and the Docker soft limit it also sets reaches a running
+     * container only at its next deploy or restart. The form section and the field's help say exactly that.
+     *
      * @param before       the settings map the stored row carried
      * @param after        the settings map the write is landing
      * @param storedStatus the status of the STORED row -- what the daemon is running now

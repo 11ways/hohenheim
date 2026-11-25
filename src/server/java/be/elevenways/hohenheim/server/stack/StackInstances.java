@@ -45,7 +45,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  *
  * What the tier GAINED by lowering, none of which it had before: fenced outcome writes (a
  * stale controller's deploy cannot stick), the host lease, host capacity booking
- * (charge == cap -- the pre-lowering tier booked NOTHING, so a host could be overcommitted
+ * (charge == cap, a stack service states no reservation -- the pre-lowering tier booked
+ * NOTHING, so a host could be overcommitted
  * by stacks invisibly), the port ledger's claim-before-create with its {@code releasing}
  * park and its after-start verification against the daemon's OWN binding, host placement,
  * the reconciler's instance classification, {@code InstanceService}'s verified destroy and

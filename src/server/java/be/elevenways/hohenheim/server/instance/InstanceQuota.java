@@ -38,15 +38,15 @@ import java.util.Set;
  * DECLARED limits -- was rejected because {@code ResourceLimits} treats memory as
  * optional, so the budget of a fleet of unbounded workloads sums to ZERO: a host full of
  * tenant work reads as an empty budget, which is the silent-success shape rather than a
- * conservative one. Charge == cap survives the choice intact: the number booked here is
- * the number {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))}
- * hands the driver as the cgroup / VM memory cap, so nothing is booked that is not also
- * enforced. A kind whose handler class is gone prices at 0 and books nothing: a
- * declaration nothing enforces is charged nothing.
+ * conservative one. The owner is charged its workloads' MAXIMUM, the number
+ * {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))} hands the driver as the cgroup / VM
+ * memory cap, so nothing a tenant runs can grow past what its budget granted; the host books the smaller RESERVED
+ * amount ({@link InstanceCapacity#effectiveMaximumMb} says why the two differ). A kind whose handler class is gone
+ * prices at 0 and books nothing: a declaration nothing enforces is charged nothing.
  *
- * AIDEV-NOTE: the owner budget and {@code InstanceCapacity}'s host budget book the SAME
- * number into DIFFERENT buckets, and both must hold: the host answers "is there RAM here",
- * the owner answers "may this tenant have it". Neither subtracts from the other, because
+ * AIDEV-NOTE: the owner budget and {@code InstanceCapacity}'s host budget book into DIFFERENT
+ * buckets from ONE settings derivation, and both must hold: the host answers "is there RAM here"
+ * (reserved), the owner answers "may this tenant have it" (maximum). Neither subtracts from the other, because
  * they ration different things -- an owner's budget is not per host, and a host's budget is
  * shared by every owner on it.
  *
@@ -144,7 +144,7 @@ public final class InstanceQuota {
             Charge count = COUNT.held(stored);
             Integer stamped = stored.get(InstanceModel.QUOTA_MEMORY_MB);
             long amount = InstanceCapacity.booksNothing(InstanceKinds.handlerOf(stored)) ? 0
-                : Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(stored));
+                : Math.max(0, stamped != null ? stamped : InstanceCapacity.maximumMbOf(stored));
             return new Charge(memoryBucketOfChargedBucket(count.bucket()), amount,
                 stamped == null || count.derived());
         }
@@ -152,7 +152,7 @@ public final class InstanceQuota {
         @Override
         public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
                                       @NonNull Transition transition) {
-            long amount = Math.max(0, InstanceCapacity.effectiveFootprintMb(row, stored));
+            long amount = Math.max(0, InstanceCapacity.effectiveMaximumMb(row, stored));
             String countBucket = switch (transition) {
                 case CREATE, RESTORE -> {
                     String stamped = row.get(InstanceModel.QUOTA_BUCKET);

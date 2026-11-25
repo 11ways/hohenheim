@@ -179,8 +179,9 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     /**
      * A database engine's admitted memory, PER ENGINE
      * ({@link ManagedDatabase.Engine#footprintMb(boolean)}, which carries the measurements and
-     * the rule behind them) -- charge == cap, so this is also the cgroup ceiling the
-     * engine actually gets when the operator declares no {@code memory_limit_mb}.
+     * the rule behind them) -- an engine states no reservation, so its charge is its cap and this
+     * is also the cgroup ceiling the engine actually gets when the operator declares no
+     * {@code memory_limit_mb}.
      *
      * AIDEV-NOTE: this deliberately does NOT go through {@link #engineOf}, which throws
      * Violations on an unknown token. {@code InstanceCapacity} calls this from a write

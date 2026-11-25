@@ -457,8 +457,8 @@ public class InstanceModel extends Model {
      * The memory (MB) booked for this workload against its OWNER's memory budget, stamped
      * by InstanceQuota at the write that took it.
      *
-     * AIDEV-NOTE: a SECOND amount stamp beside CAPACITY_MB, holding the same number today,
-     * and deliberately not shared with it. CAPACITY_MB is the HOST booking and is 0 (or
+     * AIDEV-NOTE: a SECOND amount stamp beside CAPACITY_MB, deliberately not shared with it: it books the app's
+     * MAXIMUM, CAPACITY_MB its RESERVED amount (equal while the app states no reservation). CAPACITY_MB is 0 (or
      * absent) whenever the row has no host -- a hostless instance books nothing on any
      * machine, but it still declares memory its owner is charged for. Reading the host
      * stamp for the owner release would hand back 0 for exactly those rows and lock the

@@ -20,7 +20,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * it {@code OwnerBudget.DISK_GB} would ration only the disks an owner attaches and ignore the
  * one every workload already has, which is a hole in the cap, not a smaller cap.
  *
- * The doctrine is InstanceCapacity's, verbatim: charge equals cap. The GB charged here
+ * The doctrine is the one InstanceCapacity keeps for every amount without a reservation:
+ * charge equals cap. The GB charged here
  * is the number the driver hands the daemon as the root device's size, so a workload
  * physically cannot occupy more root storage than was charged for it.
  *

@@ -715,8 +715,9 @@ reached without a browser (`DatabaseApi`), and their doors are the panels':
 nothing at all -- so the column was EMPTY exactly where an operator needed a number.
 Every projection therefore also carries:
 
-- `effective_memory_mb` -- the ceiling the database actually runs under. Because
-  charge == cap, this is both the cgroup limit and what the host budget is charged.
+- `effective_memory_mb` -- the ceiling the database actually runs under. Because a
+  database states no reservation, its charge is its cap: this is both the cgroup limit
+  and what the host budget is charged.
 - `memory_source` -- `declared` (the record's own `memory_limit_mb`), `default` (the
   engine kind's declared footprint, which is what the booking used), or `engine` (a
   SHARED record has no container of its own; the ceiling is its engine's).
@@ -753,10 +754,11 @@ enumerates every tenant's workload on the machine by name.
 
 - `GET /api/v1/hosts` -- per host: `id`, `name`, `runtime`, `mode`, `admission`
   (`blocked` / `admitted` / `draining`), `preflight_ok`, then the ledger --
-  `measured`, `stale`, `budget_mb`, `booked_mb`, `bookable_mb`, `free_mb`,
-  `overcommit_ratio`, `reserve_mb`, `measured_at`, `facts_max_age_hours`.
+  `measured`, `stale`, `budget_mb`, `booked_mb` (the apps' reserved amounts), `bookable_mb`, `free_mb`,
+  `maximums_mb` (what the apps may grow to together; never booked), `overcommit_ratio`, `reserve_mb`,
+  `measured_at`, `facts_max_age_hours`.
 - `GET /api/v1/hosts/{id}` -- the same plus `workloads`: `id`, `kind`, `name`,
-  `status`, `booked_mb` and, when available, `usage_mb`. Database engines and
+  `status`, `booked_mb` (its reserved amount), `maximum_mb` and, when available, `usage_mb`. Database engines and
   dedicated databases appear here as `hohenheim:database_container` instances,
   because the tier is lowered onto the instance contract -- one walk enumerates the
   whole ledger.

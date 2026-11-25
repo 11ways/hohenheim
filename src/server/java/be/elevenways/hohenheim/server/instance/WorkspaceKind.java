@@ -124,6 +124,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** Which console the start command gets; {@link ConsoleKind} is the vocabulary's home. */
@@ -154,7 +156,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
                 HohenheimFormSections.limitsNote(), List.of(
                 HOME_QUOTA_MB.getName(), ENVIRONMENT_VARIABLES.getName(),
-                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(), CONSOLE_KIND.getName())));
+                MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
+                CONSOLE_KIND.getName())));
     }
 
     @Override public @NonNull Identifier typeId() { return ID; }

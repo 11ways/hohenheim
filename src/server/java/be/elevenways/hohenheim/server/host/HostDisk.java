@@ -70,14 +70,12 @@ public final class HostDisk {
 
     /** @return the host's stored disk reading, null when it was never measured */
     public static @Nullable Reading storedOf(@NonNull Row server) {
-        if (!(server.get(HostModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
-                || !(capabilities.get(HostFact.DISK_TOTAL.token()) instanceof Number total)
-                || !(capabilities.get(HostFact.DISK_FREE.token()) instanceof Number free)
-                || total.longValue() <= 0 || free.longValue() < 0 || free.longValue() > total.longValue()) {
+        long[] stored = HostPreflight.storedFigures(server, HostFact.DISK_TOTAL, HostFact.DISK_FREE);
+        if (stored == null || stored[0] <= 0 || stored[1] < 0 || stored[1] > stored[0]) {
             return null;
         }
         Instant measuredAt = HostPreflight.factMeasuredAt(server, HostFact.DISK_TOTAL.token());
-        return new Reading(new DiskSpace(total.longValue(), free.longValue()), measuredAt,
+        return new Reading(new DiskSpace(stored[0], stored[1]), measuredAt,
             HostPreflight.measuredRecently(measuredAt));
     }
 

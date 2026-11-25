@@ -163,7 +163,7 @@ const server = http.createServer((req, res) => {
             return respond(200, { hosts: [
                 { id: 1, name: 'kuifje', runtime: 'docker', mode: 'local',
                     admission: 'admitted', preflight_ok: true, measured: true, stale: false,
-                    budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931,
+                    budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931, maximums_mb: 14336,
                     overcommit_ratio: 1, reserve_mb: 1024,
                     measured_at: '2026-09-02T10:00:00Z', facts_max_age_hours: 168 },
                 { id: 2, name: 'unprobed', runtime: 'docker', mode: 'ssh',
@@ -175,14 +175,14 @@ const server = http.createServer((req, res) => {
         if (req.url === '/api/v1/hosts/1' && req.method === 'GET') {
             return respond(200, { id: 1, name: 'kuifje', runtime: 'docker', mode: 'local',
                 admission: 'admitted', preflight_ok: true, measured: true, stale: false,
-                budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931,
+                budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931, maximums_mb: 14336,
                 overcommit_ratio: 1, reserve_mb: 1024,
                 measured_at: '2026-09-02T10:00:00Z', facts_max_age_hours: 168,
                 workloads: [
                     { id: 51, kind: 'hohenheim:docker_container', name: 'earl-app',
-                        status: 'running', booked_mb: 512, usage_mb: 301 },
+                        status: 'running', booked_mb: 512, maximum_mb: 1024, usage_mb: 301 },
                     { id: 52, kind: 'hohenheim:database_container', name: 'dbengine-pg',
-                        status: 'running', booked_mb: 1024 }] });
+                        status: 'running', booked_mb: 1024, maximum_mb: 1024 }] });
         }
         if (req.url === '/api/v1/hosts/2' && req.method === 'GET') {
             return respond(200, { id: 2, name: 'unprobed', runtime: 'docker', mode: 'ssh',
@@ -545,9 +545,9 @@ server.listen(0, '127.0.0.1', async () => {
         check('host list hit the documented lane',
             requests.at(-1).method === 'GET' && requests.at(-1).url === '/api/v1/hosts');
         r = await run(['host', 'show', '1']);
-        check('host show names the booking and the free room', r.status === 0
+        check('host show names the booking, the free room and the maximums beside them', r.status === 0
             && r.stdout.includes('9984 of 10915 MB booked')
-            && r.stdout.includes('931 MB free'), r.stdout + r.stderr);
+            && r.stdout.includes('931 MB free, maximums together 14336 MB'), r.stdout + r.stderr);
         check('host show lists every workload with what it holds',
             r.stdout.includes('earl-app') && r.stdout.includes('dbengine-pg')
                 && r.stdout.includes('1024'), r.stdout);

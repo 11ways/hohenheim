@@ -116,7 +116,8 @@ public class ManagedDatabase {
 
         /**
          * This engine's DECLARED memory footprint (MB) for the PERSISTENCE SHAPE it runs
-         * in: both what the capacity ledger books and, because charge == cap, the cgroup
+         * in: both what the capacity ledger books and, because an engine states no reservation
+         * (charge == cap), the cgroup
          * ceiling the daemon applies when the operator declares no
          * {@code memory_limit_mb}. The shape is the same stored fact that decides the
          * data directory's mode ({@link DatabaseContainerKind#isEphemeral}), so the

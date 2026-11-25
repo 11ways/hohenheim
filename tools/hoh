@@ -561,11 +561,12 @@ const engineVerbs = {
 // -- host verbs (hoh host list|show) ------------------------------------------
 //
 // The capacity picture the admin overview page renders. Every number is the
-// server's own ledger -- booked is what placement decides on (declared ceilings,
-// charge == cap), never live RSS, which is what `docker stats` was answering.
+// server's own ledger -- booked is what placement decides on (the apps' reserved
+// amounts), maximums what they may grow to together, never live RSS, which is
+// what `docker stats` was answering.
 
 const hostColumns = ['id', 'name', 'runtime', 'admission', 'measured', 'budget_mb',
-    'booked_mb', 'free_mb', 'overcommit_ratio'];
+    'booked_mb', 'maximums_mb', 'free_mb', 'overcommit_ratio'];
 
 const hostVerbs = {
 
@@ -586,12 +587,12 @@ const hostVerbs = {
                 + ' -- this host has no placement budget');
         } else {
             console.log(`  memory: ${data.booked_mb} of ${data.budget_mb} MB booked,`
-                + ` ${data.free_mb} MB free`
+                + ` ${data.free_mb} MB free, maximums together ${data.maximums_mb} MB`
                 + ` (overcommit ${data.overcommit_ratio}x, reserve ${data.reserve_mb} MB,`
                 + ` measured ${data.measured_at})`);
         }
         table(data.workloads || [],
-            ['id', 'name', 'kind', 'status', 'booked_mb', 'usage_mb']);
+            ['id', 'name', 'kind', 'status', 'booked_mb', 'maximum_mb', 'usage_mb']);
     },
 };
 

@@ -50,7 +50,8 @@ import java.util.Set;
  * What the tier GAINED by lowering, none of which it had before: the fenced outcome
  * write (a stale controller's provision cannot stick), the host lease, the port ledger's
  * record-after claim under the INSTANCE owner with its {@code releasing} park, host
- * capacity booking (charge == cap), the reconciler's instance classification, the
+ * capacity booking (charge == cap: an engine states no reservation), the reconciler's
+ * instance classification, the
  * kernel-verified isolation sweep's instance lane, and the verified-destroy discipline
  * with its named refusals.
  *

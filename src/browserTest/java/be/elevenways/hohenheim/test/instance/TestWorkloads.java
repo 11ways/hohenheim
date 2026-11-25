@@ -29,6 +29,17 @@ public final class TestWorkloads {
      * @param memoryLimitMb its {@code memory_limit_mb}, null for its kind's default
      */
     public static @NonNull Row dockerContainer(@NonNull String name, int serverId, @Nullable Integer memoryLimitMb) {
+        return dockerContainer(name, serverId, memoryLimitMb, null);
+    }
+
+    /**
+     * Builds an unsaved Docker container app on {@code serverId} that reserves less than its maximum.
+     *
+     * @param memoryLimitMb    its {@code memory_limit_mb} (the maximum), null for its kind's default
+     * @param memoryReservedMb its {@code memory_reserved_mb}, null to reserve its maximum
+     */
+    public static @NonNull Row dockerContainer(@NonNull String name, int serverId, @Nullable Integer memoryLimitMb,
+                                               @Nullable Integer memoryReservedMb) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, DOCKER_KIND);
@@ -36,6 +47,9 @@ public final class TestWorkloads {
         settings.put("image", "fake/image");
         if (memoryLimitMb != null) {
             settings.put(InstanceKindFields.MEMORY_LIMIT_MB, memoryLimitMb);
+        }
+        if (memoryReservedMb != null) {
+            settings.put(InstanceKindFields.MEMORY_RESERVED_MB, memoryReservedMb);
         }
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.HOST_ID, serverId);

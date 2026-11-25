@@ -622,11 +622,21 @@
   ],
   "memory_limit": [
     {
-      "text": "Geheugenlimiet",
+      "text": "Maximaal geheugen",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximaal geheugen; de host reserveert evenveel. Laat leeg voor de standaardlimiet van dit soort.",
+      "text": "Geheugen waartoe het mag groeien; daarboven stopt de kernel het. Laat leeg voor de standaard van dit soort.",
+      "scope": "help"
+    }
+  ],
+  "memory_reserved": [
+    {
+      "text": "Gereserveerd geheugen",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Geheugen dat de host ervoor boekt; het mag meer gebruiken, tot het maximum. Een wijziging wordt meteen geboekt, herstart niets en bereikt een draaiende Docker-app bij haar volgende deploy of herstart. Laat leeg om het maximum te reserveren.",
       "scope": "help"
     }
   ],
@@ -6833,7 +6843,11 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' heeft geen ruimte voor deze app: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. {$held} Kies een kleinere geheugenlimiet, verwijder of verklein een app die er geheugen inneemt, of laat een extra host toe.",
+    "text": "Host '{$name}' heeft geen ruimte voor deze app: ze reserveert {$needed :bytes} en slechts {$free :bytes} van het geheugenbudget is vrij. {$held} Kies minder gereserveerd geheugen, verwijder of verklein een app die er geheugen inneemt, of laat een extra host toe.",
+    "scope": "violations"
+  },
+  "memory_reserved_above_maximum": {
+    "text": "Gereserveerd geheugen ({$reserved :bytes}) kan niet meer zijn dan maximaal geheugen ({$maximum :bytes}): verlaag het gereserveerde geheugen of verhoog het maximale geheugen.",
     "scope": "violations"
   },
   "capacity_held_by": {
@@ -11350,6 +11364,7 @@
     "scope": "server_overview"
   },
   "bookable_free": {"text": "{$free :bytes} vrij van {$budget :bytes}", "scope": "server_overview"},
+  "maximums": {"text": "Maxima samen", "scope": "server_overview"},
   "unmeasured": [
     {
       "text": "Ongemeten",
@@ -13112,7 +13127,7 @@
     "scope": "form_section"
   },
   "limits_description": {
-    "text": "Een nieuwe geheugen- of CPU-limiet geldt zodra u opslaat. Op een Docker-host herstart de app en is die even niet bereikbaar; op een Incus-host verandert ze ter plaatse.",
+    "text": "Een nieuw maximaal geheugen of een nieuwe CPU-limiet geldt zodra u opslaat. Op een Docker-host herstart de app en is die even niet bereikbaar; op een Incus-host verandert ze ter plaatse. Een nieuw gereserveerd geheugen verandert meteen wat de host boekt en herstart niets; een draaiende app op een Docker-host krijgt het bij haar volgende deploy of herstart.",
     "scope": "form_section"
   },
   "deployment": {

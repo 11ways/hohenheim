@@ -103,6 +103,8 @@ public final class HostApi {
         // What is left to book, which is the number an operator planning a move wants; the host page's
         // "Bookable" fact says the same figure.
         entry.put("free_mb", capacity.freeMb());
+        // What the booked apps may grow to together, beside what they reserve; nothing is booked against it.
+        entry.put("maximums_mb", capacity.maximumsMb());
         entry.put("overcommit_ratio", overcommitRatio());
         entry.put("reserve_mb", reserveMb());
         entry.put("measured_at", capacity.measuredAtIso());
@@ -127,6 +129,7 @@ public final class HostApi {
             entry.put("name", instance.get(InstanceModel.NAME));
             entry.put("status", String.valueOf((Object) instance.get(InstanceModel.STATUS)));
             entry.put("booked_mb", InstanceCapacity.bookedMbOf(instance));
+            entry.put("maximum_mb", InstanceCapacity.maximumMbOf(instance));
             Long usage = instanceId == null ? null : InstanceStats.lastMemoryMb(instanceId);
             if (usage != null) {
                 entry.put("usage_mb", usage);

@@ -5,9 +5,11 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -35,37 +37,44 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.function.ToIntBiFunction;
 
 /**
  * PER-HOST memory capacity: the InstanceQuota shape, but the bucket is a HOST rather than
  * an owner, so the thing being rationed is physics instead of policy.
  *
- * THE PRODUCT DECISION:
+ * THE PRODUCT DECISION (the owner's, 2026-11-25):
  *
- * A workload is admitted as its DECLARED {@code memory_limit_mb}, and when it declares
- * none, as its KIND's declared footprint ({@link InstanceKindHandler#defaultFootprintMb}).
- * The denominator is therefore never zero -- the exact defect that made a limits-summed
- * budget decoration. And because {@code ResourceLimits.fromSettings(settings, default)}
- * hands that same number to the daemon as the cgroup / VM memory cap, the booking is not
- * an estimate: a workload cannot grow past what was booked for it. Charge == cap.
+ * An app declares TWO amounts. Its RESERVED memory ({@code memory_reserved_mb}) is what it
+ * is guaranteed, and is what this ledger books against its host. Its MAXIMUM
+ * ({@code memory_limit_mb}) is what it may grow to, and is the cgroup / VM memory cap the
+ * driver enforces. An app that states only the maximum reserves all of it, exactly as
+ * before the split, and one that states neither books its KIND's declared footprint
+ * ({@link InstanceKindHandler#defaultFootprintMb}): the denominator is never zero, the
+ * exact defect that made a limits-summed budget decoration. The booking is therefore no
+ * longer the cap: charge == reservation, cap == maximum, and reservation <= maximum is
+ * refused otherwise ({@code memory_reserved_above_maximum}). The sum of maximums is shown
+ * beside the booking ({@link #maximumsMbOn}) and is never booked.
  *
- * What the operator gets asked in exchange: nothing. The kind's footprint is the DEFAULT
- * value of a field the form already has, so declaring a bigger workload is one number on
- * a form the operator was already looking at.
+ * Robbedoes on 2026-11-25 is why, in the owner's own figures: 18 apps booked 10,880 of 11,683 MB at their caps
+ * while using about a third, and a new 1 GB app was refused. The memory health checks
+ * ({@link MemoryHealth}) say when a reservation is too small or far too large.
  *
  * The two honest questions, answered:
  *
- * 1. The declared footprints exceed the host: the reservation refuses BY NAME
+ * 1. The reservations exceed the host: the reservation refuses BY NAME
  *    ({@code host_capacity_reached}, naming the host, what was asked and what is free),
  *    and placement never offers such a host in the first place, so the common path is a
- *    different host rather than a refusal. Overcommit is available and DELIBERATE
- *    ({@code capacity.memory_overcommit_ratio}) -- an operator may book more than the
- *    host has, and the setting's own description says who settles that bet.
- * 2. The footprints fit but the host is really full: for MEMORY this cannot silently
- *    happen, because every booking is also an enforced cap. It can happen for anything
- *    NOT booked -- page cache, the daemon itself, a stack container, disk and CPU -- which
- *    is what {@code capacity.host_memory_reserve_mb} exists for, and which is the honest
- *    limit of this gate: it rations declared workload memory, and claims nothing else.
+ *    different host rather than a refusal. Overcommit is available and DELIBERATE: the ONE
+ *    ratio ({@code capacity.memory_overcommit_ratio}) multiplies the bookable total the
+ *    reservations are booked against, and the setting's own description says who settles
+ *    that bet.
+ * 2. The reservations fit but the host is really full: apps grow past their reservations
+ *    up to their maximums, so this CAN happen now, by the operator's own declaration; the
+ *    Docker soft limit ({@code MemoryReservation}) is the kernel's promise to reclaim an app
+ *    down to its reservation first, and the host-memory and near-maximum checks say it
+ *    before the OOM killer does. Anything NOT booked -- page cache, the daemon itself,
+ *    disk and CPU -- is what {@code capacity.host_memory_reserve_mb} exists for.
  *
  * AIDEV-NOTE: a workload is booked on its RECORD'S EXISTENCE, not on whether it is
  * running. A stopped guest can be started again without asking anyone, so a control plane
@@ -159,7 +168,8 @@ public final class InstanceCapacity {
             Math.clamp(bookedMbOn(serverId), 0, Integer.MAX_VALUE),
             budget != null ? Math.clamp(bookableMbOn(serverId, budget), 0, Integer.MAX_VALUE) : 0,
             measuredAt != null ? measuredAt.toString() : null,
-            maxAge != null ? maxAge : 0);
+            maxAge != null ? maxAge : 0,
+            Math.clamp(maximumsMbOn(serverId), 0, Integer.MAX_VALUE));
     }
 
     // -- the budget -----------------------------------------------------------
@@ -218,18 +228,14 @@ public final class InstanceCapacity {
     // -- the footprint --------------------------------------------------------
 
     /**
-     * The memory (MB) one instance row is booked at: its declared limit, else its kind's
-     * declared footprint.
+     * The memory (MB) one instance row is booked at, its RESERVED amount: its declared reservation, else its declared
+     * maximum, else its kind's declared footprint.
      *
      * @return the footprint, or 0 when the kind is unknown (a kind whose handler class is
      *         gone cannot be deployed either, so booking nothing for it is honest)
      */
     public static int footprintMbOf(@NonNull Row instance) {
-        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
-        if (handler == null || !InstanceModel.roleHoldsMemory(instance.get(InstanceModel.RUNTIME_ROLE))) {
-            return 0;
-        }
-        return footprintMbOf(handler, InstanceModel.settingsOf(instance));
+        return amountOf(instance, InstanceCapacity::footprintMbOf);
     }
 
     /** The same derivation from a kind and its settings, before any record exists. */
@@ -239,24 +245,75 @@ public final class InstanceCapacity {
             .bookedMemoryMb();
     }
 
+    /** The memory cap (MB) of a kind with these settings: the declared maximum, else the kind's footprint. */
+    public static int maximumMbOf(@NonNull InstanceKindHandler handler, @NonNull Map<String, Object> settings) {
+        return ResourceLimits.fromSettings(settings, handler.defaultFootprintMb(settings))
+            .maximumMemoryMb();
+    }
+
+    /** @return one row's amount by {@code derivation}, 0 for an unknown kind or a role that holds no memory */
+    private static int amountOf(@NonNull Row instance,
+                                @NonNull ToIntBiFunction<InstanceKindHandler, Map<String, Object>> derivation) {
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
+        if (handler == null || !InstanceModel.roleHoldsMemory(instance.get(InstanceModel.RUNTIME_ROLE))) {
+            return 0;
+        }
+        return derivation.applyAsInt(handler, InstanceModel.settingsOf(instance));
+    }
+
     /**
      * The memory (MB) an app reserves as its settings declare it now: the guaranteed amount its host books for it, and
      * what the memory health checks ({@link MemoryHealth}) hold its use against.
      *
-     * AIDEV-NOTE: the ONE reading of "reserved" outside the booking itself; today it is the footprint, because the
-     * reservation is still the maximum. A record whose releases book for it (an application) reserves nothing itself.
+     * AIDEV-NOTE: the ONE reading of "reserved" outside the booking itself. A record whose releases book for it (an
+     * application) reserves nothing itself.
      */
     public static long reservedMbOf(@NonNull Row instance) {
         return booksNothing(InstanceKinds.handlerOf(instance)) ? 0 : footprintMbOf(instance);
     }
 
-    /**
-     * The memory (MB) an app may grow to, the cap its runtime enforces; 0 when it holds none.
-     *
-     * AIDEV-NOTE: equal to {@link #reservedMbOf} while the reservation is still the maximum.
-     */
+    /** The memory (MB) an app may grow to, the cap its runtime enforces; 0 when it holds none. */
     public static long maximumMbOf(@NonNull Row instance) {
-        return reservedMbOf(instance);
+        return booksNothing(InstanceKinds.handlerOf(instance)) ? 0
+            : amountOf(instance, InstanceCapacity::maximumMbOf);
+    }
+
+    /**
+     * The sum of the maximums (MB) of the apps booked on a host: what they may all grow to together, shown beside
+     * what is booked; nothing is booked against it and no ratio applies to it.
+     */
+    public static long maximumsMbOn(int serverId) {
+        long sum = 0;
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.HOST_ID.eq(serverId)).all()) {
+            sum += maximumMbOf(instance);
+        }
+        return sum;
+    }
+
+    /**
+     * Refuses a reservation above the maximum on a write that leaves the row live, naming both amounts.
+     *
+     * AIDEV-NOTE: unlike {@link #effectiveMb} this has no {@link #booksNothing} guard, on purpose: an application
+     * books nothing itself, but its settings are the declaration every release it deploys inherits, so a reservation
+     * above its maximum is refused on the application rather than on its next deploy.
+     *
+     * @throws Violations {@code memory_reserved_above_maximum} on {@code memory_reserved_mb}
+     */
+    static void requireReservationWithinMaximum(@NonNull Row row, @Nullable Row stored) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
+        if (handler == null) {
+            return;
+        }
+        Map<String, Object> settings = settingsAfterWrite(row, stored);
+        Integer reserved = RawValues.positiveInt(settings.get(InstanceKindFields.MEMORY_RESERVED_MB));
+        int maximum = maximumMbOf(handler, settings);
+        if (reserved != null && maximum > 0 && reserved > maximum) {
+            throw Violations.ofField(InstanceKindFields.MEMORY_RESERVED_MB, reserved,
+                HohenheimMicrocopy.VIOLATIONS.of("memory_reserved_above_maximum")
+                    .withArg("reserved", ByteUnit.MEGABYTE.bytes(reserved))
+                    .withArg("maximum", ByteUnit.MEGABYTE.bytes(maximum)));
+        }
     }
 
     // -- the gate -------------------------------------------------------------
@@ -605,6 +662,12 @@ public final class InstanceCapacity {
             row.set(InstanceModel.CAPACITY_MB, charge == null ? 0 : (int) charge.amount());
         }
 
+        /** A reservation above the maximum is no booking at all: it is refused before anything is charged. */
+        @Override
+        public void validate(@NonNull Row row, @Nullable Row stored) {
+            requireReservationWithinMaximum(row, stored);
+        }
+
         /**
          * A live row mid-migration holds its booking on the SOURCE and the open window's on
          * the DESTINATION ({@code migrate_reserved_mb}); the reconcile must count both, or it
@@ -705,24 +768,39 @@ public final class InstanceCapacity {
     }
 
     /**
-     * The footprint the write will END UP being charged -- a partial CMS update carries
+     * The RESERVED amount the write will END UP being charged on its host -- a partial CMS update carries
      * only the changed keys (the {@code Row.afterWrite} idiom), so pricing the staged
      * row alone would charge a settings-less edit as a zero-footprint workload.
-     *
-     * AIDEV-NOTE: package-visible because {@link InstanceQuota}'s per-OWNER memory budget
-     * must book the very same number this host budget does. Two derivations of "how much
-     * memory is this write worth" is how one ledger ends up charging what the other does
-     * not, and charge == cap only holds while there is ONE answer.
      */
     static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
+        return effectiveMb(row, stored, InstanceCapacity::footprintMbOf);
+    }
+
+    /**
+     * The MAXIMUM the write will end up declaring, what {@link InstanceQuota}'s per-OWNER memory budget books.
+     *
+     * AIDEV-NOTE: the owner books the maximum, the host the reservation, on purpose. The host budget is physics, and
+     * the overcommit ratio is the operator's bet on it; the owner budget is policy, "may this tenant have it", and a
+     * tenant who could lower its reservation to escape its budget while keeping a large maximum would hold memory no
+     * budget granted. Both read the same settings through {@link #effectiveMb}: one derivation, two amounts.
+     */
+    static int effectiveMaximumMb(@NonNull Row row, @Nullable Row stored) {
+        return effectiveMb(row, stored, InstanceCapacity::maximumMbOf);
+    }
+
+    private static int effectiveMb(@NonNull Row row, @Nullable Row stored,
+                                   @NonNull ToIntBiFunction<InstanceKindHandler, Map<String, Object>> derivation) {
         InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
         if (handler == null || booksNothing(handler)
                 || !InstanceModel.roleHoldsMemory(row.afterWrite(InstanceModel.RUNTIME_ROLE, stored))) {
             return 0;
         }
-        Map<String, Object> settings =
-            row.has(InstanceModel.SETTINGS.getName()) || stored == null
-                ? InstanceModel.settingsOf(row) : InstanceModel.settingsOf(stored);
-        return footprintMbOf(handler, settings);
+        return derivation.applyAsInt(handler, settingsAfterWrite(row, stored));
+    }
+
+    /** @return the settings the write leaves on the row: the staged ones when it carries them, else the stored */
+    private static @NonNull Map<String, Object> settingsAfterWrite(@NonNull Row row, @Nullable Row stored) {
+        return row.has(InstanceModel.SETTINGS.getName()) || stored == null
+            ? InstanceModel.settingsOf(row) : InstanceModel.settingsOf(stored);
     }
 }

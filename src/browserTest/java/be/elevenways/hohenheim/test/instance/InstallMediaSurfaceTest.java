@@ -1010,7 +1010,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
     private static InstanceSpec mediaSpec(String handle) {
         return InstanceSpec.builder(handle, "",
-                new ResourceLimits(1024, null),
+                ResourceLimits.of(1024, null),
                 new ContainerHardening.Profile("incus-vm", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, 9377))
             .imageOrigin(ImageOrigin.INSTALL_MEDIA)
@@ -1156,7 +1156,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                                              @NonNull Map<String, Object> settings) {
             return InstanceSpec.builder("media-surf-instance-" + instanceId,
                     String.valueOf(settings.getOrDefault("image", "fake/image")),
-                    new ResourceLimits(512, null),
+                    ResourceLimits.of(512, null),
                     new ContainerHardening.Profile("fake-media", List.of()),
                     OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
                 .build();

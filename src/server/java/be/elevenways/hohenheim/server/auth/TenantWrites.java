@@ -1098,8 +1098,9 @@ public final class TenantWrites {
      * {@code image} is the {@code image_any} threat one tier over -- DatabaseContainerKind
      * declares {@code tenantAuthored() == false} and therefore has no InstanceImagePolicy
      * equivalent to catch an attacker-chosen engine image. {@code memory_limit_mb} and
-     * {@code cpu_limit} ARE the capacity booking (charge == cap), so writing one is
-     * writing your own host budget. {@code ephemeral} flips the data directory to a tmpfs:
+     * {@code cpu_limit} ARE the capacity booking (an engine states no reservation: its charge is
+     * its cap), so writing one is writing your own host budget. {@code ephemeral} flips the data
+     * directory to a tmpfs:
      * a silent total data loss on the next deploy. {@code db_user}/{@code db_password}/
      * {@code db_name} are mirrored into the RUNNING engine's secrets
      * (DatabaseInstances.writeEngineSecrets) -- rotation is a real operation

@@ -39,8 +39,16 @@ public final class InstanceKindFields {
 
     public static final String ENVIRONMENT_VARIABLES = "environment_variables";
 
-    /** The memory ceiling in MiB, the host-capacity denominator. */
+    /** The memory ceiling in MiB an app may grow to, the cap its runtime enforces. */
     public static final String MEMORY_LIMIT_MB = "memory_limit_mb";
+
+    /**
+     * The memory in MiB an app is guaranteed, the amount its host books for it; absent, it books its maximum.
+     *
+     * AIDEV-NOTE: only the kinds whose amounts live in their settings map declare it; a managed database and a stack
+     * service keep theirs in their own columns, which carry no reservation, so they book their maximum.
+     */
+    public static final String MEMORY_RESERVED_MB = "memory_reserved_mb";
 
     public static final String CPU_LIMIT = "cpu_limit";
 
@@ -88,6 +96,12 @@ public final class InstanceKindFields {
         return IntegerField.builder().name(MEMORY_LIMIT_MB)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit"))
             .help(HohenheimMicrocopy.HELP.of("memory_limit")).byteSize(ByteUnit.MEGABYTE).build();
+    }
+
+    public static @NonNull IntegerField memoryReserved() {
+        return IntegerField.builder().name(MEMORY_RESERVED_MB)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_reserved"))
+            .help(HohenheimMicrocopy.HELP.of("memory_reserved")).byteSize(ByteUnit.MEGABYTE).build();
     }
 
     public static @NonNull DoubleField cpuLimit() {

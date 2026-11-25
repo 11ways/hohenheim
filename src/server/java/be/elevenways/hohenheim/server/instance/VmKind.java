@@ -98,6 +98,8 @@ public final class VmKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /**

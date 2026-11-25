@@ -67,6 +67,8 @@ public final class StaticSiteKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     // AIDEV-NOTE: declared after the fields -- Schema.addSection validates membership against the fields so far.
@@ -81,7 +83,7 @@ public final class StaticSiteKind implements InstanceKindHandler {
             HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT, GitSourceSchema.DELIVERY));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
             HohenheimFormSections.limitsNote(), List.of(
-            MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+            MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
     }
 
     /** Never runs itself: each deploy generates a release that serves the built output. */

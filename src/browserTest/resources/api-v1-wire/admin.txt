@@ -31,7 +31,7 @@
 ## list hosts
 > GET /api/v1/hosts
 < 200 application/json; charset=utf-8
-{"hosts":[{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true},{"admission":"admitted","bookable_mb":0,"booked_mb":0,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":2,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-incus-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"incus","stale":true}]}
+{"hosts":[{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"maximums_mb":512,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true},{"admission":"admitted","bookable_mb":0,"booked_mb":0,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":2,"maximums_mb":0,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-incus-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"incus","stale":true}]}
 
 ## list hosts with a tenant key
 > GET /api/v1/hosts
@@ -41,7 +41,7 @@
 ## read a host
 > GET /api/v1/hosts/1
 < 200 application/json; charset=utf-8
-{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true,"workloads":[{"booked_mb":512,"id":1,"kind":"hohenheim:docker_container","name":"wire-web","status":"stopped"}]}
+{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"maximums_mb":512,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true,"workloads":[{"booked_mb":512,"id":1,"kind":"hohenheim:docker_container","maximum_mb":512,"name":"wire-web","status":"stopped"}]}
 
 ## read an absent host
 > GET /api/v1/hosts/999999

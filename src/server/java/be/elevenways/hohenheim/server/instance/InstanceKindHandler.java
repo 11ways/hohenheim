@@ -229,17 +229,18 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * declaration is that the capacity gate can never have a zero denominator. Declaring
      * it is one line; forgetting it is a compile error.
      *
-     * AIDEV-NOTE: charge == cap is the invariant, not a coincidence. The booking is only
-     * honest because {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))}
-     * hands the SAME number to the daemon, so a workload cannot quietly grow past what
-     * the ledger booked for it. If a kind ever charges one number and caps another, the
-     * gate is decoration again.
+     * AIDEV-NOTE: the default IS the cap and the booking of an app that states no amounts. The
+     * booking is only honest because {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))}
+     * hands the daemon the declared maximum (this default when none) and the ledger books the declared
+     * reservation (the maximum when none), so a workload grows past its booking only up to a cap an
+     * operator chose. A kind that charged one default and capped another would make the gate decoration again.
      *
      * AIDEV-NOTE: the SETTINGS are the argument because a kind can handle several
      * workload SHAPES (DatabaseContainerKind handles all four engines, whose real
      * startup peaks differ by 250 MiB). A no-argument signature forced such a kind to
-     * answer one flat number for every shape, and because charge == cap that flat number
-     * became a cgroup ceiling BELOW some engines' measured startup peak -- mysql and
+     * answer one flat number for every shape, and because a kind's default was both its charge
+     * and its cap, that flat number became a cgroup ceiling BELOW some engines' measured startup
+     * peak -- mysql and
      * mongo spent their whole init pinned against it and were OOM-killed under parallel
      * load. An implementation that has one shape simply ignores the argument.
      *

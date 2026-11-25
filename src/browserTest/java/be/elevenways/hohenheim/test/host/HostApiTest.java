@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The HOST capacity surface: the memory picture that lived only on the admin overview
  * page, which is why an operator placing databases on shared engines was reading
  * {@code docker stats} -- a live-RSS number that answers a DIFFERENT question from the
- * one placement decides on (declared ceilings, charge == cap).
+ * one placement decides on (the apps' declared reservations).
  *
  * ONE journey, and the assertions compare against {@link InstanceCapacity} itself rather
  * than against literals: the claim being pinned is not "the API returns 10915", it is

@@ -85,9 +85,9 @@ class MemoryHealthAttentionTest {
                 //    watched for three days is not yet.
                 int host = HostFixtures.admittedDockerHost(PREFIX + "apps", 8192);
                 hosts.add(host);
-                int idle = app(apps, "idle", host, 512);
+                int idle = app(apps, "idle", host, 512, null);
                 recordEvery(idle, now, Duration.ofDays(8), step -> 60 + step % 5 * 10);
-                int young = app(apps, "young", host, 512);
+                int young = app(apps, "young", host, 512, null);
                 recordEvery(young, now, Duration.ofDays(3), step -> 60);
                 assertThat(appItems(now, "en")).as("step 3: the idle app is hinted, the young one is not")
                     .containsExactly("info " + PREFIX + "idle reserves far more memory than it uses | Over the last 7 "
@@ -96,7 +96,7 @@ class MemoryHealthAttentionTest {
 
                 // 4. Near its maximum warns on the newest sample alone.
                 MemoryHistory.clear();
-                int full = app(apps, "full", host, 512);
+                int full = app(apps, "full", host, 512, null);
                 MemoryHistory.record(full, new MemoryHistory.Sample(now.minus(Duration.ofMinutes(2)), 460 * MIB),
                     THRESHOLDS.longest());
                 assertThat(appItems(now, "en")).as("step 4: 460 MB of a 512 MB maximum")
@@ -108,8 +108,17 @@ class MemoryHealthAttentionTest {
                         + "460 MB, 90% van het maximum van 512 MB. Bij het maximum stopt de kernel het, dus verhoog "
                         + "het maximale geheugen. -> /admin/instances/" + full + "/page/overview");
 
+                // 4b. Use above a reservation below the maximum, the whole hour long, says to raise the reservation.
+                int grown = app(apps, "grown", host, 1024, 256);
+                recordEvery(grown, now, Duration.ofMinutes(70), step -> 300 + step % 3 * 10);
+                assertThat(appItems(now, "en")).as("step 4b: an hour above 256 MB reserved, near no maximum")
+                    .filteredOn(line -> line.contains(PREFIX + "grown")).containsExactly("warning " + PREFIX
+                        + "grown uses more memory than it reserves | For the last 1h it used up to 320 MB, more than "
+                        + "the 256 MB its host reserves for it. Raise its reserved memory to 448 MB. -> "
+                        + "/admin/instances/" + grown + "/page/overview");
+
                 // 5. A kill the status reconciler stored is an alert naming the app and the moment, on the dashboard.
-                int killed = app(apps, "killed", host, 512);
+                int killed = app(apps, "killed", host, 512, null);
                 Instant killedAt = now.minus(Duration.ofMinutes(20));
                 Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(killed))
                     .assign(InstanceModel.WORKLOAD_KILLED_AT, killedAt)
@@ -201,8 +210,8 @@ class MemoryHealthAttentionTest {
     }
 
     /** A running Docker container app of this memory limit, as the reconciler would have confirmed it. */
-    private static int app(List<Integer> made, String name, int serverId, int limitMb) {
-        Row row = TestWorkloads.dockerContainer(PREFIX + name, serverId, limitMb);
+    private static int app(List<Integer> made, String name, int serverId, int limitMb, Integer reservedMb) {
+        Row row = TestWorkloads.dockerContainer(PREFIX + name, serverId, limitMb, reservedMb);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         made.add(id);

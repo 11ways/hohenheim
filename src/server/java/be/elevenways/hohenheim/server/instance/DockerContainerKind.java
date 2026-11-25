@@ -153,6 +153,8 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
+    public static final IntegerField MEMORY_RESERVED_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryReserved());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** Which console the primary process gets; {@link ConsoleKind} is the vocabulary's home. */
@@ -167,7 +169,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
                 SRV_SERVICE.getName(), STATUS_PROBE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             HohenheimFormSections.limitsNote(),
-            List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+            List.of(MEMORY_RESERVED_MB.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         // The console shape has a working default (plain); a TUI workload opts in.
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
             List.of(CONSOLE_KIND.getName())));

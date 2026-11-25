@@ -10,14 +10,18 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceResize;
+import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.testsupport.thread.Racers;
+import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -25,6 +29,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -262,6 +268,88 @@ class InstanceCapacityTest {
             assertThat(InstanceCapacity.footprintMbOf(applicationKind,
                     Map.of(InstanceKindFields.MEMORY_LIMIT_MB, 48)))
                 .as("step 4: with one, at that limit").isEqualTo(48);
+        });
+    }
+
+    /**
+     * Two amounts per app: the host books what an app RESERVES, the runtime caps it at its MAXIMUM, and the owner is
+     * charged the maximum. A host of 1,000 MB bookable takes four apps reserving 250 MB of a 512 MB maximum.
+     */
+    @Test
+    void aHostBooksReservationsWhileAppsMayGrowToTheirMaximums() {
+        Db.run(datasource, () -> {
+            int alpha = host("reserving", 1000L, Now.instant());
+            int beta = host("plain", 2048L, Now.instant());
+
+            // 1. Four apps reserving 250 MB fill the host; their maximums sum beside it, booked nowhere.
+            List<Integer> four = new ArrayList<>();
+            for (int index = 1; index <= 4; index++) {
+                four.add(save(TestWorkloads.dockerContainer(PREFIX + "r" + index, alpha, 512, 250)));
+            }
+            assertThat(InstanceCapacity.bookedMbOn(alpha)).as("step 1: four reservations of 250 MB").isEqualTo(1000);
+            assertThat(InstanceCapacity.maximumsMbOn(alpha)).as("step 1: four maximums of 512 MB").isEqualTo(2048);
+            Row first = Models.get(InstanceModel.class).findById(four.get(0));
+            assertThat((Integer) first.get(InstanceModel.CAPACITY_MB)).as("step 1: the host books the reservation")
+                .isEqualTo(250);
+            assertThat((Integer) first.get(InstanceModel.QUOTA_MEMORY_MB))
+                .as("step 1: the owner is charged the maximum").isEqualTo(512);
+
+            // 2. A fifth is refused, saying what it reserves and that nothing is free.
+            Throwable fifth = catchThrowable(
+                () -> save(TestWorkloads.dockerContainer(PREFIX + "r5", alpha, 512, 250)));
+            assertThat(keyOf("step 2: a fifth reservation", fifth)).isEqualTo("host_capacity_reached");
+            var said = ((Violations) fifth).all().get(0).message().args();
+            assertThat(Arrays.asList(said.get("needed"), said.get("free"), said.get("held") != null))
+                .as("step 2: the refusal names what is asked, what is free and who holds it")
+                .containsExactly(ByteUnit.MEGABYTE.bytes(250), 0L, true);
+
+            // 3. Lowering a reservation frees room at once, and asks for no restart: the fifth now fits.
+            Map<String, Object> before = InstanceModel.settingsOf(first);
+            Map<String, Object> after = new LinkedHashMap<>(before);
+            after.put(InstanceKindFields.MEMORY_RESERVED_MB, 125);
+            assertThat(InstanceResize.requiresRecreate(before, after, InstanceModel.STATUS_RUNNING))
+                .as("step 3: a new reservation leaves a running app running").isFalse();
+            first.set(InstanceModel.SETTINGS, after);
+            Models.get(InstanceModel.class).save(first);
+            assertThat(InstanceCapacity.bookedMbOn(alpha)).as("step 3: 125 MB freed").isEqualTo(875);
+            save(TestWorkloads.dockerContainer(PREFIX + "r5", alpha, 512, 125));
+            assertThat(InstanceCapacity.bookedMbOn(alpha)).as("step 3: the fifth fits in it").isEqualTo(1000);
+
+            // 4. The reconciler recounts the reservations, not the maximums.
+            Quotas.reserve(InstanceCapacity.bucketOf(alpha), 999, Long.MAX_VALUE);
+            assertThat(QuotaReconciler.reconcile().corrections()).as("step 4: the drifted host bucket is corrected")
+                .extracting(QuotaReconciler.Correction::bucket).contains(InstanceCapacity.bucketOf(alpha));
+            assertThat(InstanceCapacity.bookedMbOn(alpha)).as("step 4: back to what is reserved").isEqualTo(1000);
+
+            // 5. An app stating only its limit books as before the split: reserved = maximum = that limit.
+            int plain = save(TestWorkloads.dockerContainer(PREFIX + "limit-only", beta, 300));
+            Row plainRow = Models.get(InstanceModel.class).findById(plain);
+            assertThat(List.of(InstanceCapacity.bookedMbOn(beta), InstanceCapacity.maximumsMbOn(beta),
+                    InstanceCapacity.reservedMbOf(plainRow), InstanceCapacity.maximumMbOf(plainRow)))
+                .as("step 5: 300 MB everywhere").containsOnly(300L);
+
+            // 6. A reservation above the maximum is refused, naming both amounts.
+            Throwable over = catchThrowable(
+                () -> save(TestWorkloads.dockerContainer(PREFIX + "over", beta, 512, 600)));
+            assertThat(keyOf("step 6: reserving more than the maximum", over))
+                .isEqualTo("memory_reserved_above_maximum");
+            assertThat(((Violations) over).all().get(0).fieldName()).as("step 6: on the reservation")
+                .isEqualTo(InstanceKindFields.MEMORY_RESERVED_MB);
+            var amounts = ((Violations) over).all().get(0).message().args();
+            assertThat(Arrays.asList(amounts.get("reserved"), amounts.get("maximum"))).as("step 6: naming both amounts")
+                .containsExactly(ByteUnit.MEGABYTE.bytes(600), ByteUnit.MEGABYTE.bytes(512));
+            assertThat(InstanceCapacity.bookedMbOn(beta)).as("step 6: nothing was booked for it").isEqualTo(300);
+
+            // 7. The Docker run spec carries both: the maximum as the cap, the reservation as the soft limit.
+            Map<String, Object> reserving = new LinkedHashMap<>();
+            ResourceLimits.fromSettings(InstanceModel.settingsOf(first), 512).applyTo(reserving);
+            assertThat(reserving).as("step 7: Memory is the maximum, MemoryReservation the reservation")
+                .containsEntry("Memory", ByteUnit.MEGABYTE.bytes(512))
+                .containsEntry("MemoryReservation", ByteUnit.MEGABYTE.bytes(125));
+            Map<String, Object> limitOnly = new LinkedHashMap<>();
+            ResourceLimits.fromSettings(InstanceModel.settingsOf(plainRow), 512).applyTo(limitOnly);
+            assertThat(limitOnly).as("step 7: an app stating only its limit has no soft limit")
+                .containsEntry("Memory", ByteUnit.MEGABYTE.bytes(300)).doesNotContainKey("MemoryReservation");
         });
     }
 
