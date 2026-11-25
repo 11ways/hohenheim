@@ -125,7 +125,7 @@ class InstanceQuotaTest extends HohenheimTestBase {
         int refusals = 0;
         int successes = 0;
         for (HttpResponse<?> response : responses) {
-            if (String.valueOf(response.body()).contains("Instance quota reached")) {
+            if (String.valueOf(response.body()).contains("App quota reached")) {
                 refusals++;
             } else if (response.statusCode() == 200 || response.statusCode() == 302
                     || response.statusCode() == 303) {
@@ -153,7 +153,7 @@ class InstanceQuotaTest extends HohenheimTestBase {
         assertThat(third.statusCode()).as("step 5: the freed slot admits a new create")
             .isIn(200, 302, 303);
         assertThat(third.body()).as("step 5: and it is not a re-rendered refusal")
-            .doesNotContain("Instance quota reached");
+            .doesNotContain("App quota reached");
         assertThat(liveRaceRows()).as("step 5: the third instance is live").hasSize(1);
         assertThat(Quotas.usedOf(OPERATOR_BUCKET))
             .as("step 5: the bucket is exactly full again")
@@ -163,7 +163,7 @@ class InstanceQuotaTest extends HohenheimTestBase {
         //    never a reset.
         HttpResponse<String> fourth = postCreate(NAME_PREFIX + "fourth");
         assertThat(fourth.body()).as("step 6: the next create is refused by name")
-            .contains("Instance quota reached");
+            .contains("App quota reached");
         assertThat(liveRaceRows()).as("step 6: no fourth row landed").hasSize(1);
     }
 }

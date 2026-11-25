@@ -101,7 +101,7 @@
 ## delete a database a workload holds
 > POST /api/v1/databases/1/delete (application/x-www-form-urlencoded, 0 bytes)
 < 422 application/json; charset=utf-8
-{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each instance's Databases tab first.","status":422,"violations":[{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each instance's Databases tab first."}]}
+{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each app's Databases tab first.","status":422,"violations":[{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each app's Databases tab first."}]}
 
 ## delete a detached database
 > POST /api/v1/databases/2/delete (application/x-www-form-urlencoded, 0 bytes)

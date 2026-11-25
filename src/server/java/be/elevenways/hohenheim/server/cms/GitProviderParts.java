@@ -68,8 +68,8 @@ public final class GitProviderParts {
             .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
             .build();
         return entry(HohenheimIds.id("git_provider"), table, form, GitProviderParts::operatorWords)
-            .writes(ResourceMutations.rows().create().update().delete().beforeSave(GitConnectionWrites::generateKey)
-                .build())
+            .writes(ResourceMutations.rows().create().update().delete(GitConnectionWrites.DELETE)
+                .beforeSave(GitConnectionWrites::generateKey).build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
@@ -89,7 +89,7 @@ public final class GitProviderParts {
         return ManageTwin.reached(entry(ManageTwin.id("git_provider"), table, form, GitProviderParts::tenantWords),
                 TenantScopes.MANAGED_GIT_PROVIDERS, ResourceTabs.<Row>none().withContributions())
             .standsUnder(HohenheimSlugs.APPS)
-            .writes(ResourceMutations.rows().create().update().delete()
+            .writes(ResourceMutations.rows().create().update().delete(GitConnectionWrites.DELETE)
                 .beforeSave(GitConnectionWrites::generateKey)
                 .beforeSave(save -> {
                     if (save.isCreate()) {

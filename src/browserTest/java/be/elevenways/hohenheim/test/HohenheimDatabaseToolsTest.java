@@ -85,12 +85,14 @@ class HohenheimDatabaseToolsTest extends HohenheimHttpTestBase {
             String password = "fixture-password-" + tag;
             McpHttpSession.Answer created = admin.call("database_set", Map.of("name", PREFIX + "db-" + tag,
                 "engine", DatabaseModel.ENGINE_POSTGRES, "placement", DatabaseModel.PLACEMENT_DEDICATED,
-                "db_name", "appdb", "db_password", password, "memory_limit_mb", 256));
+                "db_name", "appdb", "password", password, "memory_limit_mb", 256));
             assertThat(created.error()).as("step 2: " + created.text()).isFalse();
             assertThat(created.text()).as("step 2: the password never comes out").doesNotContain(password);
             String databaseCode = codeIn(created.text(), "DB");
             int databaseId = keyOf(DatabaseModel.MODEL_ID, databaseCode, cleanUp);
-            assertThat(admin.call("read", Map.of("ids", List.of(databaseCode))).text())
+            assertThat((String) row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.DB_PASSWORD))
+                .as("step 2: the password given is the one stored").isEqualTo(password);
+            assertThat(admin.call("read", Map.of("codes", List.of(databaseCode))).text())
                 .as("step 2: a read shows no password").doesNotContain(password);
 
             // 3. Its ceiling changes; a password and a generated one at once are refused by name, and a password
@@ -101,13 +103,13 @@ class HohenheimDatabaseToolsTest extends HohenheimHttpTestBase {
             assertThat((Integer) row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.MEMORY_LIMIT_MB))
                 .as("step 3: the new ceiling").isEqualTo(384);
             McpHttpSession.Answer twice = admin.call("database_set", Map.of("code", databaseCode,
-                "db_password", "another-password-" + tag, "generate_password", true));
+                "password", "another-password-" + tag, "generate_password", true));
             assertThat(twice.error()).as("step 3: " + twice.text()).isTrue();
             assertThat(twice.text()).as("step 3: the refusal names it").contains("generate_password");
             McpHttpSession.Answer notServing = admin.call("database_set", Map.of("code", databaseCode,
-                "db_password", "another-password-" + tag));
+                "password", "another-password-" + tag));
             assertThat(notServing.error()).as("step 3: not serving: " + notServing.text()).isTrue();
-            assertThat(notServing.text()).as("step 3: the refusal names it").contains("db_password")
+            assertThat(notServing.text()).as("step 3: the refusal names it").contains("password")
                 .doesNotContain("another-password-" + tag);
             McpHttpSession.Answer frozen = admin.call("database_set", Map.of("code", databaseCode, "db_user", "x"));
             assertThat(frozen.error()).as("step 3: credentials are fixed: " + frozen.text()).isTrue();

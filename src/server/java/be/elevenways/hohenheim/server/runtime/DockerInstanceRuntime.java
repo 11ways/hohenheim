@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.zenit.server.io.FilesystemNodeKind;
 
 import be.elevenways.hohenheim.server.util.PosixPaths;
+import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
@@ -555,15 +556,8 @@ public final class DockerInstanceRuntime
     private static final String RENAME_SCRIPT = "mv -- \"$HH_FM_PATH\" \"$HH_FM_TARGET\"";
     private static final String DELETE_SCRIPT = "rm -f -- \"$HH_FM_PATH\"";
     private static final String DELETE_TREE_SCRIPT = "rm -rf -- \"$HH_FM_PATH\"";
-    /** uid:gid of a path, used to keep a rewritten file owned by whoever owned its directory. */
+    /** uid:gid of a path, used to write a file owned by whoever owns its directory. */
     private static final String OWNER_SCRIPT = "stat -c '%u:%g' \"$HH_FM_PATH\"";
-    /**
-     * {@code -h}: re-own the ENTRY, never what it points at. Between the write and this
-     * chown the workload can swap the file for a symlink; a following chown run as the
-     * container's root would then hand an arbitrary container file (its /etc/shadow) to
-     * the directory's owner.
-     */
-    private static final String CHOWN_SCRIPT = "chown -h \"$HH_FM_OWNER\" \"$HH_FM_PATH\"";
     /**
      * The service refuses a symlink LEAF before it asks, and chmod has no portable
      * no-follow flag: the leaf race is the class note's in-container TOCTOU, bounded the
@@ -668,6 +662,7 @@ public final class DockerInstanceRuntime
         requireOurs(handle, ownerLabels, "write a file into");
         String directory = PosixPaths.parentOf(path);
         String name = PosixPaths.nameOf(path);
+        Tar.Owner owner = ownerOf(handle, path, directory);
 
         Path staging = Files.createTempDirectory("hohenheim-file-manager");
         try {
@@ -676,11 +671,10 @@ public final class DockerInstanceRuntime
             applyMode(target, mode);
             // File entries ONLY (never a directory entry): a tar carrying the target
             // directory re-owns it to root at extraction.
-            this.docker.putArchiveFiles(handle, directory, staging, List.of(name));
+            this.docker.putArchiveFiles(handle, directory, staging, List.of(name), owner);
         } finally {
             FileTrees.deleteQuietly(staging);
         }
-        ownByDirectory(handle, path, directory);
     }
 
     @Override
@@ -689,10 +683,10 @@ public final class DockerInstanceRuntime
             throws IOException {
         requireOurs(handle, ownerLabels, "write a file into");
         String directory = PosixPaths.parentOf(path);
+        Tar.Owner owner = ownerOf(handle, path, directory);
         applyMode(source, mode);
         // One file entry named after the target, its bytes streamed from the source file.
-        this.docker.putArchiveFile(handle, directory, source, PosixPaths.nameOf(path));
-        ownByDirectory(handle, path, directory);
+        this.docker.putArchiveFile(handle, directory, source, PosixPaths.nameOf(path), owner);
     }
 
     @Override
@@ -711,26 +705,32 @@ public final class DockerInstanceRuntime
     }
 
     /**
-     * Hand a just-extracted file to whoever owns the directory it landed in.
+     * The owner a written file lands with: whoever owns the directory it goes into, read BEFORE anything is written, so
+     * the daemon's extraction sets it and no chown follows (one run as a non-root workload's own uid cannot re-own the
+     * file the extraction made, and failed after the bytes were in place).
+     *
+     * AIDEV-NOTE: a stopped container has no exec to read the owner with; the file then lands owned as its staging file
+     * is (the controller's uid), as every write did before, and that is logged rather than silently skipped.
+     *
+     * @return the directory's owner, null for a stopped container
+     * @throws IOException when the owner cannot be read from a running container; nothing is written then
      */
-    private void ownByDirectory(@NonNull String handle, @NonNull String path,
-                                @NonNull String directory) throws IOException {
-        // The extraction landed the file owned by the CONTROLLER's uid (the tar entry
-        // carries the staging file's owner: root on a root controller). Hand it back to
-        // whoever owns the directory it lives in, so a non-root workload can still write
-        // its own file --
-        // the same lesson the directory-entry rule above encodes, one level down. A
-        // stopped container has no exec, so the ownership fix waits for the next start;
-        // that is stated rather than silently skipped.
+    private Tar.@Nullable Owner ownerOf(@NonNull String handle, @NonNull String path, @NonNull String directory)
+            throws IOException {
+        String owner;
         try {
-            String owner = runFileScript(handle, OWNER_SCRIPT, Map.of("HH_FM_PATH", directory)).trim();
-            if (!owner.isEmpty()) {
-                runFileScript(handle, CHOWN_SCRIPT, Map.of("HH_FM_PATH", path, "HH_FM_OWNER", owner));
-            }
+            owner = runFileScript(handle, OWNER_SCRIPT, Map.of("HH_FM_PATH", directory));
         } catch (WorkloadNotBrowsableException stopped) {
-            Blast.log("FILES: wrote", path, "into stopped container", handle,
-                "- ownership stays root until the workload runs again");
+            Blast.log("FILES: writing", path, "into stopped container", handle,
+                "- its directory's owner cannot be read, so the file keeps the controller's");
+            return null;
         }
+        Tar.Owner parsed = Tar.Owner.parse(owner);
+        if (parsed == null) {
+            throw new IOException("The owner of '" + directory + "' in '" + handle + "' reads as '"
+                + owner.trim() + "'");
+        }
+        return parsed;
     }
 
     @Override

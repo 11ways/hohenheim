@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.application.AppImageFollowers;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
@@ -8,9 +9,11 @@ import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -261,6 +264,38 @@ public final class DeleteImpact {
             long templates = id == null ? 0 : naming.getOrDefault(id, 0L);
             reasons.add(instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
                 .withArg("instances", instances).withArg("templates", templates) : null);
+        }
+        return reasons;
+    }
+
+    /**
+     * AIDEV-NOTE: an app names its connection inside its settings map, which no query narrows, so the apps of the kinds
+     * whose settings declare a connection are read once for the asked connections together, never once per row.
+     *
+     * @return per git connection: the apps that still build from it, named
+     */
+    static @NonNull List<@Nullable Microcopy> gitConnectionsInUse(@NonNull List<? extends Row> connections) {
+        Set<Integer> ids = new LinkedHashSet<>(idsOf(connections, GitProviderModel.ID));
+        Map<Integer, List<String>> using = new HashMap<>();
+        List<String> kinds = InstanceKinds.kindsWhere(kind -> kind.getSchema() != null
+            && kind.getSchema().getFields().containsKey(GitSourceSchema.PROVIDER_ID));
+        if (!ids.isEmpty() && !kinds.isEmpty()) {
+            for (Row app : Models.get(InstanceModel.class).find().where(InstanceModel.KIND.in(kinds))
+                    .where(InstanceModel.liveAuthored()).all()) {
+                Integer provider = RawValues.positiveInt(
+                    InstanceModel.settingsOf(app).get(GitSourceSchema.PROVIDER_ID));
+                if (provider != null && ids.contains(provider)) {
+                    using.computeIfAbsent(provider, id -> new ArrayList<>())
+                        .add(String.valueOf((Object) app.get(InstanceModel.NAME)));
+                }
+            }
+        }
+        List<Microcopy> reasons = new ArrayList<>(connections.size());
+        for (Row connection : connections) {
+            List<String> apps = using.get(connection.get(GitProviderModel.ID));
+            reasons.add(apps == null ? null : HohenheimMicrocopy.VIOLATIONS.of("git_connection_in_use")
+                .withArg("name", String.valueOf((Object) connection.get(GitProviderModel.NAME)))
+                .withArg("apps", join(apps)));
         }
         return reasons;
     }

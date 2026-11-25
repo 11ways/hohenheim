@@ -113,7 +113,9 @@ public class DatabaseModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("db_user"))
         .help(HohenheimMicrocopy.HELP.of("db_user"))
         .build());
+    /** Goes by {@code password} as an input (a tool's argument, a form's entry); its column keeps its stored name. */
     public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password")
+        .inputName("password")
         .secret()
         .encrypted()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("db_password"))

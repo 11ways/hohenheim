@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.cms.AppKindWrites;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.BuildHookParts;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
+import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
@@ -125,6 +126,8 @@ public final class HohenheimTools extends McpToolCollection {
             .route(EnvironmentParts.DELETE, null)
             .route(ReconcileFindingParts.REMOVE, null)
             .route(ReleasedClaimParts.LIFT, null)
+            .route(GitConnectionWrites.DELETE, null)
+            .route(CertificateParts.DELETE, null)
             .build();
         McpHostTool deploy = McpCodeTool.builder("deploy", words("mcp_tool_deploy"), writes())
             .code(words("mcp_code_deploy"))

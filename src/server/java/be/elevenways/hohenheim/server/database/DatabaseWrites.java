@@ -76,7 +76,8 @@ public final class DatabaseWrites {
         if (user.isEmpty()) {
             user = "appuser";
         }
-        String password = trimmed(values.get(DatabaseModel.DB_PASSWORD.getName()));
+        // The form's entry goes by the field's input name (an HTTP caller's stored name is renamed to it before).
+        String password = trimmed(new OperationInput.Values(values).get(DatabaseModel.DB_PASSWORD));
         if (password.isEmpty()) {
             password = Secrets.generatePassword();
         }

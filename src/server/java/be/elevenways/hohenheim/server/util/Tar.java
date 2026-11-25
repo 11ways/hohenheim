@@ -113,6 +113,26 @@ public final class Tar {
     }
 
     /**
+     * The numeric owner every entry of an archive is written with, whatever owns its host file: the daemon applies it
+     * at extraction, so a file lands owned by whoever owns the directory it goes into, with no chown after it.
+     */
+    public record Owner(long uid, long gid) {
+
+        /** @return the owner {@code stat -c '%u:%g'} printed, null for text that names none */
+        public static @Nullable Owner parse(@NonNull String text) {
+            String[] parts = text.trim().split(":");
+            if (parts.length != 2) return null;
+            try {
+                long uid = Long.parseLong(parts[0]);
+                long gid = Long.parseLong(parts[1]);
+                return uid < 0 || gid < 0 || uid > MAX_OCTAL_ID || gid > MAX_OCTAL_ID ? null : new Owner(uid, gid);
+            } catch (NumberFormatException notOwner) {
+                return null;
+            }
+        }
+    }
+
+    /**
      * Streams an archive to an {@link OutputStream}; nothing is buffered beyond one block.
      * The caller writes the end-of-archive marker with {@link #finish()} only on success, so
      * a failed walk never produces an archive that LOOKS complete.
@@ -121,14 +141,28 @@ public final class Tar {
 
         private final OutputStream out;
         private final Ownerships ownerships;
+        private final @Nullable Owner owner;
 
         public Writer(@NonNull OutputStream out) {
             this(out, Ownerships.AS_ON_DISK);
         }
 
         public Writer(@NonNull OutputStream out, @NonNull Ownerships ownerships) {
+            this(out, ownerships, null);
+        }
+
+        /** @param owner the owner every entry is written with, null for the one {@code ownerships} gives */
+        public Writer(@NonNull OutputStream out, @NonNull Ownerships ownerships, @Nullable Owner owner) {
             this.out = out;
             this.ownerships = ownerships;
+            this.owner = owner;
+        }
+
+        /** @return the entry's owner and mode as written: the ownerships' rule, then the fixed owner if one is set */
+        private @NonNull Ownership written(@NonNull Path source, boolean directory) throws IOException {
+            Ownership ruled = this.ownerships.applyTo(Ownership.of(source), directory);
+            return this.owner == null ? ruled
+                : new Ownership(ruled.mode(), ruled.fileType(), this.owner.uid(), this.owner.gid());
         }
 
         /**
@@ -140,7 +174,7 @@ public final class Tar {
         public void add(@NonNull Path source, @NonNull String entryName) throws IOException {
             BasicFileAttributes attributes = Files.readAttributes(source,
                 BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            Ownership ownership = this.ownerships.applyTo(Ownership.of(source), attributes.isDirectory());
+            Ownership ownership = this.written(source, attributes.isDirectory());
             long mtime = attributes.lastModifiedTime().toMillis() / 1000;
             if (attributes.isSymbolicLink()) {
                 writeEntryHeader(entryName, '2', 0, Files.readSymbolicLink(source).toString(),
@@ -186,7 +220,7 @@ public final class Tar {
             if (!attributes.isDirectory()) {
                 throw new IOException("'" + source + "' is not a directory");
             }
-            Ownership ownership = this.ownerships.applyTo(Ownership.of(source), true);
+            Ownership ownership = this.written(source, true);
             String directoryName = entryName.endsWith("/") ? entryName : entryName + "/";
             writeEntryHeader(directoryName, '5', 0, "", ownership.mode(), ownership,
                 attributes.lastModifiedTime().toMillis() / 1000);

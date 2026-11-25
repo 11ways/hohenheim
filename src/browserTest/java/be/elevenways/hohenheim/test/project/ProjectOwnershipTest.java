@@ -364,7 +364,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             "name=" + PREFIX + "over-cap" + "&projectId=" + projectOneId + "&" + ApiSupport.fromTemplateTransport());
         assertThat(refused.body())
             .as("step 1: the project cap refuses the create, named")
-            .contains("Instance quota reached");
+            .contains("App quota reached");
         assertThat(Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "over-cap")).count())
             .as("step 1: nothing landed").isZero();

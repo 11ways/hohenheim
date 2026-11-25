@@ -934,7 +934,7 @@ public class DatabaseService extends DatasourceScoped {
     static void requireLogicalIdentifiers(String user, String password, String database) {
         requireLogicalNames(user, database);
         if (!ManagedDatabase.Engine.isLogicalIdentifier(password)) {
-            throw Violations.ofField(DatabaseModel.DB_PASSWORD.getName(), "", logicalIdentifierRefusal());
+            throw Violations.ofField(DatabaseModel.DB_PASSWORD.getInputName(), "", logicalIdentifierRefusal());
         }
     }
 
@@ -968,7 +968,7 @@ public class DatabaseService extends DatasourceScoped {
     /** @throws Violations {@code database_logical_password} for a password a new credential may not be */
     private static void requireNewPassword(String password) {
         if (!ManagedDatabase.Engine.isNewLogicalPassword(password)) {
-            throw Violations.ofField(DatabaseModel.DB_PASSWORD.getName(), "",
+            throw Violations.ofField(DatabaseModel.DB_PASSWORD.getInputName(), "",
                 HohenheimMicrocopy.VIOLATIONS.of("database_logical_password")
                     .withArg("minimum", ManagedDatabase.Engine.LOGICAL_PASSWORD_MIN)
                     .withArg("maximum", ManagedDatabase.Engine.LOGICAL_IDENTIFIER_MAX));

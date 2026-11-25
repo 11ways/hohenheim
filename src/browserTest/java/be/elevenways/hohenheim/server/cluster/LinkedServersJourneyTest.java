@@ -475,13 +475,13 @@ class LinkedServersJourneyTest {
 
             // 2. A read of Kuifje's app on the master answers what Kuifje's own connection answers the same person
             //    holding a key of the same scopes there.
-            McpHttpSession.Answer read = master.call("read", Map.of("ids", List.of(appCode)));
+            McpHttpSession.Answer read = master.call("read", Map.of("codes", List.of(appCode)));
             assertThat(read.error()).as("step 2: read " + read.text()).isFalse();
             McpHttpSession own = McpHttpSession.open(McpHttpSession.endpoint(kuifje.port(),
                 HohenheimMcpModule.SERVER_NAME), bearer(after("mcp-key ", kuifje.ask("mcp-key "
                 + String.join(",", scopes)))));
             assertThat(read.text()).as("step 2: Kuifje's own answer").contains(appCode)
-                .isEqualTo(own.call("read", Map.of("ids", List.of(appCode))).text());
+                .isEqualTo(own.call("read", Map.of("codes", List.of(appCode))).text());
 
             // 3. A write on the master is made on Kuifje: the master's record of Kuifje is in step when it answers,
             //    and Kuifje's history credits the person, through the master.
@@ -501,10 +501,10 @@ class LinkedServersJourneyTest {
             //    site and Kuifje's app is refused in words, and nothing is sent either.
             String ownCode = RecordCodes.codeUnjudged(SiteModel.MODEL_ID, masterSite(CARRIED_SITE));
             int sent = relay.accepted();
-            McpHttpSession.Answer here = master.call("read", Map.of("ids", List.of(ownCode)));
+            McpHttpSession.Answer here = master.call("read", Map.of("codes", List.of(ownCode)));
             assertThat(here.error()).as("step 4: read here " + here.text()).isFalse();
             assertThat(here.text()).as("step 4: the master's site").contains(CARRIED_SITE);
-            McpHttpSession.Answer both = master.call("read", Map.of("ids", List.of(appCode, ownCode)));
+            McpHttpSession.Answer both = master.call("read", Map.of("codes", List.of(appCode, ownCode)));
             assertThat(both.error()).as("step 4: both servers refused").isTrue();
             assertThat(both.text()).as("step 4: in words").isEqualTo("The records this call names are kept on"
                 + " different servers. Name the records of one server per call.");
@@ -529,7 +529,7 @@ class LinkedServersJourneyTest {
             McpHttpSession.Answer unnamed = McpHttpSession.open(McpHttpSession.endpoint(APP.port(),
                 HohenheimMcpModule.SERVER_NAME), bearer(ApiKeyService.create(passwordOnly, "cluster-password",
                 List.of(McpScopes.server(HohenheimMcpModule.SERVER_NAME), "*"), null).plaintext()))
-                .call("read", Map.of("ids", List.of(appCode)));
+                .call("read", Map.of("codes", List.of(appCode)));
             assertThat(unnamed.text()).as("step 5: no Proteus sign-in here").isEqualTo("Acting on Kuifje from here"
                 + " needs a person who signs in with Proteus, here and on Kuifje. Sign in here with Proteus once, then"
                 + " use a key of that account.");
@@ -543,7 +543,7 @@ class LinkedServersJourneyTest {
             //    Kuifje.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT, "elsewhere");
             ForkedHohenheim.vouchedBy(operatorId, ProteusSignIn.realm());
-            McpHttpSession.Answer realm = master.call("read", Map.of("ids", List.of(appCode)));
+            McpHttpSession.Answer realm = master.call("read", Map.of("codes", List.of(appCode)));
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.AuthProteus.REALM_CLIENT,
                 ForkedHohenheim.PROTEUS_REALM_CLIENT);
             ForkedHohenheim.vouchedBy(operatorId, ProteusSignIn.realm());
@@ -553,7 +553,7 @@ class LinkedServersJourneyTest {
             // 8. Kuifje does not answer: the call says so, naming it, and nothing is answered from the master's
             //    record.
             relay.retarget(closedPort());
-            McpHttpSession.Answer silent = master.call("read", Map.of("ids", List.of(appCode)));
+            McpHttpSession.Answer silent = master.call("read", Map.of("codes", List.of(appCode)));
             relay.retarget(kuifje.port());
             assertThat(silent.error()).as("step 8: an error").isTrue();
             assertThat(silent.text()).as("step 8: in words").isEqualTo("Kuifje does not answer; nothing was changed.");

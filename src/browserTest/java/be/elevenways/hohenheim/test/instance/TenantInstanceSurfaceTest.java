@@ -477,7 +477,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 + "&" + ApiSupport.fromTemplateTransport());
             assertThat(unauthorized.body())
                 .as("step 2: a tenant without create authority is refused, named")
-                .contains("You are not allowed to create instances");
+                .contains("You are not allowed to create apps");
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
                 .as("step 2: the refused create persisted NOTHING").isZero();
@@ -490,7 +490,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 + "&" + ApiSupport.fromTemplateTransport());
             assertThat(nowhere.body())
                 .as("step 3: no admitted host means a NAMED placement refusal")
-                .contains("No admitted host currently accepts this workload");
+                .contains("No admitted host currently accepts this app");
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
                 .as("step 3: still nothing persisted").isZero();
@@ -548,7 +548,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 + "&" + ApiSupport.fromTemplateTransport());
             assertThat(capped.body())
                 .as("step 7: the per-owner cap refuses the next create, named")
-                .contains("Instance quota reached");
+                .contains("App quota reached");
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "over-cap")).count())
                 .as("step 7: and nothing landed").isZero();

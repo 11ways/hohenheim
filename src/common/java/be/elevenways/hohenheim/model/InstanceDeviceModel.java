@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -24,6 +26,7 @@ import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -73,9 +76,12 @@ public class InstanceDeviceModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The app the device is attached to, which an assistant names by its code ({@code list kind=app_device of=AP}). */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(InstanceModel.MODEL_ID)))
+            .build());
 
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .value(TYPE_DISK, v -> v.displayName("Disk").icon("hard-drive")

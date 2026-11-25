@@ -56,6 +56,32 @@ class SourceTreeArchiveTest {
             .isEqualTo(0640);
     }
 
+    /**
+     * A file the file manager writes lands owned by whoever owns its directory, as the daemon extracts it: nothing
+     * re-owns it afterwards, which a non-root app could not do (the rehearsal's "chown: Operation not permitted").
+     */
+    @Test
+    void aWrittenFileCarriesItsDirectoryOwnerInItsOwnHeader() throws Exception {
+        Path file = this.directory.resolve("rehearse.txt");
+        Files.writeString(file, "hello");
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r-----"));
+
+        // 1. The owner stat prints is read as such; anything else is no owner.
+        Tar.Owner owner = Tar.Owner.parse("1001:1002\n");
+        assertThat(owner).as("step 1: uid and gid").isEqualTo(new Tar.Owner(1001, 1002));
+        assertThat(Tar.Owner.parse("chown: Operation not permitted")).as("step 1: no owner").isNull();
+
+        // 2. The entry carries that owner, its mode as the disk has it.
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Tar.Writer writer = new Tar.Writer(out, Tar.Ownerships.AS_ON_DISK, owner);
+        writer.add(file, "rehearse.txt");
+        writer.finish();
+        byte[] tar = out.toByteArray();
+        assertThat(ownerOf(tar)).as("step 2: the directory's uid").isEqualTo(1001);
+        assertThat(octalAt(tar, 116)).as("step 2: the directory's gid").isEqualTo(1002);
+        assertThat(modeOf(tar)).as("step 2: the mode as written").isEqualTo(0640);
+    }
+
     private static byte[] archive(Path path, Tar.Ownerships ownerships) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Tar.Writer writer = new Tar.Writer(out, ownerships);
@@ -70,7 +96,12 @@ class SourceTreeArchiveTest {
 
     /** @return the first header's numeric owner (ustar octal field at offset 108) */
     private static long ownerOf(byte[] tar) {
-        String octal = new String(tar, 108, 8, StandardCharsets.US_ASCII).replace("\0", "").trim();
+        return octalAt(tar, 108);
+    }
+
+    /** @return the first header's octal field at this offset (108 uid, 116 gid) */
+    private static long octalAt(byte[] tar, int offset) {
+        String octal = new String(tar, offset, 8, StandardCharsets.US_ASCII).replace("\0", "").trim();
         return Long.parseLong(octal, 8);
     }
 }

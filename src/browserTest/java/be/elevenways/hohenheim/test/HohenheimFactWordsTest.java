@@ -94,9 +94,9 @@ class HohenheimFactWordsTest {
                     HohenheimActivityAction.CRASH_LOOP_KEY, true), EN))
                 .as("step 2: a crash-looping correction")
                 .isEqualTo("Corrected from Running to Error: it died without an observed stop, and its host reports"
-                    + " the workload absent; crash loop, automatic restarts suspended");
+                    + " the app absent; crash loop, automatic restarts suspended");
             assertThat(detail(instances, instance, NL)).as("step 2: in Dutch too")
-                .isEqualTo("Gecorrigeerd van Actief naar Fout: de workload viel weg zonder waargenomen stop, en zijn"
+                .isEqualTo("Gecorrigeerd van Actief naar Fout: de app viel weg zonder waargenomen stop, en zijn"
                     + " host meldt hem afwezig; crashlus, automatische herstarts opgeschort");
             assertThat(said(instances, instance, HohenheimActivityAction.RECONCILED, Map.of(
                     HohenheimActivityAction.FROM_KEY, InstanceModel.STATUS_RUNNING,
@@ -106,7 +106,7 @@ class HohenheimFactWordsTest {
                     HohenheimActivityAction.CRASH_LOOP_KEY, false), EN))
                 .as("step 2: one without a crash loop names none")
                 .isEqualTo("Corrected from Running to Stopped: it died without an observed stop, and its host reports"
-                    + " the workload stopped");
+                    + " the app stopped");
 
             // 3. A converted correction keeps its own stored text after the plain words.
             HistoryFixtureRows.action(datasource).change(InstanceModel.MODEL_ID, instance, ChangeOp.EVENT)
@@ -146,7 +146,7 @@ class HohenheimFactWordsTest {
             assertThat(reasons).as("step 5: each end reason in its own words")
                 .hasSize(InstanceShell.EndReason.values().length);
             assertThat(detail(instances, instance, NL)).as("step 5: in Dutch too")
-                .isEqualTo("/bin/sh als uid 1000 gesloten: de workload stopte");
+                .isEqualTo("/bin/sh als uid 1000 gesloten: de app stopte");
 
             // 5b. A command's ending names the command and how it ended, for every ending there is.
             Set<String> endings = new HashSet<>();
@@ -220,7 +220,7 @@ class HohenheimFactWordsTest {
             int site = site("words-site");
             assertThat(said(sites, site, HohenheimActivityAction.DISABLED,
                 Map.of(HohenheimActivityAction.STRANDED_KEY, true), EN)).as("step 10: a stranded site")
-                .isEqualTo("Disabled: the instance it served was destroyed");
+                .isEqualTo("Disabled: the app it served was destroyed");
             assertThat(said(sites, site, HohenheimActivityAction.DISABLED, Map.of(), EN))
                 .as("step 10: a plain disable").isEqualTo("Disabled");
             int copy = site("words-site-copy");

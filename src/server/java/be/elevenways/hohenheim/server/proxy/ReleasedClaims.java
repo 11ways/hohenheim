@@ -168,15 +168,20 @@ public final class ReleasedClaims {
                                            int claimantSiteId) {
         Set<String> claimant = HohenheimAccess.manageSubjectsOf(claimantSiteId);
         Row active = activeClaimFor(claimKey);
-        if (active != null && !allows(active, claimant)) {
+        if (active != null && !allows(active, claimant, claimantSiteId)) {
             return active;
         }
-        return overlapRefusal(claimKey, matchType, claimant);
+        return overlapRefusal(claimKey, matchType, claimant, claimantSiteId);
     }
 
     /**
-     * Whether a claimant may take a released route back: the same owner always may, and a
-     * grant-free site (a tenant's brand new one, or an operator's) is judged on the ACTOR.
+     * Whether a claimant may take a released route back: the site that released it always may, the same owner always
+     * may, and a grant-free site (a tenant's brand new one, or an operator's) is judged on the ACTOR.
+     *
+     * AIDEV-NOTE: the releasing site itself is never "another owner": a site trashed and then restored serves what it
+     * served, for the hostname it held, so no dangling pointer reaches someone else's content. Its subjects cannot
+     * say so, because the trash revoked its grants (RecordGrantCleanup) and a restore never resurrects them: judged by
+     * subjects, an operator restoring a customer's site was refused "released by another owner".
      *
      * AIDEV-NOTE: an EMPTY claimant set means "no manage grants YET", which is both the
      * operator case and a tenant whose fresh site has not been granted anything yet (a
@@ -186,7 +191,10 @@ public final class ReleasedClaims {
      * that lane, tenant self-service site creation would lock every tenant out of its own
      * released hostnames.
      */
-    private static boolean allows(@NonNull Row claim, @Nullable Set<String> claimant) {
+    private static boolean allows(@NonNull Row claim, @Nullable Set<String> claimant, int claimantSiteId) {
+        if (Objects.equals(claim.get(ReleasedRouteClaimModel.FORMER_SITE_ID), claimantSiteId)) {
+            return true;
+        }
         Set<String> former = parse(claim.get(ReleasedRouteClaimModel.FORMER_SUBJECTS));
         if (claimant != null && claimant.equals(former)) {
             return true;
@@ -201,7 +209,7 @@ public final class ReleasedClaims {
      */
     private static @Nullable Row overlapRefusal(@NonNull String claimKey,
                                                 @Nullable String matchType,
-                                                @Nullable Set<String> claimant) {
+                                                @Nullable Set<String> claimant, int claimantSiteId) {
         int days = windowDays();
         if (days <= 0) {
             return null;
@@ -226,7 +234,7 @@ public final class ReleasedClaims {
                     claim.get(ReleasedRouteClaimModel.MATCH_TYPE))) {
                 continue;
             }
-            if (!allows(claim, claimant)) {
+            if (!allows(claim, claimant, claimantSiteId)) {
                 return claim;
             }
         }

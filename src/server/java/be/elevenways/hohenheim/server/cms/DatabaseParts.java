@@ -301,7 +301,7 @@ public final class DatabaseParts {
             .register();
 
     /** The password change's one input: blank generates a password, as a create does. */
-    public static final StringField NEW_PASSWORD = StringField.builder(DatabaseModel.DB_PASSWORD.getName())
+    public static final StringField NEW_PASSWORD = StringField.builder(DatabaseModel.DB_PASSWORD.getInputName())
         .secret()
         .label(HohenheimMicrocopy.DATABASE.of("new_password"))
         .help(HohenheimMicrocopy.DATABASE.of("new_password_help")
@@ -603,7 +603,7 @@ public final class DatabaseParts {
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.ENGINE.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_NAME.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_USER.getName()),
-            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_PASSWORD.getName()),
+            ResourceFieldBinding.frozenAfterCreate(DatabaseModel.DB_PASSWORD.getInputName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.IMAGE.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.EPHEMERAL.getName()),
             ResourceFieldBinding.frozenAfterCreate(DatabaseModel.HOST_ID.getName()),

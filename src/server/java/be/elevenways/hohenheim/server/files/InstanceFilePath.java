@@ -5,11 +5,13 @@ import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.content.FilePaths;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -41,6 +43,18 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
     public static final int MAX_LENGTH = 1024;
 
     /**
+     * The one refusal of a path no volume holds, whatever made it so, naming where the app's volumes are mounted: the
+     * same words for every cause, so the refusal reveals nothing about what is where.
+     *
+     * @param volumeRoots the container paths the app's volumes mount at
+     */
+    public static @NonNull Violations refused(@NonNull Collection<String> volumeRoots) {
+        Set<String> roots = rootsOf(volumeRoots);
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused")
+            .withArg("count", roots.size()).withArg("volumes", String.join(", ", roots)));
+    }
+
+    /**
      * Parse a caller-supplied absolute container path against the instance's declared
      * volume roots.
      *
@@ -51,17 +65,20 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
     public static @NonNull InstanceFilePath parse(@NonNull Collection<String> volumeRoots,
                                                   @NonNull String submitted) {
         if (submitted.isEmpty() || submitted.length() > MAX_LENGTH || submitted.charAt(0) != '/') {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            throw refused(volumeRoots);
         }
         // Control characters (NUL included) never appear in a path we author, and a NUL
         // is how a C-level consumer downstream can be made to see a shorter string.
         for (int i = 0; i < submitted.length(); i++) {
             if (submitted.charAt(i) < 0x20 || submitted.charAt(i) == 0x7F) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+                throw refused(volumeRoots);
             }
         }
 
         List<String> segments = segmentsOf(submitted);
+        if (segments == null) {
+            throw refused(volumeRoots);
+        }
         // Canonical-spelling test: the path REBUILT from its accepted segments must be
         // the submitted string byte for byte, so "//a", "/a/", "/a/./b" and "/a/../b"
         // are all refusals rather than aliases of an accepted path.
@@ -70,15 +87,15 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
             rebuilt.append('/').append(segment);
         }
         if (!rebuilt.toString().equals(submitted)) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            throw refused(volumeRoots);
         }
 
         String root = rootFor(volumeRoots, submitted);
         if (root == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            throw refused(volumeRoots);
         }
-        if (segments.size() - segmentsOf(root).size() > MAX_DEPTH) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+        if (segments.size() - Objects.requireNonNull(segmentsOf(root)).size() > MAX_DEPTH) {
+            throw refused(volumeRoots);
         }
         return new InstanceFilePath(root, submitted);
     }
@@ -112,13 +129,9 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
         return null;
     }
 
-    /** Split on '/', skipping empty segments and refusing "." and ".." outright (FilePaths.segments). */
-    private static @NonNull List<String> segmentsOf(@NonNull String path) {
-        List<String> segments = FilePaths.segments(path);
-        if (segments == null) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
-        }
-        return segments;
+    /** Split on '/', skipping empty segments; null for "." or ".." anywhere (FilePaths.segments). */
+    private static @Nullable List<String> segmentsOf(@NonNull String path) {
+        return FilePaths.segments(path);
     }
 
     /** Whether this path IS a volume root (which can never be renamed or deleted). */

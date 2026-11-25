@@ -550,7 +550,7 @@ final class ForkedHohenheim implements AutoCloseable {
                     body.put("subjects", List.of(words[2]));
                     body.put("server", "hohenheim");
                     body.put("tool", "read");
-                    body.put("arguments", Map.of("ids", List.of(words[1])));
+                    body.put("arguments", Map.of("codes", List.of(words[1])));
                     body.put("scopes", List.of("mcp:hohenheim", "*"));
                     LinkCalls.Answer answer = LinkCalls.tool(master.get(LinkedServerModel.BASE_URL),
                         master.get(LinkedServerModel.LINK_KEY), body, "en");

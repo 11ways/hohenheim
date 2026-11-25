@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -9,6 +10,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -48,8 +50,11 @@ public class SystemUserModel extends Model {
     public static final BooleanField OBSOLETE = SCHEMA.addField(BooleanField.builder("obsolete")
             .defaultValue(false).build());
     // Workload-identity claim: the ONE site whose child processes run as this uid
-    // (unique index; null = unclaimed). Written only through WorkloadIdentity.
-    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+    // (unique index; null = unclaimed). Written only through WorkloadIdentity. An assistant names the site by its
+    // code ({@code list kind=host_account of=S12}).
+    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id")
+        .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(SiteModel.MODEL_ID)))
+        .build());
     // True for rows Hohenheim provisioned itself; the /etc/passwd reconciler never
     // marks a managed row obsolete, whatever the discovery scan says.
     public static final BooleanField MANAGED = SCHEMA.addField(BooleanField.builder("managed")

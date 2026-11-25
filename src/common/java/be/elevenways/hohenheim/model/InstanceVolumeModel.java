@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -13,6 +14,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.OptimisticLockingBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -64,9 +66,12 @@ public class InstanceVolumeModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The app the volume belongs to, which an assistant names by its code ({@code list kind=volume of=AP12}). */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(InstanceModel.MODEL_ID)))
+            .build());
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()

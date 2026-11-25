@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.application.FakeApps;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.ai.server.mcp.host.McpCoverage;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
@@ -27,6 +28,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -171,6 +173,26 @@ class HohenheimDataToolsTest extends HohenheimHttpTestBase {
                 .as("step 7: neither a snapshot nor an app").isTrue();
             assertThat(admin.call("snapshot_restore", Map.of("code", snapshotCode)).error())
                 .as("step 7: a failed snapshot is not put back").isTrue();
+
+            // 7b. Every kind that belongs to an app lists by the app's code, a dump by its database's.
+            McpHttpSession.Answer snapshots = admin.call("list", Map.of("kind", "snapshot", "of", appCode));
+            assertThat(snapshots.error()).as("step 7b: " + snapshots.text()).isFalse();
+            assertThat(snapshots.text()).as("step 7b: the app's snapshot").contains(snapshotCode);
+            for (String kind : List.of("backup", "volume", "app_device")) {
+                McpHttpSession.Answer listed = admin.call("list", Map.of("kind", kind, "of", appCode));
+                assertThat(listed.error()).as("step 7b: " + kind + " of the app: " + listed.text()).isFalse();
+            }
+            assertThat(admin.call("list", Map.of("kind", "database_dump", "of", databaseCode)).text())
+                .as("step 7b: the database's dump").contains(dumpCode);
+
+            // 7c. Taking a snapshot of an app is the write that must not run twice: request applies to it too.
+            Map<?, ?> snapshotArguments = (Map<?, ?>) McpCoverage.offered(server, operator).stream()
+                .filter(tool -> tool.name().equals("snapshot_set")).findFirst().orElseThrow()
+                .inputSchema(operator).get("properties");
+            assertThat(String.valueOf(((Map<?, ?>) snapshotArguments.get("request")).get("description")))
+                .as("step 7c: request is for every code snapshot_set takes").doesNotContain("Only for code");
+            assertThat(admin.call("snapshot_set", Map.of("code", appCode)).text())
+                .as("step 7c: an app without volumes, said as an app").doesNotContain("Instance");
 
             // 8. The file tools name the app's file calls; a folder takes no content (refused before any file is
             //    touched), and this stopped app without volumes has nothing to read.

@@ -193,12 +193,19 @@ public enum ChargedModel {
         dimension.stamp(row, claim);
     }
 
-    /** A live row staying live: move only what changed, then stamp the new holding. */
+    /**
+     * A live row staying live: move only what changed, then stamp the new holding.
+     *
+     * AIDEV-NOTE: an unchanged booking is stamped too: a stamp the booking rule no longer reads (an application's,
+     * written before its releases booked in its place) would otherwise stay on the row for good, and every reader of
+     * the column (the host page's booked memory) showed it.
+     */
     private void rebook(@NonNull ChargedDimension dimension, @NonNull Row row, @NonNull Row stored,
                         @NonNull Journal journal) {
         Charge before = dimension.held(stored);
         Charge after = dimension.claim(row, stored, Transition.REBOOK);
         if (before == null ? after == null : before.sameBooking(after)) {
+            if (after != null) dimension.stamp(row, after);
             return;
         }
         if (before != null && after != null && before.bucket().equals(after.bucket())) {

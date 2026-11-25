@@ -1135,11 +1135,22 @@ public class DockerClient {
      */
     public void putArchiveFiles(String containerId, String targetDir, Path hostDir,
                                 List<String> relativeFiles) throws IOException {
+        putArchiveFiles(containerId, targetDir, hostDir, relativeFiles, null);
+    }
+
+    /**
+     * {@link #putArchiveFiles(String, String, Path, List)} with every entry owned by {@code owner}, which the daemon
+     * applies as it extracts them.
+     *
+     * @param owner the owner the files land with, null for their host files' own
+     */
+    public void putArchiveFiles(String containerId, String targetDir, Path hostDir,
+                                List<String> relativeFiles, Tar.@Nullable Owner owner) throws IOException {
         List<String> names = new ArrayList<>();
         for (String relative : relativeFiles) {
             names.add(entryNameOf(relative));
         }
-        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, writer -> {
+        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, owner, writer -> {
             for (String name : names) {
                 writer.add(hostDir.resolve(name), name);
             }
@@ -1151,12 +1162,13 @@ public class DockerClient {
      * {@code name}, its bytes stream from {@code source} wherever that file lives, so a
      * spooled upload lands without being copied to a staging directory first.
      *
-     * @param name a plain relative entry name, refused like any {@link #putArchiveFiles} name
+     * @param name  a plain relative entry name, refused like any {@link #putArchiveFiles} name
+     * @param owner the owner the file lands with, null for its host file's own
      */
-    public void putArchiveFile(String containerId, String targetDir, Path source, String name)
-            throws IOException {
+    public void putArchiveFile(String containerId, String targetDir, Path source, String name,
+                               Tar.@Nullable Owner owner) throws IOException {
         String entry = entryNameOf(name);
-        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, writer -> writer.add(source, entry));
+        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, owner, writer -> writer.add(source, entry));
     }
 
     /**
@@ -1196,9 +1208,15 @@ public class DockerClient {
     /** One archive PUT whose tar is produced straight onto the wire. */
     private void putArchive(String containerId, String targetDir, Tar.Ownerships ownerships,
                             ArchiveContent content) throws IOException {
+        putArchive(containerId, targetDir, ownerships, null, content);
+    }
+
+    /** {@link #putArchive(String, String, Tar.Ownerships, ArchiveContent)} with every entry owned by {@code owner}. */
+    private void putArchive(String containerId, String targetDir, Tar.Ownerships ownerships,
+                            Tar.@Nullable Owner owner, ArchiveContent content) throws IOException {
         DockerWire.upload(streamTransport(), timeoutMillis, LONG_OP_TIMEOUT_MS, "PUT",
             archivePath(containerId, targetDir), "application/x-tar", out -> {
-                Tar.Writer writer = new Tar.Writer(out, ownerships);
+                Tar.Writer writer = new Tar.Writer(out, ownerships, owner);
                 content.writeTo(writer);
                 writer.finish();
             }, DockerWire.MAX_ERROR_BODY);

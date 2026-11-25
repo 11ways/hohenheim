@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
@@ -16,12 +17,14 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.LongField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,8 +58,11 @@ public class DatabaseDumpModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The database dumped, which an assistant names by its code ({@code list kind=database_dump of=DB12}). */
     public static final IntegerField DATABASE_ID = SCHEMA.addField(IntegerField.builder().name("database_id")
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database"))
+        .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(DatabaseModel.MODEL_ID)))
+        .build());
 
     /** The database's name when the dump was taken. */
     public static final StringField DATABASE_NAME = SCHEMA.addField(StringField.builder().name("database_name")

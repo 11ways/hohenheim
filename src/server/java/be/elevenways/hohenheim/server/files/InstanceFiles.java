@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.util.PermissionBits;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -80,9 +81,9 @@ import java.util.Set;
  * itself could not (/etc/shadow of its own container, a root-owned binary) -- a privilege
  * escalation INSIDE the container. What bounds it is layer 1: the race can never reach the
  * host or another tenant, and every host-side read of what comes back is a strict tar parse
- * that refuses links ({@code util.Tar}). The file scripts narrow it further ({@code chown
- * -h}, {@code mv --}/{@code rm --} on quoted variables). Do not "fix" it by weakening layer 3
- * into a single leaf stat; closing it for real needs the operations to run as the
+ * that refuses links ({@code util.Tar}). The file scripts narrow it further ({@code mv --}/{@code rm --} on quoted
+ * variables), and a written file's owner is set by the extraction itself, never by a chown after it. Do not "fix" it
+ * by weakening layer 3 into a single leaf stat; closing it for real needs the operations to run as the
  * workload's own uid, which the archive API cannot do.
  */
 public final class InstanceFiles {
@@ -328,12 +329,12 @@ public final class InstanceFiles {
                                                     @NonNull String relativePath) {
         // The root as a browse root is spelled (no trailing slash); a volume mounted at "/" is none.
         Set<String> own = InstanceFilePath.rootsOf(List.of(volumeRoot));
+        List<String> roots = sortedRoots(new ArrayList<>(InstanceVolumes.declaredMounts(instanceId).values()));
         if (own.isEmpty()) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            throw InstanceFilePath.refused(roots);
         }
         String root = own.iterator().next();
-        return requireUnder(sortedRoots(new ArrayList<>(InstanceVolumes.declaredMounts(instanceId).values())), root,
-            root + "/" + relativePath);
+        return requireUnder(roots, root, root + "/" + relativePath);
     }
 
     private void putInto(@NonNull Opened opened, int instanceId, @NonNull InstanceFilePath target,
@@ -350,7 +351,7 @@ public final class InstanceFiles {
                                                           @NonNull String requestedPath) {
         InstanceFilePath parsed = InstanceFilePath.parse(roots, requestedPath);
         if (!parsed.volumeRoot().equals(volumeRoot)) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            throw InstanceFilePath.refused(roots);
         }
         return parsed;
     }
@@ -489,8 +490,8 @@ public final class InstanceFiles {
          */
         InstanceFileSupport.@Nullable Entry walk(@NonNull InstanceFilePath target) {
             InstanceFileSupport files = files();
-            if (!containedParents(files, handle(), target)) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+            if (!containedParents(files, handle(), target, this.roots)) {
+                throw InstanceFilePath.refused(this.roots);
             }
             return statOrNull(files, handle(), target.absolute());
         }
@@ -504,7 +505,7 @@ public final class InstanceFiles {
          */
         InstanceFileSupport.@Nullable Entry lookup(@NonNull InstanceFilePath target) {
             InstanceFileSupport files = files();
-            if (!containedParents(files, handle(), target)) {
+            if (!containedParents(files, handle(), target, this.roots)) {
                 return null;
             }
             return statOrNull(files, handle(), target.absolute());
@@ -607,12 +608,14 @@ public final class InstanceFiles {
      *
      * @return false when an ancestor is simply absent, which {@link Opened#walk} refuses
      *         like any other failed walk and {@link Opened#lookup} answers as "not there"
+     * @param roots the app's volume roots, which the refusal names
      * @throws Violations {@code files_path_refused} -- the SAME refusal a lexically bad
      *         path gets, so the walk reveals nothing about what is where
      */
     private static boolean containedParents(@NonNull InstanceFileSupport files,
                                             @NonNull String handle,
-                                            @NonNull InstanceFilePath target) {
+                                            @NonNull InstanceFilePath target,
+                                            @NonNull List<String> roots) {
         List<InstanceFilePath> chain = target.chainFromRoot();
         for (int i = 0; i < chain.size() - 1; i++) {
             InstanceFileSupport.Entry entry = statOrNull(files, handle, chain.get(i).absolute());
@@ -620,7 +623,7 @@ public final class InstanceFiles {
                 return false;
             }
             if (entry.kind() != FilesystemNodeKind.DIRECTORY) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
+                throw InstanceFilePath.refused(roots);
             }
         }
         return true;
@@ -707,12 +710,15 @@ public final class InstanceFiles {
      * Map a driver failure onto a named refusal. A workload that cannot be reached by exec
      * right now gets its OWN key, because "your server is stopped" and "something broke"
      * are different things an operator must be able to tell apart.
+     *
+     * AIDEV-NOTE: the driver's own text names the container and quotes a shell's error, so it goes to the log and
+     * never into the answer a person or an assistant reads.
      */
     private static @NonNull Violations failure(@NonNull IOException error) {
         if (error instanceof DockerInstanceRuntime.WorkloadNotBrowsableException) {
             return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_workload_not_browsable"));
         }
-        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed")
-            .withArg("reason", HohenheimViolations.reasonOf(error)));
+        Blast.log("FILES: the operation failed:", HohenheimViolations.reasonOf(error));
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed"));
     }
 }

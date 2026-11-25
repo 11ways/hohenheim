@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 
 import be.elevenways.protoblast.common.i18n.wording.Noun;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -19,6 +21,7 @@ import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -101,9 +104,11 @@ public class InstanceSnapshotModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The app the snapshot is of, which an assistant names by its code ({@code list kind=snapshot of=AP12}). */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(InstanceModel.MODEL_ID)))
             .build());
 
     /**

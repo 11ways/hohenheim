@@ -74,7 +74,7 @@ column shared at=3 shown=true hidden=false sortable=false filterable=true copyab
 column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:test_git_provider at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:delete_git_connection at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.delete_git_connection?ids%3D{record}
 inline name
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
@@ -110,7 +110,7 @@ column shared at=3 shown=true hidden=false sortable=false filterable=true copyab
 column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:test_git_provider at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:delete_git_connection at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.delete_git_connection?ids%3D{record}
 inline name
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
@@ -367,7 +367,7 @@ control CREATE%20placement at=2 kind=zenitforms:form/select input=select require
 control CREATE%20engine_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.database_engine,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20db_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20db_user at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20db_password at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20password at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control CREATE%20image at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20ephemeral at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20memory_limit_mb at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -380,7 +380,7 @@ control EDIT%20placement at=2 kind=zenitforms:form/select input=select required=
 control EDIT%20engine_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.database_engine,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20db_name at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20db_user at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20db_password at=6 kind=zenitforms:control/string input=secret required=false readonly=true options= binding=
+control EDIT%20password at=6 kind=zenitforms:control/string input=secret required=false readonly=true options= binding=
 control EDIT%20image at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20ephemeral at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
 control EDIT%20memory_limit_mb at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -479,7 +479,7 @@ column kind at=1 shown=true hidden=false sortable=false filterable=true copyable
 column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 row hohenheim:test_git_provider at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:delete_git_connection at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.delete_git_connection?ids%3D{record}
 inline name
 tab access at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=

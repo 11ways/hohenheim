@@ -265,8 +265,8 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .contains("Change game address").contains("href=\"/admin/instances/" + appId + "\"");
         assertThat(overview).as("step 6b: the Details card names the owner's quota it is charged to")
             .contains("Owner's quota").contains("/admin/" + HohenheimSlugs.INSTANCE_QUOTAS);
-        assertThat(overview).as("step 6b: counting this game server among the owner's workloads")
-            .containsPattern("[1-9][0-9]* (of [0-9]+ )?workloads");
+        assertThat(overview).as("step 6b: counting this game server among the owner's apps")
+            .containsPattern("[1-9][0-9]* (of [0-9]+ )?apps");
 
         // 7. Its Configuration shows the game address it was given, as an operator's entry; a container reached as a
         //    website has no such entry.
@@ -558,7 +558,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 2: the lead speaks of ports, never of a certificate")
             .contains("publishes its ports");
         assertThat(wizard).as("step 2: the name entry is the one every flow shares")
-            .contains("Instance name");
+            .contains("App name");
         assertThat(wizard).as("step 2: a port row's name is for Other only, never suggested on every row")
             .doesNotContain("placeholder=\"metrics\"");
         assertThat(wizard).as("step 2: THE ASSERTION -- the Ports step owns the ports; Options asks none of them")

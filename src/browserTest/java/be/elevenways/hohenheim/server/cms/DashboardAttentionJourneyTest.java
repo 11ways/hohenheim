@@ -858,16 +858,16 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         Microcopy inUse = new HostModel.References(1, 0, 0, 2, 1)
             .describe(HohenheimMicrocopy.VIOLATIONS.of("server_in_use").withArg("name", "local"));
         assertThat(say(inUse)).as("step 2: each count in its own plural")
-            .isEqualTo("Host local is still used by 1 stack, 0 databases, 0 shared database engines, 2 instances "
+            .isEqualTo("Host local is still used by 1 stack, 0 databases, 0 shared database engines, 2 apps "
                 + "and 1 port claim; remove or move them (release the claims) first");
         assertThat(inUse.resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
-            .as("step 2: in Dutch too").contains("1 stack, 0 databases, 0 gedeelde database-engines, 2 instanties "
+            .as("step 2: in Dutch too").contains("1 stack, 0 databases, 0 gedeelde database-engines, 2 apps "
                 + "en 1 poortclaim");
         Microcopy template = HohenheimMicrocopy.VIOLATIONS.of("template_in_use").withArg("name", "Blog");
         assertThat(say(template.withArg("count", 1))).as("step 2: one")
-                .isEqualTo("Template Blog is still used by 1 instance");
+                .isEqualTo("Template Blog is still used by 1 app");
         assertThat(template.withArg("count", 3).resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
-            .as("step 2: several, in Dutch").isEqualTo("Sjabloon Blog wordt nog gebruikt door 3 instanties");
+            .as("step 2: several, in Dutch").isEqualTo("Sjabloon Blog wordt nog gebruikt door 3 apps");
 
         // 3. No shipped sentence spells a pseudo-plural any more ("(s)", "(en)"); "http(s)" is a scheme, not a count.
         Pattern pseudo = Pattern.compile("[A-Za-z]\\((s|en|e|n)\\)");
@@ -939,14 +939,14 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row restart = instance(PREFIX + "restart", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), restart));
             int restartId = restart.get(InstanceModel.ID);
-            stopped(restartId, HohenheimActivityAction.WORKLOAD_RESTART_REFUSED, "Instance quota reached");
+            stopped(restartId, HohenheimActivityAction.WORKLOAD_RESTART_REFUSED, "App quota reached");
             AttentionItem restartItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(restartId));
             assertThat(restartItem).as("step 3: the refused restart is a root").isNotNull();
             assertThat(List.of(say(restartItem.title()), say(restartItem.detail()), say(restartItem.note())))
                 .as("step 3: what happened, why in words, and the gate's own words after them")
                 .containsExactly(PREFIX + "restart stopped after an error",
                     PREFIX + "restart stopped and its automatic restart was refused",
-                    "Technically: Instance quota reached");
+                    "Technically: App quota reached");
 
             // 4. An app whose forced address has no certificate keeps the HTTPS badge: there the address IS the cause.
             Row forcedApp = instance(PREFIX + "forced", local);

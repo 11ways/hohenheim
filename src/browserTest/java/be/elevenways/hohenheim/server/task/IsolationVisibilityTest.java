@@ -180,8 +180,8 @@ class IsolationVisibilityTest {
         assertThat(contained.findings()).as("step 4: naming the workload in the raw reading")
             .containsExactly(HOST + ": stopped instance " + HANDLE, HOST + ": containment failed: daemon refused");
         assertThat(contained.getMessage()).as("step 4: and saying what happened in words")
-            .isEqualTo("1 workload on " + HOST + " was stopped or cut off because its isolation could not be "
-                + "repaired. The isolation of 1 workload on " + HOST + " could not be checked or repaired");
+            .isEqualTo("1 app on " + HOST + " was stopped or cut off because its isolation could not be "
+                + "repaired. The isolation of 1 app on " + HOST + " could not be checked or repaired");
         assertThat(DELIVERIES.get())
             .as("step 4: and must always notify")
             .isEqualTo(2);

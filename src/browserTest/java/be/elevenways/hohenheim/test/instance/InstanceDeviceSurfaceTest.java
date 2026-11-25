@@ -213,7 +213,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .contains("/admin/instance-devices/new?parent=" + instanceId + "&amp;type=nic")
             .as("step 1: under the lead sentence the shared record heading draws")
             .contains("data-cms-tab-lead")
-            .contains("Data disks and extra network interfaces attached to this instance")
+            .contains("Data disks and extra network interfaces attached to this app")
             .as("step 1: and the devices table stands in its own section under its own heading")
             .contains("id=\"devices\"");
         assertThat(texts(tab.body(), "h2")).as("step 1: the devices section's heading").contains("Devices");

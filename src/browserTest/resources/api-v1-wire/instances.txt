@@ -86,7 +86,7 @@
 ## take a snapshot with a view grant
 > POST /api/v1/instances/1/snapshot (application/x-www-form-urlencoded, 9 bytes)
 < 422 application/json; charset=utf-8
-{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app"}]}
 
 ## take a backup
 > POST /api/v1/instances/1/backup (application/x-www-form-urlencoded, 0 bytes)
@@ -96,7 +96,7 @@
 ## take a backup with a view grant
 > POST /api/v1/instances/1/backup (application/x-www-form-urlencoded, 0 bytes)
 < 422 application/json; charset=utf-8
-{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app"}]}
 
 ## list devices
 > GET /api/v1/instances/3/devices
@@ -126,7 +126,7 @@
 ## resize an absent disk
 > POST /api/v1/instances/3/devices/resize (application/x-www-form-urlencoded, 24 bytes)
 < 422 application/json; charset=utf-8
-{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance"}]}
+{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this app","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this app"}]}
 
 ## detach a disk
 > POST /api/v1/instances/3/devices/detach (application/x-www-form-urlencoded, 14 bytes)
@@ -136,7 +136,7 @@
 ## detach an absent device
 > POST /api/v1/instances/3/devices/detach (application/x-www-form-urlencoded, 14 bytes)
 < 422 application/json; charset=utf-8
-{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance"}]}
+{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this app","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this app"}]}
 
 ## create an instance
 > POST /api/v1/instances (application/x-www-form-urlencoded, 178 bytes)
@@ -156,4 +156,4 @@
 ## delete an instance with a view grant
 > POST /api/v1/instances/1/delete (application/x-www-form-urlencoded, 0 bytes)
 < 422 application/json; charset=utf-8
-{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this app"}]}

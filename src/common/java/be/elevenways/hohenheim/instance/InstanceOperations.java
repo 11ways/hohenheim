@@ -172,6 +172,7 @@ public final class InstanceOperations {
         .help(HohenheimMicrocopy.HELP.of("snapshot_note"))
         .build();
 
+    /** Takes a snapshot; the same request id again answers the first snapshot instead of taking a second. */
     public static final Operation<Row, SnapshotInput, Integer> SNAPSHOT =
         Operation.declare(HohenheimIds.id("snapshot_instance"))
             .happened(OperationSentences.of("snapshot_instance"))
@@ -185,7 +186,7 @@ public final class InstanceOperations {
                 values -> new SnapshotInput(values.get(NOTE))))
             .result(Integer.class)
             .command(COMMAND_FACET)
-            .facts(OperationFact.REACHES_OUTSIDE)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
             .register();
 
     /** The snapshot's input. */

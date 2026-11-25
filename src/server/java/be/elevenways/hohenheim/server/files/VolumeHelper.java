@@ -34,7 +34,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * the host, and the containment walk of {@link InstanceFiles} refuses one in the path anyway. The owner labels name
  * the APPLICATION, which is what lets {@link ContainerHardening}'s per-instance bind rule admit exactly its volumes.
  *
- * AIDEV-NOTE: no network ({@code NetworkMode none}), the service profile (the directory-owner chown needs CHOWN),
+ * AIDEV-NOTE: no network ({@code NetworkMode none}), the service profile (a written file's owner is the
+ * directory's, set by the daemon's extraction: no chown runs inside),
  * and a sleep that ends the container by itself should the controller die before {@link #close} removes it. A
  * leftover (a removal that failed, a controller that died) is an exited container labelled with the application:
  * the next helper of that application removes its exited ones before it starts, and the periodic instance

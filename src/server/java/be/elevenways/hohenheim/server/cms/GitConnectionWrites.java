@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.server.source.SshProviderKind;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RowSave;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -37,7 +40,9 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
+import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.operation.PatchBase;
 import be.elevenways.zenit.server.operation.RecordCodes;
@@ -134,6 +139,23 @@ public final class GitConnectionWrites {
             .command(CmsCommands.TRANSACTIONAL)
             .register();
 
+    /**
+     * Removes a git connection, the panel's own Delete of one (its form lane's removal, the tenant freeze judging who
+     * may); refused by name while an app builds from it.
+     */
+    public static final Operation<Row, Void, Integer> DELETE =
+        Operation.declare(HohenheimIds.id("delete_git_connection"))
+            .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_git_connection_description"))
+            .icon(Icon.TRASH)
+            .one(GitProviderOperations.PROVIDER)
+            .verb(OperationVerb.DELETE)
+            .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
+            .result(Integer.class)
+            .facts(OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.TRANSACTIONAL)
+            .register();
+
     static {
         OperationHandlers.attach(CREATE).handle(call -> created(Objects.requireNonNull(call.input()),
             Objects.requireNonNull(call.access(), "a create has its caller")));
@@ -141,6 +163,12 @@ public final class GitConnectionWrites {
             .patchBase(PatchBase.ofValues(CHANGE, (connection, access) -> stored(Objects.requireNonNull(connection))))
             .handle(call -> changed(call.subject(), Objects.requireNonNull(call.input()), call.patched(),
                 Objects.requireNonNull(call.access(), "a change has its caller")));
+        OperationHandlers.attach(DELETE)
+            .availability(Availability.batch((connections, access) -> DeleteImpact.gitConnectionsInUse(connections)))
+            .handle(call -> {
+                Models.get(GitProviderModel.class).delete(call.subject());
+                return 1;
+            });
         RecordReadLines.register(GitProviderModel.MODEL_ID, GitConnectionWrites.class, (keys, access) -> {
             Map<String, List<RecordReadLines.Line>> lines = new HashMap<>();
             for (Row connection : Models.get(GitProviderModel.class).find()

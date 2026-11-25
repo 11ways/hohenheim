@@ -177,9 +177,9 @@ class InstancePowerOperationsTest {
                 assertThat(body).as("step 2: backup during deploy has the byte-identical instance in-progress body")
                     .isEqualTo(
                     "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
-                        + "instance backup-deploy-target is still running; try again when it has "
+                        + "app backup-deploy-target is still running; try again when it has "
                         + "finished\",\"violations\":[{\"code\":"
-                        + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance "
+                        + "\"instance_operation_in_progress\",\"message\":\"Another operation on app "
                         + "backup-deploy-target is still "
                         + "running; try again when it has finished\"}]}");
             } finally {
@@ -306,9 +306,9 @@ class InstancePowerOperationsTest {
             assertThat(refusedBody).as("step 3: start during restart keeps the byte-identical /api/v1 refusal body")
                 .isEqualTo(
                 "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
-                    + "instance ops-target is still running; try again when it has "
+                    + "app ops-target is still running; try again when it has "
                     + "finished\",\"violations\":[{\"code\":"
-                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance ops-target is "
+                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on app ops-target is "
                     + "still "
                     + "running; try again when it has finished\"}]}");
 

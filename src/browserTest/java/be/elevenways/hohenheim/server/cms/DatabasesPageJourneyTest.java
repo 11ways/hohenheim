@@ -391,7 +391,7 @@ class DatabasesPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(say(DeleteImpact.databaseInUse(shared))).as("step 4b: the in-use reason names the apps")
                 .isEqualTo("Database '" + PREFIX + "shared-shop' is attached to " + PREFIX
                         + "shared-shop-app, " + PREFIX
-                    + "shared-blog-app. Detach it on each instance's Databases tab first.")
+                    + "shared-blog-app. Detach it on each app's Databases tab first.")
                 .as("step 4b: and pastes no path into the sentence").doesNotContain("/admin/");
             String appTab = adminGet("/admin/" + HohenheimSlugs.INSTANCES + "/" + shopApp.get(InstanceModel.ID)
                 + "/page/databases").body();

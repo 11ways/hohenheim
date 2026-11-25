@@ -156,7 +156,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         HohenheimTools hand = HohenheimTools.build();
         declared = hand;
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
-            .collections(McpRecordTools.shared(), McpListTool.over(tools, AuthMcp.tools()), hand,
+            .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand,
                 McpDescribeTool.over(SERVER_NAME, hand.tools()))
             .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
                 code(DnsZoneModel.MODEL_ID, 7))

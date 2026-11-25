@@ -159,7 +159,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
                 .as("the name describes a provisioned container and stays frozen")
                 .isZero();
             assertThat(page.locator("[name='db_user']").count()).isZero();
-            assertThat(page.locator("[name='db_password']").count()).isZero();
+            assertThat(page.locator("[name='password']").count()).isZero();
             // ... while the memory ceiling is writable. Numeric entries are never a
             // native number input (its decimal separator follows the BROWSER locale),
             // so the control to look for is plumage's.

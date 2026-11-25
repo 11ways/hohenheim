@@ -124,7 +124,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         //     exactly one. createTitle is the only seam the framework offers.
         assertThat(page.locator("h1").first().textContent().trim())
             .as("step 1b: the create screen names one instance, not the list")
-            .isEqualTo("New instance");
+            .isEqualTo("New app");
 
         // 2. No kind chosen: every host is offered and none is judged yet, and the runtime image, which only the
         //    kinds that run inside one ask, is not shown at all.
@@ -405,7 +405,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             assertCount(SETTINGS + " pl-card[data-section='" + section + "'][data-collapsed='true']", 0,
                 "step 2: the " + section + " section is open on first paint");
         }
-        for (String visible : List.of("repository_url", "provider_id", "repository", "branch",
+        for (String visible : List.of("repository_url", "git_connection", "repository", "branch",
                 "build_command", "start_command", "container_port")) {
             assertThat(page.locator(SETTINGS + " [name='settings." + visible + "']").count())
                 .as("step 2: " + visible + " renders").isGreaterThan(0);
@@ -547,7 +547,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 .isNull();
             assertThat(nowhere.body())
                 .as("step 1: the operator is told why, in the placement vocabulary")
-                .contains("No admitted host currently accepts this workload");
+                .contains("No admitted host currently accepts this app");
 
             // 1b. Every refusal the operator can fix on the form arrives in ONE pass: an
             //     empty host AND a mistyped repository URL are both reported on the same
@@ -563,7 +563,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 .as("step 1b: refused, re-rendered").isNotIn(302, 303);
             assertThat(twice.body())
                 .as("step 1b: the host refusal is on the page")
-                .contains("No admitted host currently accepts this workload");
+                .contains("No admitted host currently accepts this app");
             assertThat(twice.body())
                 .as("step 1b: and so is the repository URL refusal, on the SAME render")
                 .contains("This is not a git clone URL");

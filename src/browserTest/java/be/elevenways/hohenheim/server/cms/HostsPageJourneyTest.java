@@ -196,7 +196,7 @@ class HostsPageJourneyTest extends HohenheimHttpTestBase {
             assertThat(say(advice.statusLabel())).as("step 7: yet it reads as advice").isEqualTo("Advice");
             assertThat(advice.statusVariant()).as("step 7: in the warning tone").isEqualTo(BadgeVariant.WARNING);
             assertThat(say(advice.detail())).as("step 7: saying what it found")
-                .isEqualTo("The probe instance never answered, so this is unknown");
+                .isEqualTo("The probe container never answered, so this is unknown");
             HostPreflightReportView report = HostOverviewState.preflightReport(server(waiting));
             assertThat(say(report.summaryLabel())).as("step 7: the report's verdict is a capitalised word from copy")
                 .isEqualTo("Failed");
@@ -211,7 +211,7 @@ class HostsPageJourneyTest extends HohenheimHttpTestBase {
             String waitingPage = adminGet("/admin/" + HohenheimSlugs.HOSTS + "/" + waiting + "/page/overview").body();
             assertThat(waitingPage).as("step 8: the host page draws the finding")
                 .contains("nftables refused a firewall change")
-                .as("step 8: and the advice's").contains("The probe instance never answered")
+                .as("step 8: and the advice's").contains("The probe container never answered")
                 .as("step 8: and the report's verdict apart from its time").contains("data-preflight-verdict");
             String admittedPage = adminGet("/admin/" + HohenheimSlugs.HOSTS + "/" + admitted + "/page/overview")
                 .body();

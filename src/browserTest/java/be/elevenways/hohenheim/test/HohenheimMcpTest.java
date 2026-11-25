@@ -84,6 +84,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -334,6 +335,10 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(undescribed).as("no operation is said only by its label").isEmpty();
         System.out.println("MCP arguments without words: " + McpCoverage.undescribedParameters(server,
             TenantConduits.operator()));
+        // A dyndns new_token makes a new token on every call that is no retry of one request: never idempotent.
+        assertThat(McpCoverage.offered(server, TenantConduits.operator()).stream()
+            .filter(tool -> tool.name().equals("dns_record_set")).findFirst().orElseThrow().annotations().idempotent())
+            .as("dns_record_set is not marked idempotent").isFalse();
     }
 
     /**
@@ -356,7 +361,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             }
         }
         assertThat(stored).as("step 1: the stored names that go by another name")
-            .contains("nice_name", "force_ssl", "custom_headers", "more_backends", "port_protocol", "delay");
+            .contains("nice_name", "force_ssl", "custom_headers", "more_backends", "port_protocol", "delay",
+                "db_password");
         // Whole words of a name: "hsts_subdomains" names subdomains, never a domain for an address.
         List<String> forbidden = List.of("domain", "domains", "ssl", "letsencrypt", "server");
         int arguments = 0;
@@ -376,6 +382,16 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             }
         }
         assertThat(arguments).as("step 2: the hand-declared tools' arguments were read").isGreaterThan(100);
+
+        // 3. The shared record tools name records by code too: read by codes, history by code, never by ids or id.
+        for (Map.Entry<String, String> shared : Map.of("read", "codes", "history", "code").entrySet()) {
+            McpHostTool tool = McpCoverage.offered(server, operator).stream()
+                .filter(offered -> offered.name().equals(shared.getKey())).findFirst().orElseThrow();
+            Map<?, ?> properties = (Map<?, ?>) tool.inputSchema(operator).get("properties");
+            assertThat(properties.keySet().stream().map(String::valueOf).toList())
+                .as("step 3: " + shared.getKey() + " takes " + shared.getValue())
+                .contains(shared.getValue()).doesNotContain("ids", "id");
+        }
     }
 
     /** The one list knows every kind the tools take or answer a code of, each by the spec's word for it. */
@@ -466,7 +482,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         McpHttpSession.Answer listed = session.call("list", Map.of("kind", "site", "search", name));
         assertThat(listed.error()).as("step 3: " + listed.text()).isFalse();
         assertThat(listed.text()).as("step 3: the list").contains(code).contains(name);
-        McpHttpSession.Answer read = session.call("read", Map.of("ids", List.of(code)));
+        McpHttpSession.Answer read = session.call("read", Map.of("codes", List.of(code)));
         assertThat(read.error()).as("step 3: " + read.text()).isFalse();
         assertThat(read.text()).as("step 3: the read").contains(code + " (site)").contains(name);
 
@@ -534,22 +550,23 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
             // 1. The operator's read of the docker container says what it runs, its port, a setting left at its
             //    default, and its secret environment as set, never its value.
-            McpHttpSession.Answer read = operatorSession.call("read", Map.of("ids", List.of(workerCode)));
+            McpHttpSession.Answer read = operatorSession.call("read", Map.of("codes", List.of(workerCode)));
             assertThat(read.error()).as("step 1: " + read.text()).isFalse();
             System.out.println("A docker container app read in full (" + read.text().length() + " characters):\n"
                 + read.text());
             assertThat(read.text()).as("step 1: the container in full").contains(workerCode + " (app)")
                 .contains(workerName).contains("image (Container image): fake/worker").contains("tag (Image tag): 1.4")
                 .contains("command (Container command): worker --queue mail").contains("container_port: 8080")
-                .contains("(default)").contains("Environment variables: set").contains("status: ")
+                .contains("(default)").contains("Environment variables (set in the panel): set").contains("status: ")
                 .doesNotContain(SECRET);
 
             // 2. The operator's read of the application says its image, port and health check, its secret as set.
-            McpHttpSession.Answer readShop = operatorSession.call("read", Map.of("ids", List.of(shopCode)));
+            McpHttpSession.Answer readShop = operatorSession.call("read", Map.of("codes", List.of(shopCode)));
             assertThat(readShop.error()).as("step 2: " + readShop.text()).isFalse();
             assertThat(readShop.text()).as("step 2: the application in full")
                 .contains("image (Container image): fake/app")
-                .contains("container_port: 8080").contains("health_path: /up").contains("Environment variables: set")
+                .contains("container_port: 8080").contains("health_path: /up")
+                .contains("Environment variables (set in the panel): set")
                 .doesNotContain(SECRET);
 
             // 3. The customer holding the container reads what the customer panel shows him: its name and status,
@@ -558,7 +575,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             RecordGrants.grant(GrantSubjectType.USER, customerId, InstanceModel.MODEL_ID, workerId,
                 HohenheimCapabilities.MANAGE, true);
             McpHttpSession customer = presetSession(server, endpoint, customerId, "Mcp Full Read");
-            McpHttpSession.Answer his = customer.call("read", Map.of("ids", List.of(workerCode)));
+            McpHttpSession.Answer his = customer.call("read", Map.of("codes", List.of(workerCode)));
             assertThat(his.error()).as("step 3: " + his.text()).isFalse();
             assertThat(his.text()).as("step 3: the customer panel's fields").contains(workerName).contains("status: ")
                 .doesNotContain("Container image").doesNotContain("fake/worker").doesNotContain("worker --queue")
@@ -615,7 +632,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
 
             // 3. A read of his app and of his site says its status, and no stored number.
             for (String code : List.of(appCode, siteCode)) {
-                McpHttpSession.Answer read = session.call("read", Map.of("ids", List.of(code)));
+                McpHttpSession.Answer read = session.call("read", Map.of("codes", List.of(code)));
                 assertThat(read.error()).as("step 3: " + read.text()).isFalse();
                 assertThat(read.text()).as("step 3: the read of " + code).contains("status: ")
                     .doesNotContainPattern("(?<![A-Za-z0-9])[0-9]+(?![0-9])");
@@ -688,7 +705,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 7: the list reads as much with two more builds").isEqualTo(fewer);
             McpHttpSession.Answer buildLog = session.call("logs", Map.of("code", buildCode));
             assertThat(buildLog.text()).as("step 7: his build's own output").contains("npm ERR! the build of the shop");
-            McpHttpSession.Answer failed = session.call("read", Map.of("ids", List.of(failedCode, buildCode)));
+            McpHttpSession.Answer failed = session.call("read", Map.of("codes", List.of(failedCode, buildCode)));
             assertThat(failed.error()).as("step 7: " + failed.text()).isFalse();
             assertThat(failed.text()).as("step 7: the reads name the app and say that they failed")
                 .contains("app: " + appCode).contains("failure: ").doesNotContain(reason).doesNotContain(steps)
@@ -835,9 +852,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 assertThat(hidden.error()).as("step 14: " + run + " refused to another tenant").isTrue();
                 assertThat(hidden.text().replace(run, "<code>")).as("step 14: " + run + " names nothing to him")
                     .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
-                assertThat(rival.call("read", Map.of("ids", List.of(run))).text().replace(run, "<code>"))
+                assertThat(rival.call("read", Map.of("codes", List.of(run))).text().replace(run, "<code>"))
                     .as("step 14: nor does a read of " + run)
-                    .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
+                    .isEqualTo(rival.call("read", Map.of("codes", List.of(noRun))).text().replace(noRun, "<code>"));
             }
         }
     }
@@ -916,7 +933,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .containsEntry("MODE", "worker").containsEntry("API_TOKEN", secrets.get(0)).hasSize(6);
 
             // 4. Its read shows every setting, its variables plain and the secrets as set.
-            McpHttpSession.Answer read = admin.call("read", Map.of("ids", List.of(code)));
+            McpHttpSession.Answer read = admin.call("read", Map.of("codes", List.of(code)));
             assertThat(read.error()).as("step 4: " + read.text()).isFalse();
             assertThat(read.text()).as("step 4: the settings").contains("image (Container image): fake/app")
                 .contains("command (Container command): worker --queue mail");
@@ -932,7 +949,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 "command", "worker --queue jobs", "console_mode", "plain", "protocol", "tcp"));
             assertThat(changed.error()).as("step 5: " + changed.text()).isFalse();
             assertThat(changed.text()).as("step 5: what changed").contains("command");
-            assertThat(admin.call("read", Map.of("ids", List.of(code))).text()).as("step 5: the new command")
+            assertThat(admin.call("read", Map.of("codes", List.of(code))).text()).as("step 5: the new command")
                 .contains("command (Container command): worker --queue jobs")
                 .contains("image (Container image): fake/app");
             assertThat(admin.call("app_docker_container_set", Map.of("code", code, "host", "SR1")).text())
@@ -974,6 +991,11 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             String shopCode = shopMade.group();
             int shopId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID,
                 shopCode)));
+            // Its read names each setting by the argument that sets it, and says where any other is set.
+            String shopRead = admin.call("read", Map.of("codes", List.of(shopCode))).text();
+            assertThat(shopRead).as("step 6: the host by its create's argument").contains("host: ")
+                .as("step 6: a setting no argument takes says where it is set").contains("(set in the panel)")
+                .doesNotContainPattern("(?m)^Host: ");
             settle("step 6");
             daemon.answerNextOneShot(0, "migrated\n");
             assertThat(followed(admin, startedRun(admin, "deploy", shopCode, "step 6"), "step 6").text())
@@ -1048,6 +1070,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .findById(hostId))) - 200;
         InstanceCapacity.reserve(hostId, filled);
         Integer appId = null;
+        Integer shopId = null;
         try (FakeApps ignored = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
                 .getResolvedDatasource())) {
             McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
@@ -1150,13 +1173,41 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(retimed.error()).as("step 7: " + retimed.text()).isFalse();
             assertThat(siteSettings(siteId)).as("step 7: the undeclared key is still stored beside the change")
                 .containsEntry("undeclared_note", "kept").containsEntry("idle_timeout", 600);
+
+            // 8. Its memory limit lowered, its booking follows at once: the host holds what it now asks.
+            assertThat(admin.call("app_docker_container_set", Map.of("code", app, "memory_limit_mb", 64)).error())
+                .as("step 8: lowered").isFalse();
+            assertThat(InstanceCapacity.bookedMbOn(hostId)).as("step 8: booked at the new limit")
+                .isEqualTo(filled + 64);
+            assertThat((Integer) Models.get(InstanceModel.class).find().noCache().where(InstanceModel.ID.eq(appId))
+                .first().get(InstanceModel.CAPACITY_MB)).as("step 8: stamped at it").isEqualTo(64);
+
+            // 9. An application books nothing itself (its releases do): a stamp left on one from before that rule is
+            //    put right by its next change, and the host's booking does not move.
+            McpHttpSession.Answer shop = admin.call("app_application_set", Map.of("name", PREFIX + "stamped-"
+                + letters(), "host", host, "image", "fake/app", "tag", "v1", "container_port", 80,
+                "memory_limit_mb", 128));
+            assertThat(shop.error()).as("step 9: " + shop.text()).isFalse();
+            Matcher shopMade = appCodes.matcher(shop.text());
+            assertThat(shopMade.find()).as("step 9: the answer names the app").isTrue();
+            shopId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID,
+                shopMade.group())));
+            Models.get(InstanceModel.class).find().noCache().where(InstanceModel.ID.eq(shopId))
+                .assign(InstanceModel.CAPACITY_MB, 128).updateAll();
+            assertThat(admin.call("app_application_set", Map.of("code", shopMade.group(), "memory_limit_mb", 64))
+                .error()).as("step 9: lowered").isFalse();
+            assertThat((Integer) Models.get(InstanceModel.class).find().noCache().where(InstanceModel.ID.eq(shopId))
+                .first().get(InstanceModel.CAPACITY_MB)).as("step 9: the stale stamp is put right").isZero();
+            assertThat(InstanceCapacity.bookedMbOn(hostId)).as("step 9: the host's booking did not move")
+                .isEqualTo(filled + 64);
         } finally {
-            if (appId != null) {
+            for (Integer id : Arrays.asList(appId, shopId)) {
+                if (id == null) continue;
                 for (Row site : Models.get(SiteModel.class).find().withTrashed()
-                        .where(SiteModel.INSTANCE_ID.eq(appId)).all()) {
+                        .where(SiteModel.INSTANCE_ID.eq(id)).all()) {
                     HardDeletes.byId(Models.get(SiteModel.class), site.get(SiteModel.ID));
                 }
-                HardDeletes.byId(Models.get(InstanceModel.class), appId);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
             InstanceCapacity.release(hostId, filled);
             HardDeletes.byId(Models.get(HostModel.class), hostId);
@@ -1200,7 +1251,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 1: it follows the app").isEqualTo(api);
             assertThat(RawValues.map(Models.get(InstanceModel.class).findById(workerId).get(InstanceModel.SETTINGS))
                 .get("image")).as("step 1: no image of its own").isNull();
-            assertThat(admin.call("read", Map.of("ids", List.of(worker))).text())
+            assertThat(admin.call("read", Map.of("codes", List.of(worker))).text())
                 .as("step 1: its read names the app by the argument that set it").contains("image_app (")
                 .contains(apiCode);
 
@@ -1266,7 +1317,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(created.text()).as("step 1: never the private key").doesNotContain("PRIVATE KEY");
 
             // 2. Its read shows the same public key, the private key only as set.
-            McpHttpSession.Answer read = admin.call("read", Map.of("ids", List.of(connection)));
+            McpHttpSession.Answer read = admin.call("read", Map.of("codes", List.of(connection)));
             assertThat(read.error()).as("step 2: " + read.text()).isFalse();
             assertThat(read.text()).as("step 2: the public key").contains(key.substring("public_key: ".length()))
                 .doesNotContain("PRIVATE KEY").contains(repository);
@@ -1294,7 +1345,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(String.valueOf(settings.get("provider_id"))).as("step 4: the app uses the connection")
                 .isEqualTo(String.valueOf(connectionId));
             assertThat(settings.get("repository")).as("step 4: and its repository").isEqualTo(repository);
-            assertThat(admin.call("read", Map.of("ids", List.of(appCode))).text()).as("step 4: read back by its code")
+            assertThat(admin.call("read", Map.of("codes", List.of(appCode))).text()).as("step 4: read back by its code")
                 .contains("git_connection: " + connection);
 
             // 5. A token connection: its token goes in and never comes out.
@@ -1307,8 +1358,20 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 tokenConnection))));
             assertThat((String) Models.get(GitProviderModel.class).findById(providers.get(1))
                 .get(GitProviderModel.ACCESS_TOKEN)).as("step 5: the token is stored").isEqualTo(token);
-            assertThat(tokened.text() + admin.call("read", Map.of("ids", List.of(tokenConnection))).text())
+            assertThat(tokened.text() + admin.call("read", Map.of("codes", List.of(tokenConnection))).text())
                 .as("step 5: never shown").doesNotContain(token).doesNotContain("public_key");
+
+            // 6. A connection an app builds from is not deleted, the refusal naming the app; one nothing uses is, by
+            //    its code, as describe offers.
+            McpHttpSession.Answer held = admin.call("delete", Map.of("code", connection));
+            assertThat(held.error()).as("step 6: refused while used: " + held.text()).isTrue();
+            assertThat(held.text()).as("step 6: naming the app").contains(PREFIX + "site-");
+            assertThat(Models.get(GitProviderModel.class).findById(connectionId)).as("step 6: kept").isNotNull();
+            assertThat(admin.call("describe", Map.of("code", tokenConnection)).text())
+                .as("step 6: describe offers the delete").contains("delete code=" + tokenConnection);
+            McpHttpSession.Answer deleted = admin.call("delete", Map.of("code", tokenConnection));
+            assertThat(deleted.error()).as("step 6: " + deleted.text()).isFalse();
+            assertThat(Models.get(GitProviderModel.class).findById(providers.get(1))).as("step 6: gone").isNull();
         } finally {
             if (appId != null) HardDeletes.byId(Models.get(InstanceModel.class), appId);
             for (int id : providers) HardDeletes.byId(Models.get(GitProviderModel.class), id);
@@ -1416,7 +1479,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(RawValues.map(secure.get(SiteDomainModel.CUSTOM_HEADERS))).as("step 2: the request header")
                 .containsEntry("X-Shop", "1");
             // Every change a tool makes is in the record's history, as the panel's own save is.
-            McpHttpSession.Answer past = admin.call("history", Map.of("id", addressCode));
+            McpHttpSession.Answer past = admin.call("history", Map.of("code", addressCode));
             assertThat(past.error()).as("step 2: the address's history " + past.text()).isFalse();
             assertThat(past.text()).as("step 2: the change is in it").contains("changed " + hostname);
             // The one list lists a site's addresses by the site's code, and refuses a code naming nothing.
@@ -1543,9 +1606,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .doesNotContain("203.0.113.30");
             assertThat(manager.call("dns_zone_set", Map.of("code", zone, "refresh", 7200)).error())
                 .as("step 6b: a zone is installation administration").isTrue();
-            // The site goes back to the operator alone: step 8's trash and restore are the operator's own.
-            RecordGrants.revoke(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
-                HohenheimCapabilities.MANAGE);
+            // The manager keeps his grant: step 8's operator trashes and restores the site all the same.
 
             // 6c. A dynamic DNS token made for shop A is never in the answer: the zone's Records tab shows it to the
             //     account that asked, once.
@@ -1602,7 +1663,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 6d: unlinked").isEqualTo(0L);
 
             // 7. The site and the address read in full; describe names the exact calls.
-            String read = admin.call("read", Map.of("ids", List.of(siteCode, addressCode))).text();
+            String read = admin.call("read", Map.of("codes", List.of(siteCode, addressCode))).text();
             assertThat(read).as("step 7: the reads").contains(siteName).contains(app).contains(hostname);
             assertThat(RawValues.map(Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME
                 .eq(hostname)).first().get(SiteDomainModel.RESPONSE_HEADERS)))
@@ -1623,7 +1684,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .get(SiteModel.NAME)).as("step 7a: its first name again").isEqualTo(siteName);
 
             // 8. roll_back takes a site (its release engine then answers in its own words); delete sends the site to
-            //    the trash; site_restore brings it back; trashed again, permanent removes it for good.
+            //    the trash; site_restore brings it back, the manager's grant of step 6b notwithstanding (the trash
+            //    revoked the grant, and the site that released its hostnames takes them back); trashed again,
+            //    permanent removes it for good.
             assertThat(admin.call("roll_back", Map.of("code", siteCode)).text()).as("step 8: a site is rolled back")
                 .doesNotContain("is none of them");
             assertThat(admin.call("delete", Map.of("code", siteCode, "permanent", true)).error())
@@ -1647,7 +1710,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 + letters(), "root_path", "/tmp", "autoindex", false, "missing_page", "404.html"));
             assertThat(files.error()).as("step 9: " + files.text()).isFalse();
             String filesCode = found(Pattern.compile("S\\d+"), files.text(), "step 9: the site's code");
-            assertThat(admin.call("read", Map.of("ids", List.of(filesCode))).text()).as("step 9: its folder")
+            assertThat(admin.call("read", Map.of("codes", List.of(filesCode))).text()).as("step 9: its folder")
                 .contains("/tmp");
             assertThat(admin.call("delete", Map.of("code", app, "with_data", true)).error())
                 .as("step 9: the app deleted").isFalse();
@@ -1734,7 +1797,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     String.valueOf(port.get(1)), "4465/tcp", String.valueOf(port.get(2)), "4587/tcp"));
 
             // 2. read shows each port.
-            String read = admin.call("read", Map.of("ids", List.of(mail))).text();
+            String read = admin.call("read", Map.of("codes", List.of(mail))).text();
             assertThat(read).as("step 2: every port read").contains(String.valueOf(port.get(0))).contains("2525/tcp")
                 .contains(String.valueOf(port.get(1))).contains(String.valueOf(port.get(2)));
 
@@ -1904,9 +1967,9 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 assertThat(hidden.error()).as("step 3: " + what + " refused by run_read").isTrue();
                 assertThat(hidden.text().replace(code, "<code>")).as("step 3: " + what + " names nothing to him")
                     .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
-                assertThat(rival.call("read", Map.of("ids", List.of(code))).text().replace(code, "<code>"))
+                assertThat(rival.call("read", Map.of("codes", List.of(code))).text().replace(code, "<code>"))
                     .as("step 3: nor does a read of " + what)
-                    .isEqualTo(rival.call("read", Map.of("ids", List.of(noRun))).text().replace(noRun, "<code>"));
+                    .isEqualTo(rival.call("read", Map.of("codes", List.of(noRun))).text().replace(noRun, "<code>"));
                 assertThat(httpGet(page + id, rivalSession).statusCode()).as("step 3: " + what + "'s page")
                     .isEqualTo(missingPage);
                 assertThat(httpGet(part + id, rivalSession).statusCode()).as("step 3: " + what + "'s live part")

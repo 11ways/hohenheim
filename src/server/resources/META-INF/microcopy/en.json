@@ -12,11 +12,11 @@
     "scope": "violations"
   },
   "database_already_attached": {
-    "text": "That database is already attached to this instance",
+    "text": "That database is already attached to this app",
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Database '{$name}' is attached to {$workloads}; detach it on the instance's Databases tab first",
+    "text": "Database '{$name}' is attached to {$workloads}; detach it on the app's Databases tab first",
     "scope": "violations"
   },
   "database_missing": {
@@ -37,7 +37,7 @@
   },
   "database_not_ready": [
     {
-      "text": "Database '{$name}' is not ready yet (state: {$state}); the workload would start without its credentials, so wait until it is active and deploy then",
+      "text": "Database '{$name}' is not ready yet (state: {$state}); the app would start without its credentials, so wait until it is active and deploy then",
       "scope": "violations"
     },
     {
@@ -416,7 +416,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximum CPU cores available to the workload. Leave blank for no limit.",
+      "text": "Maximum CPU cores available to the app. Leave blank for no limit.",
       "scope": "help"
     }
   ],
@@ -1370,7 +1370,7 @@
       "scope": "schedule_step"
     },
     {
-      "text": "Attach a data disk or an extra network interface to this instance.",
+      "text": "Attach a data disk or an extra network interface to this app.",
       "scope": "instance_device"
     },
     {
@@ -1378,11 +1378,11 @@
       "scope": "server_media"
     },
     {
-      "text": "This instance declares no data directories yet.",
+      "text": "This app declares no data directories yet.",
       "scope": "instance_volume"
     },
     {
-      "text": "No managed database injects its connection details into this instance yet.",
+      "text": "No managed database injects its connection details into this app yet.",
       "scope": "instance_database"
     }
   ],
@@ -2271,11 +2271,11 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Live output of this instance's workload. Commands are sent with the form below.",
+      "text": "Live output of this app. Commands are sent with the form below.",
       "scope": "instance_console"
     },
     {
-      "text": "This workload runs in a real terminal: what you type here goes straight to it, and it follows the size of this window.",
+      "text": "This app runs in a real terminal: what you type here goes straight to it, and it follows the size of this window.",
       "scope": "instance_console",
       "console": "tty"
     },
@@ -2284,7 +2284,7 @@
       "scope": "instance_framebuffer"
     },
     {
-      "text": "Run one command inside this instance's workload and read its exit code and output.",
+      "text": "Run one command inside this app and read its exit code and output.",
       "scope": "instance_exec"
     },
     {
@@ -2780,20 +2780,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instances",
+      "text": "Apps",
       "scope": "instance"
     },
     {
-      "text": "instances",
+      "text": "apps",
       "scope": "instance",
       "case": "sentence"
     },
     {
-      "text": "Instance quotas",
+      "text": "App quotas",
       "scope": "instance_quota"
     },
     {
-      "text": "instance quotas",
+      "text": "app quotas",
       "scope": "instance_quota",
       "case": "sentence"
     },
@@ -2816,11 +2816,11 @@
       "case": "sentence"
     },
     {
-      "text": "Unexpected workloads",
+      "text": "Unexpected containers",
       "scope": "reconcile_finding"
     },
     {
-      "text": "unexpected workloads",
+      "text": "unexpected containers",
       "scope": "reconcile_finding",
       "case": "sentence"
     },
@@ -2852,11 +2852,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instance files",
+      "text": "App files",
       "scope": "instance_file"
     },
     {
-      "text": "instance files",
+      "text": "app files",
       "scope": "instance_file",
       "case": "sentence"
     },
@@ -2924,20 +2924,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instance snapshots",
+      "text": "App snapshots",
       "scope": "instance_snapshot"
     },
     {
-      "text": "instance snapshots",
+      "text": "app snapshots",
       "scope": "instance_snapshot",
       "case": "sentence"
     },
     {
-      "text": "Instance backups",
+      "text": "App backups",
       "scope": "instance_backup"
     },
     {
-      "text": "instance backups",
+      "text": "app backups",
       "scope": "instance_backup",
       "case": "sentence"
     },
@@ -3848,7 +3848,7 @@
     "scope": "violations"
   },
   "dns_managed_by_unknown": {
-    "text": "That is not a system this instance knows how to hand a record to",
+    "text": "That is not a system this app knows how to hand a record to",
     "scope": "violations"
   },
   "dns_value_required": {
@@ -3936,15 +3936,15 @@
     "scope": "violations"
   },
   "game_domain_authority_instance": {
-    "text": "You need management authority over that instance",
+    "text": "You need management authority over that app",
     "scope": "violations"
   },
   "game_domain_authority_none": {
-    "text": "You need authority over the domain or one of the instances to remove this mapping",
+    "text": "You need authority over the domain or one of the apps to remove this mapping",
     "scope": "violations"
   },
   "game_domain_same_instance": {
-    "text": "The backend and the proxy must be different instances",
+    "text": "The backend and the proxy must be different apps",
     "scope": "violations"
   },
   "game_domain_cross_host": {
@@ -3964,7 +3964,7 @@
     "scope": "violations"
   },
   "game_instance_missing": {
-    "text": "That instance does not exist",
+    "text": "That app does not exist",
     "scope": "violations"
   },
   "game_domain_field_required": {
@@ -3988,7 +3988,7 @@
     "scope": "violations"
   },
   "game_link_unsupported": {
-    "text": "Instance '{$name}' runs on a driver without link networks",
+    "text": "App '{$name}' runs on a driver without link networks",
     "scope": "violations"
   },
   "game_domain": [
@@ -4003,7 +4003,7 @@
   ],
   "game_backend": [
     {
-      "text": "Backend instance",
+      "text": "Backend app",
       "scope": "hohenheim_field"
     },
     {
@@ -4017,7 +4017,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The proxy instance whose forced-hosts config is generated from this mapping.",
+      "text": "The proxy app whose forced-hosts config is generated from this mapping.",
       "scope": "help"
     }
   ],
@@ -4138,7 +4138,7 @@
     "scope": "certificate_request_error"
   },
   "zone_not_primary": {
-    "text": "This instance only replicates the zone covering {$hostnames} from {$peer}; request the certificate there, give that peer an admin API key, or use HTTP-01",
+    "text": "This server only replicates the zone covering {$hostnames} from {$peer}; request the certificate there, give that peer an admin API key, or use HTTP-01",
     "scope": "certificate_request_error"
   },
   "dns_server_disabled": {
@@ -4339,7 +4339,7 @@
       "scope": "dns_role"
     },
     {
-      "text": "Owned and edited on this instance.",
+      "text": "Owned and edited on this server.",
       "scope": "help"
     }
   ],
@@ -4407,7 +4407,7 @@
   },
   "delete_confirm": [
     {
-      "text": "Detach database '{$database}' from instance '{$instance}'? Reachability is revoked at the daemon as soon as you confirm, and the injected {$prefix} variables disappear at the instance's next deploy. The database itself and its data are kept.",
+      "text": "Detach database '{$database}' from app '{$instance}'? Reachability is revoked at the daemon as soon as you confirm, and the injected {$prefix} variables disappear at the app's next deploy. The database itself and its data are kept.",
       "scope": "instance_database"
     },
     {
@@ -4423,7 +4423,7 @@
       "scope": "auth_provider"
     },
     {
-      "text": "Delete this variable? It leaves its environment now; workloads there stop receiving it at their next deploy, and anything running keeps the value it was deployed with until then.",
+      "text": "Delete this variable? It leaves its environment now; apps there stop receiving it at their next deploy, and anything running keeps the value it was deployed with until then.",
       "scope": "environment_variable"
     },
     {
@@ -4431,7 +4431,7 @@
       "scope": "access_list"
     },
     {
-      "text": "Delete this environment? An environment that still holds variables or workloads is refused, so move or remove those first.",
+      "text": "Delete this environment? An environment that still holds variables or apps is refused, so move or remove those first.",
       "scope": "environment"
     },
     {
@@ -4451,7 +4451,7 @@
       "scope": "project"
     },
     {
-      "text": "Delete this ISO volume from the host? Instances no longer referencing it are unaffected.",
+      "text": "Delete this ISO volume from the host? Apps no longer referencing it are unaffected.",
       "scope": "server_media"
     },
     {
@@ -4459,7 +4459,7 @@
       "scope": "access_rule"
     },
     {
-      "text": "This removes the workload from its host but keeps its data. Use \"Delete with data\" when the data must go too.",
+      "text": "This removes the app from its host but keeps its data. Use \"Delete with data\" when the data must go too.",
       "scope": "instance"
     },
     {
@@ -5269,7 +5269,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "Sending '{$command}' stops this instance gracefully.",
+      "text": "Sending '{$command}' stops this app gracefully.",
       "scope": "instance_console"
     }
   ],
@@ -5283,7 +5283,7 @@
       "scope": "stack"
     },
     {
-      "text": "Stop this instance? It keeps its published port for its next start; the container and its data are kept.",
+      "text": "Stop this app? It keeps its published port for its next start; the container and its data are kept.",
       "scope": "instance"
     }
   ],
@@ -5315,7 +5315,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "Stop this instance and start it again?",
+      "text": "Stop this app and start it again?",
       "scope": "instance"
     }
   ],
@@ -5649,7 +5649,7 @@
       "scope": "stop_kind"
     },
     {
-      "text": "Runs one command inside the workload and shows its output and exit code.",
+      "text": "Runs one command inside the app and shows its output and exit code.",
       "scope": "console_mode"
     }
   ],
@@ -6009,7 +6009,7 @@
       "scope": "stack_services"
     },
     {
-      "text": ".match {$stranded :string}\ntrue {{Disabled: the instance it served was destroyed}}\n* {{Disabled}}",
+      "text": ".match {$stranded :string}\ntrue {{Disabled: the app it served was destroyed}}\n* {{Disabled}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -6207,7 +6207,7 @@
     }
   ],
   "workload_identity": {
-    "text": "Site {$name} workload identity",
+    "text": "Site {$name} app identity",
     "scope": "attention_title"
   },
   "route_taken_other_site": {
@@ -6377,7 +6377,7 @@
     "scope": "help"
   },
   "instance_container_port": {
-    "text": "Container port the workload listens on; protocol and exposure below decide how it is published",
+    "text": "Container port the app listens on; protocol and exposure below decide how it is published",
     "scope": "help"
   },
   "instance_volumes": {
@@ -6401,7 +6401,7 @@
       "scope": "instance_kind"
     },
     {
-      "text": "Run a container image as a managed instance",
+      "text": "Run a container image as a managed app",
       "scope": "instance_kind_description"
     }
   ],
@@ -6442,19 +6442,19 @@
     }
   ],
   "stopped_toast": {
-    "text": "Instance {$name} stopped",
+    "text": "App {$name} stopped",
     "scope": "instance"
   },
   "instance_not_found": {
-    "text": "Instance #{$id} does not exist (or was deleted)",
+    "text": "App #{$id} does not exist (or was deleted)",
     "scope": "violations"
   },
   "instance_upstream_not_applicable": {
-    "text": "This upstream does not serve an instance; leave this empty.",
+    "text": "This upstream does not serve an app; leave this empty.",
     "scope": "site"
   },
   "instance_kind_unknown": {
-    "text": "No runtime handles instance kind {$kind}",
+    "text": "No runtime handles app kind {$kind}",
     "scope": "violations"
   },
   "console_kind_unknown": {
@@ -6462,7 +6462,7 @@
     "scope": "violations"
   },
   "instance_image_required": {
-    "text": "An image is required before this instance can be deployed",
+    "text": "An image is required before this app can be deployed",
     "scope": "violations"
   },
   "instance_deploy_failed": {
@@ -6486,7 +6486,7 @@
     "scope": "violations"
   },
   "quota_reached": {
-    "text": "Instance quota reached: {$used :integer} of {$limit :integer} in use",
+    "text": "App quota reached: {$used :integer} of {$limit :integer} in use",
     "scope": "violations"
   },
   "quota_negative": {
@@ -6505,11 +6505,11 @@
   ],
   "max_instances": [
     {
-      "text": "Max instances",
+      "text": "Max apps",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Cap for this owner on every live workload: machines, containers and game servers alike. 0 refuses every new one, empty falls back to the global default",
+      "text": "Cap for this owner on every live app: machines, containers and game servers alike. 0 refuses every new one, empty falls back to the global default",
       "scope": "help"
     }
   ],
@@ -6518,7 +6518,7 @@
     "scope": "violations"
   },
   "instance_fenced_out": {
-    "text": "Instance {$name} is now controlled by another controller on host {$server}; this operation was aborted without cleanup",
+    "text": "App {$name} is now controlled by another controller on host {$server}; this operation was aborted without cleanup",
     "scope": "violations"
   },
   "host_not_admitted": [
@@ -6532,7 +6532,7 @@
     }
   ],
   "instance_placement_blocked": {
-    "text": "This instance cannot be started right now. Its host is not accepting new workloads; your operator has to clear this.",
+    "text": "This app cannot be started right now. Its host is not accepting new apps; your operator has to clear this.",
     "scope": "violations"
   },
   "host_posture_refuses": {
@@ -6568,11 +6568,11 @@
     "scope": "server"
   },
   "cordon_confirm": {
-    "text": "Stop scheduling new workloads onto this host? Instances already running on it keep running and keep serving; use Drain to move them off.",
+    "text": "Stop scheduling new apps onto this host? Apps already running on it keep running and keep serving; use Drain to move them off.",
     "scope": "server"
   },
   "drain_confirm": {
-    "text": "Every instance on this host will be stopped, moved to another host and started there. Workloads that cannot move are refused by name and stay untouched.",
+    "text": "Every app on this host will be stopped, moved to another host and started there. Apps that cannot move are refused by name and stay untouched.",
     "scope": "server"
   },
   "host_drained": {
@@ -6631,7 +6631,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "How well this host separates tenants. Trusted only: no hostile tenants at all. Dedicated: one tenant owns the machine. Shared containers: several tenants share one kernel, so a container escape reaches all of them. VM isolated: every workload runs in its own virtual machine, the only posture rated against a hostile root tenant.",
+      "text": "How well this host separates tenants. Trusted only: no hostile tenants at all. Dedicated: one tenant owns the machine. Shared containers: several tenants share one kernel, so a container escape reaches all of them. VM isolated: every app runs in its own virtual machine, the only posture rated against a hostile root tenant.",
       "scope": "help"
     }
   ],
@@ -6641,7 +6641,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Whether new workloads may be placed here. Blocked until a preflight passes; admitted accepts placement; cordoned keeps what already runs but takes nothing new. Changed with the Check and admit and Cordon actions, never by editing this form.",
+      "text": "Whether new apps may be placed here. Blocked until a preflight passes; admitted accepts placement; cordoned keeps what already runs but takes nothing new. Changed with the Check and admit and Cordon actions, never by editing this form.",
       "scope": "help"
     }
   ],
@@ -6767,7 +6767,7 @@
   },
   "trust_notice_body": [
     {
-      "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into workloads there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
+      "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into apps there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
       "scope": "server"
     },
     {
@@ -6845,39 +6845,39 @@
     "scope": "violations"
   },
   "instance_busy": {
-    "text": "Instance {$name} is busy ({$status}); wait for the running snapshot or restore to finish",
+    "text": "App {$name} is busy ({$status}); wait for the running snapshot or restore to finish",
     "scope": "violations"
   },
   "migrate_operator_only": {
-    "text": "Migrating an instance between hosts is an operator action",
+    "text": "Migrating an app between hosts is an operator action",
     "scope": "violations"
   },
   "migrate_same_host": {
-    "text": "Instance {$name} already lives on that host",
+    "text": "App {$name} already lives on that host",
     "scope": "violations"
   },
   "migrate_unsupported": {
-    "text": "Instance {$name} runs on a driver without a migration transport (no whole-instance export/import and no volume capture/restore); it cannot be migrated",
+    "text": "App {$name} runs on a driver without a migration transport (no whole-app export/import and no volume capture/restore); it cannot be migrated",
     "scope": "violations"
   },
   "migrate_game_paired": {
-    "text": "Instance {$name} is bound to a game domain mapping; its proxy/backend pair rides a host-local link network, so moving one side alone would break it. Remove the mapping first.",
+    "text": "App {$name} is bound to a game domain mapping; its proxy/backend pair rides a host-local link network, so moving one side alone would break it. Remove the mapping first.",
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :integer}\none {{Instance {$name} carries 1 attached device, and its host or the destination cannot carry device volumes across, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count :integer} attached devices, and its host or the destination cannot carry device volumes across, so migrating would silently lose them. Detach the devices first.}}",
+    "text": ".match {$count :integer}\none {{App {$name} carries 1 attached device, and its host or the destination cannot carry device volumes across, so migrating would silently lose it. Detach the device first.}}\n* {{App {$name} carries {$count :integer} attached devices, and its host or the destination cannot carry device volumes across, so migrating would silently lose them. Detach the devices first.}}",
     "scope": "violations"
   },
   "migrate_install_media_present": {
-    "text": "Instance {$name} has install media {$media} in its drive; an ISO is stored on its own host only, so detach the install media before migrating.",
+    "text": "App {$name} has install media {$media} in its drive; an ISO is stored on its own host only, so detach the install media before migrating.",
     "scope": "violations"
   },
   "migrate_publication_present": {
-    "text": "Instance {$name} publishes a host port; that claim cannot move with it",
+    "text": "App {$name} publishes a host port; that claim cannot move with it",
     "scope": "violations"
   },
   "migrate_destination_occupied": {
-    "text": "Host {$server} already runs a foreign workload under the handle of {$name}; refusing the name collision",
+    "text": "Host {$server} already runs a foreign app under the handle of {$name}; refusing the name collision",
     "scope": "violations"
   },
   "instance_migrate_failed": {
@@ -6901,11 +6901,11 @@
     "scope": "violations"
   },
   "instance_workload_absent": {
-    "text": "Instance {$name} has no workload at the daemon; deploy it first",
+    "text": "App {$name} has no app at the daemon; deploy it first",
     "scope": "violations"
   },
   "instance_unreachable": {
-    "text": "The daemon for instance {$name} cannot be reached",
+    "text": "The daemon for app {$name} cannot be reached",
     "scope": "violations"
   },
   "instance_backup_target_none": {
@@ -6925,11 +6925,11 @@
     "scope": "instance"
   },
   "backup_target_missing": {
-    "text": "No backup target is configured for this instance",
+    "text": "No backup target is configured for this app",
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Backup target {$name} still holds {$backups} and backs {$instances}; delete those backups and repoint the instances first",
+    "text": "Backup target {$name} still holds {$backups} and backs {$instances}; delete those backups and repoint the apps first",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -6973,7 +6973,7 @@
     "scope": "violations"
   },
   "snapshot_no_volumes": {
-    "text": "Instance {$name} declares no volumes; there is nothing to snapshot",
+    "text": "App {$name} declares no volumes; there is nothing to snapshot",
     "scope": "violations"
   },
   "snapshots_unsupported": {
@@ -7027,7 +7027,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Take a snapshot? Drivers that copy volumes briefly stop a running instance and start it again; drivers with native snapshots capture it live.",
+    "text": "Take a snapshot? Drivers that copy volumes briefly stop a running app and start it again; drivers with native snapshots capture it live.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -7039,7 +7039,7 @@
     "scope": "instance"
   },
   "backup_confirm": {
-    "text": "Export a backup now? A running instance is stopped briefly for the copy, then started again before the upload.",
+    "text": "Export a backup now? A running app is stopped briefly for the copy, then started again before the upload.",
     "scope": "instance"
   },
   "backup_done": {
@@ -7087,7 +7087,7 @@
     "scope": "instance_snapshot"
   },
   "restore_confirm": {
-    "text": "Restore this snapshot onto {$name}? Everything written since the capture is lost. Type the instance name to confirm.",
+    "text": "Restore this snapshot onto {$name}? Everything written since the capture is lost. Type the app name to confirm.",
     "scope": "instance_snapshot"
   },
   "data_disks": {
@@ -7103,19 +7103,19 @@
     "scope": "instance_backup"
   },
   "restore_new": {
-    "text": "Restore to new instance",
+    "text": "Restore to new app",
     "scope": "instance_backup"
   },
   "restore_new_confirm": {
-    "text": "Restore this backup to a NEW instance? The source instance is untouched.",
+    "text": "Restore this backup to a NEW app? The source app is untouched.",
     "scope": "instance_backup"
   },
   "restored_new": {
-    "text": "Backup restored to new instance #{$id}",
+    "text": "Backup restored to new app #{$id}",
     "scope": "instance_backup"
   },
   "restored_new_partial": {
-    "text": "Backup restored to new instance #{$id}, but not everything came back: {$missing}",
+    "text": "Backup restored to new app #{$id}, but not everything came back: {$missing}",
     "scope": "instance_backup"
   },
   "restored_new_ports_moved": {
@@ -7123,7 +7123,7 @@
     "scope": "instance_backup"
   },
   "restore_new_step": {
-    "text": "Restore to a new instance",
+    "text": "Restore to a new app",
     "scope": "instance_backup"
   },
   "restore_in_place": {
@@ -7135,11 +7135,11 @@
     "scope": "instance_backup"
   },
   "restore_in_place_confirm_generic": {
-    "text": "A fresh backup of the instance is taken first; then its volumes are replaced with this backup's. Its settings, variables and config files stay as they are.",
+    "text": "A fresh backup of the app is taken first; then its volumes are replaced with this backup's. Its settings, variables and config files stay as they are.",
     "scope": "instance_backup"
   },
   "restore_in_place_confirm": {
-    "text": "A fresh backup of the instance is taken first; then its volumes are replaced with the backup from {$at}. Its settings, variables and config files stay as they are.",
+    "text": "A fresh backup of the app is taken first; then its volumes are replaced with the backup from {$at}. Its settings, variables and config files stay as they are.",
     "scope": "instance_backup"
   },
   "restored_in_place": {
@@ -7335,7 +7335,7 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": ".match {$count :integer}\none {{Template {$name} is still used by 1 instance}}\n* {{Template {$name} is still used by {$count :integer} instances}}",
+    "text": ".match {$count :integer}\none {{Template {$name} is still used by 1 app}}\n* {{Template {$name} is still used by {$count :integer} apps}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
@@ -7343,7 +7343,7 @@
     "scope": "violations"
   },
   "stack_service_running": {
-    "text": "Service {$service} still runs a workload; destroy it first",
+    "text": "Service {$service} still runs an app; destroy it first",
     "scope": "violations"
   },
   "variable_key_taken": {
@@ -7355,24 +7355,24 @@
     "scope": "violations"
   },
   "install_incomplete": {
-    "text": "Instance {$name} cannot start: its install step is {$state}",
+    "text": "App {$name} cannot start: its install step is {$state}",
     "scope": "violations"
   },
   "install_needs_template": {
-    "text": "Instance {$name} has no template, so there is no install step to run",
+    "text": "App {$name} has no template, so there is no install step to run",
     "scope": "violations"
   },
   "install_requires_stopped": {
-    "text": "Stop instance {$name} before running its install step",
+    "text": "Stop app {$name} before running its install step",
     "scope": "violations"
   },
   "install_unsupported": {
-    "text": "The runtime of instance {$name} cannot run install steps",
+    "text": "The runtime of app {$name} cannot run install steps",
     "scope": "violations"
   },
   "install_failed": [
     {
-      "text": "The install step for instance {$name} failed; see the provisioning tab for its output",
+      "text": "The install step for app {$name} failed; see the provisioning tab for its output",
       "scope": "violations"
     },
     {
@@ -7389,15 +7389,15 @@
     }
   ],
   "reinstall_no_step": {
-    "text": "The template of instance {$name} declares no install step to re-run",
+    "text": "The template of app {$name} declares no install step to re-run",
     "scope": "violations"
   },
   "reinstall_clear_failed": {
-    "text": "Clearing the data of instance {$name} failed: {$reason}",
+    "text": "Clearing the data of app {$name} failed: {$reason}",
     "scope": "violations"
   },
   "files_unsupported": {
-    "text": "The runtime of instance {$name} cannot stage config files",
+    "text": "The runtime of app {$name} cannot stage config files",
     "scope": "violations"
   },
   "template_import_unparseable": {
@@ -7405,7 +7405,7 @@
     "scope": "violations"
   },
   "template_import_format": {
-    "text": "That document is not a hohenheim instance template export",
+    "text": "That document is not a hohenheim app template export",
     "scope": "violations"
   },
   "template_import_version": {
@@ -7441,11 +7441,11 @@
     "scope": "instance_template"
   },
   "approve_confirm": {
-    "text": "Approve this template? Approved templates become selectable as an instance source.",
+    "text": "Approve this template? Approved templates become selectable as an app source.",
     "scope": "instance_template"
   },
   "unapprove_confirm": {
-    "text": "Withdraw approval? The template stops being selectable; existing instances keep running.",
+    "text": "Withdraw approval? The template stops being selectable; existing apps keep running.",
     "scope": "instance_template"
   },
   "approved_toast": {
@@ -7457,7 +7457,7 @@
     "scope": "instance_template"
   },
   "create_instance": {
-    "text": "Create instance",
+    "text": "Create app",
     "scope": "instance_template"
   },
   "contents": {
@@ -7500,7 +7500,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Shell script run once with the instance's volumes mounted and its variables as environment",
+      "text": "Shell script run once with the app's volumes mounted and its variables as environment",
       "scope": "help"
     }
   ],
@@ -7520,7 +7520,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Console line marking the workload ready; only read when Ready when is Console line",
+      "text": "Console line marking the app ready; only read when Ready when is Console line",
       "scope": "help"
     }
   ],
@@ -7558,7 +7558,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Shown above the input on the create-instance form",
+      "text": "Shown above the input on the create-app form",
       "scope": "help"
     }
   ],
@@ -7582,7 +7582,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Prefilled on the create-instance form; used when the submit leaves the field blank",
+      "text": "Prefilled on the create-app form; used when the submit leaves the field blank",
       "scope": "help"
     }
   ],
@@ -7641,11 +7641,11 @@
     "scope": "hohenheim_field"
   },
   "template_description": {
-    "text": "Shown to whoever picks this template as an instance source",
+    "text": "Shown to whoever picks this template as an app source",
     "scope": "help"
   },
   "template_kind": {
-    "text": "What created instances run; the kind decides the settings baseline and the runtime driver",
+    "text": "What created apps run; the kind decides the settings baseline and the runtime driver",
     "scope": "help"
   },
   "template_file_content": {
@@ -7763,7 +7763,7 @@
     "scope": "instance"
   },
   "reinstall_clear_confirm": {
-    "text": "Reinstall {$name}? This template's policy WIPES its data volumes first. Type the instance name to confirm.",
+    "text": "Reinstall {$name}? This template's policy WIPES its data volumes first. Type the app name to confirm.",
     "scope": "instance"
   },
   "required": [
@@ -7823,7 +7823,7 @@
     "scope": "instance_provisioning"
   },
   "create_from": {
-    "text": "Create instance from",
+    "text": "Create app from",
     "scope": "instance_from_template"
   },
   "step_details": {
@@ -7831,11 +7831,11 @@
     "scope": "instance_from_template"
   },
   "step_variables_lead": {
-    "text": "The values this instance starts with. A secret left blank keeps the value set on the template.",
+    "text": "The values this app starts with. A secret left blank keeps the value set on the template.",
     "scope": "instance_from_template"
   },
   "instance_name": [
-    {"text": "Instance name", "scope": "instance_from_template"},
+    {"text": "App name", "scope": "instance_from_template"},
     {"text": "The new app's name.", "scope": "help"}
   ],
   "host": [
@@ -7861,12 +7861,12 @@
     "scope": "instance_from_template"
   },
   "install_note": {
-    "text": "This template runs an install step after creation; the instance can start once it completes.",
+    "text": "This template runs an install step after creation; the app can start once it completes.",
     "scope": "instance_from_template"
   },
   "create": [
     {
-      "text": "Create instance",
+      "text": "Create app",
       "scope": "instance_from_template"
     },
     {
@@ -7939,15 +7939,15 @@
     }
   ],
   "console_unsupported": {
-    "text": "The runtime of instance '{$name}' has no console streaming support",
+    "text": "The runtime of app '{$name}' has no console streaming support",
     "scope": "violations"
   },
   "console_not_running": {
-    "text": "Instance '{$name}' is not running, so there is no console to attach to",
+    "text": "App '{$name}' is not running, so there is no console to attach to",
     "scope": "violations"
   },
   "console_open_failed": {
-    "text": "Could not open the console of instance '{$name}': {$reason}",
+    "text": "Could not open the console of app '{$name}': {$reason}",
     "scope": "violations"
   },
   "console_send_failed": {
@@ -7960,7 +7960,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "What happens when the workload exits without an observed stop: restart redeploys it (any exit code counts as a crash), none records the exit.",
+      "text": "What happens when the app exits without an observed stop: restart redeploys it (any exit code counts as a crash), none records the exit.",
       "scope": "help"
     }
   ],
@@ -8031,11 +8031,11 @@
       "scope": "instance_framebuffer"
     },
     {
-      "text": "Start the instance to run a command inside it.",
+      "text": "Start the app to run a command inside it.",
       "scope": "instance_exec"
     },
     {
-      "text": "Start this instance to open a shell inside it.",
+      "text": "Start this app to open a shell inside it.",
       "scope": "instance_shell"
     }
   ],
@@ -8158,7 +8158,7 @@
     {"text": "Words kept with the snapshot, to recognise it by later; left empty, none.", "scope": "help"}
   ],
   "unknown_instance": {
-    "text": "Unknown instance",
+    "text": "Unknown app",
     "scope": "violations"
   },
   "unknown_schedule": {
@@ -8174,7 +8174,7 @@
     "scope": "violations"
   },
   "schedule_not_allowed": {
-    "text": "You may not manage schedules of this instance",
+    "text": "You may not manage schedules of this app",
     "scope": "violations"
   },
   "port_protocol": [
@@ -8183,7 +8183,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "TCP or UDP; a UDP port always pre-allocates a fixed host port before the workload starts",
+      "text": "TCP or UDP; a UDP port always pre-allocates a fixed host port before the app starts",
       "scope": "help"
     }
   ],
@@ -8248,7 +8248,7 @@
     "scope": "violations"
   },
   "port_conflict_unnamed": {
-    "text": "Host port {$port} is already claimed by another workload",
+    "text": "Host port {$port} is already claimed by another app",
     "scope": "violations"
   },
   "port_shape_without_port": {
@@ -8272,15 +8272,15 @@
     "scope": "port_exposure"
   },
   "instance_not_permitted": {
-    "text": "You are not allowed to perform this action on this instance",
+    "text": "You are not allowed to perform this action on this app",
     "scope": "violations"
   },
   "no_placement_available": {
-    "text": "No admitted host currently accepts this workload",
+    "text": "No admitted host currently accepts this app",
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Every host that accepts this workload is out of memory: it needs {$needed :bytes} and the emptiest one has {$free :bytes} free. Choose a smaller memory limit, free a workload, or admit another host",
+    "text": "Every host that accepts this app is out of memory: it needs {$needed :bytes} and the emptiest one has {$free :bytes} free. Choose a smaller memory limit, free memory by stopping or deleting an app, or admit another host",
     "scope": "violations"
   },
   "host_help": {
@@ -8292,27 +8292,27 @@
     "scope": "violations"
   },
   "instance_create_not_permitted": {
-    "text": "You are not allowed to create instances",
+    "text": "You are not allowed to create apps",
     "scope": "violations"
   },
   "backup_source_gone": {
-    "text": "The instance this backup was taken from no longer exists; ask an operator to restore it.",
+    "text": "The app this backup was taken from no longer exists; ask an operator to restore it.",
     "scope": "violations"
   },
   "backup_restore_template_required": {
-    "text": "This backup can only be restored by an operator: its instance has no approved template.",
+    "text": "This backup can only be restored by an operator: its app has no approved template.",
     "scope": "violations"
   },
   "backup_restore_host_refused": {
-    "text": "The host of this instance cannot take the restored copy right now.",
+    "text": "The host of this app cannot take the restored copy right now.",
     "scope": "violations"
   },
   "backup_restore_in_place_unsupported": {
-    "text": "This backup cannot be restored in place; restore it as a new instance instead.",
+    "text": "This backup cannot be restored in place; restore it as a new app instead.",
     "scope": "violations"
   },
   "backup_volumes_changed": {
-    "text": "The instance's volumes changed since this backup; restore it as a new instance instead.",
+    "text": "The app's volumes changed since this backup; restore it as a new app instead.",
     "scope": "violations"
   },
   "unknown_power_action": {
@@ -8328,7 +8328,7 @@
     "scope": "violations"
   },
   "hohenheim_instances_create": {
-    "text": "Create instances from approved templates",
+    "text": "Create apps from approved templates",
     "scope": "permission"
   },
   "tls_passthrough": [
@@ -8575,7 +8575,7 @@
     "scope": "violations"
   },
   "files_path_refused": {
-    "text": "That path is not inside this instance",
+    "text": ".match {$count :integer}\n0 {{That path is not inside the app's volumes; it declares none}}\n* {{That path is not inside the app's volumes, which are mounted at {$volumes}}}",
     "scope": "violations"
   },
   "files_not_found": {
@@ -8599,7 +8599,7 @@
     "scope": "violations"
   },
   "files_no_volumes": {
-    "text": "This instance declares no volumes to browse",
+    "text": "This app declares no volumes to browse",
     "scope": "violations"
   },
   "files_workload_not_browsable": {
@@ -8619,7 +8619,11 @@
     "scope": "violations"
   },
   "files_failed": {
-    "text": "The file operation failed: {$reason}",
+    "text": "The file operation failed; Hohenheim's log names the cause",
+    "scope": "violations"
+  },
+  "git_connection_in_use": {
+    "text": "Git connection {$name} is used by {$apps}; point those apps at another connection first",
     "scope": "violations"
   },
   "release": [
@@ -8693,15 +8697,15 @@
     "scope": "violations"
   },
   "instance_kind_owner_managed": {
-    "text": "{$kind} instances are managed by the record that owns them, not created here",
+    "text": "{$kind} apps are managed by the record that owns them, not created here",
     "scope": "violations"
   },
   "instance_generated_readonly": {
-    "text": "This instance is owned by {$source} and cannot be edited or deleted here",
+    "text": "This app is owned by {$source} and cannot be edited or deleted here",
     "scope": "violations"
   },
   "instance_generated_attribution": {
-    "text": "Instance ownership attribution is set by the system, never submitted",
+    "text": "App ownership attribution is set by the system, never submitted",
     "scope": "violations"
   },
   "serving": {
@@ -8937,11 +8941,11 @@
     "scope": "project"
   },
   "owned_instances": {
-    "text": "Instances",
+    "text": "Apps",
     "scope": "project"
   },
   "instance_quota": {
-    "text": "Instance quota",
+    "text": "App quota",
     "scope": "project"
   },
   "project_name": {
@@ -9032,7 +9036,7 @@
     "scope": "violations"
   },
   "variable_one_owner": {
-    "text": "A variable belongs to exactly one instance or one environment",
+    "text": "A variable belongs to exactly one app or one environment",
     "scope": "violations"
   },
   "git_provider_unknown": {
@@ -9358,7 +9362,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "DANGER: a privileged container's root user maps onto the HOST's root user. A system container is not a security boundary against a determined root user even unprivileged; privileged mode removes most of what remains. Leave off unless the workload genuinely cannot run without it.",
+      "text": "DANGER: a privileged container's root user maps onto the HOST's root user. A system container is not a security boundary against a determined root user even unprivileged; privileged mode removes most of what remains. Leave off unless the app genuinely cannot run without it.",
       "scope": "help"
     }
   ],
@@ -9368,7 +9372,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "In-place app update script, run inside the running instance through the community function library",
+      "text": "In-place app update script, run inside the running app through the community function library",
       "scope": "help"
     }
   ],
@@ -9381,20 +9385,20 @@
     "scope": "violations"
   },
   "app_update_no_script": {
-    "text": "The template of instance {$name} declares no update script",
+    "text": "The template of app {$name} declares no update script",
     "scope": "violations"
   },
   "app_update_unsupported": {
-    "text": "The runtime of instance {$name} cannot run in-place app updates",
+    "text": "The runtime of app {$name} cannot run in-place app updates",
     "scope": "violations"
   },
   "app_update_requires_running": {
-    "text": "Instance {$name} must be running for an in-place app update",
+    "text": "App {$name} must be running for an in-place app update",
     "scope": "violations"
   },
   "app_update_failed": [
     {
-      "text": "The app update of instance {$name} failed: {$reason}",
+      "text": "The app update of app {$name} failed: {$reason}",
       "scope": "violations"
     },
     {
@@ -9419,7 +9423,7 @@
     }
   ],
   "console_command_confirm": {
-    "text": "Send this line to the instance's console?",
+    "text": "Send this line to the app's console?",
     "scope": "instance"
   },
   "console_command_sent_toast": {
@@ -9427,7 +9431,7 @@
     "scope": "instance"
   },
   "app_update_confirm": {
-    "text": "Run the template's update script inside the running instance?",
+    "text": "Run the template's update script inside the running app?",
     "scope": "instance"
   },
   "app_updated_toast": {
@@ -9478,7 +9482,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "First-boot provisioning (#cloud-config). \\{\\{KEY\\}\\} placeholders resolve against the instance's variables, secret variables included.",
+      "text": "First-boot provisioning (#cloud-config). \\{\\{KEY\\}\\} placeholders resolve against the app's variables, secret variables included.",
       "scope": "help"
     }
   ],
@@ -9592,7 +9596,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Name of an ISO volume published on the instance's host (see the host record's Install media tab). Only install-media devices use it.",
+      "text": "Name of an ISO volume published on the app's host (see the host record's Install media tab). Only install-media devices use it.",
       "scope": "help"
     }
   ],
@@ -9602,7 +9606,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Bandwidth ceiling for every NIC of this workload. Leave blank for unshaped.",
+      "text": "Bandwidth ceiling for every NIC of this app. Leave blank for unshaped.",
       "scope": "help"
     }
   ],
@@ -9612,7 +9616,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Size of the workload's own root disk. Leave blank to inherit the image size. It can only grow, and only while the workload is stopped.",
+      "text": "Size of the app's own root disk. Leave blank to inherit the image size. It can only grow, and only while the app is stopped.",
       "scope": "help"
     }
   ],
@@ -9625,7 +9629,7 @@
     "scope": "violations"
   },
   "root_disk_unsupported": {
-    "text": "Instances of kind {$kind} cannot have a root disk size: their runtime enforces no per-workload root quota",
+    "text": "Apps of kind {$kind} cannot have a root disk size: their runtime enforces no per-app root quota",
     "scope": "violations"
   },
   "disk_quota_reached": {
@@ -9645,11 +9649,11 @@
     "scope": "violations"
   },
   "device_exists": {
-    "text": "Device '{$device}' already exists on this instance",
+    "text": "Device '{$device}' already exists on this app",
     "scope": "violations"
   },
   "device_not_found": {
-    "text": "Device '{$device}' does not exist on this instance",
+    "text": "Device '{$device}' does not exist on this app",
     "scope": "violations"
   },
   "devices_unsupported": {
@@ -9769,11 +9773,11 @@
     { "text": "{$actor} saved {$subject} as a template", "scope": "hohenheim", "target": "happened" }
   ],
   "capture_template_hint": {
-    "text": "Publish this stopped instance's current state as a prepared image and create an unapproved template from it",
+    "text": "Publish this stopped app's current state as a prepared image and create an unapproved template from it",
     "scope": "instance"
   },
   "capture_template_confirm": {
-    "text": "Publish this instance's current disk state as a prepared image on its host and create a template from it? Publishing a large disk can take several minutes.",
+    "text": "Publish this app's current disk state as a prepared image on its host and create a template from it? Publishing a large disk can take several minutes.",
     "scope": "instance"
   },
   "tab": {
@@ -10063,15 +10067,15 @@
     "scope": "violations"
   },
   "template_capture_unsupported": {
-    "text": "Instance '{$name}' cannot be captured as a template on its runtime",
+    "text": "App '{$name}' cannot be captured as a template on its runtime",
     "scope": "violations"
   },
   "template_capture_requires_stopped": {
-    "text": "Instance '{$name}' must be stopped before it can be captured as a template",
+    "text": "App '{$name}' must be stopped before it can be captured as a template",
     "scope": "violations"
   },
   "template_capture_failed": {
-    "text": "Capturing instance '{$name}' failed: {$reason}",
+    "text": "Capturing app '{$name}' failed: {$reason}",
     "scope": "violations"
   },
   "device_rename_unsupported": {
@@ -10079,7 +10083,7 @@
     "scope": "violations"
   },
   "device_retype_unsupported": {
-    "text": "A device cannot change type or move to another instance",
+    "text": "A device cannot change type or move to another app",
     "scope": "violations"
   },
   "device_resize_not_a_disk": {
@@ -10095,7 +10099,7 @@
     { "text": "{$actor} cleaned up leftovers on {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "reap_controller_objects_confirm": {
-    "text": "Removes the isolation ACL, extra-NIC bridge and presence marker that OTHER hohenheim controllers left on this Incus daemon -- including objects whose controller left no presence stamp at all, which the scheduled sweep never touches. Objects this controller owns are never candidates, and the daemon itself refuses to remove one a workload still references.",
+    "text": "Removes the isolation ACL, extra-NIC bridge and presence marker that OTHER hohenheim controllers left on this Incus daemon -- including objects whose controller left no presence stamp at all, which the scheduled sweep never touches. Objects this controller owns are never candidates, and the daemon itself refuses to remove one that an app still references.",
     "scope": "server"
   },
   "controller_objects_reaped": {
@@ -10275,11 +10279,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instance backup",
+      "text": "App backup",
       "scope": "instance_backup"
     },
     {
-      "text": "instance backup",
+      "text": "app backup",
       "scope": "instance_backup",
       "case": "sentence"
     },
@@ -10302,20 +10306,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instance file",
+      "text": "App file",
       "scope": "instance_file"
     },
     {
-      "text": "instance file",
+      "text": "app file",
       "scope": "instance_file",
       "case": "sentence"
     },
     {
-      "text": "Instance quota",
+      "text": "App quota",
       "scope": "instance_quota"
     },
     {
-      "text": "instance quota",
+      "text": "app quota",
       "scope": "instance_quota",
       "case": "sentence"
     },
@@ -10329,11 +10333,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instance snapshot",
+      "text": "App snapshot",
       "scope": "instance_snapshot"
     },
     {
-      "text": "instance snapshot",
+      "text": "app snapshot",
       "scope": "instance_snapshot",
       "case": "sentence"
     },
@@ -10401,11 +10405,11 @@
       "case": "sentence"
     },
     {
-      "text": "Unexpected workload",
+      "text": "Unexpected container",
       "scope": "reconcile_finding"
     },
     {
-      "text": "unexpected workload",
+      "text": "unexpected container",
       "scope": "reconcile_finding",
       "case": "sentence"
     },
@@ -10707,7 +10711,7 @@
     "scope": "violations"
   },
   "exec_unsupported": {
-    "text": "The runtime of instance {$name} cannot run commands",
+    "text": "The runtime of app {$name} cannot run commands",
     "scope": "violations"
   },
   "exec_failed": {
@@ -10720,11 +10724,11 @@
   },
   "workload": [
     {
-      "text": "Workload",
+      "text": "App",
       "scope": "instance_console"
     },
     {
-      "text": "Workload",
+      "text": "App",
       "scope": "app_overview"
     }
   ],
@@ -10734,7 +10738,7 @@
   },
   "instance_backup_never": [
     {
-      "text": "Instance {$name} has never been backed up",
+      "text": "App {$name} has never been backed up",
       "scope": "attention_title"
     },
     {
@@ -10967,19 +10971,19 @@
     "scope": "violations"
   },
   "instance_required": {
-    "text": "An attachment needs an instance",
+    "text": "An attachment needs an app",
     "scope": "violations"
   },
   "instance_missing": {
-    "text": "That instance does not exist",
+    "text": "That app does not exist",
     "scope": "violations"
   },
   "instance_kind_no_injection": {
-    "text": "Instance kind '{$kind}' has no link networks, so a database cannot be attached to it",
+    "text": "App kind '{$kind}' has no link networks, so a database cannot be attached to it",
     "scope": "violations"
   },
   "tenant_instance_not_managed": {
-    "text": "You do not have config authority over that instance",
+    "text": "You do not have config authority over that app",
     "scope": "violations"
   },
   "max_memory_mb": [
@@ -10988,7 +10992,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Cap on this owner's total workload memory, game servers included; 0 refuses every workload, empty falls back to the global default",
+      "text": "Cap on this owner's total app memory, game servers included; 0 refuses every app, empty falls back to the global default",
       "scope": "help"
     }
   ],
@@ -11056,7 +11060,7 @@
       "scope": "instance_volume"
     },
     {
-      "text": "Detach '{$database}' from '{$instance}'? The workload can no longer reach the database as soon as you confirm, and loses its {$prefix}_* connection variables at its next deploy.",
+      "text": "Detach '{$database}' from '{$instance}'? The app can no longer reach the database as soon as you confirm, and loses its {$prefix}_* connection variables at its next deploy.",
       "scope": "instance_database"
     }
   ],
@@ -11261,7 +11265,7 @@
     "scope": "server_overview"
   },
   "workloads": {
-    "text": "Workloads",
+    "text": "Apps",
     "scope": "server_overview"
   },
   "workloads_hint": {
@@ -11304,7 +11308,7 @@
     "scope": "server_overview"
   },
   "tier_instance": {
-    "text": "Instance",
+    "text": "App",
     "scope": "server_overview"
   },
   "tier_stack": {
@@ -11326,7 +11330,7 @@
     }
   ],
   "migrate_hint": {
-    "text": "Move this workload to another host (cold: it is stopped for the copy)",
+    "text": "Move this app to another host (cold: it is stopped for the copy)",
     "scope": "instance"
   },
   "migrated_toast": {
@@ -11334,7 +11338,7 @@
     "scope": "instance"
   },
   "cold_note": {
-    "text": "A cold move: the workload is stopped, exported whole, imported on the destination and started again if it was running.",
+    "text": "A cold move: the app is stopped, exported whole, imported on the destination and started again if it was running.",
     "scope": "instance_migrate"
   },
   "current_host": {
@@ -11370,7 +11374,7 @@
     "scope": "instance_migrate"
   },
   "no_destinations_hint": {
-    "text": "Enroll and admit a second host of the same runtime to move this workload.",
+    "text": "Enroll and admit a second host of the same runtime to move this app.",
     "scope": "instance_migrate"
   },
   "migrate_target_required": {
@@ -11402,7 +11406,7 @@
     "scope": "onboarding_checklist"
   },
   "checklist_host_detail": {
-    "text": "A host is the machine your workloads run on.",
+    "text": "A host is the machine your apps run on.",
     "scope": "onboarding_checklist"
   },
   "checklist_host_enrolled": {
@@ -11434,11 +11438,11 @@
     "scope": "onboarding_checklist"
   },
   "deploy_blocked_delegated": {
-    "text": "Its host is not accepting new workloads right now. Your operator has to clear this.",
+    "text": "Its host is not accepting new apps right now. Your operator has to clear this.",
     "scope": "instance_overview"
   },
   "deploy_blocked_operator": {
-    "text": "Its host is not accepting new workloads right now. Open the host in the admin panel and use Check and admit.",
+    "text": "Its host is not accepting new apps right now. Open the host in the admin panel and use Check and admit.",
     "scope": "instance_overview"
   },
   "used": {
@@ -11604,7 +11608,7 @@
     "scope": "server"
   },
   "acknowledge_body": {
-    "text": "Shared containers on {$name} means hostile tenants run on ONE kernel: a container escape reaches every other workload on the machine and the host itself. Only VM isolation is rated against a hostile root tenant. Type the host name to accept this risk; it is recorded against your name and has to be accepted again if the posture or this warning changes.",
+    "text": "Shared containers on {$name} means hostile tenants run on ONE kernel: a container escape reaches every other app on the machine and the host itself. Only VM isolation is rated against a hostile root tenant. Type the host name to accept this risk; it is recorded against your name and has to be accepted again if the posture or this warning changes.",
     "scope": "server"
   },
   "posture_acknowledged": {
@@ -11732,7 +11736,7 @@
       "scope": "released_claim"
     },
     {
-      "text": "Groups that own sites, instances and databases, and the people who may manage them.",
+      "text": "Groups that own sites, apps and databases, and the people who may manage them.",
       "scope": "project"
     },
     {
@@ -11772,15 +11776,15 @@
       "scope": "settings"
     },
     {
-      "text": "Where instance and database backups are written: local disk or a remote store.",
+      "text": "Where app and database backups are written: local disk or a remote store.",
       "scope": "backup_target"
     },
     {
-      "text": "How many instances, and how much of each resource, one owner may use.",
+      "text": "How many apps, and how much of each resource, one owner may use.",
       "scope": "instance_quota"
     },
     {
-      "text": "Public game hostnames, each routed to the instance that answers for it.",
+      "text": "Public game hostnames, each routed to the app that answers for it.",
       "scope": "game_domain"
     },
     {
@@ -11812,7 +11816,7 @@
       "scope": "environment_variable"
     },
     {
-      "text": "Other nameservers this server transfers zones with, and the Hohenheim instances it also forwards record edits to.",
+      "text": "Other nameservers this server transfers zones with, and the Hohenheim servers it also forwards record edits to.",
       "scope": "dns_peer"
     },
     {
@@ -11856,7 +11860,7 @@
       "scope": "access_rule"
     },
     {
-      "text": "Host directories mounted into an instance",
+      "text": "Host directories mounted into an app",
       "scope": "instance_volume"
     },
     {
@@ -12313,7 +12317,7 @@
     "scope": "uid_mode"
   },
   "upstream_instance_required": {
-    "text": "This upstream serves an instance, so it needs one chosen",
+    "text": "This upstream serves an app, so it needs one chosen",
     "scope": "violations"
   },
   "readiness_line_needs_console_line": {
@@ -12321,7 +12325,7 @@
     "scope": "violations"
   },
   "upstream_instance_unexpected": {
-    "text": "Only an instance upstream may name an instance; clear it or change the upstream",
+    "text": "Only an app upstream may name an app; clear it or change the upstream",
     "scope": "violations"
   },
   "host_no_volume_quota": {
@@ -12369,15 +12373,15 @@
     "scope": "violations"
   },
   "template_volume_kind_unsupported": {
-    "text": "This template declares the volume '{$name}', but instances of its kind do not mount volumes. Remove the volume, or give the template a kind that mounts them.",
+    "text": "This template declares the volume '{$name}', but apps of its kind do not mount volumes. Remove the volume, or give the template a kind that mounts them.",
     "scope": "violations"
   },
   "template_volume_container_path_required": {
-    "text": "Template volume '{$name}' declares no container path, so the instance would never mount it. Give it the path it must appear at inside the workload.",
+    "text": "Template volume '{$name}' declares no container path, so the app would never mount it. Give it the path it must appear at inside the app.",
     "scope": "violations"
   },
   "volume_container_path_conflict": {
-    "text": "Volumes '{$first}' and '{$second}' both mount at '{$path}', so the workload would get two directories at one path. Give one of them a different container path.",
+    "text": "Volumes '{$first}' and '{$second}' both mount at '{$path}', so the app would get two directories at one path. Give one of them a different container path.",
     "scope": "violations"
   },
   "application_not_found": {
@@ -12449,7 +12453,7 @@
     "scope": "violations"
   },
   "site_exposes_no_instance": {
-    "text": "This site exposes no instance, so there is no release to roll back",
+    "text": "This site exposes no app, so there is no release to roll back",
     "scope": "violations"
   },
   "build_context": [
@@ -12478,7 +12482,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Which console the workload's main process gets. An interactive terminal gives it a real pseudo-terminal: keystrokes, echo and resize on the console tab, which is what a full-screen TUI such as Alchemy's Janeway needs.",
+      "text": "Which console the app's main process gets. An interactive terminal gives it a real pseudo-terminal: keystrokes, echo and resize on the console tab, which is what a full-screen TUI such as Alchemy's Janeway needs.",
       "scope": "help"
     }
   ],
@@ -12498,7 +12502,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Started as the workload's main process; an instance may override it.",
+      "text": "Started as the app's main process; an app may override it.",
       "scope": "help"
     }
   ],
@@ -12586,7 +12590,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "How the workload is judged ready to take traffic.",
+      "text": "How the app is judged ready to take traffic.",
       "scope": "help"
     }
   ],
@@ -12618,7 +12622,7 @@
       "scope": "instance"
     },
     {
-      "text": "A terminal inside the workload, as the workload's own user.",
+      "text": "A terminal inside the app, as the app's own user.",
       "scope": "console_mode"
     },
     {
@@ -12638,7 +12642,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "How long a graceful stop may take before the workload is killed.",
+      "text": "How long a graceful stop may take before the app is killed.",
       "scope": "help"
     }
   ],
@@ -12648,7 +12652,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "How the workload is asked to stop before the grace period runs out.",
+      "text": "How the app is asked to stop before the grace period runs out.",
       "scope": "help"
     }
   ],
@@ -12658,7 +12662,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "How the workload's process identity is derived; only mapped host uids exist today.",
+      "text": "How the app's process identity is derived; only mapped host uids exist today.",
       "scope": "help"
     }
   ],
@@ -12699,7 +12703,7 @@
     "scope": "help"
   },
   "site_instance": {
-    "text": "The instance whose port this hostname serves.",
+    "text": "The app whose port this hostname serves.",
     "scope": "help"
   },
   "template_runtime_image": {
@@ -12719,7 +12723,7 @@
     "scope": "violations"
   },
   "push_does_not_start_stopped_workload": {
-    "text": "'{$name}' is not running, so the pushed commit was not deployed: a git push never starts a workload someone stopped. Deploy it yourself to pick this commit up.",
+    "text": "'{$name}' is not running, so the pushed commit was not deployed: a git push never starts an app someone stopped. Deploy it yourself to pick this commit up.",
     "scope": "violations"
   },
   "workspace_exec_failed": {
@@ -12731,7 +12735,7 @@
     "scope": "violations"
   },
   "runtime_image_required": {
-    "text": "Pick a runtime image: it decides what this workload runs inside",
+    "text": "Pick a runtime image: it decides what this app runs inside",
     "scope": "violations"
   },
   "runtime_image_unknown": {
@@ -12755,7 +12759,7 @@
     "scope": "violations"
   },
   "volume_own_failed": {
-    "text": "Volume '{$path}' could not be given to the workload's uid on the {$backend} backend: {$reason}",
+    "text": "Volume '{$path}' could not be given to the app's uid on the {$backend} backend: {$reason}",
     "scope": "violations"
   },
   "readiness_timed_out": {
@@ -12824,7 +12828,7 @@
     "scope": "instance"
   },
   "expose_hint": {
-    "text": "Create a site that serves this instance on a hostname",
+    "text": "Create a site that serves this app on a hostname",
     "scope": "instance"
   },
   "record_title": {
@@ -12890,7 +12894,7 @@
     "scope": "help"
   },
   "volume_unknown": {
-    "text": "No volume named \"{$name}\" exists on this instance",
+    "text": "No volume named \"{$name}\" exists on this app",
     "scope": "violations"
   },
   "volume_rename_unsupported": {
@@ -12898,15 +12902,15 @@
     "scope": "violations"
   },
   "volume_rehome_unsupported": {
-    "text": "A volume cannot move to another instance",
+    "text": "A volume cannot move to another app",
     "scope": "violations"
   },
   "volume_home_protected": {
-    "text": "The workspace's home volume cannot be deleted on its own; use the instance's \"Delete with data\"",
+    "text": "The workspace's home volume cannot be deleted on its own; use the app's \"Delete with data\"",
     "scope": "violations"
   },
   "volume_kind_unsupported": {
-    "text": "Instances of this kind do not mount volumes",
+    "text": "Apps of this kind do not mount volumes",
     "scope": "violations"
   },
   "volume_quota_invalid": {
@@ -12947,7 +12951,7 @@
   },
   "create_title": [
     {
-      "text": "New instance",
+      "text": "New app",
       "scope": "instance"
     },
     {
@@ -13028,7 +13032,7 @@
     "scope": "form_section"
   },
   "audit_hint": {
-    "text": "Opening and closing a shell is recorded in this instance's activity log.",
+    "text": "Opening and closing a shell is recorded in this app's activity log.",
     "scope": "instance_shell"
   },
   "limits_hint": {
@@ -13045,7 +13049,7 @@
   },
   "runs_as_root": [
     {
-      "text": "This workload runs as root",
+      "text": "This app runs as root",
       "scope": "instance_shell"
     },
     {
@@ -13056,13 +13060,13 @@
   ],
   "runs_as_root_description": [
     {
-      "text": "A shell is only offered where the workload runs as its own non-root user, because root inside the container is root on the host.",
+      "text": "A shell is only offered where the app runs as its own non-root user, because root inside the container is root on the host.",
       "scope": "instance_shell"
     },
     {
       "scope": "instance_shell",
       "workload": "virtual_machine",
-      "text": "A shell here opens only as a workload's own non-root user, and this virtual machine's agent runs commands as its root. Sign in on the machine itself through its screen."
+      "text": "A shell here opens only as an app's own non-root user, and this virtual machine's agent runs commands as its root. Sign in on the machine itself through its screen."
     }
   ],
   "shell_failed": {
@@ -13070,7 +13074,7 @@
     "scope": "violations"
   },
   "shell_missing_in_image": {
-    "text": "The image of instance {$name} carries none of these shells: {$shell}",
+    "text": "The image of app {$name} carries none of these shells: {$shell}",
     "scope": "violations"
   },
   "app_not_serving": {
@@ -13078,19 +13082,19 @@
     "scope": "violations"
   },
   "shell_not_running": {
-    "text": "Instance {$name} is not running, so there is no shell to open",
+    "text": "App {$name} is not running, so there is no shell to open",
     "scope": "violations"
   },
   "shell_requires_nonroot_workload": {
-    "text": "Instance {$name} runs as root inside its container, so hohenheim refuses to open a shell there",
+    "text": "App {$name} runs as root inside its container, so hohenheim refuses to open a shell there",
     "scope": "violations"
   },
   "shell_too_many_sessions": {
-    "text": "Instance {$name} already has the maximum of {$max :integer} shell sessions open",
+    "text": "App {$name} already has the maximum of {$max :integer} shell sessions open",
     "scope": "violations"
   },
   "shell_unsupported_runtime": {
-    "text": "The runtime of instance {$name} has no interactive shell lane yet",
+    "text": "The runtime of app {$name} has no interactive shell lane yet",
     "scope": "violations"
   },
   "unsupported_runtime": {
@@ -13098,11 +13102,11 @@
     "scope": "instance_shell"
   },
   "unsupported_runtime_description": {
-    "text": "This workload runs on a runtime hohenheim cannot open an interactive terminal on yet.",
+    "text": "This app runs on a runtime hohenheim cannot open an interactive terminal on yet.",
     "scope": "instance_shell"
   },
   "no_enabled_runtime_image": {
-    "text": "No runtime image is enabled. Enable the one this instance should run inside under Runtime images first.",
+    "text": "No runtime image is enabled. Enable the one this app should run inside under Runtime images first.",
     "scope": "instance"
   },
   "no_incus_runtime_image": {
@@ -13110,7 +13114,7 @@
     "scope": "instance"
   },
   "no_exposable_instance": {
-    "text": "No instance publishes a port for a site to serve. Create an application, workspace or container instance under Instances first.",
+    "text": "No app publishes a port for a site to serve. Create an app under Apps first.",
     "scope": "site"
   },
   "no_repositories": {
@@ -13122,7 +13126,7 @@
     "scope": "git_provider"
   },
   "delete_confirm_stranding": {
-    "text": "This removes the workload from its host but keeps its data. These sites expose it and will be DISABLED so they stop answering: {$sites}. Their hostnames, certificates and access rules are kept -- point them at another workload and enable them again.",
+    "text": "This removes the app from its host but keeps its data. These sites expose it and will be DISABLED so they stop answering: {$sites}. Their hostnames, certificates and access rules are kept -- point them at another app and enable them again.",
     "scope": "instance"
   },
   "delete_with_data_confirm_stranding": [
@@ -13220,7 +13224,7 @@
       "scope": "dns_peer"
     },
     {
-      "text": "Delete the variable {$key} from environment {$environment}? Workloads in that environment stop receiving it at their next deploy; anything running keeps the value it was deployed with until then.",
+      "text": "Delete the variable {$key} from environment {$environment}? Apps in that environment stop receiving it at their next deploy; anything running keeps the value it was deployed with until then.",
       "scope": "environment_variable"
     }
   ],
@@ -13242,15 +13246,15 @@
       "scope": "server"
     },
     {
-      "text": "{$count} live instances were created from this template. Destroy them first, or their records would name a template that no longer exists.",
+      "text": "{$count} live apps were created from this template. Destroy them first, or their records would name a template that no longer exists.",
       "scope": "instance_template"
     },
     {
-      "text": "Database '{$name}' is attached to {$workloads}. Detach it on each instance's Databases tab first.",
+      "text": "Database '{$name}' is attached to {$workloads}. Detach it on each app's Databases tab first.",
       "scope": "database"
     },
     {
-      "text": "{$instances} live instances and {$templates} templates still run inside this image. Repoint them first, or their next deploy fails on an image that no longer exists.",
+      "text": "{$instances} live apps and {$templates} templates still run inside this image. Repoint them first, or their next deploy fails on an image that no longer exists.",
       "scope": "runtime_image"
     },
     {
@@ -13271,7 +13275,7 @@
     "scope": "auth_provider"
   },
   "delete_migrating": {
-    "text": "The workload {$instance} is being migrated onto this host right now. Let the migration settle first.",
+    "text": "The app {$instance} is being migrated onto this host right now. Let the migration settle first.",
     "scope": "server"
   },
   "delete_confirm_dependents": {
@@ -13355,7 +13359,7 @@
     "scope": "certificate"
   },
   "instance_crash_loop": {
-    "text": "Instance crash loop",
+    "text": "App crash loop",
     "scope": "notification_event"
   },
   "stack_health": {
@@ -13367,7 +13371,7 @@
     "scope": "notification_event"
   },
   "workload_isolation": {
-    "text": "Workload isolation",
+    "text": "App isolation",
     "scope": "notification_event"
   },
   "login_succeeded": [
@@ -13386,7 +13390,7 @@
     }
   ],
   "runtime_image_not_applicable": {
-    "text": "This kind of instance does not run inside a runtime image; leave this empty.",
+    "text": "This kind of app does not run inside a runtime image; leave this empty.",
     "scope": "instance"
   },
   "notification_events": {
@@ -13926,7 +13930,7 @@
     }
   ],
   "template_database_engine": {
-    "text": "Engine of the managed database created for every instance made from this template.",
+    "text": "Engine of the managed database created for every app made from this template.",
     "scope": "help"
   },
   "template_database_prefix": {
@@ -13938,15 +13942,15 @@
     "scope": "help"
   },
   "no_databases_description": {
-    "text": "This template declares no managed databases; an instance created from it has to attach one by hand.",
+    "text": "This template declares no managed databases; an app created from it has to attach one by hand.",
     "scope": "template_contents"
   },
   "no_volumes_description": {
-    "text": "This template declares no volumes yet; add one for each directory an instance must keep when its container is replaced.",
+    "text": "This template declares no volumes yet; add one for each directory an app must keep when its container is replaced.",
     "scope": "template_contents"
   },
   "template_volume_name_taken": {
-    "text": "This template already declares a volume named '{$name}'. Two declarations of one name become a single volume on every instance, so one of them would be lost.",
+    "text": "This template already declares a volume named '{$name}'. Two declarations of one name become a single volume on every app, so one of them would be lost.",
     "scope": "violations"
   },
   "template_required": {
@@ -14070,7 +14074,7 @@
     "scope": "dns_zone"
   },
   "import_replica": {
-    "text": "Its records are owned by the primary this zone transfers from and arrive over AXFR, so a zone file cannot be imported here. Import it on the instance that is primary for this zone.",
+    "text": "Its records are owned by the primary this zone transfers from and arrive over AXFR, so a zone file cannot be imported here. Import it on the server that is primary for this zone.",
     "scope": "dns_zone"
   },
   "import_replica_named": {
@@ -14763,7 +14767,7 @@
       "target": "history_fact"
     },
     {
-      "text": ".match {$crash_loop :string}\ntrue {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the workload {$daemon_state}; crash loop, automatic restarts suspended}}\n* {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the workload {$daemon_state}}}",
+      "text": ".match {$crash_loop :string}\ntrue {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the app {$daemon_state}; crash loop, automatic restarts suspended}}\n* {{Corrected from {$from} to {$to}: it died without an observed stop, and its host reports the app {$daemon_state}}}",
       "scope": "hohenheim",
       "target": "history_fact",
       "has_from": "true"
@@ -14797,7 +14801,7 @@
       "has_moved": "true"
     },
     {
-      "text": "{$actor} moved the workloads off {$subject}",
+      "text": "{$actor} moved the apps off {$subject}",
       "scope": "hohenheim",
       "target": "happened"
     }
@@ -14845,7 +14849,7 @@
       "target": "history_fact"
     },
     {
-      "text": ".match {$closed_by :string}\nclient {{Closed {$shell} as uid {$run_user}: the viewer left the terminal}}\nexited {{Closed {$shell} as uid {$run_user}: the shell exited}}\nidle {{Closed {$shell} as uid {$run_user}: no keystroke for too long}}\nrevoked {{Closed {$shell} as uid {$run_user}: its access was revoked}}\nworkload_ended {{Closed {$shell} as uid {$run_user}: the workload stopped}}\n* {{Closed {$shell} as uid {$run_user}}}",
+      "text": ".match {$closed_by :string}\nclient {{Closed {$shell} as uid {$run_user}: the viewer left the terminal}}\nexited {{Closed {$shell} as uid {$run_user}: the shell exited}}\nidle {{Closed {$shell} as uid {$run_user}: no keystroke for too long}}\nrevoked {{Closed {$shell} as uid {$run_user}: its access was revoked}}\nworkload_ended {{Closed {$shell} as uid {$run_user}: the app stopped}}\n* {{Closed {$shell} as uid {$run_user}}}",
       "scope": "hohenheim",
       "target": "history_fact",
       "has_shell": "true"
@@ -14931,7 +14935,7 @@
     "scope": "help"
   },
   "database_engine_root_user": {
-    "text": "The superuser the controller drives this engine with. A workload never sees it.",
+    "text": "The superuser the controller drives this engine with. An app never sees it.",
     "scope": "help"
   },
   "database_engine_root_password": {
@@ -15031,7 +15035,7 @@
     "scope": "database"
   },
   "move_shared_confirm": {
-    "text": "Move '{$name}' onto this host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
+    "text": "Move '{$name}' onto this host's shared engine? Every attached app is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
     "scope": "database"
   },
   "move_shared_ok": {
@@ -15063,7 +15067,7 @@
     "scope": "server_overview"
   },
   "move_shared_confirm_generic": {
-    "text": "Move this database onto the host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
+    "text": "Move this database onto the host's shared engine? Every attached app is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
     "scope": "database"
   },
   "deploy_done": {
@@ -15103,7 +15107,7 @@
     "scope": "git_provider"
   },
   "instance_operation_in_progress": {
-    "text": "Another operation on instance {$name} is still running; try again when it has finished",
+    "text": "Another operation on app {$name} is still running; try again when it has finished",
     "scope": "violations"
   },
   "repository_url_local_refused": {
@@ -15143,7 +15147,7 @@
     "scope": "alert"
   },
   "database_move_leftover_body": {
-    "text": "Database {$name} now lives on shared engine {$engine}, but its old dedicated engine could not be removed and still holds its port, memory and a copy of the data: {$reason}. Remove the old engine instance by hand.",
+    "text": "Database {$name} now lives on shared engine {$engine}, but its old dedicated engine could not be removed and still holds its port, memory and a copy of the data: {$reason}. Remove the old engine container by hand.",
     "scope": "alert"
   },
   "control_plane_backup_failed_subject": {
@@ -15155,15 +15159,15 @@
     "scope": "alert"
   },
   "instance_backup_failed_subject": {
-    "text": "Instance backup failed: {$name}",
+    "text": "App backup failed: {$name}",
     "scope": "alert"
   },
   "instance_backup_failed_body": {
-    "text": "The scheduled backup of instance {$name} failed: {$reason}",
+    "text": "The scheduled backup of app {$name} failed: {$reason}",
     "scope": "alert"
   },
   "instance_backup_unknown_body": {
-    "text": "The scheduled backup of instance {$name} was interrupted before it recorded an outcome; it is not known whether the backup completed, so check the backup target",
+    "text": "The scheduled backup of app {$name} was interrupted before it recorded an outcome; it is not known whether the backup completed, so check the backup target",
     "scope": "alert"
   },
   "deploy_failed_subject": {
@@ -15924,7 +15928,7 @@
     "scope": "server_overview"
   },
   "fix_resources": {
-    "text": "Give the Incus host more CPU or memory, or place workloads on another host.",
+    "text": "Give the Incus host more CPU or memory, or place apps on another host.",
     "scope": "server_overview"
   },
   "fix_trusted": {
@@ -15952,7 +15956,7 @@
     "scope": "server_overview"
   },
   "fix_kernel_isolation_lane": {
-    "text": "This host gives containers no isolated kernel lane. Enable it, or run tenant workloads in virtual machines.",
+    "text": "This host gives containers no isolated kernel lane. Enable it, or run tenant apps in virtual machines.",
     "scope": "server_overview"
   },
   "fix_container_userns": {
@@ -16116,7 +16120,7 @@
     "scope": "app_health"
   },
   "workload_not_running": {
-    "text": "Its workload {$name} is not running.",
+    "text": "Its app {$name} is not running.",
     "scope": "app_health"
   },
   "path_open": [
@@ -16259,7 +16263,7 @@
     "scope": "app_list"
   },
   "type_workload": {
-    "text": "Workload",
+    "text": "App",
     "scope": "app_list"
   },
   "type_website": {
@@ -16348,11 +16352,11 @@
       "scope": "instance_volume"
     },
     {
-      "text": "Each attached database injects its connection variables into the workload at deploy. Detaching revokes reachability at once; the variables disappear at the next deploy.",
+      "text": "Each attached database injects its connection variables into the app at deploy. Detaching revokes reachability at once; the variables disappear at the next deploy.",
       "scope": "instance_database"
     },
     {
-      "text": "Data disks and extra network interfaces attached to this instance, on top of the root disk and network it always has.",
+      "text": "Data disks and extra network interfaces attached to this app, on top of the root disk and network it always has.",
       "scope": "instance_device"
     }
   ],
@@ -17037,7 +17041,7 @@
     }
   ],
   "credentials_not_live_detail": {
-    "text": "The password of database {$database} changed after this workload was started, so it still connects with the old one, which the database refuses. Restart it to give it the new password.",
+    "text": "The password of database {$database} changed after this app was started, so it still connects with the old one, which the database refuses. Restart it to give it the new password.",
     "scope": "app_health"
   },
   "mark_kept": {
@@ -17761,7 +17765,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :integer}\none {{1 instance}}\n* {{{$count :integer} instances}}",
+      "text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}",
       "scope": "count"
     }
   ],
@@ -17855,11 +17859,11 @@
     "scope": "host_check"
   },
   "finding_probe_instance_failed": {
-    "text": "The probe instance (image {$image} from {$server}) could not run ({$error}), so what this host does to an app is unknown",
+    "text": "The probe container (image {$image} from {$server}) could not run ({$error}), so what this host does to an app is unknown",
     "scope": "host_check"
   },
   "finding_probe_unanswered": {
-    "text": "The probe instance never answered, so this is unknown",
+    "text": "The probe container never answered, so this is unknown",
     "scope": "host_check"
   },
   "finding_userns_unreadable": {
@@ -18261,11 +18265,11 @@
     "scope": "isolation_finding"
   },
   "not_repaired": {
-    "text": ".match {$count :integer}\none {{The isolation of 1 workload on {$subject} could not be checked or repaired}}\n* {{The isolation of {$count :integer} workloads on {$subject} could not be checked or repaired}}",
+    "text": ".match {$count :integer}\none {{The isolation of 1 app on {$subject} could not be checked or repaired}}\n* {{The isolation of {$count :integer} apps on {$subject} could not be checked or repaired}}",
     "scope": "isolation_finding"
   },
   "cut_off": {
-    "text": ".match {$count :integer}\none {{1 workload on {$subject} was stopped or cut off because its isolation could not be repaired}}\n* {{{$count :integer} workloads on {$subject} were stopped or cut off because their isolation could not be repaired}}",
+    "text": ".match {$count :integer}\none {{1 app on {$subject} was stopped or cut off because its isolation could not be repaired}}\n* {{{$count :integer} apps on {$subject} were stopped or cut off because their isolation could not be repaired}}",
     "scope": "isolation_finding"
   },
   "enforcement_off": {
@@ -19170,11 +19174,11 @@
     "scope": "hohenheim_field"
   },
   "candidate_instance": {
-    "text": "New instance",
+    "text": "New app",
     "scope": "hohenheim_field"
   },
   "retired_instance": {
-    "text": "Replaced instance",
+    "text": "Replaced app",
     "scope": "hohenheim_field"
   },
   "step_log": {
@@ -19430,7 +19434,7 @@
   ],
   "instance_kind_change_refused": {
     "scope": "violations",
-    "text": "This workload cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."
+    "text": "This app cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."
   },
   "step_ports": {"scope": "put_online", "text": "Ports"},
   "runs_on_card": {"scope": "put_online", "text": "Runs on"},
@@ -19480,8 +19484,8 @@
   "game_address_set": {"scope": "instance_overview", "text": "Give it a game address"},
   "game_address_change": {"scope": "instance_overview", "text": "Change game address"},
   "owner_quota": {"scope": "instance_overview", "text": "Owner's quota"},
-  "quota_workloads": {"scope": "instance_overview", "text": "{$used :integer} of {$limit :integer} workloads"},
-  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used :integer} workloads, no cap"},
+  "quota_workloads": {"scope": "instance_overview", "text": "{$used :integer} of {$limit :integer} apps"},
+  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used :integer} apps, no cap"},
   "quota_memory": {"scope": "instance_overview", "text": "{$used :bytes} of {$limit :bytes} memory"},
   "quota_memory_open": {"scope": "instance_overview", "text": "{$used :bytes} memory, no cap"},
   "connect_hint": {"scope": "instance_overview", "text": "Players and clients connect to these ports of its host."},
@@ -19645,7 +19649,7 @@
     "scope": "instance_database"
   },
   "detach_confirm_any": {
-    "text": "Detach this database? The workload can no longer reach it as soon as you confirm. The database itself and its data are kept.",
+    "text": "Detach this database? The app can no longer reach it as soon as you confirm. The database itself and its data are kept.",
     "scope": "instance_database"
   },
   "detached_toast": {
@@ -19808,7 +19812,7 @@
   "build_hook_revoked_toast": {"text": "The build hook is revoked.", "scope": "build_hook"},
   "hook": {"text": "Build hook", "scope": "deploy_trigger"},
   "trigger_named": {"text": "{$trigger} {$actor}", "scope": "deployments"},
-  "hook_does_not_start_stopped_workload": {"text": "'{$name}' is not running, so the build hook did not deploy it: a build hook never starts a workload someone stopped. Start it yourself first.", "scope": "violations"},
+  "hook_does_not_start_stopped_workload": {"text": "'{$name}' is not running, so the build hook did not deploy it: a build hook never starts an app someone stopped. Start it yourself first.", "scope": "violations"},
   "build_hook_name_invalid": {"text": "Give the build hook a name of at most {$max} characters.", "scope": "violations"},
   "build_hook_needs_application": {"text": "Only an app that deploys releases takes a build hook.", "scope": "violations"},
   "build_hook_already_revoked": {"text": "This build hook is revoked; create a new one instead.", "scope": "violations"},
@@ -20029,12 +20033,12 @@
   "start_instance_description": {"text": "Starts the stopped app the way a deploy starts it, without changing its settings or its data. Refused while a database the app uses is not ready.", "scope": "hohenheim"},
   "stop_instance_description": {"text": "Stops the app. Its data, volumes and ports are kept, so start brings it back; an app that is already stopped stays as it is.", "scope": "hohenheim"},
   "restart_instance_description": {"text": "Stops the app and starts it again with its current settings; its data is kept. An app whose releases Hohenheim manages starts again as a fresh deploy.", "scope": "hohenheim"},
-  "deploy_instance_description": {"text": "Puts the app's newest version online, in the background. An app or static site is built, its pre-deploy command runs, the new version starts beside the old one, is checked over HTTP and takes over; a failed step leaves the old version serving. A workspace builds from its repository and restarts; other kinds start their workload again.", "scope": "hohenheim"},
+  "deploy_instance_description": {"text": "Puts the app's newest version online, in the background. An app or static site is built, its pre-deploy command runs, the new version starts beside the old one, is checked over HTTP and takes over; a failed step leaves the old version serving. A workspace builds from its repository and restarts; other kinds start their app again.", "scope": "hohenheim"},
   "backup_instance_description": {"text": "Backs the app's volumes up to its backup target now. The app is stopped while its data is copied and started again before the upload.", "scope": "hohenheim"},
   "connect_push_webhook_description": {"text": "Registers the push webhook at the git provider the app's source comes from, or brings it up to date, so a push starts a deploy. Stores a webhook secret when the app has none.", "scope": "hohenheim"},
   "snapshot_instance_description": {"text": "Takes a snapshot of the app's volumes on its host, which restore can put back later. The app is stopped while the copy is made and started again afterwards.", "scope": "hohenheim"},
   "install_instance_description": {"text": "Runs the install step of the app's template, or resumes or retries it, while that install is not done.", "scope": "hohenheim"},
-  "reinstall_instance_description": {"text": "Runs the template's install step again as the template's data policy says: preserve runs it over the existing volumes; clear first removes the workload and its volumes, which cannot be undone.", "scope": "hohenheim"},
+  "reinstall_instance_description": {"text": "Runs the template's install step again as the template's data policy says: preserve runs it over the existing volumes; clear first removes the app and its volumes, which cannot be undone.", "scope": "hohenheim"},
   "destroy_instance_data_description": {"text": "Deletes the app and removes its volumes and their data from the host. This cannot be undone; delete keeps the data.", "scope": "hohenheim"},
   "delete_instance_description": {"text": "Deletes the app: its container is removed and its ports released. Its volumes and their data stay on the host, where the reconciler reports them; delete with data removes those too.", "scope": "hohenheim"},
   "attach_install_media_description": {"text": "Puts an ISO that is on the machine's host into the machine's drive, to boot an installer from. Only for a virtual machine with no ISO attached.", "scope": "hohenheim"},
@@ -20139,7 +20143,7 @@
   "delete_server_description": {"text": "Removes the host from this panel and withdraws this panel's trust on it; the host and what runs on it are not touched. Refused while records still use it.", "scope": "hohenheim"},
   "delete_runtime_image_description": {"text": "Deletes this custom runtime image from the list. Refused while an app uses it.", "scope": "hohenheim"},
   "delete_project_description": {"text": "Deletes the project and the roles it owns. Refused while the project still owns records.", "scope": "hohenheim"},
-  "remove_orphan_description": {"text": "Removes the leftover workload the reconciler found on the host. Volumes are never removed this way.", "scope": "hohenheim"},
+  "remove_orphan_description": {"text": "Removes the leftover container the reconciler found on the host. Volumes are never removed this way.", "scope": "hohenheim"},
   "refresh_stack_description": {"text": "Reads the stack's live state from its host and answers its status; it changes nothing.", "scope": "hohenheim"},
   "test_git_provider_description": {"text": "Tests the git connection by listing its repositories, and answers how many or why it failed; it changes nothing.", "scope": "hohenheim"},
   "test_backup_target_description": {"text": "Checks whether the backup target can be reached, and answers why not when it cannot; it changes nothing.", "scope": "hohenheim"},
@@ -20147,7 +20151,7 @@
   "cordon_server_description": {"text": "Cordons the host: no new work is placed on it, while what already runs there keeps running.", "scope": "hohenheim"},
   "drain_server_description": {"text": "Moves every app off this host, pausing it first if it still takes new apps: each is stopped, moved to another host and started there. An app that cannot move is named and left alone.", "scope": "hohenheim"},
   "uncordon_server_description": {"text": "Ends the host's cordon, so new work may be placed on it again.", "scope": "hohenheim"},
-  "reap_controller_objects_description": {"text": "Removes the network objects other Hohenheim controllers left on this Incus host. Objects of this controller, and objects a workload still uses, are never removed.", "scope": "hohenheim"},
+  "reap_controller_objects_description": {"text": "Removes the network objects other Hohenheim controllers left on this Incus host. Objects of this controller, and objects an app still uses, are never removed.", "scope": "hohenheim"},
   "template_project": {"text": "The project the new app belongs to.", "scope": "help"},
   "certificate_name": {"text": "The name the certificate is listed under; left empty, its first hostname.", "scope": "help"},
   "site_name": {"text": "The site's name, as the panel lists it.", "scope": "help"},
@@ -20295,6 +20299,7 @@
   "create_git_connection_description": {"text": "Adds a git connection through the panel's own create.", "scope": "hohenheim"},
   "change_git_connection": {"text": "Change a git connection", "scope": "hohenheim"},
   "change_git_connection_description": {"text": "Changes the settings sent of a git connection through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
+  "delete_git_connection_description": {"text": "Removes a git connection, as the panel's Delete does; refused by name while an app builds from it.", "scope": "hohenheim"},
   "git_connection_thing": {"text": "a git connection", "scope": "hohenheim"},
   "mcp_tool_git_connection_set": {"text": "Creates or changes a git connection apps build from: GitHub, GitLab or Gitea through their API with a token (or, for GitHub, an App key), or any git service over SSH with a private key. Credentials go in once, stored encrypted, and never come out. An SSH connection created without ssh_private_key gets a new key pair: the answer and read show its public_key, to add to the repository as a read-only deploy key; regenerate_key makes a new pair. A change sends only what changes. Only an administrator shares a connection with everyone. Answers the code (G2).", "scope": "hohenheim"},
   "mcp_code_git_connection": {"text": "The connection's code; leave out to create one.", "scope": "hohenheim"},

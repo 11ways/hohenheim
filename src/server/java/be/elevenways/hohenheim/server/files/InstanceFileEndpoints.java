@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.util.PosixPaths;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -156,11 +157,10 @@ public final class InstanceFileEndpoints {
             }
             int instanceId = instance.get(InstanceModel.ID);
             String path = conduit.getQueryParam("path");
-            if (path == null || path.isEmpty()) {
-                return ApiConduits.refusal(conduit,
-                    Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused")));
-            }
             try {
+                if (path == null || path.isEmpty()) {
+                    throw InstanceFilePath.refused(new InstanceFiles().volumeRoots(instanceId));
+                }
                 HandlerSupport.download(conduit, "application/octet-stream", PosixPaths.nameOf(path),
                     new InstanceFiles().read(instanceId, path));
                 return null;
@@ -253,8 +253,8 @@ public final class InstanceFileEndpoints {
         } catch (DomainRefusal refused) {
             return ApiConduits.refusal(conduit, refused, instance);
         } catch (IOException unspooled) {
-            return ApiConduits.refusal(conduit, Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed")
-                .withArg("reason", HohenheimViolations.reasonOf(unspooled))));
+            Blast.log("FILES: the upload could not be spooled:", HohenheimViolations.reasonOf(unspooled));
+            return ApiConduits.refusal(conduit, Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed")));
         } finally {
             if (upload != null) {
                 FileTrees.deleteQuietly(upload);

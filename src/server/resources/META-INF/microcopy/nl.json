@@ -12,11 +12,11 @@
     "scope": "violations"
   },
   "database_already_attached": {
-    "text": "Die databank is al aan deze instance gekoppeld",
+    "text": "Die databank is al aan deze app gekoppeld",
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Databank '{$name}' is gekoppeld aan {$workloads}; koppel ze eerst los op het tabblad Databanken van de instantie",
+    "text": "Databank '{$name}' is gekoppeld aan {$workloads}; koppel ze eerst los op het tabblad Databanken van de app",
     "scope": "violations"
   },
   "database_missing": {
@@ -37,7 +37,7 @@
   },
   "database_not_ready": [
     {
-      "text": "Databank '{$name}' is nog niet klaar (status: {$state}); de workload zou zonder haar inloggegevens starten, wacht dus tot ze actief is en deploy dan",
+      "text": "Databank '{$name}' is nog niet klaar (status: {$state}); de app zou zonder haar inloggegevens starten, wacht dus tot ze actief is en deploy dan",
       "scope": "violations"
     },
     {
@@ -416,7 +416,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximaal aantal CPU-kernen voor de workload. Leeg betekent onbeperkt.",
+      "text": "Maximaal aantal CPU-kernen voor de app. Leeg betekent onbeperkt.",
       "scope": "help"
     }
   ],
@@ -1370,7 +1370,7 @@
       "scope": "schedule_step"
     },
     {
-      "text": "Koppel een gegevensschijf of een extra netwerkinterface aan deze instantie.",
+      "text": "Koppel een gegevensschijf of een extra netwerkinterface aan deze app.",
       "scope": "instance_device"
     },
     {
@@ -1378,11 +1378,11 @@
       "scope": "server_media"
     },
     {
-      "text": "Deze instantie heeft nog geen datamappen.",
+      "text": "Deze app heeft nog geen datamappen.",
       "scope": "instance_volume"
     },
     {
-      "text": "Nog geen beheerde databank injecteert haar verbindingsgegevens in deze instantie.",
+      "text": "Nog geen beheerde databank injecteert haar verbindingsgegevens in deze app.",
       "scope": "instance_database"
     }
   ],
@@ -2271,11 +2271,11 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Live uitvoer van de workload van deze instantie. Commando's verstuur je met het formulier hieronder.",
+      "text": "Live uitvoer van deze app. Commando's verstuur je met het formulier hieronder.",
       "scope": "instance_console"
     },
     {
-      "text": "Deze workload draait in een echte terminal: wat je hier typt gaat er rechtstreeks naartoe, en hij volgt de grootte van dit venster.",
+      "text": "Deze app draait in een echte terminal: wat je hier typt gaat er rechtstreeks naartoe, en hij volgt de grootte van dit venster.",
       "scope": "instance_console",
       "console": "tty"
     },
@@ -2284,7 +2284,7 @@
       "scope": "instance_framebuffer"
     },
     {
-      "text": "Voer een opdracht uit in de workload van deze instantie en lees de afsluitcode en uitvoer.",
+      "text": "Voer een opdracht uit in deze app en lees de afsluitcode en uitvoer.",
       "scope": "instance_exec"
     },
     {
@@ -2780,20 +2780,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instanties",
+      "text": "Apps",
       "scope": "instance"
     },
     {
-      "text": "instanties",
+      "text": "apps",
       "scope": "instance",
       "case": "sentence"
     },
     {
-      "text": "Instantiequota's",
+      "text": "App-quota's",
       "scope": "instance_quota"
     },
     {
-      "text": "instantiequota's",
+      "text": "app-quota's",
       "scope": "instance_quota",
       "case": "sentence"
     },
@@ -2816,11 +2816,11 @@
       "case": "sentence"
     },
     {
-      "text": "Onverwachte workloads",
+      "text": "Onverwachte containers",
       "scope": "reconcile_finding"
     },
     {
-      "text": "onverwachte workloads",
+      "text": "onverwachte containers",
       "scope": "reconcile_finding",
       "case": "sentence"
     },
@@ -2852,11 +2852,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instantiebestanden",
+      "text": "App-bestanden",
       "scope": "instance_file"
     },
     {
-      "text": "instantiebestanden",
+      "text": "app-bestanden",
       "scope": "instance_file",
       "case": "sentence"
     },
@@ -2924,20 +2924,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instantiesnapshots",
+      "text": "App-snapshots",
       "scope": "instance_snapshot"
     },
     {
-      "text": "instantiesnapshots",
+      "text": "app-snapshots",
       "scope": "instance_snapshot",
       "case": "sentence"
     },
     {
-      "text": "Instantieback-ups",
+      "text": "App-back-ups",
       "scope": "instance_backup"
     },
     {
-      "text": "instantieback-ups",
+      "text": "app-back-ups",
       "scope": "instance_backup",
       "case": "sentence"
     },
@@ -3848,7 +3848,7 @@
     "scope": "violations"
   },
   "dns_managed_by_unknown": {
-    "text": "Dat is geen systeem waaraan deze instantie een record kan overdragen",
+    "text": "Dat is geen systeem waaraan deze app een record kan overdragen",
     "scope": "violations"
   },
   "dns_value_required": {
@@ -3936,15 +3936,15 @@
     "scope": "violations"
   },
   "game_domain_authority_instance": {
-    "text": "Je hebt beheerrechten nodig over die instantie",
+    "text": "Je hebt beheerrechten nodig over die app",
     "scope": "violations"
   },
   "game_domain_authority_none": {
-    "text": "Je hebt rechten nodig over het domein of een van de instanties om deze koppeling te verwijderen",
+    "text": "Je hebt rechten nodig over het domein of een van de apps om deze koppeling te verwijderen",
     "scope": "violations"
   },
   "game_domain_same_instance": {
-    "text": "De backend en de proxy moeten verschillende instanties zijn",
+    "text": "De backend en de proxy moeten verschillende apps zijn",
     "scope": "violations"
   },
   "game_domain_cross_host": {
@@ -3964,7 +3964,7 @@
     "scope": "violations"
   },
   "game_instance_missing": {
-    "text": "Die instantie bestaat niet",
+    "text": "Die app bestaat niet",
     "scope": "violations"
   },
   "game_domain_field_required": {
@@ -3988,7 +3988,7 @@
     "scope": "violations"
   },
   "game_link_unsupported": {
-    "text": "Instantie '{$name}' draait op een driver zonder koppelnetwerken",
+    "text": "App '{$name}' draait op een driver zonder koppelnetwerken",
     "scope": "violations"
   },
   "game_domain": [
@@ -4003,7 +4003,7 @@
   ],
   "game_backend": [
     {
-      "text": "Backend-instantie",
+      "text": "Backend-app",
       "scope": "hohenheim_field"
     },
     {
@@ -4017,7 +4017,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "De proxy-instantie waarvan de forced-hosts-configuratie uit deze koppeling gegenereerd wordt.",
+      "text": "De proxy-app waarvan de forced-hosts-configuratie uit deze koppeling gegenereerd wordt.",
       "scope": "help"
     }
   ],
@@ -4138,7 +4138,7 @@
     "scope": "certificate_request_error"
   },
   "zone_not_primary": {
-    "text": "Deze instantie repliceert de zone die {$hostnames} dekt alleen van {$peer}; vraag het certificaat daar aan, geef die peer een admin-API-sleutel, of gebruik HTTP-01",
+    "text": "Deze server repliceert de zone die {$hostnames} dekt alleen van {$peer}; vraag het certificaat daar aan, geef die peer een admin-API-sleutel, of gebruik HTTP-01",
     "scope": "certificate_request_error"
   },
   "dns_server_disabled": {
@@ -4407,7 +4407,7 @@
   },
   "delete_confirm": [
     {
-      "text": "Database '{$database}' loskoppelen van instantie '{$instance}'? De bereikbaarheid wordt bij het bevestigen meteen ingetrokken bij de daemon, en de geinjecteerde {$prefix}-variabelen verdwijnen bij de volgende uitrol van de instantie. De database zelf en de gegevens blijven behouden.",
+      "text": "Database '{$database}' loskoppelen van app '{$instance}'? De bereikbaarheid wordt bij het bevestigen meteen ingetrokken bij de daemon, en de geinjecteerde {$prefix}-variabelen verdwijnen bij de volgende uitrol van de app. De database zelf en de gegevens blijven behouden.",
       "scope": "instance_database"
     },
     {
@@ -4423,7 +4423,7 @@
       "scope": "auth_provider"
     },
     {
-      "text": "Deze variabele verwijderen? Ze verlaat haar omgeving nu; workloads daar krijgen ze bij hun volgende deploy niet meer, en wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
+      "text": "Deze variabele verwijderen? Ze verlaat haar omgeving nu; apps daar krijgen ze bij hun volgende deploy niet meer, en wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
       "scope": "environment_variable"
     },
     {
@@ -4431,7 +4431,7 @@
       "scope": "access_list"
     },
     {
-      "text": "Deze omgeving verwijderen? Een omgeving die nog variabelen of workloads bevat wordt geweigerd, verplaats of verwijder die dus eerst.",
+      "text": "Deze omgeving verwijderen? Een omgeving die nog variabelen of apps bevat wordt geweigerd, verplaats of verwijder die dus eerst.",
       "scope": "environment"
     },
     {
@@ -4451,7 +4451,7 @@
       "scope": "project"
     },
     {
-      "text": "Dit ISO-volume van de host verwijderen? Instanties die er niet meer naar verwijzen merken er niets van.",
+      "text": "Dit ISO-volume van de host verwijderen? Apps die er niet meer naar verwijzen merken er niets van.",
       "scope": "server_media"
     },
     {
@@ -4459,7 +4459,7 @@
       "scope": "access_rule"
     },
     {
-      "text": "Dit verwijdert de workload van zijn host maar bewaart de data. Gebruik \"Verwijderen met data\" als de data ook weg moet.",
+      "text": "Dit verwijdert de app van zijn host maar bewaart de data. Gebruik \"Verwijderen met data\" als de data ook weg moet.",
       "scope": "instance"
     },
     {
@@ -5269,7 +5269,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "'{$command}' versturen stopt deze instantie netjes.",
+      "text": "'{$command}' versturen stopt deze app netjes.",
       "scope": "instance_console"
     }
   ],
@@ -5283,7 +5283,7 @@
       "scope": "stack"
     },
     {
-      "text": "Deze instantie stoppen? Ze houdt haar gepubliceerde poort voor de volgende start; de container en zijn data blijven bestaan.",
+      "text": "Deze app stoppen? Ze houdt haar gepubliceerde poort voor de volgende start; de container en zijn data blijven bestaan.",
       "scope": "instance"
     }
   ],
@@ -5315,7 +5315,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "Deze instantie stoppen en opnieuw starten?",
+      "text": "Deze app stoppen en opnieuw starten?",
       "scope": "instance"
     }
   ],
@@ -5649,7 +5649,7 @@
       "scope": "stop_kind"
     },
     {
-      "text": "Voert één opdracht uit in de workload en toont de uitvoer en de exitcode.",
+      "text": "Voert één opdracht uit in de app en toont de uitvoer en de exitcode.",
       "scope": "console_mode"
     }
   ],
@@ -6009,7 +6009,7 @@
       "scope": "stack_services"
     },
     {
-      "text": ".match {$stranded :string}\ntrue {{Uitgeschakeld: de instantie erachter werd verwijderd}}\n* {{Uitgeschakeld}}",
+      "text": ".match {$stranded :string}\ntrue {{Uitgeschakeld: de app erachter werd verwijderd}}\n* {{Uitgeschakeld}}",
       "scope": "hohenheim",
       "target": "history_fact"
     },
@@ -6207,7 +6207,7 @@
     }
   ],
   "workload_identity": {
-    "text": "Workload-identiteit van site {$name}",
+    "text": "App-identiteit van site {$name}",
     "scope": "attention_title"
   },
   "route_taken_other_site": {
@@ -6377,7 +6377,7 @@
     "scope": "help"
   },
   "instance_container_port": {
-    "text": "Containerpoort waarop de workload luistert; protocol en blootstelling hieronder bepalen hoe hij gepubliceerd wordt",
+    "text": "Containerpoort waarop de app luistert; protocol en blootstelling hieronder bepalen hoe hij gepubliceerd wordt",
     "scope": "help"
   },
   "instance_volumes": {
@@ -6401,7 +6401,7 @@
       "scope": "instance_kind"
     },
     {
-      "text": "Een container-image draaien als beheerde instantie",
+      "text": "Een container-image draaien als beheerde app",
       "scope": "instance_kind_description"
     }
   ],
@@ -6442,19 +6442,19 @@
     }
   ],
   "stopped_toast": {
-    "text": "Instantie {$name} gestopt",
+    "text": "App {$name} gestopt",
     "scope": "instance"
   },
   "instance_not_found": {
-    "text": "Instantie #{$id} bestaat niet (of is verwijderd)",
+    "text": "App #{$id} bestaat niet (of is verwijderd)",
     "scope": "violations"
   },
   "instance_upstream_not_applicable": {
-    "text": "Deze upstream bedient geen instantie; laat dit leeg.",
+    "text": "Deze upstream bedient geen app; laat dit leeg.",
     "scope": "site"
   },
   "instance_kind_unknown": {
-    "text": "Geen runtime kan instantiesoort {$kind} uitvoeren",
+    "text": "Geen runtime kan app-soort {$kind} uitvoeren",
     "scope": "violations"
   },
   "console_kind_unknown": {
@@ -6462,7 +6462,7 @@
     "scope": "violations"
   },
   "instance_image_required": {
-    "text": "Een image is vereist voordat deze instantie gedeployd kan worden",
+    "text": "Een image is vereist voordat deze app gedeployd kan worden",
     "scope": "violations"
   },
   "instance_deploy_failed": {
@@ -6486,7 +6486,7 @@
     "scope": "violations"
   },
   "quota_reached": {
-    "text": "Instantiequota bereikt: {$used :integer} van {$limit :integer} in gebruik",
+    "text": "App-quota bereikt: {$used :integer} van {$limit :integer} in gebruik",
     "scope": "violations"
   },
   "quota_negative": {
@@ -6505,11 +6505,11 @@
   ],
   "max_instances": [
     {
-      "text": "Max. instanties",
+      "text": "Max. apps",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Limiet voor deze eigenaar op elke draaiende werklast: machines, containers en gameservers. 0 weigert elke nieuwe, leeg valt terug op de globale standaard",
+      "text": "Limiet voor deze eigenaar op elke draaiende app: machines, containers en gameservers. 0 weigert elke nieuwe, leeg valt terug op de globale standaard",
       "scope": "help"
     }
   ],
@@ -6518,7 +6518,7 @@
     "scope": "violations"
   },
   "instance_fenced_out": {
-    "text": "Instantie {$name} wordt nu beheerd door een andere controller op host {$server}; deze bewerking is afgebroken zonder opruiming",
+    "text": "App {$name} wordt nu beheerd door een andere controller op host {$server}; deze bewerking is afgebroken zonder opruiming",
     "scope": "violations"
   },
   "host_not_admitted": [
@@ -6532,7 +6532,7 @@
     }
   ],
   "instance_placement_blocked": {
-    "text": "Deze instantie kan nu niet gestart worden. De host neemt geen nieuwe workloads aan; je beheerder moet dit oplossen.",
+    "text": "Deze app kan nu niet gestart worden. De host neemt geen nieuwe apps aan; je beheerder moet dit oplossen.",
     "scope": "violations"
   },
   "host_posture_refuses": {
@@ -6568,11 +6568,11 @@
     "scope": "server"
   },
   "cordon_confirm": {
-    "text": "Geen nieuwe werklasten meer op deze host plaatsen? Instanties die er al draaien blijven draaien en blijven bedienen; gebruik Leegmaken om ze te verplaatsen.",
+    "text": "Geen nieuwe apps meer op deze host plaatsen? Apps die er al draaien blijven draaien en blijven bedienen; gebruik Leegmaken om ze te verplaatsen.",
     "scope": "server"
   },
   "drain_confirm": {
-    "text": "Elke instantie op deze host wordt gestopt, naar een andere host verplaatst en daar gestart. Werklasten die niet kunnen verhuizen worden bij naam geweigerd en blijven onaangeroerd.",
+    "text": "Elke app op deze host wordt gestopt, naar een andere host verplaatst en daar gestart. Apps die niet kunnen verhuizen worden bij naam geweigerd en blijven onaangeroerd.",
     "scope": "server"
   },
   "host_drained": {
@@ -6631,7 +6631,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Hoe goed deze host tenants van elkaar scheidt. Enkel vertrouwd: geen vijandige tenants. Toegewijd aan een tenant: een tenant bezit de machine. Gedeelde containers: meerdere tenants delen een kernel, dus een container-uitbraak bereikt ze allemaal. VM-isolatie: elke workload draait in een eigen virtuele machine, de enige stand die bestand is tegen een vijandige root-tenant.",
+      "text": "Hoe goed deze host tenants van elkaar scheidt. Enkel vertrouwd: geen vijandige tenants. Toegewijd aan een tenant: een tenant bezit de machine. Gedeelde containers: meerdere tenants delen een kernel, dus een container-uitbraak bereikt ze allemaal. VM-isolatie: elke app draait in een eigen virtuele machine, de enige stand die bestand is tegen een vijandige root-tenant.",
       "scope": "help"
     }
   ],
@@ -6641,7 +6641,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Of hier nieuwe workloads geplaatst mogen worden. Geblokkeerd tot een preflight slaagt; toegelaten aanvaardt plaatsing; afgegrendeld houdt wat al draait maar neemt niets nieuws aan. Wijzig dit met de acties Controleren en toelaten en Afgrendelen, nooit via dit formulier.",
+      "text": "Of hier nieuwe apps geplaatst mogen worden. Geblokkeerd tot een preflight slaagt; toegelaten aanvaardt plaatsing; afgegrendeld houdt wat al draait maar neemt niets nieuws aan. Wijzig dit met de acties Controleren en toelaten en Afgrendelen, nooit via dit formulier.",
       "scope": "help"
     }
   ],
@@ -6767,7 +6767,7 @@
   },
   "trust_notice_body": [
     {
-      "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in werklasten injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
+      "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in apps injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
       "scope": "server"
     },
     {
@@ -6845,39 +6845,39 @@
     "scope": "violations"
   },
   "instance_busy": {
-    "text": "Instantie {$name} is bezig ({$status}); wacht tot de lopende snapshot of restore klaar is",
+    "text": "App {$name} is bezig ({$status}); wacht tot de lopende snapshot of restore klaar is",
     "scope": "violations"
   },
   "migrate_operator_only": {
-    "text": "Een instantie tussen hosts migreren is een beheerdersactie",
+    "text": "Een app tussen hosts migreren is een beheerdersactie",
     "scope": "violations"
   },
   "migrate_same_host": {
-    "text": "Instantie {$name} staat al op die host",
+    "text": "App {$name} staat al op die host",
     "scope": "violations"
   },
   "migrate_unsupported": {
-    "text": "Instantie {$name} draait op een driver zonder migratietransport (geen volledige export/import en geen volume-opname/-herstel); ze kan niet gemigreerd worden",
+    "text": "App {$name} draait op een driver zonder migratietransport (geen volledige export/import en geen volume-opname/-herstel); ze kan niet gemigreerd worden",
     "scope": "violations"
   },
   "migrate_game_paired": {
-    "text": "Instantie {$name} is gekoppeld aan een game-domeintoewijzing; het proxy/backend-paar gebruikt een host-lokaal koppelnetwerk, dus een kant alleen verplaatsen zou het breken. Verwijder eerst de toewijzing.",
+    "text": "App {$name} is gekoppeld aan een game-domeintoewijzing; het proxy/backend-paar gebruikt een host-lokaal koppelnetwerk, dus een kant alleen verplaatsen zou het breken. Verwijder eerst de toewijzing.",
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :integer}\none {{Instantie {$name} heeft 1 gekoppeld apparaat, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count :integer} gekoppelde apparaten, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
+    "text": ".match {$count :integer}\none {{App {$name} heeft 1 gekoppeld apparaat, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{App {$name} heeft {$count :integer} gekoppelde apparaten, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
     "scope": "violations"
   },
   "migrate_install_media_present": {
-    "text": "Instantie {$name} heeft installatiemedia {$media} in het station; een ISO staat alleen op zijn eigen host, dus koppel de installatiemedia los voor je migreert.",
+    "text": "App {$name} heeft installatiemedia {$media} in het station; een ISO staat alleen op zijn eigen host, dus koppel de installatiemedia los voor je migreert.",
     "scope": "violations"
   },
   "migrate_publication_present": {
-    "text": "Instantie {$name} publiceert een hostpoort; die claim kan niet mee verhuizen",
+    "text": "App {$name} publiceert een hostpoort; die claim kan niet mee verhuizen",
     "scope": "violations"
   },
   "migrate_destination_occupied": {
-    "text": "Host {$server} draait al een vreemde werklast onder de handle van {$name}; de naambotsing wordt geweigerd",
+    "text": "Host {$server} draait al een vreemde app onder de handle van {$name}; de naambotsing wordt geweigerd",
     "scope": "violations"
   },
   "instance_migrate_failed": {
@@ -6901,11 +6901,11 @@
     "scope": "violations"
   },
   "instance_workload_absent": {
-    "text": "Instantie {$name} heeft geen workload bij de daemon; deploy ze eerst",
+    "text": "App {$name} heeft geen app bij de daemon; deploy ze eerst",
     "scope": "violations"
   },
   "instance_unreachable": {
-    "text": "De daemon voor instantie {$name} is onbereikbaar",
+    "text": "De daemon voor app {$name} is onbereikbaar",
     "scope": "violations"
   },
   "instance_backup_target_none": {
@@ -6925,11 +6925,11 @@
     "scope": "instance"
   },
   "backup_target_missing": {
-    "text": "Er is geen back-updoel ingesteld voor deze instantie",
+    "text": "Er is geen back-updoel ingesteld voor deze app",
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Back-updoel {$name} bevat nog {$backups} en dient als doel voor {$instances}; verwijder eerst die back-ups en wijs de instanties elders toe",
+    "text": "Back-updoel {$name} bevat nog {$backups} en dient als doel voor {$instances}; verwijder eerst die back-ups en wijs de apps elders toe",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -6973,7 +6973,7 @@
     "scope": "violations"
   },
   "snapshot_no_volumes": {
-    "text": "Instantie {$name} declareert geen volumes; er valt niets te snapshotten",
+    "text": "App {$name} declareert geen volumes; er valt niets te snapshotten",
     "scope": "violations"
   },
   "snapshots_unsupported": {
@@ -7027,7 +7027,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende app kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -7039,7 +7039,7 @@
     "scope": "instance"
   },
   "backup_confirm": {
-    "text": "Nu een back-up exporteren? Een draaiende instantie wordt kort gestopt voor de kopie, en herstart voor de upload.",
+    "text": "Nu een back-up exporteren? Een draaiende app wordt kort gestopt voor de kopie, en herstart voor de upload.",
     "scope": "instance"
   },
   "backup_done": {
@@ -7087,7 +7087,7 @@
     "scope": "instance_snapshot"
   },
   "restore_confirm": {
-    "text": "Deze snapshot herstellen op {$name}? Alles wat sinds de opname geschreven is gaat verloren. Typ de naam van de instantie om te bevestigen.",
+    "text": "Deze snapshot herstellen op {$name}? Alles wat sinds de opname geschreven is gaat verloren. Typ de naam van de app om te bevestigen.",
     "scope": "instance_snapshot"
   },
   "data_disks": {
@@ -7103,19 +7103,19 @@
     "scope": "instance_backup"
   },
   "restore_new": {
-    "text": "Herstellen naar nieuwe instantie",
+    "text": "Herstellen naar nieuwe app",
     "scope": "instance_backup"
   },
   "restore_new_confirm": {
-    "text": "Deze back-up herstellen naar een NIEUWE instantie? De broninstantie blijft onaangeroerd.",
+    "text": "Deze back-up herstellen naar een NIEUWE app? De bronapp blijft onaangeroerd.",
     "scope": "instance_backup"
   },
   "restored_new": {
-    "text": "Back-up hersteld naar nieuwe instantie #{$id}",
+    "text": "Back-up hersteld naar nieuwe app #{$id}",
     "scope": "instance_backup"
   },
   "restored_new_partial": {
-    "text": "Back-up hersteld naar nieuwe instantie #{$id}, maar niet alles kwam terug: {$missing}",
+    "text": "Back-up hersteld naar nieuwe app #{$id}, maar niet alles kwam terug: {$missing}",
     "scope": "instance_backup"
   },
   "restored_new_ports_moved": {
@@ -7123,7 +7123,7 @@
     "scope": "instance_backup"
   },
   "restore_new_step": {
-    "text": "Terugzetten naar een nieuwe instantie",
+    "text": "Terugzetten naar een nieuwe app",
     "scope": "instance_backup"
   },
   "restore_in_place": {
@@ -7135,11 +7135,11 @@
     "scope": "instance_backup"
   },
   "restore_in_place_confirm_generic": {
-    "text": "Eerst wordt een nieuwe back-up van de instantie gemaakt; daarna worden haar volumes vervangen door die van deze back-up. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
+    "text": "Eerst wordt een nieuwe back-up van de app gemaakt; daarna worden haar volumes vervangen door die van deze back-up. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
     "scope": "instance_backup"
   },
   "restore_in_place_confirm": {
-    "text": "Eerst wordt een nieuwe back-up van de instantie gemaakt; daarna worden haar volumes vervangen door die van de back-up van {$at}. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
+    "text": "Eerst wordt een nieuwe back-up van de app gemaakt; daarna worden haar volumes vervangen door die van de back-up van {$at}. Haar instellingen, variabelen en configuratiebestanden blijven zoals ze zijn.",
     "scope": "instance_backup"
   },
   "restored_in_place": {
@@ -7335,7 +7335,7 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": ".match {$count :integer}\none {{Sjabloon {$name} wordt nog gebruikt door 1 instantie}}\n* {{Sjabloon {$name} wordt nog gebruikt door {$count :integer} instanties}}",
+    "text": ".match {$count :integer}\none {{Sjabloon {$name} wordt nog gebruikt door 1 app}}\n* {{Sjabloon {$name} wordt nog gebruikt door {$count :integer} apps}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
@@ -7343,7 +7343,7 @@
     "scope": "violations"
   },
   "stack_service_running": {
-    "text": "Service {$service} draait nog een workload; vernietig die eerst",
+    "text": "Service {$service} draait nog een app; vernietig die eerst",
     "scope": "violations"
   },
   "variable_key_taken": {
@@ -7355,24 +7355,24 @@
     "scope": "violations"
   },
   "install_incomplete": {
-    "text": "Instantie {$name} kan niet starten: de installatiestap is {$state}",
+    "text": "App {$name} kan niet starten: de installatiestap is {$state}",
     "scope": "violations"
   },
   "install_needs_template": {
-    "text": "Instantie {$name} heeft geen sjabloon, dus er is geen installatiestap om uit te voeren",
+    "text": "App {$name} heeft geen sjabloon, dus er is geen installatiestap om uit te voeren",
     "scope": "violations"
   },
   "install_requires_stopped": {
-    "text": "Stop instantie {$name} voordat je de installatiestap uitvoert",
+    "text": "Stop app {$name} voordat je de installatiestap uitvoert",
     "scope": "violations"
   },
   "install_unsupported": {
-    "text": "De runtime van instantie {$name} kan geen installatiestappen uitvoeren",
+    "text": "De runtime van app {$name} kan geen installatiestappen uitvoeren",
     "scope": "violations"
   },
   "install_failed": [
     {
-      "text": "De installatiestap voor instantie {$name} is mislukt; zie het provisioningtabblad voor de uitvoer",
+      "text": "De installatiestap voor app {$name} is mislukt; zie het provisioningtabblad voor de uitvoer",
       "scope": "violations"
     },
     {
@@ -7389,15 +7389,15 @@
     }
   ],
   "reinstall_no_step": {
-    "text": "Het sjabloon van instantie {$name} heeft geen installatiestap om opnieuw uit te voeren",
+    "text": "Het sjabloon van app {$name} heeft geen installatiestap om opnieuw uit te voeren",
     "scope": "violations"
   },
   "reinstall_clear_failed": {
-    "text": "Het wissen van de gegevens van instantie {$name} is mislukt: {$reason}",
+    "text": "Het wissen van de gegevens van app {$name} is mislukt: {$reason}",
     "scope": "violations"
   },
   "files_unsupported": {
-    "text": "De runtime van instantie {$name} kan geen configuratiebestanden plaatsen",
+    "text": "De runtime van app {$name} kan geen configuratiebestanden plaatsen",
     "scope": "violations"
   },
   "template_import_unparseable": {
@@ -7405,7 +7405,7 @@
     "scope": "violations"
   },
   "template_import_format": {
-    "text": "Dat document is geen hohenheim-instantiesjabloonexport",
+    "text": "Dat document is geen hohenheim-app-sjabloonexport",
     "scope": "violations"
   },
   "template_import_version": {
@@ -7441,11 +7441,11 @@
     "scope": "instance_template"
   },
   "approve_confirm": {
-    "text": "Dit sjabloon goedkeuren? Goedgekeurde sjablonen worden selecteerbaar als instantiebron.",
+    "text": "Dit sjabloon goedkeuren? Goedgekeurde sjablonen worden selecteerbaar als app-bron.",
     "scope": "instance_template"
   },
   "unapprove_confirm": {
-    "text": "Goedkeuring intrekken? Het sjabloon is niet langer selecteerbaar; bestaande instanties blijven draaien.",
+    "text": "Goedkeuring intrekken? Het sjabloon is niet langer selecteerbaar; bestaande apps blijven draaien.",
     "scope": "instance_template"
   },
   "approved_toast": {
@@ -7457,7 +7457,7 @@
     "scope": "instance_template"
   },
   "create_instance": {
-    "text": "Instantie aanmaken",
+    "text": "App aanmaken",
     "scope": "instance_template"
   },
   "contents": {
@@ -7500,7 +7500,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Shellscript dat eenmalig draait met de volumes van de instantie gekoppeld en haar variabelen als omgeving",
+      "text": "Shellscript dat eenmalig draait met de volumes van de app gekoppeld en haar variabelen als omgeving",
       "scope": "help"
     }
   ],
@@ -7520,7 +7520,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Consoleregel die aangeeft dat de workload klaar is; wordt alleen gelezen als Klaar wanneer op Consoleregel staat",
+      "text": "Consoleregel die aangeeft dat de app klaar is; wordt alleen gelezen als Klaar wanneer op Consoleregel staat",
       "scope": "help"
     }
   ],
@@ -7641,11 +7641,11 @@
     "scope": "hohenheim_field"
   },
   "template_description": {
-    "text": "Getoond aan wie dit sjabloon als instantiebron kiest",
+    "text": "Getoond aan wie dit sjabloon als app-bron kiest",
     "scope": "help"
   },
   "template_kind": {
-    "text": "Wat aangemaakte instanties draaien; de soort bepaalt de instellingenbasis en de runtimedriver",
+    "text": "Wat aangemaakte apps draaien; de soort bepaalt de instellingenbasis en de runtimedriver",
     "scope": "help"
   },
   "template_file_content": {
@@ -7763,7 +7763,7 @@
     "scope": "instance"
   },
   "reinstall_clear_confirm": {
-    "text": "{$name} herinstalleren? Het beleid van dit sjabloon WIST eerst de datavolumes. Typ de instantienaam om te bevestigen.",
+    "text": "{$name} herinstalleren? Het beleid van dit sjabloon WIST eerst de datavolumes. Typ de app-naam om te bevestigen.",
     "scope": "instance"
   },
   "required": [
@@ -7823,7 +7823,7 @@
     "scope": "instance_provisioning"
   },
   "create_from": {
-    "text": "Instantie aanmaken van",
+    "text": "App aanmaken van",
     "scope": "instance_from_template"
   },
   "step_details": {
@@ -7831,11 +7831,11 @@
     "scope": "instance_from_template"
   },
   "step_variables_lead": {
-    "text": "De waarden waarmee deze instantie start. Een geheim dat je leeg laat, behoudt de waarde van het sjabloon.",
+    "text": "De waarden waarmee deze app start. Een geheim dat je leeg laat, behoudt de waarde van het sjabloon.",
     "scope": "instance_from_template"
   },
   "instance_name": [
-    {"text": "Instantienaam", "scope": "instance_from_template"},
+    {"text": "App-naam", "scope": "instance_from_template"},
     {"text": "De naam van de nieuwe app.", "scope": "help"}
   ],
   "host": [
@@ -7861,12 +7861,12 @@
     "scope": "instance_from_template"
   },
   "install_note": {
-    "text": "Dit sjabloon voert na aanmaak een installatiestap uit; de instantie kan starten zodra die voltooid is.",
+    "text": "Dit sjabloon voert na aanmaak een installatiestap uit; de app kan starten zodra die voltooid is.",
     "scope": "instance_from_template"
   },
   "create": [
     {
-      "text": "Instantie aanmaken",
+      "text": "App aanmaken",
       "scope": "instance_from_template"
     },
     {
@@ -7939,15 +7939,15 @@
     }
   ],
   "console_unsupported": {
-    "text": "De runtime van instantie '{$name}' ondersteunt geen consolestreaming",
+    "text": "De runtime van app '{$name}' ondersteunt geen consolestreaming",
     "scope": "violations"
   },
   "console_not_running": {
-    "text": "Instantie '{$name}' draait niet, dus er is geen console om aan te koppelen",
+    "text": "App '{$name}' draait niet, dus er is geen console om aan te koppelen",
     "scope": "violations"
   },
   "console_open_failed": {
-    "text": "Kon de console van instantie '{$name}' niet openen: {$reason}",
+    "text": "Kon de console van app '{$name}' niet openen: {$reason}",
     "scope": "violations"
   },
   "console_send_failed": {
@@ -7960,7 +7960,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Wat er gebeurt als de workload stopt zonder waargenomen stop: herstarten rolt hem opnieuw uit (elke exitcode telt als crash), geen registreert enkel de stop.",
+      "text": "Wat er gebeurt als de app stopt zonder waargenomen stop: herstarten rolt hem opnieuw uit (elke exitcode telt als crash), geen registreert enkel de stop.",
       "scope": "help"
     }
   ],
@@ -8031,11 +8031,11 @@
       "scope": "instance_framebuffer"
     },
     {
-      "text": "Start de instantie om er een opdracht in uit te voeren.",
+      "text": "Start de app om er een opdracht in uit te voeren.",
       "scope": "instance_exec"
     },
     {
-      "text": "Start deze instantie om er een shell in te openen.",
+      "text": "Start deze app om er een shell in te openen.",
       "scope": "instance_shell"
     }
   ],
@@ -8158,7 +8158,7 @@
     {"text": "Woorden die bij de snapshot bewaard worden, om ze later te herkennen; leeg gelaten, geen.", "scope": "help"}
   ],
   "unknown_instance": {
-    "text": "Onbekende instantie",
+    "text": "Onbekende app",
     "scope": "violations"
   },
   "unknown_schedule": {
@@ -8174,7 +8174,7 @@
     "scope": "violations"
   },
   "schedule_not_allowed": {
-    "text": "Je mag de planningen van deze instantie niet beheren",
+    "text": "Je mag de planningen van deze app niet beheren",
     "scope": "violations"
   },
   "port_protocol": [
@@ -8183,7 +8183,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "TCP of UDP; een UDP-poort krijgt altijd vooraf een vaste hostpoort toegewezen voor de workload start",
+      "text": "TCP of UDP; een UDP-poort krijgt altijd vooraf een vaste hostpoort toegewezen voor de app start",
       "scope": "help"
     }
   ],
@@ -8248,7 +8248,7 @@
     "scope": "violations"
   },
   "port_conflict_unnamed": {
-    "text": "Hostpoort {$port} is al geclaimd door een andere workload",
+    "text": "Hostpoort {$port} is al geclaimd door een andere app",
     "scope": "violations"
   },
   "port_shape_without_port": {
@@ -8272,15 +8272,15 @@
     "scope": "port_exposure"
   },
   "instance_not_permitted": {
-    "text": "Je mag deze actie niet uitvoeren op deze instantie",
+    "text": "Je mag deze actie niet uitvoeren op deze app",
     "scope": "violations"
   },
   "no_placement_available": {
-    "text": "Geen enkele toegelaten host aanvaardt deze workload op dit moment",
+    "text": "Geen enkele toegelaten host aanvaardt deze app op dit moment",
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed :bytes} nodig en de leegste heeft {$free :bytes} vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
+    "text": "Elke host die deze app aanvaardt zit vol: er is {$needed :bytes} nodig en de leegste heeft {$free :bytes} vrij. Kies een kleinere geheugenlimiet, maak geheugen vrij door een app te stoppen of te verwijderen, of laat een extra host toe",
     "scope": "violations"
   },
   "host_help": {
@@ -8292,27 +8292,27 @@
     "scope": "violations"
   },
   "instance_create_not_permitted": {
-    "text": "Je mag geen instanties aanmaken",
+    "text": "Je mag geen apps aanmaken",
     "scope": "violations"
   },
   "backup_source_gone": {
-    "text": "De instantie waarvan deze back-up komt, bestaat niet meer; vraag een beheerder om hem terug te zetten.",
+    "text": "De app waarvan deze back-up komt, bestaat niet meer; vraag een beheerder om hem terug te zetten.",
     "scope": "violations"
   },
   "backup_restore_template_required": {
-    "text": "Alleen een beheerder kan deze back-up terugzetten: de instantie heeft geen goedgekeurd sjabloon.",
+    "text": "Alleen een beheerder kan deze back-up terugzetten: de app heeft geen goedgekeurd sjabloon.",
     "scope": "violations"
   },
   "backup_restore_host_refused": {
-    "text": "De host van deze instantie kan de teruggezette kopie nu niet aannemen.",
+    "text": "De host van deze app kan de teruggezette kopie nu niet aannemen.",
     "scope": "violations"
   },
   "backup_restore_in_place_unsupported": {
-    "text": "Deze back-up kan niet ter plaatse worden teruggezet; zet hem terug als nieuwe instantie.",
+    "text": "Deze back-up kan niet ter plaatse worden teruggezet; zet hem terug als nieuwe app.",
     "scope": "violations"
   },
   "backup_volumes_changed": {
-    "text": "De volumes van de instantie zijn veranderd sinds deze back-up; zet hem terug als nieuwe instantie.",
+    "text": "De volumes van de app zijn veranderd sinds deze back-up; zet hem terug als nieuwe app.",
     "scope": "violations"
   },
   "unknown_power_action": {
@@ -8328,7 +8328,7 @@
     "scope": "violations"
   },
   "hohenheim_instances_create": {
-    "text": "Instanties aanmaken op basis van goedgekeurde sjablonen",
+    "text": "Apps aanmaken op basis van goedgekeurde sjablonen",
     "scope": "permission"
   },
   "tls_passthrough": [
@@ -8575,7 +8575,7 @@
     "scope": "violations"
   },
   "files_path_refused": {
-    "text": "Dat pad ligt niet binnen deze instance",
+    "text": ".match {$count :integer}\n0 {{Dat pad ligt niet binnen de volumes van de app; die declareert er geen}}\n* {{Dat pad ligt niet binnen de volumes van de app, die gekoppeld zijn op {$volumes}}}",
     "scope": "violations"
   },
   "files_not_found": {
@@ -8599,7 +8599,7 @@
     "scope": "violations"
   },
   "files_no_volumes": {
-    "text": "Deze instance heeft geen volumes om te doorbladeren",
+    "text": "Deze app heeft geen volumes om te doorbladeren",
     "scope": "violations"
   },
   "files_workload_not_browsable": {
@@ -8619,7 +8619,11 @@
     "scope": "violations"
   },
   "files_failed": {
-    "text": "De bestandsbewerking is mislukt: {$reason}",
+    "text": "De bestandsbewerking is mislukt; het logboek van Hohenheim noemt de oorzaak",
+    "scope": "violations"
+  },
+  "git_connection_in_use": {
+    "text": "Git-verbinding {$name} wordt gebruikt door {$apps}; laat die apps eerst een andere verbinding gebruiken",
     "scope": "violations"
   },
   "release": [
@@ -8693,15 +8697,15 @@
     "scope": "violations"
   },
   "instance_kind_owner_managed": {
-    "text": "{$kind}-instances worden beheerd door het record dat ze bezit, niet hier aangemaakt",
+    "text": "{$kind}-app worden beheerd door het record dat ze bezit, niet hier aangemaakt",
     "scope": "violations"
   },
   "instance_generated_readonly": {
-    "text": "Deze instance is eigendom van {$source} en kan hier niet bewerkt of verwijderd worden",
+    "text": "Deze app is eigendom van {$source} en kan hier niet bewerkt of verwijderd worden",
     "scope": "violations"
   },
   "instance_generated_attribution": {
-    "text": "De eigendomsattributie van een instance wordt door het systeem gezet, nooit ingediend",
+    "text": "De eigendomsattributie van een app wordt door het systeem gezet, nooit ingediend",
     "scope": "violations"
   },
   "serving": {
@@ -8937,11 +8941,11 @@
     "scope": "project"
   },
   "owned_instances": {
-    "text": "Instanties",
+    "text": "Apps",
     "scope": "project"
   },
   "instance_quota": {
-    "text": "Instantiequota",
+    "text": "App-quota",
     "scope": "project"
   },
   "project_name": {
@@ -9032,7 +9036,7 @@
     "scope": "violations"
   },
   "variable_one_owner": {
-    "text": "Een variabele hoort bij precies één instantie of één omgeving",
+    "text": "Een variabele hoort bij precies één app of één omgeving",
     "scope": "violations"
   },
   "git_provider_unknown": {
@@ -9358,7 +9362,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "GEVAAR: de root-gebruiker van een geprivilegieerde container valt samen met root op de HOST. Een systeemcontainer is zelfs ongeprivilegieerd geen veiligheidsgrens tegen een vastberaden root-gebruiker; geprivilegieerde modus haalt het meeste van wat overblijft weg. Laat uit tenzij de werklast er echt niet zonder kan.",
+      "text": "GEVAAR: de root-gebruiker van een geprivilegieerde container valt samen met root op de HOST. Een systeemcontainer is zelfs ongeprivilegieerd geen veiligheidsgrens tegen een vastberaden root-gebruiker; geprivilegieerde modus haalt het meeste van wat overblijft weg. Laat uit tenzij de app er echt niet zonder kan.",
       "scope": "help"
     }
   ],
@@ -9368,7 +9372,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Script voor in-place app-updates, uitgevoerd in de draaiende instantie via de community-functiebibliotheek",
+      "text": "Script voor in-place app-updates, uitgevoerd in de draaiende app via de community-functiebibliotheek",
       "scope": "help"
     }
   ],
@@ -9381,20 +9385,20 @@
     "scope": "violations"
   },
   "app_update_no_script": {
-    "text": "Het sjabloon van instantie {$name} heeft geen updatescript",
+    "text": "Het sjabloon van app {$name} heeft geen updatescript",
     "scope": "violations"
   },
   "app_update_unsupported": {
-    "text": "De runtime van instantie {$name} kan geen in-place app-updates uitvoeren",
+    "text": "De runtime van app {$name} kan geen in-place app-updates uitvoeren",
     "scope": "violations"
   },
   "app_update_requires_running": {
-    "text": "Instantie {$name} moet draaien voor een in-place app-update",
+    "text": "App {$name} moet draaien voor een in-place app-update",
     "scope": "violations"
   },
   "app_update_failed": [
     {
-      "text": "De app-update van instantie {$name} is mislukt: {$reason}",
+      "text": "De app-update van app {$name} is mislukt: {$reason}",
       "scope": "violations"
     },
     {
@@ -9419,7 +9423,7 @@
     }
   ],
   "console_command_confirm": {
-    "text": "Deze regel naar de console van de instantie sturen?",
+    "text": "Deze regel naar de console van de app sturen?",
     "scope": "instance"
   },
   "console_command_sent_toast": {
@@ -9427,7 +9431,7 @@
     "scope": "instance"
   },
   "app_update_confirm": {
-    "text": "Het updatescript van het sjabloon in de draaiende instantie uitvoeren?",
+    "text": "Het updatescript van het sjabloon in de draaiende app uitvoeren?",
     "scope": "instance"
   },
   "app_updated_toast": {
@@ -9478,7 +9482,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Provisionering bij eerste opstart (#cloud-config). \\{\\{KEY\\}\\}-plaatshouders worden ingevuld met de variabelen van de instantie, geheime variabelen inbegrepen.",
+      "text": "Provisionering bij eerste opstart (#cloud-config). \\{\\{KEY\\}\\}-plaatshouders worden ingevuld met de variabelen van de app, geheime variabelen inbegrepen.",
       "scope": "help"
     }
   ],
@@ -9592,7 +9596,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Naam van een ISO-volume dat op de host van de instantie is gepubliceerd (zie het tabblad Installatiemedia van het hostrecord). Alleen installatiemedia-apparaten gebruiken dit.",
+      "text": "Naam van een ISO-volume dat op de host van de app is gepubliceerd (zie het tabblad Installatiemedia van het hostrecord). Alleen installatiemedia-apparaten gebruiken dit.",
       "scope": "help"
     }
   ],
@@ -9602,7 +9606,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Bandbreedteplafond voor elke NIC van deze werklast. Laat leeg voor onbeperkt.",
+      "text": "Bandbreedteplafond voor elke NIC van deze app. Laat leeg voor onbeperkt.",
       "scope": "help"
     }
   ],
@@ -9612,7 +9616,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Grootte van de eigen rootschijf van de workload. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de workload gestopt is.",
+      "text": "Grootte van de eigen rootschijf van de app. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de app gestopt is.",
       "scope": "help"
     }
   ],
@@ -9625,7 +9629,7 @@
     "scope": "violations"
   },
   "root_disk_unsupported": {
-    "text": "Instanties van soort {$kind} kunnen geen rootschijfgrootte hebben: hun runtime dwingt geen root-quotum per workload af",
+    "text": "Apps van soort {$kind} kunnen geen rootschijfgrootte hebben: hun runtime dwingt geen root-quotum per app af",
     "scope": "violations"
   },
   "disk_quota_reached": {
@@ -9645,11 +9649,11 @@
     "scope": "violations"
   },
   "device_exists": {
-    "text": "Apparaat '{$device}' bestaat al op deze instantie",
+    "text": "Apparaat '{$device}' bestaat al op deze app",
     "scope": "violations"
   },
   "device_not_found": {
-    "text": "Apparaat '{$device}' bestaat niet op deze instantie",
+    "text": "Apparaat '{$device}' bestaat niet op deze app",
     "scope": "violations"
   },
   "devices_unsupported": {
@@ -9769,11 +9773,11 @@
     { "text": "{$actor} bewaarde {$subject} als sjabloon", "scope": "hohenheim", "target": "happened" }
   ],
   "capture_template_hint": {
-    "text": "Publiceer de huidige staat van deze gestopte instantie als voorbereide image en maak er een niet-goedgekeurd sjabloon van",
+    "text": "Publiceer de huidige staat van deze gestopte app als voorbereide image en maak er een niet-goedgekeurd sjabloon van",
     "scope": "instance"
   },
   "capture_template_confirm": {
-    "text": "De huidige schijfstaat van deze instantie als voorbereide image op zijn host publiceren en er een sjabloon van maken? Een grote schijf publiceren kan enkele minuten duren.",
+    "text": "De huidige schijfstaat van deze app als voorbereide image op zijn host publiceren en er een sjabloon van maken? Een grote schijf publiceren kan enkele minuten duren.",
     "scope": "instance"
   },
   "tab": {
@@ -10063,15 +10067,15 @@
     "scope": "violations"
   },
   "template_capture_unsupported": {
-    "text": "Instantie '{$name}' kan op zijn runtime niet als sjabloon vastgelegd worden",
+    "text": "App '{$name}' kan op zijn runtime niet als sjabloon vastgelegd worden",
     "scope": "violations"
   },
   "template_capture_requires_stopped": {
-    "text": "Instantie '{$name}' moet gestopt zijn voor die als sjabloon vastgelegd kan worden",
+    "text": "App '{$name}' moet gestopt zijn voor die als sjabloon vastgelegd kan worden",
     "scope": "violations"
   },
   "template_capture_failed": {
-    "text": "Vastleggen van instantie '{$name}' is mislukt: {$reason}",
+    "text": "Vastleggen van app '{$name}' is mislukt: {$reason}",
     "scope": "violations"
   },
   "device_rename_unsupported": {
@@ -10079,7 +10083,7 @@
     "scope": "violations"
   },
   "device_retype_unsupported": {
-    "text": "Een apparaat kan niet van type veranderen of naar een andere instantie verhuizen",
+    "text": "Een apparaat kan niet van type veranderen of naar een andere app verhuizen",
     "scope": "violations"
   },
   "device_resize_not_a_disk": {
@@ -10095,7 +10099,7 @@
     { "text": "{$actor} ruimde restanten op op {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "reap_controller_objects_confirm": {
-    "text": "Verwijdert de isolatie-ACL, de extra-NIC-brug en de aanwezigheidsmarkering die ANDERE hohenheim-controllers op deze Incus-daemon achterlieten -- ook objecten waarvan de controller helemaal geen aanwezigheidsmarkering achterliet, die de geplande veegbeurt nooit aanraakt. Objecten van deze controller zijn nooit kandidaat, en de daemon zelf weigert een object te verwijderen waar nog een werklast naar verwijst.",
+    "text": "Verwijdert de isolatie-ACL, de extra-NIC-brug en de aanwezigheidsmarkering die ANDERE hohenheim-controllers op deze Incus-daemon achterlieten -- ook objecten waarvan de controller helemaal geen aanwezigheidsmarkering achterliet, die de geplande veegbeurt nooit aanraakt. Objecten van deze controller zijn nooit kandidaat, en de daemon zelf weigert een object te verwijderen waar nog een app naar verwijst.",
     "scope": "server"
   },
   "controller_objects_reaped": {
@@ -10275,11 +10279,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instantieback-up",
+      "text": "App-back-up",
       "scope": "instance_backup"
     },
     {
-      "text": "instantieback-up",
+      "text": "app-back-up",
       "scope": "instance_backup",
       "case": "sentence"
     },
@@ -10302,20 +10306,20 @@
       "case": "sentence"
     },
     {
-      "text": "Instantiebestand",
+      "text": "App-bestand",
       "scope": "instance_file"
     },
     {
-      "text": "instantiebestand",
+      "text": "app-bestand",
       "scope": "instance_file",
       "case": "sentence"
     },
     {
-      "text": "Instantiequotum",
+      "text": "App-quotum",
       "scope": "instance_quota"
     },
     {
-      "text": "instantiequotum",
+      "text": "app-quotum",
       "scope": "instance_quota",
       "case": "sentence"
     },
@@ -10329,11 +10333,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instantiesnapshot",
+      "text": "App-snapshot",
       "scope": "instance_snapshot"
     },
     {
-      "text": "instantiesnapshot",
+      "text": "app-snapshot",
       "scope": "instance_snapshot",
       "case": "sentence"
     },
@@ -10401,11 +10405,11 @@
       "case": "sentence"
     },
     {
-      "text": "Onverwachte workload",
+      "text": "Onverwachte container",
       "scope": "reconcile_finding"
     },
     {
-      "text": "onverwachte workload",
+      "text": "onverwachte container",
       "scope": "reconcile_finding",
       "case": "sentence"
     },
@@ -10707,7 +10711,7 @@
     "scope": "violations"
   },
   "exec_unsupported": {
-    "text": "De runtime van instantie {$name} kan geen opdrachten uitvoeren",
+    "text": "De runtime van app {$name} kan geen opdrachten uitvoeren",
     "scope": "violations"
   },
   "exec_failed": {
@@ -10720,11 +10724,11 @@
   },
   "workload": [
     {
-      "text": "Workload",
+      "text": "App",
       "scope": "instance_console"
     },
     {
-      "text": "Workload",
+      "text": "App",
       "scope": "app_overview"
     }
   ],
@@ -10734,7 +10738,7 @@
   },
   "instance_backup_never": [
     {
-      "text": "Instantie {$name} is nog nooit geback-upt",
+      "text": "App {$name} is nog nooit geback-upt",
       "scope": "attention_title"
     },
     {
@@ -10967,19 +10971,19 @@
     "scope": "violations"
   },
   "instance_required": {
-    "text": "Een koppeling vereist een instantie",
+    "text": "Een koppeling vereist een app",
     "scope": "violations"
   },
   "instance_missing": {
-    "text": "Die instantie bestaat niet",
+    "text": "Die app bestaat niet",
     "scope": "violations"
   },
   "instance_kind_no_injection": {
-    "text": "Instantiesoort '{$kind}' heeft geen linknetwerken, dus er kan geen databank aan gekoppeld worden",
+    "text": "App-soort '{$kind}' heeft geen linknetwerken, dus er kan geen databank aan gekoppeld worden",
     "scope": "violations"
   },
   "tenant_instance_not_managed": {
-    "text": "Je hebt geen config-rechten op die instantie",
+    "text": "Je hebt geen config-rechten op die app",
     "scope": "violations"
   },
   "max_memory_mb": [
@@ -10988,7 +10992,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Limiet op het totale werklastgeheugen van deze eigenaar, gameservers inbegrepen; 0 weigert elke werklast, leeg valt terug op het globale standaardmaximum",
+      "text": "Limiet op het totale geheugen van alle apps van deze eigenaar, gameservers inbegrepen; 0 weigert elke app, leeg valt terug op het globale standaardmaximum",
       "scope": "help"
     }
   ],
@@ -11056,7 +11060,7 @@
       "scope": "instance_volume"
     },
     {
-      "text": "'{$database}' loskoppelen van '{$instance}'? De workload kan de databank niet meer bereiken zodra je bevestigt, en verliest zijn {$prefix}_*-verbindingsvariabelen bij de volgende deploy.",
+      "text": "'{$database}' loskoppelen van '{$instance}'? De app kan de databank niet meer bereiken zodra je bevestigt, en verliest zijn {$prefix}_*-verbindingsvariabelen bij de volgende deploy.",
       "scope": "instance_database"
     }
   ],
@@ -11261,7 +11265,7 @@
     "scope": "server_overview"
   },
   "workloads": {
-    "text": "Workloads",
+    "text": "Apps",
     "scope": "server_overview"
   },
   "workloads_hint": {
@@ -11304,7 +11308,7 @@
     "scope": "server_overview"
   },
   "tier_instance": {
-    "text": "Instantie",
+    "text": "App",
     "scope": "server_overview"
   },
   "tier_stack": {
@@ -11326,7 +11330,7 @@
     }
   ],
   "migrate_hint": {
-    "text": "Verplaats deze workload naar een andere host (koud: hij wordt gestopt voor de kopie)",
+    "text": "Verplaats deze app naar een andere host (koud: hij wordt gestopt voor de kopie)",
     "scope": "instance"
   },
   "migrated_toast": {
@@ -11334,7 +11338,7 @@
     "scope": "instance"
   },
   "cold_note": {
-    "text": "Een koude verplaatsing: de workload wordt gestopt, volledig geëxporteerd, op de bestemming geïmporteerd en opnieuw gestart als hij draaide.",
+    "text": "Een koude verplaatsing: de app wordt gestopt, volledig geëxporteerd, op de bestemming geïmporteerd en opnieuw gestart als hij draaide.",
     "scope": "instance_migrate"
   },
   "current_host": {
@@ -11370,7 +11374,7 @@
     "scope": "instance_migrate"
   },
   "no_destinations_hint": {
-    "text": "Schrijf een tweede host met dezelfde runtime in en laat hem toe om deze workload te verplaatsen.",
+    "text": "Schrijf een tweede host met dezelfde runtime in en laat hem toe om deze app te verplaatsen.",
     "scope": "instance_migrate"
   },
   "migrate_target_required": {
@@ -11402,7 +11406,7 @@
     "scope": "onboarding_checklist"
   },
   "checklist_host_detail": {
-    "text": "Een host is de machine waarop je workloads draaien.",
+    "text": "Een host is de machine waarop je apps draaien.",
     "scope": "onboarding_checklist"
   },
   "checklist_host_enrolled": {
@@ -11434,11 +11438,11 @@
     "scope": "onboarding_checklist"
   },
   "deploy_blocked_delegated": {
-    "text": "De host neemt op dit moment geen nieuwe workloads aan. Je beheerder moet dit oplossen.",
+    "text": "De host neemt op dit moment geen nieuwe apps aan. Je beheerder moet dit oplossen.",
     "scope": "instance_overview"
   },
   "deploy_blocked_operator": {
-    "text": "De host neemt op dit moment geen nieuwe workloads aan. Open de host in het beheerpaneel en gebruik Controleren en toelaten.",
+    "text": "De host neemt op dit moment geen nieuwe apps aan. Open de host in het beheerpaneel en gebruik Controleren en toelaten.",
     "scope": "instance_overview"
   },
   "used": {
@@ -11604,7 +11608,7 @@
     "scope": "server"
   },
   "acknowledge_body": {
-    "text": "Gedeelde containers op {$name} betekent dat vijandige tenants op ÉÉN kernel draaien: een containerontsnapping bereikt elke andere workload op de machine en de host zelf. Enkel VM-isolatie is bestand tegen een vijandige root-tenant. Typ de hostnaam om dit risico te aanvaarden; het wordt op jouw naam vastgelegd en moet opnieuw aanvaard worden als de houding of deze waarschuwing verandert.",
+    "text": "Gedeelde containers op {$name} betekent dat vijandige tenants op ÉÉN kernel draaien: een containerontsnapping bereikt elke andere app op de machine en de host zelf. Enkel VM-isolatie is bestand tegen een vijandige root-tenant. Typ de hostnaam om dit risico te aanvaarden; het wordt op jouw naam vastgelegd en moet opnieuw aanvaard worden als de houding of deze waarschuwing verandert.",
     "scope": "server"
   },
   "posture_acknowledged": {
@@ -11732,7 +11736,7 @@
       "scope": "released_claim"
     },
     {
-      "text": "Groepen die sites, instanties en databanken bezitten, en wie ze mag beheren.",
+      "text": "Groepen die sites, apps en databanken bezitten, en wie ze mag beheren.",
       "scope": "project"
     },
     {
@@ -11772,15 +11776,15 @@
       "scope": "settings"
     },
     {
-      "text": "Waar back-ups van instanties en databanken terechtkomen: lokale schijf of externe opslag.",
+      "text": "Waar back-ups van apps en databanken terechtkomen: lokale schijf of externe opslag.",
       "scope": "backup_target"
     },
     {
-      "text": "Hoeveel instanties, en hoeveel van elke resource, een eigenaar mag gebruiken.",
+      "text": "Hoeveel apps, en hoeveel van elke resource, een eigenaar mag gebruiken.",
       "scope": "instance_quota"
     },
     {
-      "text": "Publieke gamehostnamen, elk gerouteerd naar de instantie die ervoor antwoordt.",
+      "text": "Publieke gamehostnamen, elk gerouteerd naar de app die ervoor antwoordt.",
       "scope": "game_domain"
     },
     {
@@ -11812,7 +11816,7 @@
       "scope": "environment_variable"
     },
     {
-      "text": "Andere nameservers waarmee deze server zones uitwisselt, en de Hohenheim-instanties waarnaar hij ook recordwijzigingen doorstuurt.",
+      "text": "Andere nameservers waarmee deze server zones uitwisselt, en de Hohenheim-servers waarnaar hij ook recordwijzigingen doorstuurt.",
       "scope": "dns_peer"
     },
     {
@@ -11856,7 +11860,7 @@
       "scope": "access_rule"
     },
     {
-      "text": "Hostmappen die in een instantie gemonteerd worden",
+      "text": "Hostmappen die in een app gemonteerd worden",
       "scope": "instance_volume"
     },
     {
@@ -12313,7 +12317,7 @@
     "scope": "uid_mode"
   },
   "upstream_instance_required": {
-    "text": "Deze upstream serveert een instantie, dus die moet gekozen worden",
+    "text": "Deze upstream serveert een app, dus die moet gekozen worden",
     "scope": "violations"
   },
   "readiness_line_needs_console_line": {
@@ -12321,7 +12325,7 @@
     "scope": "violations"
   },
   "upstream_instance_unexpected": {
-    "text": "Alleen een instantie-upstream mag een instantie noemen; wis die of wijzig de upstream",
+    "text": "Alleen een app-upstream mag een app noemen; wis die of wijzig de upstream",
     "scope": "violations"
   },
   "host_no_volume_quota": {
@@ -12369,15 +12373,15 @@
     "scope": "violations"
   },
   "template_volume_kind_unsupported": {
-    "text": "Deze sjabloon declareert het volume '{$name}', maar instanties van deze soort monteren geen volumes. Verwijder het volume, of geef de sjabloon een soort die ze wel monteert.",
+    "text": "Deze sjabloon declareert het volume '{$name}', maar apps van deze soort monteren geen volumes. Verwijder het volume, of geef de sjabloon een soort die ze wel monteert.",
     "scope": "violations"
   },
   "template_volume_container_path_required": {
-    "text": "Sjabloonvolume '{$name}' declareert geen containerpad, dus de instantie zou het nooit monteren. Geef het pad op waar het in de workload moet verschijnen.",
+    "text": "Sjabloonvolume '{$name}' declareert geen containerpad, dus de app zou het nooit monteren. Geef het pad op waar het in de app moet verschijnen.",
     "scope": "violations"
   },
   "volume_container_path_conflict": {
-    "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de workload zou twee mappen op een pad krijgen. Geef er één een ander containerpad.",
+    "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de app zou twee mappen op een pad krijgen. Geef er één een ander containerpad.",
     "scope": "violations"
   },
   "application_not_found": {
@@ -12449,7 +12453,7 @@
     "scope": "violations"
   },
   "site_exposes_no_instance": {
-    "text": "Deze site stelt geen instance beschikbaar, dus er is geen release om naar terug te rollen",
+    "text": "Deze site stelt geen app beschikbaar, dus er is geen release om naar terug te rollen",
     "scope": "violations"
   },
   "build_context": [
@@ -12478,7 +12482,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Welke console het hoofdproces van de workload krijgt. Een interactieve terminal geeft het een echte pseudo-terminal: toetsaanslagen, echo en herschalen op het consoletabblad, wat een schermvullende TUI zoals Janeway van Alchemy nodig heeft.",
+      "text": "Welke console het hoofdproces van de app krijgt. Een interactieve terminal geeft het een echte pseudo-terminal: toetsaanslagen, echo en herschalen op het consoletabblad, wat een schermvullende TUI zoals Janeway van Alchemy nodig heeft.",
       "scope": "help"
     }
   ],
@@ -12498,7 +12502,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Wordt gestart als hoofdproces van de workload; een instantie kan dit overschrijven.",
+      "text": "Wordt gestart als hoofdproces van de app; een app kan dit overschrijven.",
       "scope": "help"
     }
   ],
@@ -12586,7 +12590,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Hoe wordt bepaald dat de workload verkeer aankan.",
+      "text": "Hoe wordt bepaald dat de app verkeer aankan.",
       "scope": "help"
     }
   ],
@@ -12618,7 +12622,7 @@
       "scope": "instance"
     },
     {
-      "text": "Een terminal in de workload, als de eigen gebruiker van de workload.",
+      "text": "Een terminal in de app, als de eigen gebruiker van de app.",
       "scope": "console_mode"
     },
     {
@@ -12638,7 +12642,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Hoelang een nette stop mag duren voordat de workload wordt afgebroken.",
+      "text": "Hoelang een nette stop mag duren voordat de app wordt afgebroken.",
       "scope": "help"
     }
   ],
@@ -12648,7 +12652,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Hoe de workload gevraagd wordt te stoppen voordat het respijt verstrijkt.",
+      "text": "Hoe de app gevraagd wordt te stoppen voordat het respijt verstrijkt.",
       "scope": "help"
     }
   ],
@@ -12658,7 +12662,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Hoe de procesidentiteit van de workload wordt afgeleid; vandaag bestaan alleen toegewezen host-uids.",
+      "text": "Hoe de procesidentiteit van de app wordt afgeleid; vandaag bestaan alleen toegewezen host-uids.",
       "scope": "help"
     }
   ],
@@ -12699,7 +12703,7 @@
     "scope": "help"
   },
   "site_instance": {
-    "text": "De instantie waarvan deze hostnaam de poort serveert.",
+    "text": "De app waarvan deze hostnaam de poort serveert.",
     "scope": "help"
   },
   "template_runtime_image": {
@@ -12719,7 +12723,7 @@
     "scope": "violations"
   },
   "push_does_not_start_stopped_workload": {
-    "text": "'{$name}' draait niet, dus de gepushte commit is niet uitgerold: een git push start nooit een workload die iemand heeft gestopt. Rol hem zelf uit om deze commit op te pikken.",
+    "text": "'{$name}' draait niet, dus de gepushte commit is niet uitgerold: een git push start nooit een app die iemand heeft gestopt. Rol hem zelf uit om deze commit op te pikken.",
     "scope": "violations"
   },
   "workspace_exec_failed": {
@@ -12731,7 +12735,7 @@
     "scope": "violations"
   },
   "runtime_image_required": {
-    "text": "Kies een runtime-image: die bepaalt waarin deze workload draait",
+    "text": "Kies een runtime-image: die bepaalt waarin deze app draait",
     "scope": "violations"
   },
   "runtime_image_unknown": {
@@ -12755,7 +12759,7 @@
     "scope": "violations"
   },
   "volume_own_failed": {
-    "text": "Volume '{$path}' kon niet aan de uid van de workload gegeven worden op de {$backend}-backend: {$reason}",
+    "text": "Volume '{$path}' kon niet aan de uid van de app gegeven worden op de {$backend}-backend: {$reason}",
     "scope": "violations"
   },
   "readiness_timed_out": {
@@ -12824,7 +12828,7 @@
     "scope": "instance"
   },
   "expose_hint": {
-    "text": "Maak een site die deze instantie op een hostnaam beschikbaar maakt",
+    "text": "Maak een site die deze app op een hostnaam beschikbaar maakt",
     "scope": "instance"
   },
   "record_title": {
@@ -12890,7 +12894,7 @@
     "scope": "help"
   },
   "volume_unknown": {
-    "text": "Er bestaat geen volume met de naam \"{$name}\" op deze instantie",
+    "text": "Er bestaat geen volume met de naam \"{$name}\" op deze app",
     "scope": "violations"
   },
   "volume_rename_unsupported": {
@@ -12898,15 +12902,15 @@
     "scope": "violations"
   },
   "volume_rehome_unsupported": {
-    "text": "Een volume kan niet naar een andere instantie verhuizen",
+    "text": "Een volume kan niet naar een andere app verhuizen",
     "scope": "violations"
   },
   "volume_home_protected": {
-    "text": "Het home-volume van een workspace kan niet apart verwijderd worden; gebruik \"Verwijderen met data\" op de instantie",
+    "text": "Het home-volume van een workspace kan niet apart verwijderd worden; gebruik \"Verwijderen met data\" op de app",
     "scope": "violations"
   },
   "volume_kind_unsupported": {
-    "text": "Instanties van deze soort monteren geen volumes",
+    "text": "Apps van deze soort monteren geen volumes",
     "scope": "violations"
   },
   "volume_quota_invalid": {
@@ -12947,7 +12951,7 @@
   },
   "create_title": [
     {
-      "text": "Nieuwe instantie",
+      "text": "Nieuwe app",
       "scope": "instance"
     },
     {
@@ -13028,7 +13032,7 @@
     "scope": "form_section"
   },
   "audit_hint": {
-    "text": "Het openen en sluiten van een shell wordt vastgelegd in het activiteitenlogboek van deze instantie.",
+    "text": "Het openen en sluiten van een shell wordt vastgelegd in het activiteitenlogboek van deze app.",
     "scope": "instance_shell"
   },
   "limits_hint": {
@@ -13045,7 +13049,7 @@
   },
   "runs_as_root": [
     {
-      "text": "Deze workload draait als root",
+      "text": "Deze app draait als root",
       "scope": "instance_shell"
     },
     {
@@ -13056,13 +13060,13 @@
   ],
   "runs_as_root_description": [
     {
-      "text": "Een shell wordt alleen aangeboden waar de workload als eigen niet-root gebruiker draait, omdat root in de container ook root op de host is.",
+      "text": "Een shell wordt alleen aangeboden waar de app als eigen niet-root gebruiker draait, omdat root in de container ook root op de host is.",
       "scope": "instance_shell"
     },
     {
       "scope": "instance_shell",
       "workload": "virtual_machine",
-      "text": "Een shell opent hier alleen als de eigen gebruiker van een workload zonder rootrechten, en de agent van deze virtuele machine voert opdrachten uit als root. Meld je aan op de machine zelf via het scherm."
+      "text": "Een shell opent hier alleen als de eigen gebruiker van een app zonder rootrechten, en de agent van deze virtuele machine voert opdrachten uit als root. Meld je aan op de machine zelf via het scherm."
     }
   ],
   "shell_failed": {
@@ -13070,7 +13074,7 @@
     "scope": "violations"
   },
   "shell_missing_in_image": {
-    "text": "De image van instantie {$name} bevat geen van deze shells: {$shell}",
+    "text": "De image van app {$name} bevat geen van deze shells: {$shell}",
     "scope": "violations"
   },
   "app_not_serving": {
@@ -13078,19 +13082,19 @@
     "scope": "violations"
   },
   "shell_not_running": {
-    "text": "Instantie {$name} draait niet, dus er is geen shell om te openen",
+    "text": "App {$name} draait niet, dus er is geen shell om te openen",
     "scope": "violations"
   },
   "shell_requires_nonroot_workload": {
-    "text": "Instantie {$name} draait als root in haar container; hohenheim weigert daar een shell te openen",
+    "text": "App {$name} draait als root in haar container; hohenheim weigert daar een shell te openen",
     "scope": "violations"
   },
   "shell_too_many_sessions": {
-    "text": "Instantie {$name} heeft al het maximum van {$max :integer} shell-sessies open",
+    "text": "App {$name} heeft al het maximum van {$max :integer} shell-sessies open",
     "scope": "violations"
   },
   "shell_unsupported_runtime": {
-    "text": "De runtime van instantie {$name} heeft nog geen interactieve shell",
+    "text": "De runtime van app {$name} heeft nog geen interactieve shell",
     "scope": "violations"
   },
   "unsupported_runtime": {
@@ -13098,11 +13102,11 @@
     "scope": "instance_shell"
   },
   "unsupported_runtime_description": {
-    "text": "Deze workload draait op een runtime waarop hohenheim nog geen interactieve terminal kan openen.",
+    "text": "Deze app draait op een runtime waarop hohenheim nog geen interactieve terminal kan openen.",
     "scope": "instance_shell"
   },
   "no_enabled_runtime_image": {
-    "text": "Er is geen enkele runtime-image ingeschakeld. Schakel onder Runtime-images eerst de image in waarin deze instantie moet draaien.",
+    "text": "Er is geen enkele runtime-image ingeschakeld. Schakel onder Runtime-images eerst de image in waarin deze app moet draaien.",
     "scope": "instance"
   },
   "no_incus_runtime_image": {
@@ -13110,7 +13114,7 @@
     "scope": "instance"
   },
   "no_exposable_instance": {
-    "text": "Geen enkele instantie publiceert een poort die een site kan bedienen. Maak onder Instanties eerst een applicatie-, workspace- of containerinstantie aan.",
+    "text": "Geen enkele app publiceert een poort die een site kan bedienen. Maak onder Apps eerst een app aan.",
     "scope": "site"
   },
   "no_repositories": {
@@ -13122,7 +13126,7 @@
     "scope": "git_provider"
   },
   "delete_confirm_stranding": {
-    "text": "Dit verwijdert de workload van zijn host maar behoudt de gegevens. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD zodat ze niet langer antwoorden: {$sites}. Hun hostnamen, certificaten en toegangsregels blijven behouden -- richt ze op een andere workload en schakel ze opnieuw in.",
+    "text": "Dit verwijdert de app van zijn host maar behoudt de gegevens. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD zodat ze niet langer antwoorden: {$sites}. Hun hostnamen, certificaten en toegangsregels blijven behouden -- richt ze op een andere app en schakel ze opnieuw in.",
     "scope": "instance"
   },
   "delete_with_data_confirm_stranding": [
@@ -13220,7 +13224,7 @@
       "scope": "dns_peer"
     },
     {
-      "text": "De variabele {$key} uit omgeving {$environment} verwijderen? Workloads in die omgeving krijgen ze bij hun volgende deploy niet meer; wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
+      "text": "De variabele {$key} uit omgeving {$environment} verwijderen? Apps in die omgeving krijgen ze bij hun volgende deploy niet meer; wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
       "scope": "environment_variable"
     }
   ],
@@ -13242,15 +13246,15 @@
       "scope": "server"
     },
     {
-      "text": "{$count} actieve instanties zijn van dit sjabloon gemaakt. Vernietig ze eerst, anders verwijzen hun records naar een sjabloon dat niet meer bestaat.",
+      "text": "{$count} actieve apps zijn van dit sjabloon gemaakt. Vernietig ze eerst, anders verwijzen hun records naar een sjabloon dat niet meer bestaat.",
       "scope": "instance_template"
     },
     {
-      "text": "Databank '{$name}' is gekoppeld aan {$workloads}. Koppel ze eerst los op het tabblad Databanken van elke instantie.",
+      "text": "Databank '{$name}' is gekoppeld aan {$workloads}. Koppel ze eerst los op het tabblad Databanken van elke app.",
       "scope": "database"
     },
     {
-      "text": "{$instances} actieve instanties en {$templates} sjablonen draaien nog in deze image. Wijs ze eerst een andere toe, anders mislukt hun volgende deploy op een image die niet meer bestaat.",
+      "text": "{$instances} actieve apps en {$templates} sjablonen draaien nog in deze image. Wijs ze eerst een andere toe, anders mislukt hun volgende deploy op een image die niet meer bestaat.",
       "scope": "runtime_image"
     },
     {
@@ -13271,7 +13275,7 @@
     "scope": "auth_provider"
   },
   "delete_migrating": {
-    "text": "De workload {$instance} wordt op dit moment naar deze host gemigreerd. Laat de migratie eerst afronden.",
+    "text": "De app {$instance} wordt op dit moment naar deze host gemigreerd. Laat de migratie eerst afronden.",
     "scope": "server"
   },
   "delete_confirm_dependents": {
@@ -13355,7 +13359,7 @@
     "scope": "certificate"
   },
   "instance_crash_loop": {
-    "text": "Instantie in crashlus",
+    "text": "App in crashlus",
     "scope": "notification_event"
   },
   "stack_health": {
@@ -13367,7 +13371,7 @@
     "scope": "notification_event"
   },
   "workload_isolation": {
-    "text": "Workload-isolatie",
+    "text": "App-isolatie",
     "scope": "notification_event"
   },
   "login_succeeded": [
@@ -13386,7 +13390,7 @@
     }
   ],
   "runtime_image_not_applicable": {
-    "text": "Dit soort instantie draait niet in een runtime-image; laat dit leeg.",
+    "text": "Dit soort app draait niet in een runtime-image; laat dit leeg.",
     "scope": "instance"
   },
   "notification_events": {
@@ -13926,7 +13930,7 @@
     }
   ],
   "template_database_engine": {
-    "text": "Engine van de beheerde databank die voor elke instantie uit dit sjabloon wordt aangemaakt.",
+    "text": "Engine van de beheerde databank die voor elke app uit dit sjabloon wordt aangemaakt.",
     "scope": "help"
   },
   "template_database_prefix": {
@@ -13938,15 +13942,15 @@
     "scope": "help"
   },
   "no_databases_description": {
-    "text": "Dit sjabloon declareert geen beheerde databanken; een instantie uit dit sjabloon moet er zelf een koppelen.",
+    "text": "Dit sjabloon declareert geen beheerde databanken; een app uit dit sjabloon moet er zelf een koppelen.",
     "scope": "template_contents"
   },
   "no_volumes_description": {
-    "text": "Dit sjabloon declareert nog geen volumes; voeg er een toe voor elke map die een instantie moet bewaren wanneer haar container vervangen wordt.",
+    "text": "Dit sjabloon declareert nog geen volumes; voeg er een toe voor elke map die een app moet bewaren wanneer haar container vervangen wordt.",
     "scope": "template_contents"
   },
   "template_volume_name_taken": {
-    "text": "Dit sjabloon declareert al een volume met de naam '{$name}'. Twee declaraties van een naam worden een enkel volume op elke instantie, dus een ervan zou verloren gaan.",
+    "text": "Dit sjabloon declareert al een volume met de naam '{$name}'. Twee declaraties van een naam worden een enkel volume op elke app, dus een ervan zou verloren gaan.",
     "scope": "violations"
   },
   "template_required": {
@@ -14070,7 +14074,7 @@
     "scope": "dns_zone"
   },
   "import_replica": {
-    "text": "De records zijn eigendom van de primary waarvan deze zone overdraagt en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op de instantie die primary is voor deze zone.",
+    "text": "De records zijn eigendom van de primary waarvan deze zone overdraagt en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op de server die primary is voor deze zone.",
     "scope": "dns_zone"
   },
   "import_replica_named": {
@@ -14763,7 +14767,7 @@
       "target": "history_fact"
     },
     {
-      "text": ".match {$crash_loop :string}\ntrue {{Gecorrigeerd van {$from} naar {$to}: de workload viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}; crashlus, automatische herstarts opgeschort}}\n* {{Gecorrigeerd van {$from} naar {$to}: de workload viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}}}",
+      "text": ".match {$crash_loop :string}\ntrue {{Gecorrigeerd van {$from} naar {$to}: de app viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}; crashlus, automatische herstarts opgeschort}}\n* {{Gecorrigeerd van {$from} naar {$to}: de app viel weg zonder waargenomen stop, en zijn host meldt hem {$daemon_state}}}",
       "scope": "hohenheim",
       "target": "history_fact",
       "has_from": "true"
@@ -14797,7 +14801,7 @@
       "has_moved": "true"
     },
     {
-      "text": "{$actor} verhuisde de workloads weg van {$subject}",
+      "text": "{$actor} verhuisde de apps weg van {$subject}",
       "scope": "hohenheim",
       "target": "happened"
     }
@@ -14845,7 +14849,7 @@
       "target": "history_fact"
     },
     {
-      "text": ".match {$closed_by :string}\nclient {{{$shell} als uid {$run_user} gesloten: de gebruiker verliet de terminal}}\nexited {{{$shell} als uid {$run_user} gesloten: de shell stopte}}\nidle {{{$shell} als uid {$run_user} gesloten: te lang geen toetsaanslag}}\nrevoked {{{$shell} als uid {$run_user} gesloten: de toegang werd ingetrokken}}\nworkload_ended {{{$shell} als uid {$run_user} gesloten: de workload stopte}}\n* {{{$shell} als uid {$run_user} gesloten}}",
+      "text": ".match {$closed_by :string}\nclient {{{$shell} als uid {$run_user} gesloten: de gebruiker verliet de terminal}}\nexited {{{$shell} als uid {$run_user} gesloten: de shell stopte}}\nidle {{{$shell} als uid {$run_user} gesloten: te lang geen toetsaanslag}}\nrevoked {{{$shell} als uid {$run_user} gesloten: de toegang werd ingetrokken}}\nworkload_ended {{{$shell} als uid {$run_user} gesloten: de app stopte}}\n* {{{$shell} als uid {$run_user} gesloten}}",
       "scope": "hohenheim",
       "target": "history_fact",
       "has_shell": "true"
@@ -14931,7 +14935,7 @@
     "scope": "help"
   },
   "database_engine_root_user": {
-    "text": "De superuser waarmee de controller deze engine bestuurt. Een workload ziet die nooit.",
+    "text": "De superuser waarmee de controller deze engine bestuurt. Een app ziet die nooit.",
     "scope": "help"
   },
   "database_engine_root_password": {
@@ -15031,7 +15035,7 @@
     "scope": "database"
   },
   "move_shared_confirm": {
-    "text": "'{$name}' naar de gedeelde engine van deze host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
+    "text": "'{$name}' naar de gedeelde engine van deze host verplaatsen? Elke gekoppelde app wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
     "scope": "database"
   },
   "move_shared_ok": {
@@ -15063,7 +15067,7 @@
     "scope": "server_overview"
   },
   "move_shared_confirm_generic": {
-    "text": "Deze database naar de gedeelde engine van de host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
+    "text": "Deze database naar de gedeelde engine van de host verplaatsen? Elke gekoppelde app wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
     "scope": "database"
   },
   "deploy_done": {
@@ -15103,7 +15107,7 @@
     "scope": "git_provider"
   },
   "instance_operation_in_progress": {
-    "text": "Er loopt nog een andere bewerking op instantie {$name}; probeer het opnieuw wanneer die klaar is",
+    "text": "Er loopt nog een andere bewerking op app {$name}; probeer het opnieuw wanneer die klaar is",
     "scope": "violations"
   },
   "repository_url_local_refused": {
@@ -15143,7 +15147,7 @@
     "scope": "alert"
   },
   "database_move_leftover_body": {
-    "text": "Database {$name} staat nu op gedeelde engine {$engine}, maar de oude eigen engine kon niet worden verwijderd en houdt nog een poort, geheugen en een kopie van de data vast: {$reason}. Verwijder de oude engine-instantie met de hand.",
+    "text": "Database {$name} staat nu op gedeelde engine {$engine}, maar de oude eigen engine kon niet worden verwijderd en houdt nog een poort, geheugen en een kopie van de data vast: {$reason}. Verwijder de oude engine-container met de hand.",
     "scope": "alert"
   },
   "control_plane_backup_failed_subject": {
@@ -15155,15 +15159,15 @@
     "scope": "alert"
   },
   "instance_backup_failed_subject": {
-    "text": "Back-up van instantie mislukt: {$name}",
+    "text": "Back-up van app mislukt: {$name}",
     "scope": "alert"
   },
   "instance_backup_failed_body": {
-    "text": "De geplande back-up van instantie {$name} is mislukt: {$reason}",
+    "text": "De geplande back-up van app {$name} is mislukt: {$reason}",
     "scope": "alert"
   },
   "instance_backup_unknown_body": {
-    "text": "De geplande back-up van instantie {$name} werd onderbroken voor er een resultaat was vastgelegd; het is niet bekend of de back-up voltooid is, controleer dus het back-updoel",
+    "text": "De geplande back-up van app {$name} werd onderbroken voor er een resultaat was vastgelegd; het is niet bekend of de back-up voltooid is, controleer dus het back-updoel",
     "scope": "alert"
   },
   "deploy_failed_subject": {
@@ -15924,7 +15928,7 @@
     "scope": "server_overview"
   },
   "fix_resources": {
-    "text": "Geef de Incus-host meer CPU of geheugen, of plaats workloads op een andere host.",
+    "text": "Geef de Incus-host meer CPU of geheugen, of plaats apps op een andere host.",
     "scope": "server_overview"
   },
   "fix_trusted": {
@@ -15952,7 +15956,7 @@
     "scope": "server_overview"
   },
   "fix_kernel_isolation_lane": {
-    "text": "Deze host geeft containers geen eigen, geisoleerde kernelbaan. Schakel die in, of draai workloads van klanten in virtuele machines.",
+    "text": "Deze host geeft containers geen eigen, geisoleerde kernelbaan. Schakel die in, of draai apps van klanten in virtuele machines.",
     "scope": "server_overview"
   },
   "fix_container_userns": {
@@ -16116,7 +16120,7 @@
     "scope": "app_health"
   },
   "workload_not_running": {
-    "text": "De workload {$name} draait niet.",
+    "text": "De app {$name} draait niet.",
     "scope": "app_health"
   },
   "path_open": [
@@ -16259,7 +16263,7 @@
     "scope": "app_list"
   },
   "type_workload": {
-    "text": "Workload",
+    "text": "App",
     "scope": "app_list"
   },
   "type_website": {
@@ -16348,11 +16352,11 @@
       "scope": "instance_volume"
     },
     {
-      "text": "Elke gekoppelde databank injecteert haar verbindingsvariabelen in de workload bij de deploy. Loskoppelen trekt de bereikbaarheid meteen in; de variabelen verdwijnen bij de volgende deploy.",
+      "text": "Elke gekoppelde databank injecteert haar verbindingsvariabelen in de app bij de deploy. Loskoppelen trekt de bereikbaarheid meteen in; de variabelen verdwijnen bij de volgende deploy.",
       "scope": "instance_database"
     },
     {
-      "text": "Gegevensschijven en extra netwerkinterfaces die aan deze instantie gekoppeld zijn, bovenop de rootschijf en het netwerk die ze altijd heeft.",
+      "text": "Gegevensschijven en extra netwerkinterfaces die aan deze app gekoppeld zijn, bovenop de rootschijf en het netwerk die ze altijd heeft.",
       "scope": "instance_device"
     }
   ],
@@ -17037,7 +17041,7 @@
     }
   ],
   "credentials_not_live_detail": {
-    "text": "Het wachtwoord van database {$database} is gewijzigd nadat deze workload gestart werd, dus hij verbindt nog met het oude, dat de database weigert. Herstart hem om hem het nieuwe wachtwoord te geven.",
+    "text": "Het wachtwoord van database {$database} is gewijzigd nadat deze app gestart werd, dus hij verbindt nog met het oude, dat de database weigert. Herstart hem om hem het nieuwe wachtwoord te geven.",
     "scope": "app_health"
   },
   "mark_kept": {
@@ -17761,7 +17765,7 @@
       "scope": "tenant_usage"
     },
     {
-      "text": ".match {$count :integer}\none {{1 instantie}}\n* {{{$count :integer} instanties}}",
+      "text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}",
       "scope": "count"
     }
   ],
@@ -17855,11 +17859,11 @@
     "scope": "host_check"
   },
   "finding_probe_instance_failed": {
-    "text": "De testinstance (image {$image} van {$server}) kon niet draaien ({$error}), dus wat deze host met een app doet, is onbekend",
+    "text": "De testcontainer (image {$image} van {$server}) kon niet draaien ({$error}), dus wat deze host met een app doet, is onbekend",
     "scope": "host_check"
   },
   "finding_probe_unanswered": {
-    "text": "De testinstance antwoordde nooit, dus dit is onbekend",
+    "text": "De testcontainer antwoordde nooit, dus dit is onbekend",
     "scope": "host_check"
   },
   "finding_userns_unreadable": {
@@ -18261,11 +18265,11 @@
     "scope": "isolation_finding"
   },
   "not_repaired": {
-    "text": ".match {$count :integer}\none {{De isolatie van 1 workload op {$subject} kon niet worden gecontroleerd of hersteld}}\n* {{De isolatie van {$count :integer} workloads op {$subject} kon niet worden gecontroleerd of hersteld}}",
+    "text": ".match {$count :integer}\none {{De isolatie van 1 app op {$subject} kon niet worden gecontroleerd of hersteld}}\n* {{De isolatie van {$count :integer} apps op {$subject} kon niet worden gecontroleerd of hersteld}}",
     "scope": "isolation_finding"
   },
   "cut_off": {
-    "text": ".match {$count :integer}\none {{1 workload op {$subject} is gestopt of afgesneden omdat de isolatie niet kon worden hersteld}}\n* {{{$count :integer} workloads op {$subject} zijn gestopt of afgesneden omdat hun isolatie niet kon worden hersteld}}",
+    "text": ".match {$count :integer}\none {{1 app op {$subject} is gestopt of afgesneden omdat de isolatie niet kon worden hersteld}}\n* {{{$count :integer} apps op {$subject} zijn gestopt of afgesneden omdat hun isolatie niet kon worden hersteld}}",
     "scope": "isolation_finding"
   },
   "enforcement_off": {
@@ -19170,11 +19174,11 @@
     "scope": "hohenheim_field"
   },
   "candidate_instance": {
-    "text": "Nieuwe instantie",
+    "text": "Nieuwe app",
     "scope": "hohenheim_field"
   },
   "retired_instance": {
-    "text": "Vervangen instantie",
+    "text": "Vervangen app",
     "scope": "hohenheim_field"
   },
   "step_log": {
@@ -19430,7 +19434,7 @@
   ],
   "instance_kind_change_refused": {
     "scope": "violations",
-    "text": "Deze workload kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."
+    "text": "Deze app kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."
   },
   "step_ports": {"scope": "put_online", "text": "Poorten"},
   "runs_on_card": {"scope": "put_online", "text": "Draait op"},
@@ -19480,8 +19484,8 @@
   "game_address_set": {"scope": "instance_overview", "text": "Geef het een speladres"},
   "game_address_change": {"scope": "instance_overview", "text": "Speladres wijzigen"},
   "owner_quota": {"scope": "instance_overview", "text": "Quotum van de eigenaar"},
-  "quota_workloads": {"scope": "instance_overview", "text": "{$used :integer} van {$limit :integer} werklasten"},
-  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used :integer} werklasten, geen limiet"},
+  "quota_workloads": {"scope": "instance_overview", "text": "{$used :integer} van {$limit :integer} apps"},
+  "quota_workloads_open": {"scope": "instance_overview", "text": "{$used :integer} apps, geen limiet"},
   "quota_memory": {"scope": "instance_overview", "text": "{$used :bytes} van {$limit :bytes} geheugen"},
   "quota_memory_open": {"scope": "instance_overview", "text": "{$used :bytes} geheugen, geen limiet"},
   "connect_hint": {"scope": "instance_overview", "text": "Spelers en clients verbinden met deze poorten van zijn host."},
@@ -19645,7 +19649,7 @@
     "scope": "instance_database"
   },
   "detach_confirm_any": {
-    "text": "Deze databank loskoppelen? De workload kan haar niet meer bereiken zodra je bevestigt. De databank zelf en haar gegevens blijven behouden.",
+    "text": "Deze databank loskoppelen? De app kan haar niet meer bereiken zodra je bevestigt. De databank zelf en haar gegevens blijven behouden.",
     "scope": "instance_database"
   },
   "detached_toast": {
@@ -19808,7 +19812,7 @@
   "build_hook_revoked_toast": {"text": "De build hook is ingetrokken.", "scope": "build_hook"},
   "hook": {"text": "Build hook", "scope": "deploy_trigger"},
   "trigger_named": {"text": "{$trigger} {$actor}", "scope": "deployments"},
-  "hook_does_not_start_stopped_workload": {"text": "'{$name}' draait niet, dus de build hook heeft hem niet uitgerold: een build hook start nooit een workload die iemand heeft gestopt. Start hem eerst zelf.", "scope": "violations"},
+  "hook_does_not_start_stopped_workload": {"text": "'{$name}' draait niet, dus de build hook heeft hem niet uitgerold: een build hook start nooit een app die iemand heeft gestopt. Start hem eerst zelf.", "scope": "violations"},
   "build_hook_name_invalid": {"text": "Geef de build hook een naam van hoogstens {$max} tekens.", "scope": "violations"},
   "build_hook_needs_application": {"text": "Alleen een app die releases uitrolt kan een build hook krijgen.", "scope": "violations"},
   "build_hook_already_revoked": {"text": "Deze build hook is ingetrokken; maak in de plaats een nieuwe aan.", "scope": "violations"},
@@ -20029,12 +20033,12 @@
   "start_instance_description": {"text": "Start de gestopte app zoals een deploy dat doet, zonder de instellingen of de gegevens te wijzigen. Geweigerd zolang een database van de app niet klaar is.", "scope": "hohenheim"},
   "stop_instance_description": {"text": "Stopt de app. Gegevens, volumes en poorten blijven bewaard, zodat starten hem terugbrengt; een app die al gestopt is, blijft zoals hij is.", "scope": "hohenheim"},
   "restart_instance_description": {"text": "Stopt de app en start hem opnieuw met de huidige instellingen; de gegevens blijven bewaard. Een app waarvan Hohenheim de releases beheert, start opnieuw als een nieuwe deploy.", "scope": "hohenheim"},
-  "deploy_instance_description": {"text": "Zet de nieuwste versie van de app online, op de achtergrond. Een app of statische site wordt gebouwd, het pre-deploy-commando draait, de nieuwe versie start naast de oude, wordt over HTTP gecontroleerd en neemt over; een mislukte stap laat de oude versie draaien. Een werkruimte bouwt vanuit haar repository en herstart; andere soorten starten hun workload opnieuw.", "scope": "hohenheim"},
+  "deploy_instance_description": {"text": "Zet de nieuwste versie van de app online, op de achtergrond. Een app of statische site wordt gebouwd, het pre-deploy-commando draait, de nieuwe versie start naast de oude, wordt over HTTP gecontroleerd en neemt over; een mislukte stap laat de oude versie draaien. Een werkruimte bouwt vanuit haar repository en herstart; andere soorten starten hun app opnieuw.", "scope": "hohenheim"},
   "backup_instance_description": {"text": "Maakt nu een back-up van de volumes van de app naar haar back-updoel. De app wordt gestopt terwijl de gegevens gekopieerd worden en weer gestart voor het uploaden.", "scope": "hohenheim"},
   "connect_push_webhook_description": {"text": "Registreert de push-webhook bij de git-provider waar de bron van de app vandaan komt, of werkt hem bij, zodat een push een deploy start. Bewaart een webhookgeheim als de app er nog geen heeft.", "scope": "hohenheim"},
   "snapshot_instance_description": {"text": "Neemt een snapshot van de volumes van de app op haar host, die herstellen later kan terugzetten. De app wordt gestopt tijdens het kopiëren en daarna weer gestart.", "scope": "hohenheim"},
   "install_instance_description": {"text": "Voert de installatiestap van het sjabloon van de app uit, of hervat of herhaalt die, zolang die installatie niet klaar is.", "scope": "hohenheim"},
-  "reinstall_instance_description": {"text": "Voert de installatiestap van het sjabloon opnieuw uit zoals het gegevensbeleid van het sjabloon zegt: bewaren voert hem uit over de bestaande volumes; wissen verwijdert eerst de workload en de volumes, wat niet ongedaan kan worden.", "scope": "hohenheim"},
+  "reinstall_instance_description": {"text": "Voert de installatiestap van het sjabloon opnieuw uit zoals het gegevensbeleid van het sjabloon zegt: bewaren voert hem uit over de bestaande volumes; wissen verwijdert eerst de app en de volumes, wat niet ongedaan kan worden.", "scope": "hohenheim"},
   "destroy_instance_data_description": {"text": "Verwijdert de app en wist de volumes en hun gegevens van de host. Dit kan niet ongedaan worden; verwijderen bewaart de gegevens.", "scope": "hohenheim"},
   "delete_instance_description": {"text": "Verwijdert de app: de container verdwijnt en de poorten komen vrij. De volumes en hun gegevens blijven op de host, waar de reconciler ze meldt; verwijderen met gegevens wist die ook.", "scope": "hohenheim"},
   "attach_install_media_description": {"text": "Plaatst een ISO van de host van de machine in het station van de machine, om een installatieprogramma van op te starten. Alleen voor een virtuele machine zonder ISO.", "scope": "hohenheim"},
@@ -20139,7 +20143,7 @@
   "delete_server_description": {"text": "Verwijdert de host uit dit paneel en trekt het vertrouwen van dit paneel erop in; de host en wat erop draait blijven onaangeroerd. Geweigerd zolang records hem nog gebruiken.", "scope": "hohenheim"},
   "delete_runtime_image_description": {"text": "Verwijdert deze eigen runtime-image uit de lijst. Geweigerd zolang een app ze gebruikt.", "scope": "hohenheim"},
   "delete_project_description": {"text": "Verwijdert het project en de rollen die het bezit. Geweigerd zolang het project nog records bezit.", "scope": "hohenheim"},
-  "remove_orphan_description": {"text": "Verwijdert de achtergebleven workload die de reconciler op de host vond. Volumes worden zo nooit verwijderd.", "scope": "hohenheim"},
+  "remove_orphan_description": {"text": "Verwijdert de achtergebleven container die de reconciler op de host vond. Volumes worden zo nooit verwijderd.", "scope": "hohenheim"},
   "refresh_stack_description": {"text": "Leest de live toestand van de stack op de host en antwoordt met de status; er verandert niets.", "scope": "hohenheim"},
   "test_git_provider_description": {"text": "Test de git-verbinding door de repositories op te sommen, en antwoordt hoeveel of waarom het mislukte; er verandert niets.", "scope": "hohenheim"},
   "test_backup_target_description": {"text": "Controleert of het back-updoel bereikbaar is, en antwoordt waarom niet als het niet kan; er verandert niets.", "scope": "hohenheim"},
@@ -20147,7 +20151,7 @@
   "cordon_server_description": {"text": "Zet de host apart: er wordt geen nieuw werk op geplaatst, terwijl wat er al draait blijft draaien.", "scope": "hohenheim"},
   "drain_server_description": {"text": "Verhuist elke app van deze host en zet hem eerst apart als hij nog nieuwe apps aanneemt: elke app wordt gestopt, naar een andere host verplaatst en daar gestart. Een app die niet kan verhuizen, wordt genoemd en blijft ongemoeid.", "scope": "hohenheim"},
   "uncordon_server_description": {"text": "Beëindigt het apart zetten van de host, zodat er weer nieuw werk op geplaatst mag worden.", "scope": "hohenheim"},
-  "reap_controller_objects_description": {"text": "Verwijdert de netwerkobjecten die andere Hohenheim-controllers op deze Incus-host achterlieten. Objecten van deze controller, en objecten die een workload nog gebruikt, worden nooit verwijderd.", "scope": "hohenheim"},
+  "reap_controller_objects_description": {"text": "Verwijdert de netwerkobjecten die andere Hohenheim-controllers op deze Incus-host achterlieten. Objecten van deze controller, en objecten die een app nog gebruikt, worden nooit verwijderd.", "scope": "hohenheim"},
   "template_project": {"text": "Het project waartoe de nieuwe app behoort.", "scope": "help"},
   "certificate_name": {"text": "De naam waaronder het certificaat getoond wordt; leeg gelaten, de eerste hostnaam.", "scope": "help"},
   "site_name": {"text": "De naam van de site, zoals het paneel ze toont.", "scope": "help"},
@@ -20295,6 +20299,7 @@
   "create_git_connection_description": {"text": "Voegt een git-verbinding toe via het eigen aanmaken van het paneel.", "scope": "hohenheim"},
   "change_git_connection": {"text": "Een git-verbinding wijzigen", "scope": "hohenheim"},
   "change_git_connection_description": {"text": "Wijzigt de verstuurde instellingen van een git-verbinding via het eigen opslaan van het paneel; elke andere instelling blijft zoals ze is.", "scope": "hohenheim"},
+  "delete_git_connection_description": {"text": "Verwijdert een git-verbinding, zoals Verwijderen in het paneel; geweigerd met naam zolang een app eruit bouwt.", "scope": "hohenheim"},
   "git_connection_thing": {"text": "een git-verbinding", "scope": "hohenheim"},
   "mcp_tool_git_connection_set": {"text": "Maakt een git-verbinding aan waaruit apps bouwen, of wijzigt ze: GitHub, GitLab of Gitea via hun API met een token (of, voor GitHub, een App-sleutel), of elke git-dienst via SSH met een privésleutel. Gegevens om aan te melden gaan er eenmaal in, versleuteld opgeslagen, en komen er nooit meer uit. Een SSH-verbinding aangemaakt zonder ssh_private_key krijgt een nieuw sleutelpaar: het antwoord en read tonen haar public_key, om aan de repository toe te voegen als alleen-lezen deploy key; regenerate_key maakt een nieuw paar. Een wijziging stuurt alleen wat wijzigt. Alleen een beheerder deelt een verbinding met iedereen. Antwoordt de code (G2).", "scope": "hohenheim"},
   "mcp_code_git_connection": {"text": "De code van de verbinding; laat weg om er een aan te maken.", "scope": "hohenheim"},

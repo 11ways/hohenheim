@@ -251,7 +251,7 @@ class SftpJourneyTest {
             assertThat(refused.getStatus()).as("step 4: a read grant cannot upload")
                 .isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
             assertThat(refused.getMessage()).as("step 4: in the file manager's own words")
-                .contains("You are not allowed to perform this action on this instance");
+                .contains("You are not allowed to perform this action on this app");
             assertThat(sftpRefusal(catchThrowable(() -> read.sftp.mkdir("/data/by-reader"))).getStatus())
                 .as("step 4: nor create a directory").isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
             assertThat(inContainer(docker, handle, "ls /data"))
@@ -317,7 +317,7 @@ class SftpJourneyTest {
             // 8. No path leaves the volume: a symlinked component, an outside path and a climb are all refused.
             SftpException throughLink = sftpRefusal(catchThrowable(() -> readText(write.sftp, "/data/etcdir/passwd")));
             assertThat(throughLink.getMessage()).as("step 8: a symlinked component is refused")
-                .contains("That path is not inside this instance");
+                .contains("That path is not inside the app's volumes, which are mounted at");
             assertThat(catchThrowable(() -> readText(write.sftp, "/etc/passwd")))
                 .as("step 8: a path outside every volume is refused").isNotNull();
             assertThat(catchThrowable(() -> readText(write.sftp, "/data/../etc/passwd")))
