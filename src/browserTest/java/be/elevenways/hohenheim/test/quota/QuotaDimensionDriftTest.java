@@ -15,9 +15,13 @@ import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.history.HistoryDeclarations;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
@@ -36,7 +40,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Every quota dimension is declared once in {@link ChargedModel}, installed, reconciled by
- * being declared, and booked through the one lifecycle that unwinds a refused write.
+ * being declared, booked through the one lifecycle that unwinds a refused write, and stamped
+ * out of its model's history.
  *
  * AIDEV-NOTE: the guard against a dimension implemented BESIDE the mechanism -- a class that
  * reserves or releases ledger buckets on its own -- is the quota-ledger-writers local rule in
@@ -112,6 +117,32 @@ class QuotaDimensionDriftTest {
                     .as("step 4: and corrected to zero").isZero();
             }
         });
+    }
+
+    @Test
+    void noChargeStampReachesItsModelsHistory() {
+        for (ChargedModel charged : ChargedModel.values()) {
+            Model model = charged.model();
+            HistoryBehaviour declaration = HistoryDeclarations.of(model);
+            assertThat(declaration).as("step 1: %s declares its history", charged).isNotNull();
+            Set<String> captured = new HashSet<>();
+            for (Field<?, ?> field : declaration.capturedFields(model)) {
+                captured.add(field.getName());
+            }
+            for (ChargedDimension dimension : charged.dimensions()) {
+                // 1. The fields a dimension stamps are the ones its own stamp writes, so a new stamp needs no list.
+                Row stamped = new Row();
+                dimension.stamp(stamped, new ChargedDimension.Charge(dimension.prefix() + "probe", 1, false));
+                List<String> stamps = model.requireSchema().getFields().keySet().stream().filter(stamped::has)
+                    .toList();
+                assertThat(stamps).as("step 1: dimension %s stamps a field of %s", dimension.key(), charged)
+                    .isNotEmpty();
+
+                // 2. A stamp is the system's bookkeeping: no change of the record, created or later, captures it.
+                assertThat(captured).as("step 2: %s's history captures no stamp of %s", charged, dimension.key())
+                    .doesNotContainAnyElementsOf(stamps);
+            }
+        }
     }
 
     @Test

@@ -163,5 +163,7 @@ public class PreviewDeploymentModel extends Model {
     @Override public Schema getSchema() { return SCHEMA; }
     @Override public List<Field<?, ?>> getChangeKeyFields() { return List.of(APPLICATION_ID); }
 
-    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
+    /** Changes named, no values; the quota stamp is the charge hook's bookkeeping, never a change anyone made. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .except(QUOTA_BUCKET));
 }

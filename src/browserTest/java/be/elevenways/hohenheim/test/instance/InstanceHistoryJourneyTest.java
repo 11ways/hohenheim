@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.RecordedChanges;
@@ -93,6 +94,11 @@ class InstanceHistoryJourneyTest {
                 .isEqualTo(PINNED);
             assertThat(created).as("step 1: an unrecorded stamp stays out of the create")
                 .doesNotContainKeys(InstanceModel.CLAIM_FENCE.getName(), InstanceModel.STARTED_AT.getName());
+            assertThat((String) instances.findById(id).get(InstanceModel.QUOTA_BUCKET))
+                .as("step 1: the create booked the owner's slot").startsWith(OwnerBudget.INSTANCES.prefix());
+            assertThat(created).as("step 1: a booking is the system's, never a change the history lists")
+                .doesNotContainKeys(InstanceModel.QUOTA_BUCKET.getName(), InstanceModel.CAPACITY_MB.getName(),
+                    InstanceModel.QUOTA_MEMORY_MB.getName(), InstanceModel.ROOT_DISK_BUCKET.getName());
 
             // 2. A configuration save that changes the image clears the pin inside that same recorded change.
             Row configured = instances.findById(id);

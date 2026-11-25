@@ -112,6 +112,11 @@ public enum ChargedModel {
         return this.dimensions;
     }
 
+    /** @return the charged model */
+    public @NonNull Model model() {
+        return Models.get(this.modelClass);
+    }
+
     /** @return whether {@link #install} registered this model's hooks */
     public boolean isInstalled() {
         return this.installed;
@@ -327,10 +332,6 @@ public enum ChargedModel {
     }
 
     // -- helpers --------------------------------------------------------------
-
-    private @NonNull Model model() {
-        return Models.get(this.modelClass);
-    }
 
     /** The stored row a write targets, trashed included, or null on a create. */
     private @Nullable Row storedOf(@NonNull Row row) {

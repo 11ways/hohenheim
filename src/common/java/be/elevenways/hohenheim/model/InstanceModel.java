@@ -1018,16 +1018,27 @@ public class InstanceModel extends Model {
         DISK_OBSERVED_AT);
 
     /**
+     * The charges the quota and capacity hooks stamp to release exactly what they booked: the system's bookkeeping,
+     * never a change anyone made to the app.
+     */
+    private static final List<Field<?, ?>> RESERVATION_STAMPS = List.of(QUOTA_BUCKET, CAPACITY_MB, QUOTA_MEMORY_MB,
+        ROOT_DISK_BUCKET);
+
+    /**
      * Values are captured, an app's configuration changes included, and {@link #RECORDED_OPERATION_STATE} with them;
      * a cause or correction is recorded as its own fact.
      *
      * AIDEV-NOTE: the disk readings are excepted. Recorded, the 10-minute sweep wrote "System changed alpvm" into
      * every measured app's history six times an hour (3,900 rows on one VM by 2026-11-14), burying what people did.
+     * The reservation stamps are excepted too: recorded, every create read "Quota bucket set to ..." and "Capacity
+     * mb set to 32 MB" as if a person had set them. QuotaDimensionDriftTest proves every field a ChargedModel
+     * dimension's stamp() writes stays out of its model's history; the migration handoff's fenced re-stamp of
+     * CAPACITY_MB (InstanceOperationGuard) writes a field this list already leaves out.
      */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().values()
         // The other operation-owned stamps were never recorded: the old code wrote them only through
         // InstanceOperationGuard's hook-free fenced updateAll.
-        .except(Stream.concat(DISK_OBSERVATIONS.stream(),
+        .except(Stream.concat(Stream.concat(DISK_OBSERVATIONS.stream(), RESERVATION_STAMPS.stream()),
                 OPERATION_OWNED.stream().filter(field -> !RECORDED_OPERATION_STATE.contains(field)))
             .toArray(Field<?, ?>[]::new))
         .foldingSessionsWithin(SESSION_QUIET));

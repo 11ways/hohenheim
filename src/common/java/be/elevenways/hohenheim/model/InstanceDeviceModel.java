@@ -180,7 +180,7 @@ public class InstanceDeviceModel extends Model {
     @Override public String getTableName() { return "instance_devices"; }
     @Override public Schema getSchema() { return SCHEMA; }
 
-    /** A device's change is filed on its instance. */
+    /** A device's change is filed on its instance; the quota stamp is the charge hook's bookkeeping, never recorded. */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
-        .filedOn(InstanceModel.class, row -> row.get(INSTANCE_ID)));
+        .except(QUOTA_BUCKET).filedOn(InstanceModel.class, row -> row.get(INSTANCE_ID)));
 }

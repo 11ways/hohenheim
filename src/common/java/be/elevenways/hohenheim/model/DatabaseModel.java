@@ -446,5 +446,7 @@ public class DatabaseModel extends Model {
     @Override
     public Schema getSchema() { return SCHEMA; }
 
-    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes());
+    /** Changes named, no values; the quota stamp is the charge hook's bookkeeping, never a change anyone made. */
+    public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.optional().changes()
+        .except(QUOTA_BUCKET));
 }

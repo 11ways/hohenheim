@@ -416,8 +416,9 @@ public class SiteModel extends Model {
 
     /**
      * Revisionable, so always recorded, values captured; the Spamservice reporting key is a credential its own
-     * bookkeeping statement mints (SecurityReportEnv), so no change captures it.
+     * bookkeeping statement mints (SecurityReportEnv) and the quota stamp is the charge hook's bookkeeping, so no
+     * change captures either.
      */
     public static final HistoryBehaviour HISTORY = SCHEMA.addBehaviour(HistoryBehaviour.required().values()
-        .except(SECURITY_REPORT_TOKEN));
+        .except(SECURITY_REPORT_TOKEN, QUOTA_BUCKET));
 }
