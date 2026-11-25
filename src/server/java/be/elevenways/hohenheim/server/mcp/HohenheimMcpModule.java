@@ -14,10 +14,12 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.ai.server.mcp.host.McpDescribeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpRecordTools;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSet;
 import be.elevenways.zenit.auth.server.mcp.AuthMcp;
+import be.elevenways.zenit.auth.server.mcp.AuthTools;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -152,9 +154,12 @@ public final class HohenheimMcpModule implements ZenitModule {
         tools = set.build();
         HohenheimTools hand = HohenheimTools.build();
         declared = hand;
+        AuthTools people = AuthTools.build();
+        List<McpHostTool> described = new ArrayList<>(hand.tools());
+        described.addAll(people.tools());
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
-            .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand,
-                McpDescribeTool.over(SERVER_NAME, hand.tools()))
+            .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand, people,
+                McpDescribeTool.over(SERVER_NAME, described))
             .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
                 code(DnsZoneModel.MODEL_ID, 7))
             .saysVersionOnce()

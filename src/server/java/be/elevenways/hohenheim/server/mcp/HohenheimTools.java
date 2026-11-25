@@ -44,6 +44,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolCollection;
+import be.elevenways.zenit.auth.server.mcp.AuthTools;
+import be.elevenways.zenit.common.operation.Operation;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -93,7 +95,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(InstanceLogOperations.READ_BUILD_LOG, HohenheimMcpAnswers::log)
             .route(InstanceLogOperations.READ_DEPLOY_LOG, HohenheimMcpAnswers::log)
             .build();
-        McpHostTool delete = McpCodeTool.builder("delete", words("mcp_tool_delete"), destroys())
+        McpCodeTool.Builder deletes = McpCodeTool.builder("delete", words("mcp_tool_delete"), destroys())
             .code(words("mcp_code_delete"))
             .flag(WITH_DATA, words("mcp_with_data"))
             .flag(FORCE, words("mcp_force"))
@@ -130,8 +132,10 @@ public final class HohenheimTools extends McpToolCollection {
             .route(ReleasedClaimParts.LIFT, null)
             .route(GitConnectionWrites.DELETE, null)
             .route(CertificateParts.DELETE, null)
-            .route(InstanceTemplateParts.DELETE, null)
-            .build();
+            .route(InstanceTemplateParts.DELETE, null);
+        // zenit-auth's people and roles are deleted here too, by their own operations.
+        for (Operation<?, ?, ?> operation : AuthTools.DELETES) deletes.route(operation, null);
+        McpHostTool delete = deletes.build();
         McpHostTool deploy = McpCodeTool.builder("deploy", words("mcp_tool_deploy"), writes())
             .code(words("mcp_code_deploy"))
             .route(InstanceOperations.DEPLOY, null)

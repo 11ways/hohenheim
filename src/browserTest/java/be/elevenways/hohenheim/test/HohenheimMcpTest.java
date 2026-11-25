@@ -2115,7 +2115,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .first().get(SiteModel.ENABLED));
     }
 
-    private static int site(String name) {
+    static int site(String name) {
         Row row = Models.get(SiteModel.class).createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, name);

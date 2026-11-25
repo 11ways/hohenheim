@@ -27,7 +27,6 @@ import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
-import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.operation.PatchBase;
@@ -472,22 +471,7 @@ public final class KindSettingsWrites {
         try {
             return write.get();
         } catch (Violations refused) {
-            Violations said = new Violations();
-            for (Violation violation : refused.all()) {
-                String path = violation.path();
-                String fieldName = violation.fieldName();
-                for (Map.Entry<String, String> name : named.entrySet()) {
-                    String stored = name.getKey();
-                    if (path.equals(stored) || path.startsWith(stored + ".")) {
-                        path = name.getValue() + path.substring(stored.length());
-                        fieldName = name.getValue();
-                        break;
-                    }
-                }
-                said.add(new Violation(fieldName, path, violation.value(), violation.message(),
-                    violation.subject()));
-            }
-            throw said;
+            throw refused.renamed(named);
         }
     }
 
