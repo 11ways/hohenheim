@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,6 +30,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import be.elevenways.zenit.common.task.TaskStart;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import be.elevenways.zenit.server.task.TaskService;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -145,6 +149,28 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     @Override
     public void executor(TaskContext ctx) {
         report(sweep()).publish(ctx);
+    }
+
+    /**
+     * Starts the sweep now, off its schedule, because the ports an app may reach its own host on changed.
+     *
+     * AIDEV-NOTE: a paused type (an operator's pause, a test lane's hold) starts nothing, as its schedule would not.
+     * A sweep already under way may have checked some networks before the change committed; the next five-minute run
+     * repairs those, because isEnforced compares the whole chain. A refused start (a client install keeps the task at
+     * home) is logged and changes nothing else.
+     */
+    public static void sweepNow() {
+        TaskService tasks = TaskRuntime.service();
+        if (tasks == null || tasks.isPaused(ID)) {
+            return;
+        }
+        try {
+            if (tasks.startOrJoin(ID.toString(), null) == TaskStart.RUNNING) {
+                Blast.log(SWEEP, "was already running when the public ports changed; its next run applies them");
+            }
+        } catch (RuntimeException refused) {
+            Blast.log(SWEEP, "did not start after the public ports changed -", refused.getMessage());
+        }
     }
 
     /**

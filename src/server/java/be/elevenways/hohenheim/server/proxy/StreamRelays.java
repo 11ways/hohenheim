@@ -1,15 +1,13 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.StreamProtocol;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
-import be.elevenways.hohenheim.server.sitetype.StreamProvider;
+import be.elevenways.hohenheim.server.security.PublicPorts;
+import be.elevenways.hohenheim.server.sitetype.ServedStreams;
 import be.elevenways.hohenheim.server.sitetype.StreamTarget;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -80,34 +78,40 @@ final class StreamRelays {
     private static final int MAX_CONNECTIONS = 1_024;
 
     private final SessionStore sessionStore;
+    private final Runnable portsChanged;
     /* Both keyed by public port: the ledger lets one site at a time hold a port. */
     private final Map<Integer, Relay> relays = new HashMap<>();
     private final Map<Integer, StreamBindFailure> failures = new HashMap<>();
+    /* What the last reconcile served the public, null before the first: the change portsChanged is told of. */
+    private @Nullable PublicPorts served;
 
-    StreamRelays(@NonNull SessionStore sessionStore) {
+    /**
+     * @param portsChanged run after a reconcile that serves other public ports than the one before it, never after
+     *                     the first: an app on this host may then reach other ports of it (WorkloadNetworkPolicy)
+     */
+    StreamRelays(@NonNull SessionStore sessionStore, @NonNull Runnable portsChanged) {
         this.sessionStore = sessionStore;
+        this.portsChanged = portsChanged;
     }
 
     /** Binds, rebinds or closes every public port so they match the ports of the enabled stream sites. */
     synchronized void reconcile() {
         Map<Integer, Relay> wanted = new HashMap<>();
         Map<Integer, StreamBindFailure> failed = new HashMap<>();
-        for (Row site : Models.get(SiteModel.class).findEnabled()) {
-            UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(site.get(SiteModel.UPSTREAM_KIND));
-            if (!(handler instanceof StreamProvider provider)) continue;
+        List<ServedStreams.Served> streams = ServedStreams.enabled((name, refused) ->
+            Blast.log("Stream relays: site", name, "is not forwarded -", refused.getMessage()));
+        for (ServedStreams.Served stream : streams) {
+            Row site = stream.site();
             int siteId = site.get(SiteModel.ID);
-            String name = String.valueOf((Object) site.get(SiteModel.NAME));
-            List<StreamTarget> targets;
+            String name = stream.name();
             AccessRuleTree access;
             try {
-                Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
-                targets = provider.streamTargets(site, settings == null ? Map.of() : settings);
                 access = accessOf(site);
             } catch (RuntimeException refused) {
                 Blast.log("Stream relays: site", name, "is not forwarded -", refused.getMessage());
                 continue;
             }
-            for (StreamTarget target : targets) {
+            for (StreamTarget target : stream.targets()) {
                 int port = target.listenPort();
                 if (wanted.containsKey(port) || failed.containsKey(port)) {
                     // Only a store the ledger never judged holds one port twice: the first site keeps it.
@@ -141,6 +145,12 @@ final class StreamRelays {
         this.relays.putAll(wanted);
         this.failures.clear();
         this.failures.putAll(failed);
+        PublicPorts now = PublicPorts.of(streams);
+        boolean changed = this.served != null && !this.served.equals(now);
+        this.served = now;
+        if (changed) {
+            this.portsChanged.run();
+        }
     }
 
     /** @return the stream ports the last reconcile could not bind, by site */
@@ -158,6 +168,7 @@ final class StreamRelays {
         this.relays.values().forEach(Relay::close);
         this.relays.clear();
         this.failures.clear();
+        this.served = null;
     }
 
     /** @return the bound TCP address of a site's public port, null when nothing listens on it for that site */

@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -14,6 +13,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * THE host-firewall applier for per-workload network policy: default-deny towards the
@@ -61,6 +61,7 @@ public final class WorkloadNetworkPolicy {
     private final @NonNull NftRunner runner;
     private final @NonNull NftChains chains;
     private final @NonNull BooleanSupplier enabled;
+    private final @NonNull Supplier<PublicPorts> publicPorts;
 
     /**
      * AIDEV-NOTE: TEST SEAM and the only one. Production code never calls
@@ -78,10 +79,18 @@ public final class WorkloadNetworkPolicy {
     private static final WorkloadNetworkPolicy PRODUCTION = new WorkloadNetworkPolicy(
         new NftRunner.Sudo(), ENABLED_SETTING);
 
+    /** An applier for the proxy's own host, whose apps reach every port the proxy serves the public there. */
     public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled) {
+        this(runner, enabled, PublicPorts::ofProxyHost);
+    }
+
+    /** @param publicPorts the host's public ports, read at every apply and check so a stream change counts */
+    public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled,
+                                 @NonNull Supplier<PublicPorts> publicPorts) {
         this.runner = runner;
         this.chains = new NftChains(runner, WorkloadNetworkPolicy::table);
         this.enabled = enabled;
+        this.publicPorts = publicPorts;
     }
 
     /**
@@ -109,7 +118,7 @@ public final class WorkloadNetworkPolicy {
         if (!HostMode.SSH.declaredBy(server)) {
             return PRODUCTION;
         }
-        return new WorkloadNetworkPolicy(NftRunner.forHost(server), ENABLED_SETTING);
+        return new WorkloadNetworkPolicy(NftRunner.forHost(server), ENABLED_SETTING, PublicPorts::web);
     }
 
     /** @param policy the applier {@link #current()} returns, or null to restore production */
@@ -204,14 +213,19 @@ public final class WorkloadNetworkPolicy {
 
     /**
      * KERNEL-truth check for one workload network: whether both chains exist, are hooked,
-     * and carry every rule {@link #apply} would write for the given egress. The answer
-     * comes from re-listing the chains through the runner -- never from bookkeeping --
-     * because a host reboot erases nftables state while Docker networks and
-     * restart-policy containers come back on their own (measured on daystrom
-     * 2026-08-06: after a reboot the unless-stopped container served traffic with
+     * and carry exactly the rules {@link #apply} would write for the given egress, in its
+     * order. The answer comes from re-listing the chains through the runner -- never from
+     * bookkeeping -- because a host reboot erases nftables state while Docker networks and
+     * restart-policy containers come back on their own (measured on daystrom 2026-08-06:
+     * after a reboot the unless-stopped container served traffic with
      * {@code nft list table inet hohenheim_net} answering "No such file or directory").
      *
-     * @return false when a chain is absent, unhooked, or missing an expected rule
+     * AIDEV-NOTE: EXACTLY, not "carries every rule": the rules follow the host's stream
+     * sites, so a port that stopped being served leaves an accept rule nothing expects. A
+     * superset check read that chain as enforced and kept the port open to every app on
+     * the host until its next deploy; the exact read hands it to the sweep's repair.
+     *
+     * @return false when a chain is absent, unhooked, or carries other rules than expected
      * @throws IOException when enforcement is off, or the kernel cannot be READ at all
      *                     (an unreadable kernel is "unverifiable", never "unenforced")
      */
@@ -219,8 +233,8 @@ public final class WorkloadNetworkPolicy {
             throws IOException {
         requireEnabled(network.name());
         String key = chainKey(network.name());
-        return this.chains.satisfies(forwardChain(key), "forward", forwardRules(network, egress))
-            && this.chains.satisfies(inputChain(key), "input", inputRules(network, egress));
+        return this.chains.carriesExactly(forwardChain(key), "forward", forwardRules(network, egress))
+            && this.chains.carriesExactly(inputChain(key), "input", inputRules(network, egress));
     }
 
     /**
@@ -319,18 +333,30 @@ public final class WorkloadNetworkPolicy {
     }
 
     /**
+     * The input-hook rules for this applier's host: what the workload may send TO THE HOST
+     * ITSELF.
+     *
+     * @return the rules {@link #apply} writes into the input chain, in its order
+     */
+    public @NonNull List<String> inputRules(@NonNull WorkloadNetwork network, @NonNull Egress egress) {
+        return inputRules(network, egress, this.publicPorts.get());
+    }
+
+    /**
      * The input-hook rules: what the workload may send TO THE HOST ITSELF.
      *
      * AIDEV-NOTE: the bridge gateway IS the host and must remain denied, even on proxy
-     * ports. OPEN egress may reach the public web listener through a public destination:
+     * ports. OPEN egress may reach the host's public ports through a public destination:
      * otherwise moving a public service onto this host breaks its existing consumers
-     * in containers on the same host (the Microcopy move). This is the ordinary public
-     * proxy, with its authentication and access controls, never the private admin port.
+     * in containers on the same host (the Microcopy move, an app sending mail through the
+     * host's mail server's stream site on 587). Those are exactly the ports the proxy
+     * serves the whole internet ({@link PublicPorts}), with their authentication and access
+     * controls, never the private admin port or any other host port.
      * NONE egress gets no exception. Docker's embedded resolver lives INSIDE the
      * container at 127.0.0.11, so container DNS does not traverse this hook.
      */
     static @NonNull List<String> inputRules(@NonNull WorkloadNetwork network,
-                                           @NonNull Egress egress) {
+                                           @NonNull Egress egress, @NonNull PublicPorts ports) {
         List<String> rules = new ArrayList<>();
         rules.add("ct state established,related accept");
         String v6 = network.ipv6Subnet();
@@ -345,24 +371,27 @@ public final class WorkloadNetworkPolicy {
             for (String range : TenantNetworkRanges.HOST_DENIED_V4) {
                 rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + range + " drop");
             }
-            for (Integer port : new Integer[] {
-                    Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT),
-                    Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT)}) {
-                if (port == null || port < 1 || port > 65535) {
-                    continue;
-                }
-                rules.add("ip saddr " + network.ipv4Subnet() + " tcp dport " + port + " accept");
-                if (v6 != null) {
-                    rules.add("ip6 saddr " + v6 + " ip6 daddr 2000::/3 tcp dport " + port
-                        + " accept");
-                }
-            }
+            publicPortAccepts(rules, network, "tcp", ports.tcp());
+            publicPortAccepts(rules, network, "udp", ports.udp());
         }
         rules.add("ip saddr " + network.ipv4Subnet() + " drop");
         if (v6 != null) {
             rules.add("ip6 saddr " + v6 + " drop");
         }
         return List.copyOf(rules);
+    }
+
+    /** One accept per port of one transport, IPv4 then IPv6 towards global unicast only. */
+    private static void publicPortAccepts(@NonNull List<String> rules, @NonNull WorkloadNetwork network,
+                                          @NonNull String transport, @NonNull List<Integer> ports) {
+        String v6 = network.ipv6Subnet();
+        for (Integer port : ports) {
+            rules.add("ip saddr " + network.ipv4Subnet() + " " + transport + " dport " + port + " accept");
+            if (v6 != null) {
+                rules.add("ip6 saddr " + v6 + " ip6 daddr 2000::/3 " + transport + " dport " + port
+                    + " accept");
+            }
+        }
     }
 
 }

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.ForceSslLatch;
@@ -66,7 +67,8 @@ public class ProxyServer {
     // In-memory by default; a DbSessionStore (backed by site_sessions) is a drop-in here.
     private final SessionStore proxySessionStore;
 
-    /* The TCP/UDP streams' own public ports, kept in step with the sites at every route load. */
+    /* The TCP/UDP streams' own public ports, kept in step with the sites at every route load; a change of the ports
+       served re-applies every app's firewall rules on this host at once instead of at the next isolation sweep. */
     private final StreamRelays streams;
 
     private Undertow httpServer;
@@ -125,7 +127,7 @@ public class ProxyServer {
         long sessionTtl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore, certificateStore);
-        this.streams = new StreamRelays(proxySessionStore);
+        this.streams = new StreamRelays(proxySessionStore, VerifyWorkloadIsolation::sweepNow);
 
         // Wrap dispatcher with gzip/deflate compression. gRPC exchanges bypass the
         // encoding layer entirely: gRPC does its own message compression and a

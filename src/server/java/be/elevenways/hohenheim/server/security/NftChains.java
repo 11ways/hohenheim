@@ -121,6 +121,13 @@ final class NftChains {
         return present != null && hooked(present, hook) && present.containsAll(expected);
     }
 
+    /** Whether the chain exists, hooks the given hook, and carries the expected rules and nothing else, in order. */
+    boolean carriesExactly(@NonNull String chain, @NonNull String hook,
+                           @NonNull List<String> expected) throws IOException {
+        List<String> present = read(chain);
+        return present != null && hooked(present, hook) && rulesOf(present, hook).equals(expected);
+    }
+
     /**
      * Re-list one chain and require every rule we applied to be present in the kernel's own
      * rendering of it.
@@ -263,5 +270,29 @@ final class NftChains {
     private static boolean hooked(@NonNull List<String> present, @NonNull String hook) {
         return present.stream().anyMatch(line -> line.startsWith("type filter hook " + hook + " ")
             && line.contains("policy accept"));
+    }
+
+    /**
+     * The rule lines of one listed chain: everything after its hook line up to the brace that closes the chain.
+     *
+     * AIDEV-NOTE: the kernel renders the table line, the chain line, the hook line, the rules, then the two closing
+     * braces; a rule line is never a lone brace, so the first one ends the rules.
+     */
+    private static @NonNull List<String> rulesOf(@NonNull List<String> present, @NonNull String hook) {
+        List<String> rules = new ArrayList<>();
+        boolean inRules = false;
+        for (String line : present) {
+            if (!inRules) {
+                inRules = line.startsWith("type filter hook " + hook + " ");
+                continue;
+            }
+            if (line.equals("}")) {
+                break;
+            }
+            if (!line.isEmpty()) {
+                rules.add(line);
+            }
+        }
+        return rules;
     }
 }

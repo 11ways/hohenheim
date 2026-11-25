@@ -1,5 +1,12 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.test.FreePorts;
+import be.elevenways.hohenheim.test.StreamSiteRows;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
@@ -13,6 +20,8 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
@@ -383,6 +392,123 @@ class WorkloadNetworkPolicyTest {
             .as("a v4-only policy on a v6-enabled network is a bypass, not a partial win")
             .isInstanceOf(IOException.class)
             .hasMessageContaining("IPv6-enabled but reports no IPv6 subnet");
+    }
+
+    /**
+     * An app reaches its own host on exactly the ports the proxy serves the public there: the web ports and the ports
+     * of every ENABLED stream site, per transport. A switched-off stream opens nothing, a host the proxy does not run
+     * on serves no stream, and a stream switched off or on reaches the running app through the isolation sweep's
+     * check and repair: the mail server's submission port answered from the host's own apps (Proteus, 2026-11-24).
+     */
+    @Test
+    void anAppReachesTheEnabledStreamPortsOfItsOwnHostAndFollowsTheirSwitch() throws IOException {
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
+        int submission = FreePorts.tcpAndUdp();
+        int voice = FreePorts.tcpAndUdp();
+        int parked = FreePorts.tcpAndUdp();
+        Map<String, String> mailPorts = new LinkedHashMap<>();
+        mailPorts.put(String.valueOf(submission), "587/tcp");
+        mailPorts.put(String.valueOf(voice), "3478/udp");
+        int mail = StreamSiteRows.save("own-host-mail", mailPorts, true);
+        int spare = StreamSiteRows.save("own-host-parked", Map.of(String.valueOf(parked), "2525/tcp"), false);
+        WorkloadNetwork network = new WorkloadNetwork("hohenheim-mail-sender-net",
+            TENANT_SUBNET, TENANT_GATEWAY, TENANT_SUBNET_V6);
+        List<String> web = new ArrayList<>();
+        for (int port : List.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT),
+                Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT))) {
+            web.addAll(accepts("tcp", port));
+        }
+
+        // 1. THE RULES for an app on the proxy's own host: the web ports, then the enabled stream's TCP and UDP
+        //    ports on both families, and nothing for the switched-off stream.
+        List<String> own = acceptRules(WorkloadNetworkPolicy.forHost(HostModel.nameOf(HostModel.localHostId()))
+            .inputRules(network, Egress.OPEN));
+        List<String> expected = new ArrayList<>(web);
+        expected.addAll(accepts("tcp", submission));
+        expected.addAll(accepts("udp", voice));
+        assertThat(own).as("step 1: THE ASSERTION, the web ports and the enabled stream's ports, nothing else")
+            .containsExactlyElementsOf(expected);
+        assertThat(String.join("\n", own)).as("step 1: the switched-off stream's port opens nothing")
+            .doesNotContain("dport " + parked + " ");
+
+        // 2. An app on another host: the stream listens on the proxy's host, not there, so it adds nothing.
+        Row remote = Models.get(HostModel.class).createEmptyRow();
+        remote.set(HostModel.NAME, "own-host-elsewhere");
+        remote.set(HostModel.MODE, HostModel.MODE_SSH);
+        remote.set(HostModel.SSH_TARGET, "operator@own-host-elsewhere.invalid");
+        remote.set(HostModel.ADMISSION, HostModel.ADMISSION_BLOCKED);
+        Models.get(HostModel.class).save(remote);
+        assertThat(acceptRules(WorkloadNetworkPolicy.forHost("own-host-elsewhere").inputRules(network, Egress.OPEN)))
+            .as("step 2: another host's apps reach it on the web ports alone").containsExactlyElementsOf(web);
+
+        try (PrivateNetns netns = new PrivateNetns()) {
+            long tenant = netns.nested();
+            long peer = netns.nested();
+            wire(netns, tenant, peer);
+            String publicHost = "203.0.113.10";
+            String publicHostV6 = "2001:db8:31::10";
+            netns.setup("ip", "addr", "add", publicHost + "/32", "dev", "lo");
+            netns.setup("ip", "addr", "add", publicHostV6 + "/128", "dev", "lo", "nodad");
+            netns.listenInHost(submission);
+            netns.listenInHost(parked);
+            WorkloadNetworkPolicy policy = netns.enforcingPolicy();
+
+            // 3. Before the policy both stream ports answer on the host's public addresses of both families: no
+            //    absent listener passes. AIDEV-NOTE: the IPv6 probe here also warms the tenant's neighbour entry for
+            //    the gateway before the policy lands, as the public-web test's step 1 does; without it the IPv6 probe
+            //    after the policy read BLOCKED (2026-11-25), most likely its neighbour solicitation meeting the input
+            //    chain's final saddr drop.
+            for (String host : List.of(publicHost, publicHostV6)) {
+                for (int port : List.of(submission, parked)) {
+                    assertThat(netns.probe(tenant, host, port))
+                        .as("step 3: %s:%s listens before isolation", host, port).isEqualTo("REACHABLE");
+                }
+            }
+
+            // 4. THE ASSERTION against real packets: the enabled stream's port answers on both families and the
+            //    switched-off one stays dropped (the other host ports and the gateway: the public-web test above).
+            policy.apply(network, Egress.OPEN);
+            for (String host : List.of(publicHost, publicHostV6)) {
+                assertThat(netns.probe(tenant, host, submission))
+                    .as("step 4: the enabled stream's port answers at %s", host).isEqualTo("REACHABLE");
+            }
+            assertThat(netns.probe(tenant, publicHost, parked))
+                .as("step 4: the switched-off stream's port stays dropped").isEqualTo("BLOCKED");
+            assertThat(policy.isEnforced(network, Egress.OPEN)).as("step 4: the kernel carries the rules").isTrue();
+
+            // 5. The stream is switched off: the sweep's check finds the chain diverged (an accept nothing expects
+            //    any more), and its repair drops the port for the running app.
+            StreamSiteRows.switchTo(mail, false);
+            assertThat(policy.isEnforced(network, Egress.OPEN))
+                .as("step 5: THE ASSERTION, a port no longer served reads as diverged").isFalse();
+            policy.apply(network, Egress.OPEN);
+            assertThat(netns.probe(tenant, publicHost, submission))
+                .as("step 5: the repaired chain drops the switched-off port").isEqualTo("BLOCKED");
+            assertThat(policy.isEnforced(network, Egress.OPEN)).as("step 5: and reads as enforced again").isTrue();
+
+            // 6. The other stream is switched on: diverged again, and the repair opens its port.
+            StreamSiteRows.switchTo(spare, true);
+            assertThat(policy.isEnforced(network, Egress.OPEN))
+                .as("step 6: a newly served port reads as diverged").isFalse();
+            policy.apply(network, Egress.OPEN);
+            assertThat(netns.probe(tenant, publicHost, parked))
+                .as("step 6: the repaired chain opens the switched-on port").isEqualTo("REACHABLE");
+        } finally {
+            StreamSiteRows.switchTo(mail, false);
+            StreamSiteRows.switchTo(spare, false);
+        }
+    }
+
+    /** @return the rule list's public-port accepts, in order: every accept but the conntrack one */
+    private static List<String> acceptRules(List<String> rules) {
+        return rules.stream().filter(rule -> rule.endsWith(" accept") && !rule.startsWith("ct state ")).toList();
+    }
+
+    /** @return the accepts one public port of one transport gets on the fixture's network, IPv4 then IPv6 */
+    private static List<String> accepts(String transport, int port) {
+        return List.of("ip saddr " + TENANT_SUBNET + " " + transport + " dport " + port + " accept",
+            "ip6 saddr " + TENANT_SUBNET_V6 + " ip6 daddr 2000::/3 " + transport + " dport " + port + " accept");
     }
 
     /** Build a routed three-namespace topology: tenant -- host/gateway -- peer. */
