@@ -34,7 +34,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
             .build());
 
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("forward_port").defaultValue(DefaultPorts.of("https"))
+        IntegerField.builder().name("forward_port").defaultValue(DefaultPorts.of("https")).required()
             .validator(Range.of(1, 65535))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_port"))
             .help(HohenheimMicrocopy.HELP.of("tls_forward_port"))
@@ -44,7 +44,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
         ProxyProtocolSetting.builder().build());
 
     public static final IntegerField CONNECT_TIMEOUT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("connect_timeout").defaultValue(10).suffix("s")
+        IntegerField.builder().name("connect_timeout").defaultValue(10).required().suffix("s")
             .validator(Range.of(1, 300))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("connect_timeout"))
             .help(HohenheimMicrocopy.HELP.of("connect_timeout"))

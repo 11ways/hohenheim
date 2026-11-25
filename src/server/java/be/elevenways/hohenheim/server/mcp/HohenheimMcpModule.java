@@ -18,6 +18,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpRecordTools;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSet;
+import be.elevenways.zenit.ai.server.mcp.host.UploadTools;
 import be.elevenways.zenit.auth.server.mcp.AccountTools;
 import be.elevenways.zenit.auth.server.mcp.AuthMcp;
 import be.elevenways.zenit.auth.server.mcp.AuthTools;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.server.operation.OperationRunOperations;
@@ -89,7 +91,8 @@ public final class HohenheimMcpModule implements ZenitModule {
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
         DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID,
         InstanceFileModel.MODEL_ID, InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID,
-        RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID);
+        RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID,
+        SystemTaskHistoryModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -174,7 +177,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         described.addAll(account.tools());
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
             .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand, people, account,
-                McpDescribeTool.over(SERVER_NAME, described))
+                McpDescribeTool.over(SERVER_NAME, described), new UploadTools())
             .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
                 code(DnsZoneModel.MODEL_ID, 7))
             .saysVersionOnce()
@@ -244,6 +247,12 @@ public final class HohenheimMcpModule implements ZenitModule {
         made.put(SiteAuthProviderModel.MODEL_ID, RecordSource.of(SiteAuthProviderModel.REF).project(
             SiteAuthProviderModel.NAME, SiteAuthProviderModel.PROVIDER_TYPE, SiteAuthProviderModel.REQUIRED_PERMISSION)
             .search(SiteAuthProviderModel.NAME));
+        // The system task runs, which task_run_end and task_run_pause name by their codes.
+        made.put(SystemTaskHistoryModel.MODEL_ID, RecordSource.of(SystemTaskHistoryModel.REF).project(
+            SystemTaskHistoryModel.TASK_TYPE, SystemTaskHistoryModel.STATUS, SystemTaskHistoryModel.PROGRESS_MESSAGE,
+            SystemTaskHistoryModel.STARTED_AT, SystemTaskHistoryModel.ENDED_AT,
+            SystemTaskHistoryModel.STOP_REQUESTED_AT).search(SystemTaskHistoryModel.TASK_TYPE,
+            SystemTaskHistoryModel.PROGRESS_MESSAGE));
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
         // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
         // value is never projected (a source refuses it); its kind says it is one.

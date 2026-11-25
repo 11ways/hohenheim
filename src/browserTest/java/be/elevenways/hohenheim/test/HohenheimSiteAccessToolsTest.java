@@ -351,7 +351,7 @@ class HohenheimSiteAccessToolsTest extends HohenheimHttpTestBase {
     }
 
     /** @return the rule's place among its siblings, as stored now */
-    private static int sortOf(int ruleId) {
+    static int sortOf(int ruleId) {
         return Objects.requireNonNull(Models.get(AccessRuleModel.class).find().noCache()
             .where(AccessRuleModel.ID.eq(ruleId)).first().get(AccessRuleModel.SORT));
     }

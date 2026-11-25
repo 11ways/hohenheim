@@ -227,8 +227,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 Objects.requireNonNull(HohenheimMcpModule.declared())).stream()
             .map(operation -> operation.id().toString()).sorted().toList();
         assertThat(uncovered).as("step 1: operations no tool places and none keeps from assistants")
-            .containsExactly("hohenheim:access_rule_move_down", "hohenheim:access_rule_move_up",
-                "hohenheim:generate_instance_secret", "hohenheim:list_instance_variables",
+            .containsExactly("hohenheim:generate_instance_secret", "hohenheim:list_instance_variables",
                 "hohenheim:set_instance_variable", "hohenheim:site_hold_place",
                 "hohenheim:site_hold_remove", "hohenheim:site_label_place", "hohenheim:site_label_remove",
                 "hohenheim:site_pinned_place", "hohenheim:site_pinned_remove", "hohenheim:site_recover",
