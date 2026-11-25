@@ -323,15 +323,8 @@ public final class TrafficReads {
     private static @NonNull Read read(HohenheimTraffic.@NonNull Counted counted, @NonNull Set<String> sources,
                                       @NonNull ReadInput input, @Nullable Set<Top> screen, @NonNull Reach reach,
                                       @Nullable AccessContext caller) {
-        TrafficStore store = HohenheimTraffic.store(counted);
-        if (store == null) {
-            throw new DomainRefusal(ZenitRefusalReason.SERVICE_UNAVAILABLE, "traffic counting is stopped");
-        }
-        TrafficWindow window = input.period() == null ? TrafficWindow.DAY
-            : Objects.requireNonNull(StorageKeyed.findOrNull(Arrays.asList(TrafficWindow.values()), input.period()),
-                "the period field offers only the windows");
-        TrafficQuery query = TrafficQuery.ending(sources, window,
-            input.until() != null ? input.until() : Now.instant(), OfficeZone.office());
+        TrafficStore store = opened(counted);
+        TrafficQuery query = query(sources, input.period(), input.until());
         Top top = Top.forToken(input.top(), reach);
         Set<Top> asked = EnumSet.noneOf(Top.class);
         if (top != null) asked.add(top);
@@ -440,6 +433,34 @@ public final class TrafficReads {
             case WEEK -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_week");
             case MONTH -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_month");
         };
+    }
+
+    /** @throws DomainRefusal SERVICE_UNAVAILABLE while counting is stopped (the process is ending) */
+    static @NonNull TrafficStore opened(HohenheimTraffic.@NonNull Counted counted) {
+        TrafficStore store = HohenheimTraffic.store(counted);
+        if (store == null) {
+            throw new DomainRefusal(ZenitRefusalReason.SERVICE_UNAVAILABLE, "traffic counting is stopped");
+        }
+        return store;
+    }
+
+    /**
+     * @param sources the sources read, empty for every one
+     * @param period  the span's token, null for a day
+     * @param until   the span's end, null for now
+     * @return the span ending at until or now, in its steps, on the office clock
+     */
+    static @NonNull TrafficQuery query(@NonNull Set<String> sources, @Nullable String period,
+                                       @Nullable Instant until) {
+        return TrafficQuery.ending(sources, windowOf(period), until != null ? until : Now.instant(),
+            OfficeZone.office());
+    }
+
+    /** @return the window a period token spells, a day for none or one no window spells (a hand-written address) */
+    static @NonNull TrafficWindow windowOf(@Nullable String period) {
+        TrafficWindow window = period == null ? null
+            : StorageKeyed.findOrNull(Arrays.asList(TrafficWindow.values()), period);
+        return window == null ? TrafficWindow.DAY : window;
     }
 
     /** @return the period field carrying every window, so no list of them is spelled twice */

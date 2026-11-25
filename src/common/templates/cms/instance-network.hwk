@@ -1,0 +1,78 @@
+{#- Network tab on an app (InstanceNetworkPage): the span choices, what the app received and sent over the span and
+    what its sites answered visitors, received and sent per step, then the app's sites with the requests each
+    brought. Every figure is a read of the counted totals, so the page is the same at every load. -#}
+{% declare title: String %}
+{% declare head: RecordHeadState = null %}
+{% declare view: AppNetworkView %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-list-page cms-record-tab-page" data-hh-app-network>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+
+    <pl-nav orientation="horizontal" variant="segmented" label={% t("app_network_spans", scope: "app_network") %}>
+        {% each view.spans as span key span.key %}
+        <pl-nav-item attr:data-hh-app-network-span={% span.key %} href={% span.href %} active={% span.current %}>{{ span.label }}</pl-nav-item>
+        {% /each %}
+    </pl-nav>
+    <p class="text-muted" data-hh-app-network-range>{{ view.range }}</p>
+
+    <pl-grid size="sm" balanced>
+        <pl-stat-card variant="figure" label={% t("app_network_received", scope: "app_network") %} value={% view.received %}
+                      data-hh-app-network-figure="received"></pl-stat-card>
+        <pl-stat-card variant="figure" label={% t("app_network_sent", scope: "app_network") %} value={% view.sent %}
+                      data-hh-app-network-figure="sent"></pl-stat-card>
+        <pl-stat-card variant="figure" label={% t("app_network_to_visitors", scope: "app_network") %} value={% view.toVisitors %}
+                      description={% t("app_network_to_visitors_description", scope: "app_network") %}
+                      data-hh-app-network-figure="to_visitors"></pl-stat-card>
+    </pl-grid>
+
+    <pl-card data-hh-app-network-chart>
+        <pl-card-header>
+            <pl-card-title>{{ t("app_network_chart_title", scope: "app_network") }}</pl-card-title>
+            <pl-card-description>{{ view.chartLead }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if view.counted %}
+            <pl-chart type="line" legend series={% view.chart %} ariaLabel={% t("app_network_chart_title", scope: "app_network") %}></pl-chart>
+            {% else %}
+            <pl-empty-state icon="network-wired" plain data-hh-app-network-empty>
+                <pl-empty-state-title>{{ t("app_network_nothing_counted", scope: "app_network") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("app_network_nothing_counted_hint", scope: "app_network") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card data-hh-app-network-sites>
+        <pl-card-header>
+            <pl-card-title>{{ t("app_network_sites_title", scope: "app_network") }}</pl-card-title>
+            <pl-card-description>{{ t("app_network_sites_description", scope: "app_network") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if view.sites %}
+            <pl-table textSize="small" density="snug">
+                <pl-table-header><pl-table-row>
+                    <pl-table-head columnWidth="fill">{{ t("app_network_column_site", scope: "app_network") }}</pl-table-head>
+                    <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_requests", scope: "app_network") }}</pl-table-head>
+                    <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_sent", scope: "app_network") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each view.sites as site key site.key %}
+                    <pl-table-row data-hh-app-network-site={% site.key %}>
+                        <pl-table-cell truncate title={% site.name %}>{{ site.name }}</pl-table-cell>
+                        <pl-table-cell nowrap data-alignment="right">{{ site.requests }}</pl-table-cell>
+                        <pl-table-cell nowrap data-alignment="right">{{ site.sent }}</pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="globe" plain data-hh-app-network-no-sites>
+                <pl-empty-state-title>{{ t("app_network_no_sites", scope: "app_network") }}</pl-empty-state-title>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

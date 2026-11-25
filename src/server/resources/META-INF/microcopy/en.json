@@ -11012,6 +11012,10 @@
   },
   "page_title": [
     {
+      "text": "{$name} - Network",
+      "scope": "app_network"
+    },
+    {
       "text": "{$name} - Devices",
       "scope": "instance_device"
     },
@@ -21299,5 +21303,38 @@
   "bytes": {"text": "{$bytes :bytes}", "scope": "traffic_screen"},
   "took": {"text": "{$took :duration style=timing}", "scope": "traffic_screen"},
   "no_value": {"text": "-", "scope": "traffic_screen"},
-  "queries_tab": {"text": "Queries", "scope": "dns_zone_queries"}
+  "queries_tab": {"text": "Queries", "scope": "dns_zone_queries"},
+  "network_tab": {"text": "Network", "scope": "instance"},
+  "read_app_network": { "text": "{$actor} read the network use of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_app_network_label": {"text": "Read network use", "scope": "hohenheim"},
+  "read_app_network_description": {"text": "Reads what the app received and sent over a span, one line per step, and what each of its sites answered visitors.", "scope": "hohenheim"},
+  "mcp_tool_app_network_read": {"text": "Reads what an app received and sent over a period ending at until, counted from its own network counters, visitors and other services together: the totals against the period before, each step's bytes received and sent (a minute for an hour, an hour for a day, a day for a week or a month), then each of its sites with the requests it answered and the bytes it sent visitors through the proxy. The counters are read every 5 minutes while the app runs. Where its connections go is not recorded. Only someone who manages the app may read it.", "scope": "hohenheim"},
+  "mcp_code_app_network_read": {"text": "The app (AP12) whose network use to read.", "scope": "hohenheim"},
+  "app_network_spans": {"text": "Span", "scope": "app_network"},
+  "app_network_span_hour": {"text": "Hour", "scope": "app_network"},
+  "app_network_span_day": {"text": "Day", "scope": "app_network"},
+  "app_network_span_week": {"text": "Week", "scope": "app_network"},
+  "app_network_span_month": {"text": "Month", "scope": "app_network"},
+  "app_network_range": {"text": "{$from :datetime} to {$until :datetime}", "scope": "app_network"},
+  "app_network_received": {"text": "Received", "scope": "app_network"},
+  "app_network_sent": {"text": "Sent", "scope": "app_network"},
+  "app_network_to_visitors": {"text": "To visitors", "scope": "app_network"},
+  "app_network_to_visitors_description": {"text": "answers through the proxy", "scope": "app_network"},
+  "app_network_chart_title": {"text": "Received and sent", "scope": "app_network"},
+  "app_network_chart_lead_minute": {"text": "Per minute, in {$unit}, everything the app received and sent, visitors and other services together. Its counters are read every 5 minutes while it runs and every second while someone watches its Metrics tab, so a minute holds what moved since the reading before.", "scope": "app_network"},
+  "app_network_chart_lead_hour": {"text": "Per hour, in {$unit}, everything the app received and sent, visitors and other services together.", "scope": "app_network"},
+  "app_network_chart_lead_day": {"text": "Per day, in {$unit}, everything the app received and sent, visitors and other services together.", "scope": "app_network"},
+  "app_network_nothing_counted": {"text": "Nothing counted in this span", "scope": "app_network"},
+  "app_network_nothing_counted_hint": {"text": "Hohenheim reads the app's network counters every 5 minutes while it runs: what it sends and receives appears here within 5 minutes of its start.", "scope": "app_network"},
+  "app_network_sites_title": {"text": "Through its sites", "scope": "app_network"},
+  "app_network_sites_description": {"text": "What visitors asked of the app's sites through the proxy in this span.", "scope": "app_network"},
+  "app_network_column_site": {"text": "Site", "scope": "app_network"},
+  "app_network_column_requests": {"text": "Requests", "scope": "app_network"},
+  "app_network_column_sent": {"text": "Sent to visitors", "scope": "app_network"},
+  "app_network_no_sites": {"text": "No site points at this app", "scope": "app_network"},
+  "app_network_requests": {"text": "{$count :number}", "scope": "app_network"},
+  "app_network_size": {"text": "{$bytes :bytes}", "scope": "app_network"},
+  "app_network_step_time": {"text": "{$at :time}", "scope": "app_network"},
+  "app_network_step_hour": {"text": "{$at :datetime style=short}", "scope": "app_network"},
+  "app_network_step_day": {"text": "{$day :date style=day-month}", "scope": "app_network"}
 }

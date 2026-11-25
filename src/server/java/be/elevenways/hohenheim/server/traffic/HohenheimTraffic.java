@@ -13,8 +13,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
- * Hohenheim's two traffic stores: the proxy's, one source per site plus one for names nobody serves, and the DNS
- * server's, one source per zone; both under the data path, on the office clock.
+ * Hohenheim's three traffic stores: the proxy's, one source per site plus one for names nobody serves; the DNS
+ * server's, one source per zone; the apps', one source per app, fed by its network counters (AppCounters); all under
+ * the data path, on the office clock.
  *
  * AIDEV-NOTE: a store opens at its first hit or read, not at boot, so a role that never sees traffic keeps no files
  * and boot waits for nothing. Counting a hit takes no lock: the open store is read from one volatile slot and checked
@@ -42,7 +43,8 @@ public final class HohenheimTraffic {
     /** What a store counts; its key names the store's directory under {@code traffic/}. */
     public enum Counted {
         WEB("web"),
-        DNS("dns");
+        DNS("dns"),
+        APPS("apps");
 
         private final @NonNull String directory;
 
@@ -121,6 +123,11 @@ public final class HohenheimTraffic {
     /** @return the source key of a DNS zone's queries */
     public static @NonNull String zoneSource(int zoneId) {
         return String.valueOf(zoneId);
+    }
+
+    /** @return the source key of an app's bytes: its id, which never changes and is never reused */
+    public static @NonNull String appSource(int appId) {
+        return String.valueOf(appId);
     }
 
     /** @return hits dropped since this process started: no room in a queue, or counted while stopped */

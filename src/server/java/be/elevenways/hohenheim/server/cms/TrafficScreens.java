@@ -141,8 +141,7 @@ final class TrafficScreens {
 
         /** @return what the conduit's address asks; a period that does not read is a day, a moment now */
         static @NonNull Asked of(@NonNull Conduit conduit) {
-            TrafficWindow window = StorageKeyed.findOrNull(Arrays.asList(TrafficWindow.values()),
-                conduit.getParameter(PERIOD));
+            TrafficWindow window = TrafficReads.windowOf(conduit.getParameter(PERIOD));
             String until = conduit.getParameter(UNTIL);
             Instant end = null;
             if (until != null && !until.isBlank()) {
@@ -152,7 +151,7 @@ final class TrafficScreens {
                     end = null;
                 }
             }
-            return new Asked(window != null ? window : TrafficWindow.DAY,
+            return new Asked(window,
                 end != null && end.isBefore(Now.instant()) ? end : null);
         }
     }

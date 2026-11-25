@@ -190,8 +190,8 @@ final class HohenheimTrafficTools {
         response.untrusted(what.replace(' ', '_'), rows.isEmpty() ? "none" : String.join("\n", rows));
     }
 
-    /** @return the moment as office time to the minute, as the steps are keyed */
-    private static @NonNull String local(@NonNull Instant at) {
+    /** @return the moment as office time to the minute, as the steps are keyed; the app network read's too */
+    static @NonNull String local(@NonNull Instant at) {
         return at.atZone(OfficeZone.office()).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES).toString();
     }
 

@@ -11012,6 +11012,10 @@
   },
   "page_title": [
     {
+      "text": "{$name} - Netwerk",
+      "scope": "app_network"
+    },
+    {
       "text": "{$name} - Apparaten",
       "scope": "instance_device"
     },
@@ -21299,5 +21303,38 @@
   "bytes": {"text": "{$bytes :bytes}", "scope": "traffic_screen"},
   "took": {"text": "{$took :duration style=timing}", "scope": "traffic_screen"},
   "no_value": {"text": "-", "scope": "traffic_screen"},
-  "queries_tab": {"text": "Vragen", "scope": "dns_zone_queries"}
+  "queries_tab": {"text": "Vragen", "scope": "dns_zone_queries"},
+  "network_tab": {"text": "Netwerk", "scope": "instance"},
+  "read_app_network": { "text": "{$actor} las het netwerkgebruik van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "read_app_network_label": {"text": "Netwerkgebruik lezen", "scope": "hohenheim"},
+  "read_app_network_description": {"text": "Leest wat de app over een periode ontving en verzond, een regel per stap, en wat elk van zijn sites bezoekers antwoordde.", "scope": "hohenheim"},
+  "mcp_tool_app_network_read": {"text": "Leest wat een app ontving en verzond over een periode die eindigt op until, geteld uit zijn eigen netwerktellers, bezoekers en andere diensten samen: de totalen tegenover de periode ervoor, de bytes ontvangen en verzonden per stap (een minuut voor een uur, een uur voor een dag, een dag voor een week of een maand), daarna elk van zijn sites met de verzoeken die ze beantwoordde en de bytes die ze bezoekers via de proxy stuurde. De tellers worden elke 5 minuten gelezen terwijl de app draait. Waarheen zijn verbindingen gaan, wordt niet bijgehouden. Alleen wie de app beheert, mag dit lezen.", "scope": "hohenheim"},
+  "mcp_code_app_network_read": {"text": "De app (AP12) waarvan het netwerkgebruik gelezen wordt.", "scope": "hohenheim"},
+  "app_network_spans": {"text": "Periode", "scope": "app_network"},
+  "app_network_span_hour": {"text": "Uur", "scope": "app_network"},
+  "app_network_span_day": {"text": "Dag", "scope": "app_network"},
+  "app_network_span_week": {"text": "Week", "scope": "app_network"},
+  "app_network_span_month": {"text": "Maand", "scope": "app_network"},
+  "app_network_range": {"text": "{$from :datetime} tot {$until :datetime}", "scope": "app_network"},
+  "app_network_received": {"text": "Ontvangen", "scope": "app_network"},
+  "app_network_sent": {"text": "Verzonden", "scope": "app_network"},
+  "app_network_to_visitors": {"text": "Naar bezoekers", "scope": "app_network"},
+  "app_network_to_visitors_description": {"text": "antwoorden via de proxy", "scope": "app_network"},
+  "app_network_chart_title": {"text": "Ontvangen en verzonden", "scope": "app_network"},
+  "app_network_chart_lead_minute": {"text": "Per minuut, in {$unit}, alles wat de app ontving en verzond, bezoekers en andere diensten samen. Zijn tellers worden elke 5 minuten gelezen terwijl hij draait en elke seconde terwijl iemand zijn tabblad Metingen bekijkt, dus een minuut bevat wat er sinds de vorige lezing bewoog.", "scope": "app_network"},
+  "app_network_chart_lead_hour": {"text": "Per uur, in {$unit}, alles wat de app ontving en verzond, bezoekers en andere diensten samen.", "scope": "app_network"},
+  "app_network_chart_lead_day": {"text": "Per dag, in {$unit}, alles wat de app ontving en verzond, bezoekers en andere diensten samen.", "scope": "app_network"},
+  "app_network_nothing_counted": {"text": "Niets geteld in deze periode", "scope": "app_network"},
+  "app_network_nothing_counted_hint": {"text": "Hohenheim leest de netwerktellers van de app elke 5 minuten terwijl hij draait: wat hij verzendt en ontvangt, verschijnt hier binnen 5 minuten na zijn start.", "scope": "app_network"},
+  "app_network_sites_title": {"text": "Via zijn sites", "scope": "app_network"},
+  "app_network_sites_description": {"text": "Wat bezoekers in deze periode via de proxy aan de sites van de app vroegen.", "scope": "app_network"},
+  "app_network_column_site": {"text": "Site", "scope": "app_network"},
+  "app_network_column_requests": {"text": "Verzoeken", "scope": "app_network"},
+  "app_network_column_sent": {"text": "Naar bezoekers verzonden", "scope": "app_network"},
+  "app_network_no_sites": {"text": "Geen site verwijst naar deze app", "scope": "app_network"},
+  "app_network_requests": {"text": "{$count :number}", "scope": "app_network"},
+  "app_network_size": {"text": "{$bytes :bytes}", "scope": "app_network"},
+  "app_network_step_time": {"text": "{$at :time}", "scope": "app_network"},
+  "app_network_step_hour": {"text": "{$at :datetime style=short}", "scope": "app_network"},
+  "app_network_step_day": {"text": "{$day :date style=day-month}", "scope": "app_network"}
 }

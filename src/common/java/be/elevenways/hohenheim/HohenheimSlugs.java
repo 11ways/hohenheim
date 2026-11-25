@@ -132,6 +132,7 @@ public final class HohenheimSlugs {
         public static final String INSTALL_MEDIA = "install-media";
         public static final String KEYS = "keys";
         public static final String MEMBERS = "members";
+        public static final String NETWORK = "network";
         public static final String MIGRATE = "migrate";
         public static final String PROVISIONING = "provisioning";
         public static final String QUERIES = "queries";

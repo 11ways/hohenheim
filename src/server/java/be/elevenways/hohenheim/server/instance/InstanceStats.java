@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.runtime.StatsFeed;
 import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
+import be.elevenways.hohenheim.server.traffic.AppCounters;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.util.RecentSamples;
@@ -29,7 +30,8 @@ import java.util.function.Consumer;
  * Bounded by construction, which is the whole reason a hub exists instead of a stream per
  * viewer: ONE daemon stream per instance no matter how many tabs are open, a ring of
  * {@link #HISTORY} samples and nothing else retained. This is live OBSERVATION -- there is
- * deliberately no metrics store, no rollup and no disk anywhere in this class.
+ * deliberately no metrics store, no rollup and no disk anywhere in this class; each reading's network counters go on
+ * to AppCounters, whose app totals are the store that remembers them.
  *
  * AIDEV-NOTE: the ring is what makes a RECONNECT bounded too. A viewer that drops and
  * comes back replays at most HISTORY samples and then follows live; it never asks the
@@ -161,6 +163,8 @@ public final class InstanceStats {
 
         private final int instanceId;
         private final List<Consumer<Sample>> viewers = new CopyOnWriteArrayList<>();
+        /** The app the workload runs for, whose traffic totals its readings feed (AppCounters). */
+        private volatile int appId;
         private final RecentSamples<Sample> ring = new RecentSamples<>(HISTORY);
 
         private @Nullable StatsFeed stream;
@@ -180,6 +184,7 @@ public final class InstanceStats {
                 return;
             }
             InstanceService.Resolved resolved = new InstanceService().resolve(this.instanceId);
+            this.appId = ApplicationReleases.linkOwnerOf(resolved.row());
             if (!(resolved.runtime() instanceof StatsStreamSupport support)) {
                 throw new IOException("The driver of instance " + this.instanceId
                     + " has no live-stats lane");
@@ -249,6 +254,8 @@ public final class InstanceStats {
                     break;
                 }
                 Sample sample = decoder.next(reading);
+                // The same reading feeds the app's traffic totals, on the one baseline the memory sweep reads too.
+                AppCounters.observe(this.appId, this.instanceId, reading);
                 for (Consumer<Sample> viewer : this.record(sample)) {
                     try {
                         viewer.accept(sample);

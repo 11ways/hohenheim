@@ -819,6 +819,8 @@ public final class InstanceParts {
         tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceFilesPage());
         tabs.add(new InstanceStatsPage());
+        // What the app received and sent over time, from its counted totals, beside its live figures.
+        tabs.add(new InstanceNetworkPage());
         // The sections read THIS panel's entries: the /manage backup twin places no restore-to-new, which is how it
         // stays operator-only there too.
         tabs.add(new InstanceBackupsPage(operator));

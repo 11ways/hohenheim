@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.host.HostMemory;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.MemoryHistory;
 import be.elevenways.hohenheim.server.runtime.StatsFeed;
 import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
+import be.elevenways.hohenheim.server.traffic.AppCounters;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -35,12 +37,15 @@ import java.util.Set;
 /**
  * The memory sampler: one reading of every running app's memory use into {@link MemoryHistory}, and each measurable
  * host's available memory and swap onto its record ({@link HostMemory}), so the dashboard's memory checks judge
- * stored and remembered facts instead of dialling a daemon per render.
+ * stored and remembered facts instead of dialling a daemon per render; the same reading's network counters feed the
+ * app's traffic totals ({@link AppCounters}), so every running app is read, a reservation or not.
  *
  * AIDEV-NOTE: an app is read through the driver's own stats lane ({@link StatsStreamSupport}), one reading and closed,
  * so a third driver is sampled by its feed alone. A read that fails keeps the app's history (one blip is no reason to
- * start its windows again); only an app that stopped running is forgotten. The host stamp is a heartbeat's kind of
- * write: HostModel captures none of the facts, so it is bookkeeping, never activity.
+ * start its windows again) and its counters' baseline; only an app that stopped running is forgotten. The host stamp
+ * is a heartbeat's kind of write: HostModel captures none of the facts, so it is bookkeeping, never activity. The
+ * counters are read as often as the memory, every {@link MemoryHistory#SAMPLE_INTERVAL}, which is the finest an
+ * app's totals per minute are while nobody watches its Stats tab (the live hub's readings count too).
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -81,7 +86,8 @@ public class ObserveInstanceMemory extends ScheduledTask {
     }
 
     /**
-     * Measures every host whose kernel its shell reaches, then samples every running app that holds memory.
+     * Measures every host whose kernel its shell reaches, then reads every running app: its counters always, its
+     * memory when it holds a reservation.
      *
      * AIDEV-NOTE: hosts first: their shell has its own time bound, while a daemon's stats stream answers when it
      * answers, so a wedged daemon may hold the app half of the sweep but never the hosts' readings.
@@ -101,32 +107,41 @@ public class ObserveInstanceMemory extends ScheduledTask {
         }
         Duration keep = MemoryHealth.Thresholds.current().longest();
         Set<Integer> running = new HashSet<>();
+        Set<Integer> reserving = new HashSet<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);
-            if (id == null || InstanceCapacity.reservedMbOf(instance) <= 0) {
+            if (id == null) {
                 continue;
             }
             running.add(id);
-            Long used = usedBytesOf(id);
-            if (used != null) {
-                MemoryHistory.record(id, new MemoryHistory.Sample(Now.instant(), used), keep);
+            boolean reserves = InstanceCapacity.reservedMbOf(instance) > 0;
+            if (reserves) {
+                reserving.add(id);
+            }
+            StatsReading reading = readingOf(id);
+            if (reading == null) {
+                continue;
+            }
+            AppCounters.observe(ApplicationReleases.linkOwnerOf(instance), id, reading);
+            if (reserves) {
+                MemoryHistory.record(id, new MemoryHistory.Sample(Now.instant(), reading.memoryBytes()), keep);
             }
         }
-        MemoryHistory.retain(running);
+        MemoryHistory.retain(reserving);
+        AppCounters.retain(running);
     }
 
-    /** @return the workload's memory use now, null when its driver has no stats lane or it would not answer */
-    private static @Nullable Long usedBytesOf(int instanceId) {
+    /** @return the workload's reading now, null when its driver has no stats lane or it would not answer */
+    private static @Nullable StatsReading readingOf(int instanceId) {
         try {
             InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
             if (!(resolved.runtime() instanceof StatsStreamSupport support)) {
                 return null;
             }
             try (StatsFeed feed = support.openStats(resolved.spec().handle())) {
-                StatsReading reading = feed.next();
-                return reading == null ? null : reading.memoryBytes();
+                return feed.next();
             }
         } catch (IOException | RuntimeException unreadable) {
             Blast.log("MEMORY: could not sample instance", instanceId, "-", unreadable.getMessage());
