@@ -289,6 +289,16 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 properties.forEach((argument, shape) -> assertThat(((Map<?, ?>) shape).get("description"))
                     .as("step 4: " + tool.name() + "." + argument + " in " + language).isInstanceOf(String.class)
                     .asString().isNotBlank());
+                if (!"en".equals(language)) continue;
+                // The owner's words: an app is never an instance or a workload, an address never a domain.
+                List<String> texts = new ArrayList<>(List.of(said));
+                for (Object shape : properties.values()) {
+                    texts.add(String.valueOf(((Map<?, ?>) shape).get("description")));
+                }
+                for (String text : texts) {
+                    assertThat(Pattern.compile("(?i)\\b(workloads?|instances?|domains?)\\b").matcher(text).find())
+                        .as("step 4: " + tool.name() + " says " + text).isFalse();
+                }
             }
         }
         assertThat(english.keySet()).as("step 4: the operator is offered every declared tool")
@@ -339,6 +349,21 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(McpCoverage.offered(server, TenantConduits.operator()).stream()
             .filter(tool -> tool.name().equals("dns_record_set")).findFirst().orElseThrow().annotations().idempotent())
             .as("dns_record_set is not marked idempotent").isFalse();
+        // Every writing tool takes request on every route it has (SPEC-RULES "Parameters"): a retry never acts twice.
+        Set<String> handNames = new HashSet<>();
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            handNames.add(tool.name());
+        }
+        List<String> withoutRequest = new ArrayList<>();
+        for (McpHostTool tool : McpCoverage.offered(server, TenantConduits.operator())) {
+            if (!handNames.contains(tool.name()) || Boolean.TRUE.equals(tool.annotations().readOnly())) continue;
+            Map<?, ?> request = (Map<?, ?>) ((Map<?, ?>) tool.inputSchema(TenantConduits.operator()).get("properties"))
+                .get("request");
+            if (request == null || String.valueOf(request.get("description")).contains("Only ")) {
+                withoutRequest.add(tool.name());
+            }
+        }
+        assertThat(withoutRequest).as("writing tools some route of which takes no request").isEmpty();
     }
 
     /**
@@ -383,8 +408,10 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         }
         assertThat(arguments).as("step 2: the hand-declared tools' arguments were read").isGreaterThan(100);
 
-        // 3. The shared record tools name records by code too: read by codes, history by code, never by ids or id.
-        for (Map.Entry<String, String> shared : Map.of("read", "codes", "history", "code").entrySet()) {
+        // 3. The shared record tools name records by code too: read by codes, history and run_read by code, never by
+        //    ids or id.
+        for (Map.Entry<String, String> shared : Map.of("read", "codes", "history", "code",
+                Objects.requireNonNull(OperationRunOperations.READ.assistantName()), "code").entrySet()) {
             McpHostTool tool = McpCoverage.offered(server, operator).stream()
                 .filter(offered -> offered.name().equals(shared.getKey())).findFirst().orElseThrow();
             Map<?, ?> properties = (Map<?, ?>) tool.inputSchema(operator).get("properties");
@@ -722,6 +749,12 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(overSecret.error()).as("step 8: a secret is never turned plain").isTrue();
             assertThat(new InstanceVariables().valuesFor(appId)).as("step 8: the secret stays")
                 .containsEntry("API_TOKEN", SECRET);
+            // A secret too short to be masked is refused by the argument and the key it came in, never a column name.
+            McpHttpSession.Answer shortSecret = session.call("variable_set", Map.of("owner", appCode,
+                "secret", List.of(Map.of("key", "SHORT_PIN", "value", "abc"))));
+            assertThat(shortSecret.error()).as("step 8: a short secret is refused").isTrue();
+            assertThat(shortSecret.text()).as("step 8: by its argument and key").contains("secret: SHORT_PIN")
+                .doesNotContain("secret_value");
             McpHttpSession.Answer unset = session.call("variable_set", Map.of("owner", appCode,
                 "unset", List.of("GREETING")));
             assertThat(unset.error()).as("step 8: " + unset.text()).isFalse();
@@ -848,10 +881,10 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             String runRead = Objects.requireNonNull(OperationRunOperations.READ.assistantName());
             String noRun = "RUN999999";
             for (String run : List.of(deployRun, rollbackRun)) {
-                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("id", run));
+                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("code", run));
                 assertThat(hidden.error()).as("step 14: " + run + " refused to another tenant").isTrue();
                 assertThat(hidden.text().replace(run, "<code>")).as("step 14: " + run + " names nothing to him")
-                    .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
+                    .isEqualTo(rival.call(runRead, Map.of("code", noRun)).text().replace(noRun, "<code>"));
                 assertThat(rival.call("read", Map.of("codes", List.of(run))).text().replace(run, "<code>"))
                     .as("step 14: nor does a read of " + run)
                     .isEqualTo(rival.call("read", Map.of("codes", List.of(noRun))).text().replace(noRun, "<code>"));
@@ -1240,10 +1273,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .get(InstanceModel.HOST_ID), operator);
 
             // 1. A worker created with image_app and no image: it stores the app it follows and no image of its own.
-            McpHttpSession.Answer created = admin.call("app_docker_container_set", Map.of("name", PREFIX + "worker-"
-                + letters(), "host", host, "image_app", apiCode, "command", "worker"));
+            String workerName = PREFIX + "worker-" + letters();
+            McpHttpSession.Answer created = admin.call("app_docker_container_set", Map.of("name", workerName,
+                "host", host, "image_app", apiCode, "command", "worker"));
             assertThat(created.error()).as("step 1: " + created.text()).isFalse();
             String worker = found(Pattern.compile("AP\\d+"), created.text(), "step 1");
+            assertThat(created.text()).as("step 1: the answer says what now exists, never the button's label")
+                .contains(worker + " " + workerName + " created").doesNotContain("done");
             int workerId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(InstanceModel.MODEL_ID,
                 worker)));
             made.add(0, workerId);
@@ -1274,6 +1310,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             // An Application takes no image_app: the argument is a Docker container's alone.
             assertThat(admin.call("app_application_set", Map.of("code", apiCode, "image_app", otherCode)).error())
                 .as("step 3: an Application refuses image_app").isTrue();
+            // 4. A container lends no image: refused in words naming it by code and what can lend one, no bare id.
+            McpHttpSession.Answer fromContainer = admin.call("app_docker_container_set", Map.of("code", worker,
+                "image_app", worker));
+            assertThat(fromContainer.error()).as("step 4: " + fromContainer.text()).isTrue();
+            assertThat(fromContainer.text()).as("step 4: the container is named by its code, the lender by its kind")
+                .contains("image_app").contains(worker + " " + workerName + " is no application")
+                .doesNotContain("(" + workerId + ")");
         } finally {
             for (int id : made) HardDeletes.byId(Models.get(InstanceModel.class), id);
             local.restore();
@@ -1496,6 +1539,17 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .contains("S999999");
             assertThat(admin.call("address_set", Map.of("code", addressCode, "hsts_enabled", true)).text())
                 .as("step 2: the stored name is no argument").contains("hsts_enabled");
+            // An address is deleted by the panel's own delete, offered by describe, answered by what was deleted.
+            String spareHost = "spare." + origin;
+            String spare = found(Pattern.compile("D\\d+"), admin.call("address_set", Map.of("site", siteCode,
+                "hostname", spareHost)).text(), "step 2: the spare address's code");
+            assertThat(admin.call("describe", Map.of("code", spare)).text()).as("step 2: describe offers its delete")
+                .contains("delete code=" + spare);
+            McpHttpSession.Answer removed = admin.call("delete", Map.of("code", spare));
+            assertThat(removed.error()).as("step 2: " + removed.text()).isFalse();
+            assertThat(removed.text()).as("step 2: what was deleted").contains(spare).contains("deleted");
+            assertThat(Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME.eq(spareHost)).first())
+                .as("step 2: the address is gone").isNull();
             // The app site's own settings under their names for people.
             McpHttpSession.Answer forwarding = admin.call("site_app_set", Map.of("code", siteCode,
                 "forward_scheme", "http"));
@@ -1540,6 +1594,12 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 Map.of("name", "@", "type", "TXT", "remove", true)))).error()).as("step 5: set").isFalse();
             String after = admin.call("dns_record_list", Map.of("dns_zone", zone, "type", "A")).text();
             assertThat(after).as("step 5: the new value only").contains("203.0.113.11").doesNotContain("203.0.113.10");
+            // An entry with a key it does not take is refused naming that key and the entry, never as no list.
+            McpHttpSession.Answer misnamed = admin.call("dns_record_set", Map.of("dns_zone", zone, "records",
+                List.of(Map.of("name", "shop", "type", "A", "value", "203.0.113.12"))));
+            assertThat(misnamed.error()).as("step 5: refused").isTrue();
+            assertThat(misnamed.text()).as("step 5: naming the entry and the key it does not take")
+                .contains("records.0").contains("value").contains("values").doesNotContain("list of objects");
             assertThat(admin.call("dns_record_list", Map.of("dns_zone", zone)).text()).as("step 5: no TXT left")
                 .doesNotContain("hello");
 
@@ -1778,7 +1838,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
                 "Test Admin");
             List<Integer> port = new ArrayList<>();
-            for (int i = 0; i < 6; i++) port.add(FreePorts.tcpAndUdp());
+            for (int i = 0; i < 7; i++) port.add(FreePorts.tcpAndUdp());
             String mailName = PREFIX + "mail-" + letters();
 
             // 1. One stream with three ports, typed entries; a create without its ports says what it needs.
@@ -1846,7 +1906,41 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(admin.call("describe", Map.of("code", mail)).text()).as("step 5: describe offers the move")
                 .contains("site_stream_set code=" + mail).contains("site_ports_move code=" + mail);
 
-            assertThat(admin.call("delete", Map.of("code", mail)).error()).as("step 6: the stream trashed").isFalse();
+            // 6. A stream in the trash is said to be there, with the calls that apply, by describe and read alike; a
+            //    port another stream took meanwhile refuses its restore by the argument and the other stream's code.
+            String spareName = PREFIX + "spare-" + letters();
+            McpHttpSession.Answer spare = admin.call("site_stream_set", Map.of("name", spareName, "forward_host",
+                "127.0.0.1", "ports", List.of(Map.of("listen_port", port.get(6), "forward_port", 2222))));
+            assertThat(spare.text()).as("step 6: what now exists").contains(" " + spareName + " created");
+            String spareCode = found(Pattern.compile("S\\d+"), spare.text(), "step 6: the spare's code");
+            McpHttpSession.Answer trashed = admin.call("delete", Map.of("code", spareCode));
+            assertThat(trashed.text()).as("step 6: what became of it").contains(spareCode + " " + spareName
+                + " moved to the trash");
+            for (String tool : List.of("describe", "read")) {
+                Map<String, Object> asked = tool.equals("read") ? Map.of("codes", List.of(spareCode))
+                    : Map.of("code", spareCode);
+                assertThat(admin.call(tool, asked).text()).as("step 6: " + tool + " of a trashed stream")
+                    .contains(spareCode + " is in the trash").contains("site_restore code=" + spareCode)
+                    .contains("delete code=" + spareCode + " permanent=true").doesNotContain("Nothing here");
+            }
+            String takerName = PREFIX + "taker-" + letters();
+            McpHttpSession.Answer taker = admin.call("site_stream_set", Map.of("name", takerName, "forward_host",
+                "127.0.0.1", "ports", List.of(Map.of("listen_port", port.get(6), "forward_port", 2223))));
+            assertThat(taker.error()).as("step 6: " + taker.text()).isFalse();
+            String takerCode = found(Pattern.compile("S\\d+"), taker.text(), "step 6: the taker's code");
+            McpHttpSession.Answer blocked = admin.call("site_restore", Map.of("code", spareCode));
+            assertThat(blocked.error()).as("step 6: " + blocked.text()).isTrue();
+            assertThat(blocked.text()).as("step 6: by the argument and the holder's code")
+                .contains("ports: ").doesNotContain("settings.").contains("site " + takerCode + " " + takerName);
+            McpHttpSession.Answer purged = admin.call("delete", Map.of("code", spareCode, "permanent", true));
+            assertThat(purged.text()).as("step 6: what was deleted").contains(spareCode + " " + spareName
+                + " deleted");
+            assertThat(admin.call("delete", Map.of("code", spareCode)).text()).as("step 6: a code naming nothing")
+                .contains("Nothing here is named " + spareCode).doesNotContain("page");
+
+            assertThat(admin.call("delete", Map.of("code", mail)).error()).as("step 7: the stream trashed").isFalse();
+            assertThat(admin.call("delete", Map.of("code", takerCode)).error()).as("step 7: the taker trashed")
+                .isFalse();
         } finally {
             if (adopted != null) ServerMain.adoptProxyServer(null);
         }
@@ -1955,18 +2049,18 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 String code = code(OperationRunModel.MODEL_ID, (int) id, owner);
 
                 // 2. Its starter reads it by every route.
-                assertThat(ownerTools.call(runRead, Map.of("id", code)).error()).as("step 2: " + what + " by its tool")
-                    .isFalse();
+                assertThat(ownerTools.call(runRead, Map.of("code", code)).error())
+                    .as("step 2: " + what + " by its tool").isFalse();
                 assertThat(httpGet(page + id, ownerSession).statusCode()).as("step 2: " + what + " by its page")
                     .isEqualTo(200);
                 assertThat(httpGet(part + id, ownerSession).statusCode()).as("step 2: " + what + " by its part")
                     .isEqualTo(200);
 
                 // 3. THE ASSERTION: another tenant admitted to the same panel entry reads it as no run at all.
-                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("id", code));
+                McpHttpSession.Answer hidden = rival.call(runRead, Map.of("code", code));
                 assertThat(hidden.error()).as("step 3: " + what + " refused by run_read").isTrue();
                 assertThat(hidden.text().replace(code, "<code>")).as("step 3: " + what + " names nothing to him")
-                    .isEqualTo(rival.call(runRead, Map.of("id", noRun)).text().replace(noRun, "<code>"));
+                    .isEqualTo(rival.call(runRead, Map.of("code", noRun)).text().replace(noRun, "<code>"));
                 assertThat(rival.call("read", Map.of("codes", List.of(code))).text().replace(code, "<code>"))
                     .as("step 3: nor does a read of " + what)
                     .isEqualTo(rival.call("read", Map.of("codes", List.of(noRun))).text().replace(noRun, "<code>"));
@@ -2036,7 +2130,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         String running = "status: " + OperationRunStatus.RUNNING.storageKey();
         McpHttpSession.Answer ended = Poll.value(step + ": " + run + " ends", Duration.ofSeconds(20),
             Duration.ofMillis(50), () -> {
-                McpHttpSession.Answer answer = session.call(read, Map.of("id", run));
+                McpHttpSession.Answer answer = session.call(read, Map.of("code", run));
                 return answer.text().contains(running) ? null : answer;
             });
         assertThat(ended.error()).as(step + ": " + ended.text()).isFalse();

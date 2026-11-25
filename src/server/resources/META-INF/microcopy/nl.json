@@ -646,7 +646,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Gevonden Node.js-versie waarmee deze site wordt gestart.",
+      "text": "Gevonden Node.js-versie waarmee deze app wordt gestart.",
       "scope": "help"
     }
   ],
@@ -1472,7 +1472,7 @@
     }
   ],
   "create_hostname": {
-    "text": "Optioneel. De eerste hostnaam waarop deze site antwoordt; meer hostnamen en TLS stel je in op het tabblad Domeinen.",
+    "text": "Optioneel. De eerste hostnaam waarop deze site antwoordt; meer adressen en hun TLS kunnen later volgen.",
     "scope": "help"
   },
   "instance_project": {
@@ -3395,7 +3395,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Bedien dit domein alleen op het gekozen lokale IP-adres. Leeg betekent alle interfaces.",
+      "text": "Antwoord voor dit adres alleen op het gekozen lokale IP. Leeg betekent alle interfaces.",
       "scope": "help"
     }
   ],
@@ -3497,7 +3497,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Gebruikersnaam aangemaakt in de databasecontainer en geinjecteerd in gekoppelde sites.",
+      "text": "Gebruikersnaam aangemaakt in de databasecontainer en meegegeven aan de apps waaraan ze gekoppeld is.",
       "scope": "help"
     }
   ],
@@ -3549,7 +3549,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Het domein waarvoor deze zone autoritatief is, bv. example.com (zonder punt op het einde)",
+      "text": "De naam waarvoor deze zone antwoordt, bv. example.com (zonder punt op het einde)",
       "scope": "help"
     }
   ],
@@ -3997,7 +3997,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Het exacte-hostnaam domeinrecord waar spelers mee verbinden.",
+      "text": "Het adres waarmee spelers verbinden, een exacte hostnaam.",
       "scope": "help"
     }
   ],
@@ -4007,7 +4007,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "De gameserver waarnaar de proxy dit domein doorstuurt.",
+      "text": "De gameserver waarnaar de proxy dit adres doorstuurt.",
       "scope": "help"
     }
   ],
@@ -4585,7 +4585,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Een herkenbare naam voor dit certificaat, bv. het hoofddomein dat het dekt.",
+      "text": "Een herkenbare naam voor dit certificaat, bv. de hoofdnaam die het dekt.",
       "scope": "help"
     }
   ],
@@ -6821,7 +6821,27 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' heeft geen ruimte voor deze app: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak geheugen van een andere app vrij of laat een extra host toe.",
+    "text": "Host '{$name}' heeft geen ruimte voor deze app: er is {$needed :bytes} nodig en slechts {$free :bytes} van het geheugenbudget is vrij. {$held} Kies een kleinere geheugenlimiet, verwijder of verklein een app die er geheugen inneemt, of laat een extra host toe.",
+    "scope": "violations"
+  },
+  "capacity_held_by": {
+    "text": "Het geheugen wordt ingenomen door {$holders}; een app in de prullenbak of een afgeloste release neemt niets in, en een gestopte app houdt zijn deel tot hij verwijderd wordt.",
+    "scope": "violations"
+  },
+  "capacity_held_by_nothing": {
+    "text": "Geen enkele app neemt er geheugen van in: het hele budget is kleiner dan deze app.",
+    "scope": "violations"
+  },
+  "capacity_holder": {
+    "text": "{$app} ({$booked :bytes})",
+    "scope": "violations"
+  },
+  "capacity_holders_other": {
+    "text": ".match {$count :integer}\none {{1 andere app ({$booked :bytes})}}\n* {{{$count :integer} andere apps ({$booked :bytes})}}",
+    "scope": "violations"
+  },
+  "capacity_held_by_none": {
+    "text": "{$booked :bytes} dat geen levende app inneemt",
     "scope": "violations"
   },
   "host_capacity_unproven": {
@@ -7172,7 +7192,7 @@
       "scope": "backup_target_kind"
     },
     {
-      "text": "Een map op een andere host via ssh; een ander storingsdomein als die host dat werkelijk is",
+      "text": "Een map op een andere host via ssh; veilig bij verlies van deze host wanneer die host los ervan uitvalt",
       "scope": "backup_target_kind_description"
     },
     {
@@ -7279,7 +7299,7 @@
     "scope": "hohenheim_field"
   },
   "backup_target_kind": {
-    "text": "Waar back-upexports terechtkomen; of dat een ander faaldomein is, is een deploymentfeit dat jij beheert",
+    "text": "Waar back-upexports terechtkomen; of dat het verlies van deze host overleeft, is een deploymentfeit dat u beheert",
     "scope": "help"
   },
   "backup_target_path": {
@@ -7316,6 +7336,10 @@
   },
   "variable_secret_too_short": {
     "text": "Een geheime waarde heeft minstens {$minimum :integer} tekens nodig, anders kan ze niet in logs verborgen worden",
+    "scope": "violations"
+  },
+  "variable_entry_refused": {
+    "text": "{$key}: {$reason}",
     "scope": "violations"
   },
   "variable_not_found": {
@@ -8203,7 +8227,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Het opgegeven publieke IPv4 van deze host; gegenereerde DNS A-records voor gamedomeinen nemen het letterlijk over. Laat leeg om geen A-records te genereren",
+      "text": "Het opgegeven publieke IPv4 van deze host; gegenereerde DNS A-records voor gameadressen nemen het letterlijk over. Laat leeg om geen A-records te genereren",
       "scope": "help"
     }
   ],
@@ -8280,7 +8304,7 @@
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Elke host die deze app aanvaardt zit vol: er is {$needed :bytes} nodig en de leegste heeft {$free :bytes} vrij. Kies een kleinere geheugenlimiet, maak geheugen vrij door een app te stoppen of te verwijderen, of laat een extra host toe",
+    "text": "Elke host die deze app aanvaardt zit vol: er is {$needed :bytes} nodig en de leegste heeft {$free :bytes} vrij. {$held} Kies een kleinere geheugenlimiet, verwijder of verklein een app die er geheugen inneemt, of laat een extra host toe.",
     "scope": "violations"
   },
   "host_help": {
@@ -8824,6 +8848,10 @@
     "text": "Alleen een Docker-container kan zijn image van een app nemen.",
     "scope": "violations"
   },
+  "image_from_app_not_application": {
+    "text": "{$app} is geen applicatie. Alleen een applicatie, de soort die uit zijn repository gebouwd wordt, leent zijn image aan een container.",
+    "scope": "violations"
+  },
   "image_and_image_from_app": {
     "text": "Laat Container-image en Image-tag leeg wanneer de image van een app komt.",
     "scope": "violations"
@@ -9306,7 +9334,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "https://host:8443 voor een externe daemon (TLS-clientcertificaat + vastgepind servercertificaat), of unix:// voor de lokale socket.",
+      "text": "https://host:8443 voor een externe daemon (TLS-clientcertificaat + vastgepind daemoncertificaat), of unix:// voor de lokale socket.",
       "scope": "help"
     }
   ],
@@ -20194,7 +20222,7 @@
   "mcp_tool_template_export": {"text": "Exporteert een sjabloon als een JSON-document dat template_import, hier of op een andere Hohenheim, terug in hetzelfde sjabloon omzet: instellingen, scripts, gereedheid, stop, variabelen, configuratiebestanden, databases en volumes, met een controlesom; niet zijn goedkeuring. Alleen beheerders. Een sjabloon met een geheime waarde (een geheime instelling, de standaard van een geheime vraag, een configuratiebestand) wordt geweigerd, want een geheim verlaat nooit een toolantwoord: download het via de pagina Sjablonen van het paneel, Exporteren.", "scope": "hohenheim"},
   "mcp_code_template_export": {"text": "Het sjabloon (TP3) om te exporteren.", "scope": "hohenheim"},
   "generate_instance_secret_description": {"text": "Laat de server een willekeurig geheim maken voor een sleutel die nog geen waarde heeft; de waarde wordt nooit getoond. De app ziet het vanaf de volgende deploy.", "scope": "hohenheim"},
-  "delete_game_domain_description": {"text": "Verwijdert deze koppeling van een gamedomein en de records die ze aanmaakte.", "scope": "hohenheim"},
+  "delete_game_domain_description": {"text": "Verwijdert deze koppeling van een gameadres en de records die ze aanmaakte.", "scope": "hohenheim"},
   "enable_site_description": {"text": "Zet de site aan, zodat haar adressen weer antwoorden.", "scope": "hohenheim"},
   "disable_site_description": {"text": "Zet de site uit: haar adressen antwoorden niet meer, terwijl de instellingen en de app erachter bewaard blijven. De eigen site van het paneel wordt geweigerd.", "scope": "hohenheim"},
   "stop_forcing_https_description": {"text": "Stopt het doorsturen naar HTTPS op de adressen van de site zonder werkend certificaat, zodat ze over HTTP antwoorden. Adressen met een werkend certificaat blijven ongewijzigd.", "scope": "hohenheim"},
@@ -20273,6 +20301,14 @@
   "site_kind_other_untooled": {"text": "{$code} is een {$kind}-site; geef change_kind: true om ze in deze soort om te zetten.", "scope": "violations"},
   "create_address": {"text": "Een adres toevoegen", "scope": "hohenheim"},
   "create_address_description": {"text": "Voegt een adres toe aan een site via het eigen aanmaken van het paneel.", "scope": "hohenheim"},
+  "delete_address": {"text": "Een adres verwijderen", "scope": "hohenheim"},
+  "delete_address_description": {"text": "Verwijdert een adres van zijn site via de eigen verwijdering van het paneel; de hostnaam antwoordt daar niet meer.", "scope": "hohenheim"},
+  "delete_access_list": {"text": "Een toegangslijst verwijderen", "scope": "hohenheim"},
+  "delete_access_list_description": {"text": "Verwijdert een toegangslijst via de eigen verwijdering van het paneel, geweigerd waar het paneel ze weigert.", "scope": "hohenheim"},
+  "delete_protected_path": {"text": "Een beschermd pad verwijderen", "scope": "hohenheim"},
+  "delete_protected_path_description": {"text": "Verwijdert een beschermd pad van zijn site via de eigen verwijdering van het paneel; zijn verzoeken gaan niet meer langs zijn toegangslijst.", "scope": "hohenheim"},
+  "delete_path_redirect": {"text": "Een padomleiding verwijderen", "scope": "hohenheim"},
+  "delete_path_redirect_description": {"text": "Verwijdert een padomleiding van zijn site via de eigen verwijdering van het paneel; de site bedient dat pad weer zelf.", "scope": "hohenheim"},
   "change_address": {"text": "Een adres wijzigen", "scope": "hohenheim"},
   "change_address_description": {"text": "Wijzigt de verstuurde instellingen van een adres via het eigen opslaan van het paneel; alle andere instellingen blijven zoals ze zijn.", "scope": "hohenheim"},
   "address_thing": {"text": "een adres", "scope": "hohenheim"},

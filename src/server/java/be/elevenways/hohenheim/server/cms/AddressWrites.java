@@ -52,6 +52,10 @@ public final class AddressWrites {
     /** Changes what the call sends of an address; every other setting stays as it is. */
     public static final Operation<Row, OperationInput.Values, String> CHANGE = WRITES.change();
 
+    /** Removes an address from its site through the panel's own delete. */
+    public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("address",
+        CertificateOperations.DOMAIN, HohenheimSlugs.DOMAINS);
+
     private AddressWrites() {
     }
 

@@ -23,6 +23,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
@@ -48,6 +49,10 @@ import java.util.function.UnaryOperator;
 public final class AccessListParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessListModel.REF);
+
+    /** Deletes an access list through the panel's own delete. */
+    public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("access_list", SUBJECT,
+        HohenheimSlugs.ACCESS_LISTS);
 
     /** The list's "lets in" column: its rules in a few words. */
     private static final String LETS_IN_COLUMN = "lets_in";

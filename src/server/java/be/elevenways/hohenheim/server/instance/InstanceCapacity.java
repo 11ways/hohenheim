@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.PlacementRefusal;
@@ -17,14 +20,17 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -313,7 +319,71 @@ public final class InstanceCapacity {
         return HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
             .withArg("name", HostModel.labelOf(serverId))
             .withArg("needed", ByteUnit.MEGABYTE.bytes(neededMb))
-            .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, freeMb)));
+            .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, freeMb)))
+            .withArg("held", heldOn(serverId));
+    }
+
+    /** The most apps a refusal names one by one as what holds a host's memory; the rest are summed. */
+    private static final int NAMED_HOLDERS = 5;
+
+    /**
+     * What holds a host's booked memory, for a refusal that ran out of it: the apps holding the most, each by its
+     * code and name as the caller may read it, the rest summed, and what no live app holds; the rule it rests on is
+     * said too: an app in the trash and a retired release hold none (trashing releases a booking, a restore books it
+     * again), so freeing memory means deleting, or shrinking, one of the apps named.
+     */
+    static @NonNull Microcopy heldOn(int serverId) {
+        List<Row> rows = Models.get(InstanceModel.class).find().where(Criteria.or(
+            InstanceModel.HOST_ID.eq(serverId), InstanceModel.MIGRATE_TARGET_ID.eq(serverId))).all();
+        String bucket = bucketOf(serverId);
+        Map<Row, Long> held = new HashMap<>();
+        long accounted = 0;
+        for (Row row : rows) {
+            long amount = 0;
+            for (ChargedDimension.Charge charge : HOST_MEMORY.reconciled(row)) {
+                if (bucket.equals(charge.bucket())) amount += charge.amount();
+            }
+            if (amount > 0) held.put(row, amount);
+            accounted += amount;
+        }
+        List<Row> largest = new ArrayList<>(held.keySet());
+        largest.sort(Comparator.comparing(held::get, Comparator.reverseOrder()));
+        List<Microcopy> holders = new ArrayList<>();
+        long others = 0;
+        int unnamed = 0;
+        for (Row row : largest) {
+            String said = holders.size() < NAMED_HOLDERS ? appSaid(row) : null;
+            if (said == null) {
+                others += held.get(row);
+                unnamed++;
+            } else {
+                holders.add(HohenheimMicrocopy.VIOLATIONS.of("capacity_holder").withArg("app", said)
+                    .withArg("booked", ByteUnit.MEGABYTE.bytes(held.get(row))));
+            }
+        }
+        if (unnamed > 0) {
+            holders.add(HohenheimMicrocopy.VIOLATIONS.of("capacity_holders_other").withArg("count", unnamed)
+                .withArg("booked", ByteUnit.MEGABYTE.bytes(others)));
+        }
+        long unaccounted = bookedMbOn(serverId) - accounted;
+        if (unaccounted > 0) {
+            holders.add(HohenheimMicrocopy.VIOLATIONS.of("capacity_held_by_none")
+                .withArg("booked", ByteUnit.MEGABYTE.bytes(unaccounted)));
+        }
+        return holders.isEmpty() ? HohenheimMicrocopy.VIOLATIONS.of("capacity_held_by_nothing")
+            : HohenheimMicrocopy.VIOLATIONS.of("capacity_held_by").withArg("holders", List.copyOf(holders));
+    }
+
+    /** @return an app by its code and name, null when the work in flight may not read it */
+    private static @Nullable String appSaid(@NonNull Row app) {
+        Integer id = app.get(InstanceModel.ID);
+        boolean readable = id != null && TenantWrites.systemOrCaller(ctx -> HohenheimAccess.isAdmin(ctx)
+            || (ctx.isAccount() && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID, id,
+                HohenheimCapabilities.VIEW)));
+        if (!readable) return null;
+        String code = RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, String.valueOf(id));
+        String name = String.valueOf((Object) app.get(InstanceModel.NAME));
+        return code == null ? name : code + " " + name;
     }
 
     /** Per thread: host id -> memory a workload this thread is replacing is about to release. */

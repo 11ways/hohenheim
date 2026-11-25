@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -262,6 +263,44 @@ public final class PanelRecordWrites {
         return this.change;
     }
 
+    /**
+     * A panel resource's delete as an operation, id {@code delete_<word>} labelled and described by the Hohenheim
+     * microcopy of that id: the record goes through the caller's panel resource's own delete
+     * ({@link ResourceWrites#delete}), whose authority, offered-dead reason and hooks decide as they do for the
+     * panel's Delete button.
+     *
+     * @param slug the resource's slug in both panels
+     */
+    public static @NonNull Operation<Row, Void, Integer> deletion(@NonNull String word,
+                                                                  @NonNull SubjectType<Row> subject,
+                                                                  @NonNull String slug) {
+        Operation<Row, Void, Integer> delete = Operation.declare(HohenheimIds.id("delete_" + word))
+            .label(HohenheimMicrocopy.HOHENHEIM.of("delete_" + word))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_" + word + "_description"))
+            .one(subject)
+            // The resource's delete decides who may, as it does for the panel's button.
+            .gate(OperationGate.open())
+            .result(Integer.class)
+            .facts(OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.TRANSACTIONAL)
+            .register();
+        // Who may delete the record is the resource's question, asked before the call and by describe's offer alike.
+        OperationHandlers.attach(delete)
+            .authorize((record, input, caller) -> {
+                Panel panel = panelOf(caller);
+                PanelResource<Row> resource = CmsSupport.declaredRowEntry(panel, slug);
+                return resource != null && ResourceVerbs.removableBy(panel, resource, record, caller) ? null
+                    : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the caller's " + slug + " may not delete it");
+            })
+            .handle(call -> {
+                AccessContext caller = Objects.requireNonNull(call.access(), "a delete has its caller");
+                Panel panel = panelOf(caller);
+                ResourceWrites.delete(panel, resourceOf(panel, slug), call.subject(), caller);
+                return 1;
+            });
+        return delete;
+    }
+
     private @NonNull FormSpec form(boolean creating) {
         FormSpec.Builder form = FormSpec.builder();
         for (Part part : this.parts) {
@@ -432,9 +471,14 @@ public final class PanelRecordWrites {
      * @throws DomainRefusal forbidden for a caller whose panel declares none (an operator-only resource on /manage)
      */
     private @NonNull PanelResource<Row> resource(@NonNull Panel panel) {
-        PanelResource<Row> resource = CmsSupport.declaredRowEntry(panel, this.slug);
+        return resourceOf(panel, this.slug);
+    }
+
+    /** {@link #resource(Panel)} of the resource of this slug. */
+    private static @NonNull PanelResource<Row> resourceOf(@NonNull Panel panel, @NonNull String slug) {
+        PanelResource<Row> resource = CmsSupport.declaredRowEntry(panel, slug);
         if (resource == null) {
-            throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the caller's panel declares no " + this.slug);
+            throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the caller's panel declares no " + slug);
         }
         return resource;
     }

@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
@@ -38,6 +39,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 public final class SiteRedirectParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteRedirectModel.REF);
+
+    /** Removes a path redirect from its site through the panel's own delete. */
+    public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("path_redirect", SUBJECT,
+        HohenheimSlugs.REDIRECTS);
 
     private SiteRedirectParts() {
     }

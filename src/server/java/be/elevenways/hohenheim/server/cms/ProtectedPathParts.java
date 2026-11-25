@@ -22,6 +22,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.BadgeVariant;
@@ -49,6 +50,10 @@ public final class ProtectedPathParts {
     static final String PROTECTION_COLUMN = "protection";
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(ProtectedPathModel.REF);
+
+    /** Removes a protected path from its site through the panel's own delete. */
+    public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("protected_path", SUBJECT,
+        HohenheimSlugs.PROTECTED_PATHS);
 
     private ProtectedPathParts() {
     }

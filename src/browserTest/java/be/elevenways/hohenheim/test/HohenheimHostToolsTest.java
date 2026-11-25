@@ -229,6 +229,11 @@ class HohenheimHostToolsTest extends HohenheimHttpTestBase {
                 .get(EnvironmentModel.NAME)).as("step 12: stored").isEqualTo("production");
             assertThat(admin.call("describe", Map.of("code", environment)).text())
                 .as("step 12: describe names the change").contains("environment_set code=" + environment);
+            String row = admin.call("list", Map.of("kind", "environment", "of", project)).text().lines()
+                .filter(line -> line.contains(environment + " ")).findFirst().orElseThrow();
+            assertThat(row.split("production", -1)).as("step 12: a listed row says its name once: " + row)
+                .hasSize(2);
+            assertThat(row.split(project, -1)).as("step 12: and its project once: " + row).hasSize(2);
 
             // 13. A stack on this machine (no host given) and a service of it, each made and changed by its code.
             String stack = made(admin, "stack_set", Map.of("name", PREFIX + "stack-" + tag, "enabled", false), "ST",

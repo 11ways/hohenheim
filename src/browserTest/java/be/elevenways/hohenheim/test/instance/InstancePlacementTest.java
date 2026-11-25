@@ -219,11 +219,10 @@ class InstancePlacementTest {
     /**
      * A live workload CHARGED to {@code bucket} and BOOKED on its host.
      *
-     * AIDEV-NOTE: the bucket is written in a SECOND save on purpose. InstanceQuota's
-     * create hook derives and stamps QUOTA_BUCKET from the acting principal, so a
-     * bucket set on the insert is silently replaced by the operator's empty-set one --
-     * which would make every dedicated-posture assertion below pass for the wrong
-     * reason. The read-back is asserted rather than assumed.
+     * AIDEV-NOTE: the bucket is written by a set-based update after the insert, on purpose. InstanceQuota's hooks
+     * derive and stamp QUOTA_BUCKET from the acting principal on every save (an unchanged booking is stamped again),
+     * so a bucket staged on any save is silently replaced by the operator's empty-set one -- which would make every
+     * dedicated-posture assertion below pass for the wrong reason. The read-back is asserted rather than assumed.
      */
     private int liveInstanceOn(int serverId, String bucket, int memoryMb) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
@@ -236,9 +235,9 @@ class InstancePlacementTest {
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);
 
-        row.set(InstanceModel.QUOTA_BUCKET, bucket);
-        Models.get(InstanceModel.class).save(row);
-        Row stored = Models.get(InstanceModel.class).findById(id);
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+            .assign(InstanceModel.QUOTA_BUCKET, bucket).updateAll();
+        Row stored = Models.get(InstanceModel.class).find().noCache().where(InstanceModel.ID.eq(id)).first();
         assertThat((String) stored.get(InstanceModel.QUOTA_BUCKET))
             .as("fixture: the workload really is charged to '%s'", bucket)
             .isEqualTo(bucket);

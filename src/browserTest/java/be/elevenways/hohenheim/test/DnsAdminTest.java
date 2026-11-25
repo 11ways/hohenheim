@@ -31,7 +31,7 @@ class DnsAdminTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.locator("body").textContent())
             .contains("Zone origin")
-            .contains("The domain this zone is authoritative for")
+            .contains("The name this zone answers for")
             .contains("Role")
             .contains("Primary zones are edited here")
             .contains("Owning peer");

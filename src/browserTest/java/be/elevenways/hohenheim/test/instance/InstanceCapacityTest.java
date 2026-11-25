@@ -4,6 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -324,6 +325,11 @@ class InstanceCapacityTest {
                     + " onto a host with no headroom left", loser))
                 .as("step 1: and the refusal is the NAMED host-capacity one, not a 500")
                 .isEqualTo("host_capacity_reached");
+            // The refusal says what holds the room, by app, and the rule that a trashed app holds none.
+            assertThat(HohenheimViolations.textOf(((Violations) loser).all().get(0).message()))
+                .as("step 1: the refusal names the app holding the memory")
+                .contains((String) landed.get(0).get(InstanceModel.NAME)).contains("in the trash")
+                .doesNotContain("{$");
 
             // 2. POSITIVE ANCHOR: the refusal is about the LAST megabyte, not about the
             //    host. Freeing the winner lets the same size land immediately.

@@ -21,6 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -235,6 +236,8 @@ public final class InstancePlacement {
         // "nothing accepts this workload".
         Violations kindRefusal = null;
         long largestFreeMb = -1;
+        // The emptiest full host, whose holders the refusal names so the caller knows what to free.
+        Integer emptiestFull = null;
         int footprint = workload.footprintMb();
 
         for (Row server : Models.get(HostModel.class).find()
@@ -273,6 +276,7 @@ public final class InstancePlacement {
             long free = bookable - booked;
             if (footprint > free) {
                 somethingWasFull = true;
+                if (emptiestFull == null || free > largestFreeMb) emptiestFull = serverId;
                 largestFreeMb = Math.max(largestFreeMb, free);
                 continue;
             }
@@ -294,7 +298,8 @@ public final class InstancePlacement {
             if (somethingWasFull) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("no_placement_capacity")
                     .withArg("needed", ByteUnit.MEGABYTE.bytes(footprint))
-                    .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, largestFreeMb))));
+                    .withArg("free", ByteUnit.MEGABYTE.bytes(Math.max(0, largestFreeMb)))
+                    .withArg("held", InstanceCapacity.heldOn(Objects.requireNonNull(emptiestFull))));
             }
             if (unmeasured != null) {
                 throw Violations.ofForm(capacityUnproven(unmeasured));

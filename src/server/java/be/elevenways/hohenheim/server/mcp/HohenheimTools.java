@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.AddressWrites;
 import be.elevenways.hohenheim.server.cms.AppKindWrites;
@@ -32,11 +33,13 @@ import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.cms.ProjectParts;
+import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.hohenheim.server.cms.SiteKindWrites;
 import be.elevenways.hohenheim.server.cms.SitePortMoves;
+import be.elevenways.hohenheim.server.cms.SiteRedirectParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -132,6 +135,10 @@ public final class HohenheimTools extends McpToolCollection {
             .route(ReleasedClaimParts.LIFT, null)
             .route(GitConnectionWrites.DELETE, null)
             .route(CertificateParts.DELETE, null)
+            .route(AddressWrites.DELETE, null)
+            .route(AccessListParts.DELETE, null)
+            .route(ProtectedPathParts.DELETE, null)
+            .route(SiteRedirectParts.DELETE, null)
             .route(InstanceTemplateParts.DELETE, null);
         // zenit-auth's people and roles are deleted here too, by their own operations.
         for (Operation<?, ?, ?> operation : AuthTools.DELETES) deletes.route(operation, null);

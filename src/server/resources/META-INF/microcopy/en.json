@@ -646,7 +646,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Discovered Node.js version used to start this site.",
+      "text": "Discovered Node.js version used to start this app.",
       "scope": "help"
     }
   ],
@@ -1472,7 +1472,7 @@
     }
   ],
   "create_hostname": {
-    "text": "Optional. The first hostname this site answers on; you can add more, and set TLS, on the Domains tab.",
+    "text": "Optional. The first hostname this site answers on; more addresses and their TLS can follow later.",
     "scope": "help"
   },
   "instance_project": {
@@ -3395,7 +3395,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Only serve this domain on the selected local IP address. Blank means all interfaces.",
+      "text": "Only answer for this address on the selected local IP. Blank means all interfaces.",
       "scope": "help"
     }
   ],
@@ -3497,7 +3497,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Username created in the database container and injected into attached sites.",
+      "text": "Username created in the database container and given to the apps it is attached to.",
       "scope": "help"
     }
   ],
@@ -3549,7 +3549,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The domain this zone is authoritative for, e.g. example.com (no trailing dot)",
+      "text": "The name this zone answers for, e.g. example.com (no trailing dot)",
       "scope": "help"
     }
   ],
@@ -3997,7 +3997,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The exact-hostname domain record players connect to.",
+      "text": "The address players connect to, an exact hostname.",
       "scope": "help"
     }
   ],
@@ -4007,7 +4007,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The game server the proxy forwards this domain to.",
+      "text": "The game server the proxy forwards this address to.",
       "scope": "help"
     }
   ],
@@ -4585,7 +4585,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "A recognizable name for this certificate, e.g. the main domain it covers.",
+      "text": "A recognizable name for this certificate, e.g. the main name it covers.",
       "scope": "help"
     }
   ],
@@ -6821,7 +6821,27 @@
     "scope": "violations"
   },
   "host_capacity_reached": {
-    "text": "Host '{$name}' has no room for this app: it needs {$needed :bytes} and only {$free :bytes} of its memory budget is free. Choose a smaller memory limit, free memory another app holds, or admit another host.",
+    "text": "Host '{$name}' has no room for this app: it needs {$needed :bytes} and only {$free :bytes} of its memory budget is free. {$held} Choose a smaller memory limit, delete or shrink an app that holds memory there, or admit another host.",
+    "scope": "violations"
+  },
+  "capacity_held_by": {
+    "text": "Its memory is held by {$holders}; an app in the trash or a retired release holds none, and a stopped app keeps its share until it is deleted.",
+    "scope": "violations"
+  },
+  "capacity_held_by_nothing": {
+    "text": "No app holds any of its memory: its whole budget is smaller than this app.",
+    "scope": "violations"
+  },
+  "capacity_holder": {
+    "text": "{$app} ({$booked :bytes})",
+    "scope": "violations"
+  },
+  "capacity_holders_other": {
+    "text": ".match {$count :integer}\none {{1 other app ({$booked :bytes})}}\n* {{{$count :integer} other apps ({$booked :bytes})}}",
+    "scope": "violations"
+  },
+  "capacity_held_by_none": {
+    "text": "{$booked :bytes} that no live app holds",
     "scope": "violations"
   },
   "host_capacity_unproven": {
@@ -7172,7 +7192,7 @@
       "scope": "backup_target_kind"
     },
     {
-      "text": "A directory on another host over ssh; a different failure domain when the host actually is one",
+      "text": "A directory on another host over ssh; safe from this host's loss when that host fails apart from it",
       "scope": "backup_target_kind_description"
     },
     {
@@ -7279,7 +7299,7 @@
     "scope": "hohenheim_field"
   },
   "backup_target_kind": {
-    "text": "Where backup exports are written; whether it is a different failure domain is a deployment fact you own",
+    "text": "Where backup exports are written; whether it survives the loss of this host is a deployment fact you own",
     "scope": "help"
   },
   "backup_target_path": {
@@ -7316,6 +7336,10 @@
   },
   "variable_secret_too_short": {
     "text": "A secret value needs at least {$minimum :integer} characters, or it cannot be hidden in logs",
+    "scope": "violations"
+  },
+  "variable_entry_refused": {
+    "text": "{$key}: {$reason}",
     "scope": "violations"
   },
   "variable_not_found": {
@@ -8203,7 +8227,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The declared public IPv4 of this host; generated DNS A records for game domains carry it verbatim. Leave blank to generate no A records",
+      "text": "The declared public IPv4 of this host; generated DNS A records for game addresses carry it verbatim. Leave blank to generate no A records",
       "scope": "help"
     }
   ],
@@ -8280,7 +8304,7 @@
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Every host that accepts this app is out of memory: it needs {$needed :bytes} and the emptiest one has {$free :bytes} free. Choose a smaller memory limit, free memory by stopping or deleting an app, or admit another host",
+    "text": "Every host that accepts this app is out of memory: it needs {$needed :bytes} and the emptiest one has {$free :bytes} free. {$held} Choose a smaller memory limit, delete or shrink an app that holds memory there, or admit another host.",
     "scope": "violations"
   },
   "host_help": {
@@ -8824,6 +8848,10 @@
     "text": "Only a Docker container can take its image from an app.",
     "scope": "violations"
   },
+  "image_from_app_not_application": {
+    "text": "{$app} is no application. Only an application, the kind built from its repository, lends its image to a container.",
+    "scope": "violations"
+  },
   "image_and_image_from_app": {
     "text": "Leave Container image and Image tag empty when the image comes from an app.",
     "scope": "violations"
@@ -9306,7 +9334,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "https://host:8443 for a remote daemon (TLS client certificate + pinned server certificate), or unix:// for the local socket.",
+      "text": "https://host:8443 for a remote daemon (TLS client certificate + pinned daemon certificate), or unix:// for the local socket.",
       "scope": "help"
     }
   ],
@@ -20194,7 +20222,7 @@
   "mcp_tool_template_export": {"text": "Exports a template as a JSON document that template_import, here or on another Hohenheim, turns back into the same template: settings, scripts, readiness, stop, variables, config files, databases and volumes, with a checksum; not its approval. Administrators only. A template holding a secret value (a secret setting, a secret question's default, a config file) is refused, since a secret never leaves in a tool answer: download it from the panel's Templates page, Export.", "scope": "hohenheim"},
   "mcp_code_template_export": {"text": "The template (TP3) to export.", "scope": "hohenheim"},
   "generate_instance_secret_description": {"text": "Has the server make a random secret for a key that holds no value yet; the value is never shown. The app sees it from its next deploy.", "scope": "hohenheim"},
-  "delete_game_domain_description": {"text": "Deletes this game domain mapping and the records it generated.", "scope": "hohenheim"},
+  "delete_game_domain_description": {"text": "Deletes this game address mapping and the records it generated.", "scope": "hohenheim"},
   "enable_site_description": {"text": "Switches the site on, so its addresses answer again.", "scope": "hohenheim"},
   "disable_site_description": {"text": "Switches the site off: its addresses stop answering, while its settings and the app behind it are kept. The panel's own site is refused.", "scope": "hohenheim"},
   "stop_forcing_https_description": {"text": "Stops redirecting to HTTPS on the site's addresses that have no working certificate, so they answer over HTTP. Addresses with a working certificate are left alone.", "scope": "hohenheim"},
@@ -20273,6 +20301,14 @@
   "site_kind_other_untooled": {"text": "{$code} is a {$kind} site; give change_kind: true to turn it into this kind.", "scope": "violations"},
   "create_address": {"text": "Add an address", "scope": "hohenheim"},
   "create_address_description": {"text": "Adds an address to a site through the panel's own create.", "scope": "hohenheim"},
+  "delete_address": {"text": "Delete an address", "scope": "hohenheim"},
+  "delete_address_description": {"text": "Removes an address from its site through the panel's own delete; its hostname stops answering there.", "scope": "hohenheim"},
+  "delete_access_list": {"text": "Delete an access list", "scope": "hohenheim"},
+  "delete_access_list_description": {"text": "Deletes an access list through the panel's own delete, refused where the panel refuses it.", "scope": "hohenheim"},
+  "delete_protected_path": {"text": "Delete a protected path", "scope": "hohenheim"},
+  "delete_protected_path_description": {"text": "Removes a protected path from its site through the panel's own delete; its requests no longer pass its access list.", "scope": "hohenheim"},
+  "delete_path_redirect": {"text": "Delete a path redirect", "scope": "hohenheim"},
+  "delete_path_redirect_description": {"text": "Removes a path redirect from its site through the panel's own delete; the site serves that path itself again.", "scope": "hohenheim"},
   "change_address": {"text": "Change an address", "scope": "hohenheim"},
   "change_address_description": {"text": "Changes the settings sent of an address through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
   "address_thing": {"text": "an address", "scope": "hohenheim"},

@@ -2,11 +2,16 @@ package be.elevenways.hohenheim.server.ports;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -28,7 +33,8 @@ public final class PortHolders {
 
     /**
      * @return the holder's description when the work in flight may read the owning record (declared system work, an
-     *         operator, or a caller holding view on it), else null; an ownerless claim is named to operators only
+     *         operator, or a caller holding view on it), else null; an ownerless claim is named to operators only. A
+     *         record with a code is named by its kind, code and title ("site S14 reh-stream-a"), as a tool names it.
      */
     public static @Nullable String describedTo(@NonNull Row claim) {
         String ownerModel = claim.get(PortAllocationModel.OWNER_MODEL);
@@ -37,6 +43,13 @@ public final class PortHolders {
         boolean readable = TenantWrites.systemOrCaller(ctx -> HohenheimAccess.isAdmin(ctx)
             || (model != null && ctx.isAccount()
                 && HohenheimAccess.reachesRecord(ctx, model, ownerId, HohenheimCapabilities.VIEW)));
-        return readable ? PortLedger.describeHolder(claim) : null;
+        if (!readable) return null;
+        String code = model == null || ownerId == null ? null
+            : RecordCodes.codeUnjudged(model, String.valueOf(ownerId));
+        Model owners = code == null ? null : Models.get(model);
+        Row owner = owners == null ? null : StoredRows.byId(owners, ownerId);
+        if (owner == null) return PortLedger.describeHolder(claim);
+        String title = owners.getDisplayTitle(owner);
+        return AssistantNoun.of(model) + " " + code + (title == null || title.isBlank() ? "" : " " + title);
     }
 }

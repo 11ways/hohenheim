@@ -98,6 +98,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -480,6 +481,7 @@ public final class InstanceParts {
                 .rulesFromContext(context -> Condition.all(Condition.test(InstanceModel.KIND.getName(),
                     CoreTypes.EQUALS, Operand.of(ApplicationKind.ID.toString()))))
                 .emptyReason(context -> HohenheimMicrocopy.INSTANCE.of("image_app_empty"))
+                .outOfScope(InstanceParts::imageAppRefusal)
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
@@ -509,6 +511,20 @@ public final class InstanceParts {
             .showWhen(InstanceModel.IMAGE_APP_ID.getName(), InstanceModel.KIND.getName(),
                 DockerContainerKind.ID.toString())
             .build();
+    }
+
+    /**
+     * The save's refusal of an image app that is no application, naming it by its code and name as its reader may.
+     *
+     * @param picked the picked app's key
+     */
+    private static @Nullable Microcopy imageAppRefusal(@NonNull EditContext context, @NonNull Object picked) {
+        Row app = Models.get(InstanceModel.class).findById(picked);
+        if (app == null) return null;
+        String code = RecordCodes.code(InstanceModel.MODEL_ID, String.valueOf(picked), context.accessContext());
+        String name = String.valueOf((Object) app.get(InstanceModel.NAME));
+        return HohenheimMicrocopy.VIOLATIONS.of("image_from_app_not_application")
+            .withArg("app", code == null ? name : code + " " + name);
     }
 
     /** The card an app's name and placement stand in, on every form over the instance model. */

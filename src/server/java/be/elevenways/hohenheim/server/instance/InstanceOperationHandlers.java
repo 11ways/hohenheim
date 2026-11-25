@@ -47,6 +47,7 @@ import be.elevenways.hohenheim.instance.InstanceOperations.MigrateInput;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -536,20 +537,24 @@ public final class InstanceOperationHandlers {
         Models.get(InstanceVariableModel.class).getResolvedDatasource().withTransaction(tx -> {
             for (Map<?, ?> entry : entries(input.set())) {
                 String key = text(entry.get("key"));
-                variables.setPlainValue(instanceId, key, text(entry.get("value")));
+                byEntry(InstanceVariableOperations.SET.name(), key,
+                    () -> variables.setPlainValue(instanceId, key, text(entry.get("value"))));
                 changed.add(key);
             }
             for (Map<?, ?> entry : entries(input.secret())) {
                 String key = text(entry.get("key"));
-                variables.setValue(instanceId, null, key, VariableKind.SECRET.token(), text(entry.get("value")));
+                byEntry(InstanceVariableOperations.SECRET.name(), key, () -> variables.setValue(instanceId, null, key,
+                    VariableKind.SECRET.token(), text(entry.get("value"))));
                 changed.add(key);
             }
             for (Object key : input.generate() == null ? List.of() : input.generate()) {
-                variables.generateSecret(instanceId, text(key));
+                byEntry(InstanceVariableOperations.GENERATE.name(), text(key),
+                    () -> variables.generateSecret(instanceId, text(key)));
                 changed.add(text(key));
             }
             for (Object key : input.unset() == null ? List.of() : input.unset()) {
-                variables.unset(instanceId, text(key));
+                byEntry(InstanceVariableOperations.UNSET.name(), text(key),
+                    () -> variables.unset(instanceId, text(key)));
             }
         });
         for (String key : changed) InstanceVariables.recordSet(instanceId, key);
@@ -560,6 +565,23 @@ public final class InstanceOperationHandlers {
 
     private static boolean empty(@Nullable List<?> list) {
         return list == null || list.isEmpty();
+    }
+
+    /**
+     * Runs one entry's one-key write; its refusals name the list the entry came in and the entry's key
+     * ("secret: DB_PASS: ..."), never the column the write stores it in, and carry no value.
+     */
+    private static void byEntry(@NonNull String list, @NonNull String key, @NonNull Runnable write) {
+        try {
+            write.run();
+        } catch (Violations refused) {
+            Violations said = new Violations();
+            for (Violation violation : refused.all()) {
+                said.add(new Violation(list, list, null, HohenheimMicrocopy.VIOLATIONS.of("variable_entry_refused")
+                    .withArg("key", key).withArg("reason", violation.message()), violation.subject()));
+            }
+            throw said;
+        }
     }
 
     private static @NonNull List<Map<?, ?>> entries(@Nullable List<?> list) {
