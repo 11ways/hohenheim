@@ -10,7 +10,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
+import be.elevenways.hohenheim.server.backup.SshTargetKind;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -61,6 +64,9 @@ public final class BackupTargetParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.REF);
 
+    /** The argument naming the host an SSH target writes to. */
+    public static final String HOST = "host";
+
     /** Runs the target's health check against its real destination. */
     public static final Operation<Row, Void, TestOutcome> TEST =
         Operation.declare(HohenheimIds.id("test_backup_target"))
@@ -99,6 +105,21 @@ public final class BackupTargetParts {
      */
     public record TestOutcome(@Nullable String name, @Nullable String failure) {
     }
+
+    /**
+     * A target's create and change through this resource's form: its name, its kind and, inside its kind's settings,
+     * the folder and (for an SSH target) the host by its code, stored as the host's registry key.
+     */
+    public static final PanelRecordWrites WRITES = PanelRecordWrites.of("backup_target", BackupTargetModel.MODEL_ID,
+            SUBJECT, BackupTargetModel.ID, HohenheimSlugs.BACKUP_TARGETS)
+        .settings(List.of(BackupTargetModel.NAME))
+        // A caller names the kind by its plain word (filesystem, ssh); the stored key carries the namespace.
+        .byWord(BackupTargetModel.KIND)
+        .within(BackupTargetModel.SETTINGS)
+        .settings(List.of(FilesystemTargetKind.PATH))
+        .link(HOST, HohenheimMicrocopy.HELP.of("backup_target_host"), SshTargetKind.HOST, HostModel.MODEL_ID, false,
+            id -> HohenheimIds.id(id).toString())
+        .build();
 
     static {
         // The test is a command operation: its outcome is stored as the receipt, so it must serialize, or the

@@ -52,6 +52,7 @@ public class BackupTargetModel extends Model {
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("backup_target_name"))
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(

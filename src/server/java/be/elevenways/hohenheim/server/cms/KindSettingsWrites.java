@@ -436,6 +436,17 @@ public final class KindSettingsWrites {
      * @param columns argument name to the record's own column the argument writes (a host's code into server_id)
      */
     static <T> T speaking(@NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Supplier<T> write) {
+        Map<String, String> named = new LinkedHashMap<>();
+        columns.forEach((argument, column) -> named.put(column.getInputName(), argument));
+        return speaking(write, named);
+    }
+
+    /**
+     * Runs a write, its refusals naming each posted path by the argument that set it.
+     *
+     * @param named posted path (a record's entry, or {@code settings.path} inside a map) to the argument's name
+     */
+    static <T> T speaking(@NonNull Supplier<T> write, @NonNull Map<String, String> named) {
         try {
             return write.get();
         } catch (Violations refused) {
@@ -443,11 +454,11 @@ public final class KindSettingsWrites {
             for (Violation violation : refused.all()) {
                 String path = violation.path();
                 String fieldName = violation.fieldName();
-                for (Map.Entry<String, ? extends Field<?, ?>> link : columns.entrySet()) {
-                    String stored = link.getValue().getInputName();
+                for (Map.Entry<String, String> name : named.entrySet()) {
+                    String stored = name.getKey();
                     if (path.equals(stored) || path.startsWith(stored + ".")) {
-                        path = link.getKey() + path.substring(stored.length());
-                        fieldName = link.getKey();
+                        path = name.getValue() + path.substring(stored.length());
+                        fieldName = name.getValue();
                         break;
                     }
                 }

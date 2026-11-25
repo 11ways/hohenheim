@@ -24,7 +24,6 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -586,8 +585,7 @@ public final class DomainParts {
      */
     private static @Nullable Integer createSiteId(@NonNull Conduit conduit) {
         Integer preset = CmsSupport.scopedParentId(conduit, SiteDomainModel.SITE_ID.getName(), HohenheimSlugs.SITES);
-        return preset != null ? preset
-            : CmsSupport.scopedParentId(conduit, CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.SITES);
+        return preset != null ? preset : CmsSupport.requestedParentId(conduit, HohenheimSlugs.SITES);
     }
 
     /**

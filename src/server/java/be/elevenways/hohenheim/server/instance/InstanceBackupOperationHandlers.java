@@ -7,15 +7,16 @@ import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations.RestoreInput;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations.Restored;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
-import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -121,23 +122,24 @@ public final class InstanceBackupOperationHandlers {
      */
     private static @NonNull InputScope destinations(@Nullable Row backup, @NonNull FormSpec declared,
                                                     @Nullable AccessContext access) {
-        List<FieldOption<Integer>> options = new ArrayList<>();
+        List<FieldOption<String>> options = new ArrayList<>();
         if (backup != null && access != null && HohenheimAccess.isAdmin(access)) {
             for (InstanceBackups.Destination destination : InstanceBackups.destinationsFor(backup)) {
-                FieldOption<Integer> option = FieldOption.of(destination.serverId(),
+                FieldOption<String> option = FieldOption.of(String.valueOf(destination.serverId()),
                     Microcopy.literal(destination.name()));
                 options.add(destination.refusal() == null ? option
                     : option.disabledBecause(destination.refusal()));
             }
         }
-        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
-            InstanceTemplateOperations.HOST_ID.getName(),
-            Select.of(InstanceTemplateOperations.HOST_ID).options(OptionSource.of(options)).build())));
+        FormEntry host = InstanceBackupOperations.RESTORE_HOST;
+        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(host.name(),
+            OperationForms.recordChoice(host.name(), HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host"),
+                InstanceBackupOperations.RESTORE_HOST_HELP, HostModel.MODEL_ID, OptionSource.of(options), false))));
     }
 
     /** Restores to a new instance; the run leads to it and its step says what did not come back. */
     private static @NonNull Restored restore(@NonNull OperationCall<Row, RestoreInput> call) {
-        Integer serverId = call.input() == null ? null : call.input().hostId();
+        Integer serverId = call.input() == null ? null : call.input().host();
         InstanceBackups.Restored outcome = new InstanceBackups().restoreToNew(
             call.subject().get(InstanceBackupModel.ID), null, serverId);
         Row created = Models.get(InstanceModel.class).findById(outcome.instanceId());

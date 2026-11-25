@@ -5,11 +5,15 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
-import be.elevenways.hohenheim.KeptFromAssistants;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -43,35 +47,44 @@ public final class InstanceBackupOperations {
     /** The subject of every backup operation: one backup row. */
     public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.REF);
 
+    /** The words of {@link #RESTORE_HOST}, wherever it is drawn. */
+    public static final Microcopy RESTORE_HOST_HELP = HohenheimMicrocopy.HELP.of("backup_restore_host");
+
+    /**
+     * Where a restore to a new instance lands, by the host's code (SR1); left out, placement picks one. The panel
+     * draws it as a pick of the hosts the restore's gate admits (InstanceBackupOperationHandlers.destinations).
+     */
+    public static final FormEntry RESTORE_HOST = OperationForms.recordId("host", RESTORE_HOST_HELP,
+        HostModel.MODEL_ID, false);
+
     /**
      * Restores the backup as a NEW instance on the host the operator picks, or the one placement picks when none is;
      * a tenant's lands on its instance's own host. The source keeps running, so it confirms without a typed phrase.
      *
-     * AIDEV-NOTE: the host pick reuses the create forms' own field (InstanceTemplateOperations.HOST_ID, whose help
-     * says what blank means). Restoring onto ANOTHER host is the recovery for a dead one, so blank never means "the
-     * source host" for an operator: the server scopes the pick to the placement gate's verdict per host, and offers a
-     * tenant no pick at all.
+     * AIDEV-NOTE: restoring onto ANOTHER host is the recovery for a dead one, so blank never means "the source host"
+     * for an operator: the server scopes the pick to the placement gate's verdict per host, and offers a tenant no
+     * pick at all. Its run is read by its starter alone: a backup states no readers of its own.
      */
     public static final Operation<Row, RestoreInput, Restored> RESTORE_BACKUP =
         Operation.declare(HohenheimIds.id("restore_backup"))
             .happened(OperationSentences.of("restore_backup"))
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new"))
+            .description(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_description"))
             .icon(Icon.of("clone"))
             .one(BACKUP)
             .verb(HohenheimVerbs.RESTORE_TO_NEW)
             .gate(OperationGate.open())
-            .input(OperationInput.of(FormSpec.builder().add(InstanceTemplateOperations.HOST_ID).build(),
-                RestoreInput.class, values -> new RestoreInput(values.get(InstanceTemplateOperations.HOST_ID))))
+            .input(OperationInput.of(FormSpec.builder().add(RESTORE_HOST).build(), RestoreInput.class,
+                values -> new RestoreInput(RawValues.positiveInt(values.get(RESTORE_HOST.name())))))
             .result(Restored.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_step"))))
             .register();
 
     /** Where a restore lands: a host, or null to let placement pick one. */
-    public record RestoreInput(@Nullable Integer hostId) {
+    public record RestoreInput(@Nullable Integer host) {
     }
 
     /**
@@ -82,6 +95,7 @@ public final class InstanceBackupOperations {
         Operation.declare(HohenheimIds.id("restore_backup_in_place"))
             .happened(OperationSentences.of("restore_backup_in_place"))
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place"))
+            .description(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place_description"))
             .icon(Icon.of("clock-rotate-left"))
             .one(BACKUP)
             .verb(HohenheimVerbs.RESTORE_IN_PLACE)
@@ -90,7 +104,6 @@ public final class InstanceBackupOperations {
             .result(Integer.class)
             .command(COMMAND)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
-            .notForAssistants(KeptFromAssistants.RUN_READERS)
             .background(OperationSteps.of(
                 OperationSteps.step("restore", HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_in_place_step"))))
             .register();

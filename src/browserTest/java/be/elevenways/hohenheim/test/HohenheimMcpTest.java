@@ -132,7 +132,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
         "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
         "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
-        "hohenheim:restore_backup", "hohenheim:restore_backup_in_place", "hohenheim:rotate_host_key",
+        "hohenheim:rotate_host_key",
         "hohenheim:rotate_incus_cert", "hohenheim:route_notification_events", "hohenheim:run_schedule",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",

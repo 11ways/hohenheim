@@ -36,7 +36,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -240,9 +239,7 @@ public final class InstanceAttachmentParts {
      * accept an attach from this principal.
      */
     private static boolean mayAttach(@NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
-        Integer instanceId = conduit == null ? null : CmsSupport.scopedParentId(conduit,
-            CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.INSTANCES);
+        Integer instanceId = CmsSupport.requestedParentId(access.conduit(), HohenheimSlugs.INSTANCES);
         return instanceId != null ? InstanceDevices.mayChangeDevicesOf(access, instanceId)
             : InstanceDevices.mayChangeAnyDevices(access);
     }
@@ -492,9 +489,7 @@ public final class InstanceAttachmentParts {
             return Condition.test(DatabaseModel.ID.getName(), CoreTypes.EQUALS,
                 Operand.of(link.get(InstanceDatabaseModel.DATABASE_ID)));
         }
-        Conduit conduit = context.conduit();
-        Integer instanceId = conduit == null ? null : CmsSupport.scopedParentId(conduit,
-            CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.INSTANCES);
+        Integer instanceId = CmsSupport.requestedParentId(context.conduit(), HohenheimSlugs.INSTANCES);
         if (instanceId == null) {
             return Condition.EVERYTHING;
         }
@@ -508,8 +503,7 @@ public final class InstanceAttachmentParts {
 
     /** "Attach a database to shop-web": the create page names the app it attaches to, the parent it is opened under. */
     private static @Nullable Microcopy attachTitle(@NonNull PanelRequest request) {
-        Integer instanceId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
-            HohenheimSlugs.INSTANCES);
+        Integer instanceId = CmsSupport.requestedParentId(request.conduit(), HohenheimSlugs.INSTANCES);
         String instance = instanceId == null ? null : DeleteImpact.instanceNameOf(instanceId);
         return instance == null ? null
             : HohenheimMicrocopy.INSTANCE_DATABASE.of("attach_title").withArg("instance", instance);

@@ -331,7 +331,10 @@ public final class DatabaseParts {
             .description(HohenheimMicrocopy.DATABASE.of("change_password_hint"))
             .icon(Icon.of("key"))
             .one(DATABASE)
-            .notForAssistants("its one input is the new password, and an assistant is never sent a secret")
+            // An assistant sets a password through database_set's change (DatabaseRecordWrites), which asks this
+            // operation's gate and availability before the same writer stores it; nothing answers it back.
+            .notForAssistants("its password goes in through database_set, which asks this operation's gate and"
+                + " availability; no tool places it on its own")
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
             .input(OperationInput.of(FormSpec.builder().add(NEW_PASSWORD).build(), PasswordInput.class,
                     values -> new PasswordInput(values.get(NEW_PASSWORD.getName()) instanceof Secret typed

@@ -29,6 +29,7 @@ import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.ChildCreates;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -250,9 +251,24 @@ public final class CmsSupport {
     public static @Nullable Integer scopedParentId(@NonNull Conduit conduit, @NonNull String param,
                                                    @NonNull String parentSlug) {
         Integer prefilled = parsedInt(conduit.getQueryParam(param));
-        if (prefilled != null) {
-            return prefilled;
-        }
+        return prefilled != null ? prefilled : renderedParentId(conduit, parentSlug);
+    }
+
+    /**
+     * The parent record id a create is made under: the parent it names (ChildCreates.requestedParent: a create form's
+     * {@code parent} query, or the parent a create made outside a request names), else the record whose subpage is
+     * being rendered; null for none or a malformed value.
+     *
+     * @param conduit    the request, null outside one
+     * @param parentSlug the parent resource's slug, whose subpage supplies the fallback
+     */
+    public static @Nullable Integer requestedParentId(@Nullable Conduit conduit, @NonNull String parentSlug) {
+        Integer named = parsedInt(ChildCreates.requestedParent(conduit));
+        return named != null || conduit == null ? named : renderedParentId(conduit, parentSlug);
+    }
+
+    /** @return the id of the parent record whose subpage is being rendered, null on any other page */
+    private static @Nullable Integer renderedParentId(@NonNull Conduit conduit, @NonNull String parentSlug) {
         if (!parentSlug.equals(conduit.getParameter(CmsEndpoints.RESOURCE_PARAM))) {
             return null;
         }

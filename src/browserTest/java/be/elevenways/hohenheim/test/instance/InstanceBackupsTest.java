@@ -338,7 +338,7 @@ class InstanceBackupsTest {
                     .where(InstanceTemplateModel.ID.eq(template.get(InstanceTemplateModel.ID)))
                     .assign(InstanceTemplateModel.APPROVED_AT, Now.instant()).updateAll();
                 FormEntry pick = OperationPipeline.inputForm(tenantRestore(backup, tenant)).entries().stream()
-                    .filter(entry -> entry.name().equals("hostId")).findFirst().orElseThrow();
+                    .filter(entry -> entry.name().equals("host")).findFirst().orElseThrow();
                 assertThat(((Select<?>) pick).options().resolve(EditContext.of(tenant)))
                     .as("step 4: a tenant is offered no host").isEmpty();
                 int copy = restoredInstance(restoreRun(tenantRestore(backup, tenant), tenant, "step 4"), tenant,
@@ -488,20 +488,20 @@ class InstanceBackupsTest {
                 // 1. The source host has gone silent. The restore's host pick offers the spare and shows the source
                 //    disabled with the placement gate's own refusal, the words the Migrate page shows beside a host.
                 FormSpec form = OperationPipeline.inputForm(restoreRequest(backup));
-                FormEntry pick = form.entries().stream().filter(entry -> entry.name().equals("hostId"))
+                FormEntry pick = form.entries().stream().filter(entry -> entry.name().equals("host"))
                     .findFirst().orElse(null);
                 assertThat(pick).as("step 1: the restore asks for a host").isInstanceOf(Select.class);
                 List<? extends FieldOption<?>> options = ((Select<?>) pick).options()
                     .resolve(EditContext.of(TenantConduits.operator()));
                 assertThat(options).as("step 1: the dead source is shown, disabled, with the gate's refusal")
                     .anySatisfy(option -> {
-                        assertThat(option.value()).isEqualTo(hostId);
+                        assertThat(option.value()).isEqualTo(String.valueOf(hostId));
                         assertThat(option.disabled()).isTrue();
                         assertThat(option.description().key()).isEqualTo("host_contact_lapsed");
                     });
                 assertThat(options).as("step 1: the spare host is offered")
                     .anySatisfy(option -> {
-                        assertThat(option.value()).isEqualTo(spareId);
+                        assertThat(option.value()).isEqualTo(String.valueOf(spareId));
                         assertThat(option.disabled()).isFalse();
                     });
 
@@ -511,7 +511,7 @@ class InstanceBackupsTest {
                     .as("step 2: a restore onto the silent source is refused by the placement gate")
                     .isEqualTo("host_contact_lapsed ");
                 assertThat(violationKeys(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(backup)
-                        .form(Map.of("hostId", hostId))))))
+                        .form(Map.of("host", String.valueOf(hostId)))))))
                     .as("step 2: and the form refuses the disabled host with the same named refusal, never the "
                         + "select's generic one").isEqualTo("host_contact_lapsed ");
                 assertThat(Models.get(InstanceModel.class).find().count())
@@ -535,8 +535,8 @@ class InstanceBackupsTest {
                     .isEqualTo(spareId);
 
                 // 4. Named explicitly through the form, the spare is honoured.
-                int named = restoredInstance(restoreRun(restoreRequest(backup).form(Map.of("hostId", spareId)),
-                    "step 4"), "step 4");
+                int named = restoredInstance(restoreRun(restoreRequest(backup)
+                    .form(Map.of("host", String.valueOf(spareId))), "step 4"), "step 4");
                 restored.add(named);
                 assertThat((Integer) Models.get(InstanceModel.class).findById(named)
                         .get(InstanceModel.HOST_ID))
@@ -884,15 +884,15 @@ class InstanceBackupsTest {
                 //     once the pool has room the dialog's submit, asked again, runs the restore.
                 Row diskBackup = Models.get(InstanceBackupModel.class).findById(withDisk);
                 landing.daemon.poolTotalBytes = 2L * 1024 * 1024 * 1024;
-                OperationRun noRoom = restoreRun(restoreRequest(diskBackup).form(Map.of("hostId", landingId)),
-                    "step 3b");
+                OperationRun noRoom = restoreRun(restoreRequest(diskBackup)
+                    .form(Map.of("host", String.valueOf(landingId))), "step 3b");
                 assertThat(noRoom.status()).as("step 3b: the operation's run is refused").isEqualTo(
                     OperationRunStatus.REFUSED);
                 assertThat(noRoom.outcome()).as("step 3b: for capacity").isNotNull()
                     .extracting(Microcopy::key).isEqualTo("restore_capacity");
                 landing.daemon.poolTotalBytes = 100L * 1024 * 1024 * 1024;
                 int retried = restoredInstance(restoreRun(restoreRequest(diskBackup)
-                    .form(Map.of("hostId", landingId)), "step 3b"), "step 3b");
+                    .form(Map.of("host", String.valueOf(landingId))), "step 3b"), "step 3b");
                 restored.add(retried);
                 assertThat((Integer) Models.get(InstanceModel.class).findById(retried)
                         .get(InstanceModel.HOST_ID))

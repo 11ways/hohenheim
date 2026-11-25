@@ -195,7 +195,7 @@ class HohenheimDataToolsTest extends HohenheimHttpTestBase {
     }
 
     /** @return the id of a row saved with these values, deleted again at the end */
-    private static int record(Class<? extends Model> model, Deque<Runnable> cleanUp, Consumer<Row> fill) {
+    static int record(Class<? extends Model> model, Deque<Runnable> cleanUp, Consumer<Row> fill) {
         Row row = Models.get(model).createEmptyRow();
         fill.accept(row);
         Models.get(model).save(row);

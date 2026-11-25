@@ -1,11 +1,18 @@
 package be.elevenways.hohenheim.server.mcp;
 
+import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
+import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
+import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
+import be.elevenways.hohenheim.server.cms.DatabaseRecordWrites;
 import be.elevenways.hohenheim.server.files.InstanceFileOperations;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
@@ -94,8 +101,45 @@ final class HohenheimDataTools {
             .code(HohenheimTools.words("mcp_code_app_move"))
             .route(InstanceOperations.MIGRATE, HohenheimDataTools::moved)
             .build();
-        return List.of(moveToShared, dumpRestore, snapshotSet, snapshotRestore, fileRead, fileWrite, fileDelete,
-            fileMove, move);
+        McpHostTool databaseSet = McpCodeTool.builder("database_set", HohenheimTools.words("mcp_tool_database_set"),
+                HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_database_set"))
+            .creates(DatabaseRecordWrites.DATABASES.create(), null, List.of(DatabaseModel.NAME.getInputName(),
+                DatabaseModel.ENGINE.getInputName()), HohenheimTools.words("database_thing"))
+            .route(DatabaseRecordWrites.DATABASES.change(), HohenheimMcpAnswers::changed)
+            .build();
+        McpHostTool engineSet = McpCodeTool.builder("database_engine_set",
+                HohenheimTools.words("mcp_tool_database_engine_set"), HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_database_engine_set"))
+            .creates(DatabaseRecordWrites.ENGINES.create(), null, List.of(DatabaseEngineModel.NAME.getInputName(),
+                DatabaseEngineModel.ENGINE.getInputName()), HohenheimTools.words("database_engine_thing"))
+            .route(DatabaseRecordWrites.ENGINES.change(), HohenheimMcpAnswers::changed)
+            .build();
+        McpHostTool attach = McpCodeTool.builder("app_database_set", HohenheimTools.words("mcp_tool_app_database_set"),
+                HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_app_database_set"))
+            .creates(DatabaseRecordWrites.ATTACHMENTS.create(), null, List.of(DatabaseRecordWrites.APP,
+                DatabaseRecordWrites.DATABASE), HohenheimTools.words("database_link_thing"))
+            .route(DatabaseRecordWrites.ATTACHMENTS.change(), HohenheimMcpAnswers::changed)
+            .build();
+        McpHostTool targetSet = McpCodeTool.builder("backup_target_set",
+                HohenheimTools.words("mcp_tool_backup_target_set"), HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_backup_target_set"))
+            .creates(BackupTargetParts.WRITES.create(), null, List.of(BackupTargetModel.NAME.getInputName(),
+                BackupTargetModel.KIND.getInputName(), FilesystemTargetKind.PATH.getInputName()),
+                HohenheimTools.words("backup_target_thing"))
+            .route(BackupTargetParts.WRITES.change(), HohenheimMcpAnswers::changed)
+            .build();
+        // One effect per tool: in_place destroys, a restore into a new app only writes; the tool says destroy.
+        McpHostTool backupRestore = McpCodeTool.builder("backup_restore",
+                HohenheimTools.words("mcp_tool_backup_restore"), HohenheimTools.destroys())
+            .code(HohenheimTools.words("mcp_code_backup_restore"))
+            .flag(IN_PLACE, HohenheimTools.words("mcp_in_place_backup"))
+            .route(InstanceBackupOperations.RESTORE_BACKUP, null, IN_PLACE, "false")
+            .route(InstanceBackupOperations.RESTORE_BACKUP_IN_PLACE, null, IN_PLACE, "true")
+            .build();
+        return List.of(databaseSet, engineSet, attach, targetSet, backupRestore, moveToShared, dumpRestore,
+            snapshotSet, snapshotRestore, fileRead, fileWrite, fileDelete, fileMove, move);
     }
 
     /** The host an app now runs on, by its code; its name is what someone typed. */

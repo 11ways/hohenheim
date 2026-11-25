@@ -17,7 +17,6 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -28,6 +27,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.ChildCreates;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -42,7 +42,6 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UuidField;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.text.Texts;
@@ -257,8 +256,7 @@ public final class SpamserviceClientKeysResource {
 
     /** The client the create link names (the tab's {@code parent}), preselected like the scoped create always did. */
     private static @NonNull Map<String, Object> createDefaults(@NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
-        return createDefaults(conduit != null ? conduit.getParameter(CmsEndpoints.PARENT_PARAM) : null);
+        return createDefaults(ChildCreates.requestedParent(access.conduit()));
     }
 
     /** @param parent the create link's parent key; a malformed one is no prefill, never an exception */
