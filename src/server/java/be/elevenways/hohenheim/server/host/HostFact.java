@@ -31,6 +31,12 @@ public enum HostFact {
     NCPU(Unit.COUNT),
     /** The host's total memory in BYTES: the denominator of every placement decision on it. */
     MEM_TOTAL(Unit.BYTES),
+    /** The memory in BYTES the host's kernel still has available ({@code MemAvailable}, {@link HostMemory}). */
+    MEM_AVAILABLE(Unit.BYTES),
+    /** The host's swap in BYTES, measured with {@link #MEM_AVAILABLE}; 0 on a host without swap. */
+    SWAP_TOTAL(Unit.BYTES),
+    /** What is still free in BYTES of that swap. */
+    SWAP_FREE(Unit.BYTES),
     /** The size in BYTES of the filesystem holding the host's instance data ({@link HostDisk}). */
     DISK_TOTAL(Unit.BYTES),
     /** What is still free in BYTES on that filesystem, measured with {@link #DISK_TOTAL}. */

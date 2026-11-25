@@ -86,8 +86,28 @@ public final class DockerStatsFeed implements StatsFeed {
                 }
             }
         }
-        return new StatsReading(Now.millis(), cpu, (int) cores, RawValues.longAt(memoryStats, "usage"),
+        return new StatsReading(Now.millis(), cpu, (int) cores, workingSetOf(memoryStats),
             RawValues.longAt(memoryStats, "limit"), rx, tx);
+    }
+
+    /**
+     * The container's working set: its cgroup's usage less the inactive file cache, as {@code docker stats} reads it.
+     *
+     * AIDEV-NOTE: the raw {@code usage} counts page cache the kernel reclaims at will, so a container that only read
+     * a large file looked close to its limit; the memory checks hold this figure against what an app reserves and
+     * may grow to. cgroup v1 names the cache {@code total_inactive_file}, v2 {@code inactive_file}.
+     */
+    public static long workingSetOf(@Nullable Map<String, Object> memoryStats) {
+        long usage = RawValues.longAt(memoryStats, "usage");
+        Map<String, Object> stats = child(memoryStats, "stats");
+        if (stats != null) {
+            for (String cache : new String[] {"total_inactive_file", "inactive_file"}) {
+                if (stats.get(cache) instanceof Number inactive && inactive.longValue() < usage) {
+                    return usage - inactive.longValue();
+                }
+            }
+        }
+        return usage;
     }
 
     private static @Nullable Map<String, Object> parse(@NonNull String line) {

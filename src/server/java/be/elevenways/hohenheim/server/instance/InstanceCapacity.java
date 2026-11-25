@@ -239,6 +239,26 @@ public final class InstanceCapacity {
             .bookedMemoryMb();
     }
 
+    /**
+     * The memory (MB) an app reserves as its settings declare it now: the guaranteed amount its host books for it, and
+     * what the memory health checks ({@link MemoryHealth}) hold its use against.
+     *
+     * AIDEV-NOTE: the ONE reading of "reserved" outside the booking itself; today it is the footprint, because the
+     * reservation is still the maximum. A record whose releases book for it (an application) reserves nothing itself.
+     */
+    public static long reservedMbOf(@NonNull Row instance) {
+        return booksNothing(InstanceKinds.handlerOf(instance)) ? 0 : footprintMbOf(instance);
+    }
+
+    /**
+     * The memory (MB) an app may grow to, the cap its runtime enforces; 0 when it holds none.
+     *
+     * AIDEV-NOTE: equal to {@link #reservedMbOf} while the reservation is still the maximum.
+     */
+    public static long maximumMbOf(@NonNull Row instance) {
+        return reservedMbOf(instance);
+    }
+
     // -- the gate -------------------------------------------------------------
 
     /**

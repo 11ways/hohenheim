@@ -66,7 +66,7 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  * dashboard costs queries and never an SSH/HTTPS round trip per workload; reachability and
  * liveness are observed by their own scheduled sweeps (InstanceStatusReconciler, the host
  * probe) and read back here. The per-role collectors are ProxyAttention, DatabaseAttention,
- * HostAttention, InstanceAttention, StackAttention, DnsAttention and FirewallAttention.
+ * HostAttention, InstanceAttention, MemoryAttention, StackAttention, DnsAttention and FirewallAttention.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -151,6 +151,8 @@ public final class AttentionCollector {
             InstanceAttention.failedInstanceBackups(items);
             InstanceAttention.staleInstanceBackups(items);
             InstanceAttention.instancesLowOnDisk(items);
+            MemoryAttention.appMemory(items);
+            MemoryAttention.killedForMemory(items);
         }
         return items;
     }
@@ -229,6 +231,7 @@ public final class AttentionCollector {
             HostAttention.isolationUnenforced(items);
             HostAttention.networksRunningOut(items);
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
+            MemoryAttention.hostsShortOfMemory(items);
         }
         HostAttention.disksFillingUp(items, HohenheimRoles.hostWorkloadsEnabled());
         return items;

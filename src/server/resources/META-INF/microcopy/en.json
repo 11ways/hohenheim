@@ -1735,6 +1735,18 @@
       "target": "task_description"
     }
   ],
+  "observe_instance_memory": [
+    {
+      "text": "Measure app and host memory",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "How much memory each running app uses, and how much each host still has available, for the dashboard's memory checks",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "monitor_stacks": [
     {
       "text": "Watch stack health",
@@ -10812,6 +10824,58 @@
       "scope": "attention_detail"
     }
   ],
+  "app_memory_above_reserved": [
+    {
+      "text": "{$name} uses more memory than it reserves",
+      "scope": "attention_title"
+    },
+    {
+      "text": "For the last {$window :duration style=hours precision=exact} it used up to {$used :bytes}, more than the {$reserved :bytes} its host reserves for it. Raise its reserved memory to {$suggested :bytes}.",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_far_below_reserved": [
+    {
+      "text": "{$name} reserves far more memory than it uses",
+      "scope": "attention_title"
+    },
+    {
+      "text": ".match {$days :integer}\none {{Over the last day it used at most {$used :bytes} of the {$reserved :bytes} it reserves. Lowering its reserved memory to {$suggested :bytes} frees room on its host.}}\n* {{Over the last {$days :integer} days it used at most {$used :bytes} of the {$reserved :bytes} it reserves. Lowering its reserved memory to {$suggested :bytes} frees room on its host.}}",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_near_maximum": [
+    {
+      "text": "{$name} is close to its maximum memory",
+      "scope": "attention_title"
+    },
+    {
+      "text": "It uses {$used :bytes}, {$percent :percent} of its {$maximum :bytes} maximum. At the maximum the kernel kills it, so raise its maximum memory.",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_killed": [
+    {
+      "text": "{$name} was killed for running out of memory",
+      "scope": "attention_title"
+    },
+    {
+      "text": "The kernel killed a process in it at {$at :datetime}. It runs on without that process until it is restarted: raise its maximum memory, then restart it.",
+      "scope": "attention_detail"
+    }
+  ],
+  "host_memory_low": {
+    "text": "{$name} is short of memory",
+    "scope": "attention_title"
+  },
+  "host_memory_available_low": {
+    "text": "Only {$available :bytes} of its {$total :bytes} is still available. Move or shrink an app before the kernel starts killing them.",
+    "scope": "attention_detail"
+  },
+  "host_swap_filling": {
+    "text": "{$used :bytes} of its {$total :bytes} swap is in use, which slows every app on it. Move or shrink an app.",
+    "scope": "attention_detail"
+  },
   "controller_disk": {
     "text": "The disk holding {$path} is almost full",
     "scope": "attention_title"
@@ -15392,10 +15456,24 @@
   "settings.hohenheim.builds.timeout_seconds.help": "Wall-clock ceiling on one build, after which the container is killed and removed and the operation records timed_out.",
   "settings.hohenheim.capacity.facts_max_age_hours.label": "Capacity reading maximum age",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Hours a host's stored preflight memory reading stays valid for placement, after which the host is not chosen until a new preflight; 0 or less removes the bound.",
+  "settings.hohenheim.capacity.host_memory_low_percent.label": "Host memory low",
+  "settings.hohenheim.capacity.host_memory_low_percent.help": "Share of a host's memory still available below which the dashboard warns that the host is short of memory.",
   "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Host memory reserve",
   "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Memory subtracted from a host's measured total before any app is booked against it, left for the kernel, the container or VM daemon and the page cache.",
+  "settings.hohenheim.capacity.host_swap_full_percent.label": "Host swap filling",
+  "settings.hohenheim.capacity.host_swap_full_percent.help": "Share of a host's swap in use at which the dashboard warns that the host is short of memory.",
+  "settings.hohenheim.capacity.memory_far_below_days.label": "Far-below period",
+  "settings.hohenheim.capacity.memory_far_below_days.help": "Days an app must stay far below its reserved memory before the dashboard hints to lower it; the samples are kept in memory, so the period starts again when Hohenheim restarts.",
+  "settings.hohenheim.capacity.memory_far_below_percent.label": "Far below reserved memory",
+  "settings.hohenheim.capacity.memory_far_below_percent.help": "Share of its reserved memory that an app's highest use must stay under, for the whole far-below period, before the dashboard hints to lower it.",
+  "settings.hohenheim.capacity.memory_headroom_percent.label": "Suggested memory headroom",
+  "settings.hohenheim.capacity.memory_headroom_percent.help": "What a suggested reserved memory adds to the highest use it was judged on.",
+  "settings.hohenheim.capacity.memory_near_maximum_percent.label": "Near maximum memory",
+  "settings.hohenheim.capacity.memory_near_maximum_percent.help": "Share of its maximum memory at which an app's use warns on the dashboard, before the kernel kills it at the maximum.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Memory overcommit ratio",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Multiplier on the bookable memory after the reserve, where 1.0 books no more than the host physically has and a higher value bets that apps will not all use their declared memory at once.",
+  "settings.hohenheim.capacity.memory_sustained_minutes.label": "Sustained memory use",
+  "settings.hohenheim.capacity.memory_sustained_minutes.help": "Minutes an app must stay above its reserved memory before the dashboard says to raise it; a shorter peak says nothing.",
   "settings.hohenheim.database.backup_path.label": "Backup path",
   "settings.hohenheim.database.backup_path.help": "Directory dumps are staged in before they go to the backup target; dumps written before the target existed stay here.",
   "settings.hohenheim.database.backup_retention.label": "Backup retention",
@@ -18134,6 +18212,9 @@
     "text": "Memory",
     "scope": "host_check"
   },
+  "fact_mem_available": {"text": "Memory available", "scope": "host_check"},
+  "fact_swap_total": {"text": "Swap", "scope": "host_check"},
+  "fact_swap_free": {"text": "Swap free", "scope": "host_check"},
   "fact_disk_total": {"text": "Disk size", "scope": "host_check"},
   "fact_disk_free": {"text": "Disk free", "scope": "host_check"},
   "fact_cgroup_version": {

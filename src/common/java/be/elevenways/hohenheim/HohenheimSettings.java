@@ -1229,6 +1229,70 @@ public class HohenheimSettings {
                 + "on it are untouched. 0 or less removes the bound -- an explicit choice "
                 + "to place against a reading of any age")
             .build();
+
+        // The memory health checks (MemoryHealth): what the dashboard calls a sustained, a near-full and a
+        // far-too-large reservation, read from the per-app samples ObserveInstanceMemory takes.
+        public static final SettingDefinition<Integer> MEMORY_SUSTAINED_MINUTES = GROUP
+            .buildSetting("memory_sustained_minutes", Integer.class)
+            .defaultValue(60)
+            .label("Sustained memory use")
+            .suffix("min")
+            .description("How long an app must stay above its reserved memory before the dashboard says to raise "
+                + "the reservation; a shorter peak says nothing")
+            .build();
+
+        public static final SettingDefinition<Integer> MEMORY_NEAR_MAXIMUM_PERCENT = GROUP
+            .buildSetting("memory_near_maximum_percent", Integer.class)
+            .defaultValue(85)
+            .label("Near maximum memory")
+            .suffix("%")
+            .description("The share of its maximum memory at which an app's use warns on the dashboard, before "
+                + "the kernel kills it at the maximum")
+            .build();
+
+        public static final SettingDefinition<Integer> MEMORY_FAR_BELOW_PERCENT = GROUP
+            .buildSetting("memory_far_below_percent", Integer.class)
+            .defaultValue(33)
+            .label("Far below reserved memory")
+            .suffix("%")
+            .description("The share of its reserved memory an app's highest use must stay under, for the whole "
+                + "far-below period, before the dashboard hints to lower the reservation")
+            .build();
+
+        public static final SettingDefinition<Integer> MEMORY_FAR_BELOW_DAYS = GROUP
+            .buildSetting("memory_far_below_days", Integer.class)
+            .defaultValue(7)
+            .label("Far-below period")
+            .suffix("d")
+            .description("How many days an app must stay far below its reserved memory before the hint; the "
+                + "samples live in memory, so the period starts again when Hohenheim restarts")
+            .build();
+
+        public static final SettingDefinition<Integer> MEMORY_HEADROOM_PERCENT = GROUP
+            .buildSetting("memory_headroom_percent", Integer.class)
+            .defaultValue(25)
+            .label("Suggested memory headroom")
+            .suffix("%")
+            .description("What a suggested reservation adds to the highest use it was judged on")
+            .build();
+
+        public static final SettingDefinition<Integer> HOST_MEMORY_LOW_PERCENT = GROUP
+            .buildSetting("host_memory_low_percent", Integer.class)
+            .defaultValue(10)
+            .label("Host memory low")
+            .suffix("%")
+            .description("The share of a host's memory still available below which the dashboard warns that the "
+                + "host is short of memory")
+            .build();
+
+        public static final SettingDefinition<Integer> HOST_SWAP_FULL_PERCENT = GROUP
+            .buildSetting("host_swap_full_percent", Integer.class)
+            .defaultValue(50)
+            .label("Host swap filling")
+            .suffix("%")
+            .description("The share of a host's swap in use at which the dashboard warns that the host is short "
+                + "of memory")
+            .build();
     }
 
     // --- Host health: what the stored heartbeat is allowed to be worth ---

@@ -1735,6 +1735,18 @@
       "target": "task_description"
     }
   ],
+  "observe_instance_memory": [
+    {
+      "text": "Geheugen van apps en hosts meten",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Hoeveel geheugen elke draaiende app gebruikt en hoeveel elke host nog beschikbaar heeft, voor de geheugencontroles van het dashboard",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "monitor_stacks": [
     {
       "text": "Stackgezondheid bewaken",
@@ -10812,6 +10824,58 @@
       "scope": "attention_detail"
     }
   ],
+  "app_memory_above_reserved": [
+    {
+      "text": "{$name} gebruikt meer geheugen dan het reserveert",
+      "scope": "attention_title"
+    },
+    {
+      "text": "De voorbije {$window :duration style=hours precision=exact} gebruikte het tot {$used :bytes}, meer dan de {$reserved :bytes} die de host ervoor reserveert. Verhoog het gereserveerde geheugen naar {$suggested :bytes}.",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_far_below_reserved": [
+    {
+      "text": "{$name} reserveert veel meer geheugen dan het gebruikt",
+      "scope": "attention_title"
+    },
+    {
+      "text": ".match {$days :integer}\none {{De voorbije dag gebruikte het hoogstens {$used :bytes} van de {$reserved :bytes} die het reserveert. Als u het gereserveerde geheugen verlaagt naar {$suggested :bytes}, komt er ruimte vrij op de host.}}\n* {{De voorbije {$days :integer} dagen gebruikte het hoogstens {$used :bytes} van de {$reserved :bytes} die het reserveert. Als u het gereserveerde geheugen verlaagt naar {$suggested :bytes}, komt er ruimte vrij op de host.}}",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_near_maximum": [
+    {
+      "text": "{$name} zit dicht bij het maximale geheugen",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Het gebruikt {$used :bytes}, {$percent :percent} van het maximum van {$maximum :bytes}. Bij het maximum stopt de kernel het, dus verhoog het maximale geheugen.",
+      "scope": "attention_detail"
+    }
+  ],
+  "app_memory_killed": [
+    {
+      "text": "{$name} werd gestopt omdat het geheugen op was",
+      "scope": "attention_title"
+    },
+    {
+      "text": "De kernel stopte er om {$at :datetime} een proces in. Het draait zonder dat proces verder tot het herstart wordt: verhoog het maximale geheugen en herstart het dan.",
+      "scope": "attention_detail"
+    }
+  ],
+  "host_memory_low": {
+    "text": "{$name} komt geheugen tekort",
+    "scope": "attention_title"
+  },
+  "host_memory_available_low": {
+    "text": "Nog maar {$available :bytes} van de {$total :bytes} is beschikbaar. Verplaats of verklein een app voordat de kernel apps begint te stoppen.",
+    "scope": "attention_detail"
+  },
+  "host_swap_filling": {
+    "text": "{$used :bytes} van de {$total :bytes} swap is in gebruik, wat elke app erop vertraagt. Verplaats of verklein een app.",
+    "scope": "attention_detail"
+  },
   "controller_disk": {
     "text": "De schijf met {$path} is bijna vol",
     "scope": "attention_title"
@@ -15392,10 +15456,24 @@
   "settings.hohenheim.builds.timeout_seconds.help": "Maximale kloktijd van een build, waarna de container gestopt en verwijderd wordt en de bewerking timed_out registreert.",
   "settings.hohenheim.capacity.facts_max_age_hours.label": "Maximale leeftijd van de capaciteitsmeting",
   "settings.hohenheim.capacity.facts_max_age_hours.help": "Aantal uren dat de opgeslagen preflight-geheugenmeting van een host geldig blijft voor plaatsing, waarna de host pas na een nieuwe preflight weer gekozen wordt; 0 of minder heft de grens op.",
+  "settings.hohenheim.capacity.host_memory_low_percent.label": "Weinig geheugen op host",
+  "settings.hohenheim.capacity.host_memory_low_percent.help": "Deel van het geheugen van een host dat nog beschikbaar is, waaronder het dashboard waarschuwt dat de host geheugen tekortkomt.",
   "settings.hohenheim.capacity.host_memory_reserve_mb.label": "Geheugenreserve van de host",
   "settings.hohenheim.capacity.host_memory_reserve_mb.help": "Geheugen dat van het gemeten totaal van een host afgetrokken wordt voordat er een app op geboekt wordt, voor de kernel, de container- of VM-daemon en de paginacache.",
+  "settings.hohenheim.capacity.host_swap_full_percent.label": "Swap van host loopt vol",
+  "settings.hohenheim.capacity.host_swap_full_percent.help": "Deel van de swap van een host dat in gebruik is, waarbij het dashboard waarschuwt dat de host geheugen tekortkomt.",
+  "settings.hohenheim.capacity.memory_far_below_days.label": "Periode ver onder",
+  "settings.hohenheim.capacity.memory_far_below_days.help": "Dagen dat een app ver onder het gereserveerde geheugen moet blijven voordat het dashboard voorstelt het te verlagen; de metingen staan in het geheugen, dus de periode begint opnieuw wanneer Hohenheim herstart.",
+  "settings.hohenheim.capacity.memory_far_below_percent.label": "Ver onder gereserveerd geheugen",
+  "settings.hohenheim.capacity.memory_far_below_percent.help": "Deel van het gereserveerde geheugen waaronder het hoogste gebruik van een app de hele periode moet blijven voordat het dashboard voorstelt het te verlagen.",
+  "settings.hohenheim.capacity.memory_headroom_percent.label": "Voorgestelde geheugenmarge",
+  "settings.hohenheim.capacity.memory_headroom_percent.help": "Wat een voorgesteld gereserveerd geheugen toevoegt aan het hoogste gebruik waarop het beoordeeld werd.",
+  "settings.hohenheim.capacity.memory_near_maximum_percent.label": "Bijna maximaal geheugen",
+  "settings.hohenheim.capacity.memory_near_maximum_percent.help": "Deel van het maximale geheugen waarbij het gebruik van een app op het dashboard waarschuwt, voordat de kernel de app bij het maximum stopt.",
   "settings.hohenheim.capacity.memory_overcommit_ratio.label": "Overcommitfactor voor geheugen",
   "settings.hohenheim.capacity.memory_overcommit_ratio.help": "Vermenigvuldiger op het boekbare geheugen na de reserve, waarbij 1.0 niet meer boekt dan de host fysiek heeft en een hogere waarde erop gokt dat apps niet allemaal tegelijk hun gedeclareerde geheugen gebruiken.",
+  "settings.hohenheim.capacity.memory_sustained_minutes.label": "Aanhoudend geheugengebruik",
+  "settings.hohenheim.capacity.memory_sustained_minutes.help": "Minuten dat een app boven het gereserveerde geheugen moet blijven voordat het dashboard zegt het te verhogen; een kortere piek zegt niets.",
   "settings.hohenheim.database.backup_path.label": "Back-uppad",
   "settings.hohenheim.database.backup_path.help": "Map waarin dumps klaargezet worden voor ze naar het back-updoel gaan; dumps van voor het doel blijven hier staan.",
   "settings.hohenheim.database.backup_retention.label": "Bewaarde back-ups",
@@ -18134,6 +18212,9 @@
     "text": "Geheugen",
     "scope": "host_check"
   },
+  "fact_mem_available": {"text": "Geheugen beschikbaar", "scope": "host_check"},
+  "fact_swap_total": {"text": "Swap", "scope": "host_check"},
+  "fact_swap_free": {"text": "Swap vrij", "scope": "host_check"},
   "fact_disk_total": {"text": "Schijfgrootte", "scope": "host_check"},
   "fact_disk_free": {"text": "Schijf vrij", "scope": "host_check"},
   "fact_cgroup_version": {

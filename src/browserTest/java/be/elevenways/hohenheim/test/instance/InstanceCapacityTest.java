@@ -61,7 +61,6 @@ class InstanceCapacityTest {
     static final ServedApp APP = HohenheimServedApp.app();
 
     private static final String PREFIX = "capacity-";
-    private static final String DOCKER_KIND = "hohenheim:docker_container";
 
     private static SqlDatasource datasource;
 
@@ -114,17 +113,7 @@ class InstanceCapacityTest {
     }
 
     private Row newWorkload(int serverId, String name, Integer memoryMb) {
-        Row row = Models.get(InstanceModel.class).createEmptyRow();
-        row.set(InstanceModel.NAME, PREFIX + name);
-        row.set(InstanceModel.KIND, DOCKER_KIND);
-        Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "fake/image");
-        if (memoryMb != null) {
-            settings.put("memory_limit_mb", memoryMb);
-        }
-        row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.HOST_ID, serverId);
-        return row;
+        return TestWorkloads.dockerContainer(PREFIX + name, serverId, memoryMb);
     }
 
     private int save(Row row) {
