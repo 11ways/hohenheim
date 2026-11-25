@@ -265,6 +265,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message",
                 String.class)
+            .inputName("unknown_hosts_message")
             .defaultValue("")
             .description("Error message for unmatched domains. Leave blank for the "
                 + "localized default; a value here is the operator's own copy and is "
@@ -381,17 +382,20 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Boolean> LETSENCRYPT_ENABLED = GROUP.buildSetting("letsencrypt_enabled",
                 Boolean.class)
+            .inputName("lets_encrypt_enabled")
             .defaultValue(true)
             .description("Enable automatic Let's Encrypt certificates")
             .build();
 
         public static final SettingDefinition<String> LETSENCRYPT_EMAIL = GROUP.buildSetting("letsencrypt_email",
                 String.class)
+            .inputName("lets_encrypt_email")
             .description("Email address for Let's Encrypt account")
             .build();
 
         public static final SettingDefinition<Boolean> LETSENCRYPT_STAGING = GROUP.buildSetting("letsencrypt_staging",
                 Boolean.class)
+            .inputName("lets_encrypt_staging")
             .defaultValue(false)
             .description("Use Let's Encrypt staging server")
             .build();
@@ -546,6 +550,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Boolean> DOMAIN_MISSES_TO_FILE =
                 GROUP.buildSetting("domain_misses_to_file", Boolean.class)
+            .inputName("hostname_misses_to_file")
             .defaultValue(true)
             .description("Log suspicious unknown-domain requests to a file for fail2ban")
             .build();
@@ -738,6 +743,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> BACKUP_RETENTION = GROUP.buildSetting("backup_retention",
                 Integer.class)
+            .inputName("dump_retention")
             .defaultValue(7)
             .description("Number of dumps kept per managed database on the backup target")
             .build();
@@ -849,12 +855,14 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD =
                 GROUP.buildSetting("domain_miss_threshold", Integer.class)
+            .inputName("hostname_miss_threshold")
             .defaultValue(5)
             .description("In-window domain misses before an IP's misses are recorded as security events")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS =
                 GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
+            .inputName("event_window_seconds")
             .defaultValue(300)
             .suffix("s")
             .description("Sliding window for counting weighted security events towards a ban")
@@ -862,12 +870,14 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_BAN_THRESHOLD =
                 GROUP.buildSetting("domain_miss_ban_threshold", Integer.class)
+            .inputName("ban_score_threshold")
             .defaultValue(25)
             .description("In-window weighted event score before an IP is auto-banned")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_DECAY_PER_HIT =
                 GROUP.buildSetting("domain_miss_decay_per_hit", Integer.class)
+            .inputName("score_decay_per_hit")
             .defaultValue(2)
             .description("Score forgiven for each successful route hit")
             .build();
@@ -1016,6 +1026,7 @@ public class HohenheimSettings {
         // reasons.
         public static final SettingDefinition<Integer> PIDS_LIMIT = GROUP
             .buildSetting("pids_limit", Integer.class)
+            .inputName("host_process_pids_limit")
             .defaultValue(512)
             .description("Maximum number of processes a host process Hohenheim runs as another "
                 + "system user (the managed spam service, a git command) may have under that "
@@ -1092,6 +1103,7 @@ public class HohenheimSettings {
          * the first dot (LinkedServers.ownName, MachineName), so a name is never blank and linking never waits for it.
          */
         public static final SettingDefinition<String> NAME = GROUP.buildSetting("name", String.class)
+            .inputName("linked_name")
             .label("This server's name")
             .description("What this Hohenheim is called in the Servers list and on the servers it is linked to, "
                 + "such as Robbedoes. Empty, it is named after its machine's host name")
@@ -1111,6 +1123,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_INSTANCES_PER_OWNER = GROUP
             .buildSetting("max_instances_per_owner", Integer.class)
+            .inputName("max_apps_per_owner")
             .defaultValue(0)
             .description("Default maximum number of live instances one owner (a manage-grant "
                 + "subject set; every operator-owned instance shares one bucket) may hold. "
@@ -1486,6 +1499,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> DISK_LIMIT_MB = GROUP
             .buildSetting("disk_limit_mb", Integer.class)
+            .inputName("build_disk_limit_mb")
             .defaultValue(4096)
             .byteSize(ByteUnit.MEGABYTE)
             .description("Ceiling on the build container's writable layer, on the build "
@@ -1496,6 +1510,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> TIMEOUT_SECONDS = GROUP
             .buildSetting("timeout_seconds", Integer.class)
+            .inputName("build_timeout_seconds")
             .defaultValue(900)
             .suffix("s")
             .description("Wall-clock ceiling on one build; the sandbox kills and removes "
@@ -1504,6 +1519,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> PIDS_LIMIT = GROUP
             .buildSetting("pids_limit", Integer.class)
+            .inputName("build_pids_limit")
             .defaultValue(256)
             .description("Process ceiling inside one build container. This can only ever "
                 + "TIGHTEN hohenheim.security.container_pids_limit, never raise it")
@@ -1511,6 +1527,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_ARTIFACT_MB = GROUP
             .buildSetting("max_artifact_mb", Integer.class)
+            .inputName("build_max_artifact_mb")
             .defaultValue(1024)
             .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound for the image tar read back out of a build "
@@ -1521,6 +1538,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_UPLOAD_MB = GROUP
             .buildSetting("max_upload_mb", Integer.class)
+            .inputName("build_max_upload_mb")
             .defaultValue(512)
             .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound for an artifact uploaded to be released. "
@@ -1531,6 +1549,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> LOG_LIMIT_KB = GROUP
             .buildSetting("log_limit_kb", Integer.class)
+            .inputName("build_log_limit_kb")
             .defaultValue(512)
             .byteSize(ByteUnit.KILOBYTE)
             .description("Captured build log kept on the build operation. Output past the "
@@ -1540,6 +1559,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> HISTORY_PER_OWNER = GROUP
             .buildSetting("history_per_owner", Integer.class)
+            .inputName("build_history_per_owner")
             .defaultValue(50)
             .description("Build operations kept per owning record; older rows are pruned "
                 + "when a build completes")
@@ -1555,6 +1575,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> PROBE_TIMEOUT_SECONDS = GROUP
             .buildSetting("probe_timeout_seconds", Integer.class)
+            .inputName("release_probe_timeout_seconds")
             .defaultValue(60)
             .suffix("s")
             .description("How long a candidate release may take to answer its first "
@@ -1564,6 +1585,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> PROBE_INTERVAL_MS = GROUP
             .buildSetting("probe_interval_ms", Integer.class)
+            .inputName("release_probe_interval_ms")
             .defaultValue(500)
             .suffix("ms")
             .description("Pause between health-probe attempts against the candidate's "
@@ -1572,6 +1594,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> DRAIN_SECONDS = GROUP
             .buildSetting("drain_seconds", Integer.class)
+            .inputName("release_drain_seconds")
             .defaultValue(15)
             .suffix("s")
             .description("How long the superseded release keeps running after traffic "
@@ -1581,6 +1604,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> HISTORY_PER_RECORD = GROUP
             .buildSetting("history_per_record", Integer.class)
+            .inputName("release_history_per_record")
             .defaultValue(50)
             .description("Release operations kept per owning record; older rows are "
                 + "pruned when an operation completes")
@@ -1596,6 +1620,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> BASE_DOMAIN = GROUP
             .buildSetting("base_domain", String.class)
+            .inputName("preview_base_hostname")
             .description("The domain generated preview hostnames live under "
                 + "(<site>--<ref>.<base_domain>). Previews REFUSE to deploy while this "
                 + "is unset. TLS rides a wildcard certificate over this domain; previews "
@@ -1604,6 +1629,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> LIFETIME_MINUTES = GROUP
             .buildSetting("lifetime_minutes", Integer.class)
+            .inputName("preview_lifetime_minutes")
             .defaultValue(1440)
             .suffix("min")
             .description("How long a preview lives before the expiry sweep reclaims its "
@@ -1613,6 +1639,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_PER_OWNER = GROUP
             .buildSetting("max_per_owner", Integer.class)
+            .inputName("previews_per_owner")
             .defaultValue(3)
             .description("Concurrent live previews one owner (a manage-grant subject "
                 + "set; a project is one owner) may hold, enforced through the atomic "
@@ -1629,6 +1656,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_FILE_KB = GROUP
             .buildSetting("max_file_kb", Integer.class)
+            .inputName("file_manager_max_file_kb")
             .defaultValue(8192)
             .byteSize(ByteUnit.KILOBYTE)
             .description("Upper bound for one file read or written through the file "
@@ -1639,6 +1667,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_ENTRIES = GROUP
             .buildSetting("max_entries", Integer.class)
+            .inputName("file_manager_max_entries")
             .defaultValue(2000)
             .description("Upper bound on the entries one directory listing returns. A "
                 + "directory with more refuses to list rather than returning a truncated "
@@ -1746,6 +1775,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> RETENTION = GROUP
             .buildSetting("retention", Integer.class)
+            .inputName("backup_retention")
             .defaultValue(7)
             .description("Number of completed backups to keep per instance (the managed-"
                 + "database retention pattern); 0 or less keeps everything")
@@ -1762,6 +1792,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> STALE_AFTER_DAYS = GROUP
             .buildSetting("stale_after_days", Integer.class)
+            .inputName("backup_stale_after_days")
             .defaultValue(7)
             .suffix("d")
             .description("Days without a COMPLETED backup before an instance with a "
@@ -1772,6 +1803,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
             .buildSetting("max_archive_mb", Integer.class)
+            .inputName("backup_max_archive_mb")
             .defaultValue(1024)
             .byteSize(ByteUnit.MEGABYTE)
             .description("Upper bound for one captured volume archive. Captures are "

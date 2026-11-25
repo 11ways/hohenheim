@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.server.page.SettingsOperations;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.brand.Brands;
 import be.elevenways.zenit.common.ui.Icon;
@@ -58,7 +59,7 @@ public enum HohenheimSettingsSections {
     // How people sign in: the protected paths' sessions and the Proteus SSO login.
     SIGNIN("signin", HohenheimMicrocopy.SETTINGS_SECTION.of("section_signin"),
         HohenheimSettings.ProxyAuth.GROUP, HohenheimSettings.AuthProteus.GROUP),
-    ABUSE(label -> new SettingsPage.Mount("spamservice", label, new SpamserviceSettingsBackend()), "abuse",
+    ABUSE(label -> new SettingsPage.Mount("spamservice", label, new SpamserviceSettingsBackend()), "spam",
         HohenheimMicrocopy.SETTINGS_SECTION.of("section_abuse")),
     // The installation's name and look, and who runs it: zenit's brand group, offered here rather than behind
     // "Framework (advanced)" because the people an installation serves read it.
@@ -90,6 +91,27 @@ public enum HohenheimSettingsSections {
         this.label = label;
         this.groups = List.of();
         this.elsewhere = mount;
+    }
+
+    /** @return the word a caller names the section by, as the assistant's settings tools take it */
+    public @NonNull String key() {
+        return key;
+    }
+
+    /** @return the section as the settings operations read and write it, over the mount the page shows */
+    public SettingsOperations.@NonNull Section section() {
+        return new SettingsOperations.Section(key, label, this::mount, SettingsPage.DEFAULT_SLUG);
+    }
+
+    /**
+     * @return whether this process declares the section's settings, so a write's input derives from them; the spam
+     *         service declares its own, which reach this process only in its answers
+     */
+    public boolean settingsDeclaredHere() {
+        return switch (this) {
+            case ABUSE -> false;
+            case GENERAL, HTTPS, BACKUPS, NOTIFICATIONS, DNS, BLOCKING, APPS, HOSTS, SIGNIN, BRAND, INSTALLATION -> true;
+        };
     }
 
     /** @return the groups of Hohenheim's own settings this section offers; none for a section over another home */
