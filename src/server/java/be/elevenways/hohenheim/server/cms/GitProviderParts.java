@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitProviderKinds;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations.ConnectionTest;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -23,10 +24,13 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SshPublicKey;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -64,7 +68,8 @@ public final class GitProviderParts {
             .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
             .build();
         return entry(HohenheimIds.id("git_provider"), table, form, GitProviderParts::operatorWords)
-            .writes(ResourceMutations.rows().create().update().delete().build())
+            .writes(ResourceMutations.rows().create().update().delete().beforeSave(GitConnectionWrites::generateKey)
+                .build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
@@ -85,6 +90,7 @@ public final class GitProviderParts {
                 TenantScopes.MANAGED_GIT_PROVIDERS, ResourceTabs.<Row>none().withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             .writes(ResourceMutations.rows().create().update().delete()
+                .beforeSave(GitConnectionWrites::generateKey)
                 .beforeSave(save -> {
                     if (save.isCreate()) {
                         refuseSharedChange(save.values());
@@ -120,7 +126,7 @@ public final class GitProviderParts {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.SETTINGS))
             .add(GitProviderModel.ACCESS_TOKEN)
             .add(GitProviderModel.APP_PRIVATE_KEY_PEM)
-            .add(GitProviderModel.SSH_PRIVATE_KEY)
+            .add(Plain.of(GitProviderModel.SSH_PRIVATE_KEY).withHelp(GitProviderParts::publicKeyHelp))
             .showWhen(GitProviderModel.BASE_URL.getName(), kind, tokenKinds)
             .showWhen(GitProviderModel.ACCESS_TOKEN.getName(), kind, tokenKinds)
             .showWhen(GitProviderModel.APP_PRIVATE_KEY_PEM.getName(), kind, tokenKinds)
@@ -134,6 +140,13 @@ public final class GitProviderParts {
             .map(Identifier::toString)
             .sorted()
             .toArray(String[]::new);
+    }
+
+    /** @return the help naming the public key of a stored SSH connection's private key, null to keep the field's */
+    private static @Nullable Microcopy publicKeyHelp(@Nullable Object record) {
+        SshPublicKey key = record instanceof Row connection ? GitConnectionWrites.publicKeyOf(connection) : null;
+        return key == null ? null : HohenheimMicrocopy.HELP.of("provider_ssh_public_key")
+            .withArg("key", key.fileLine());
     }
 
     /** The entry, list, reads, inline cell and connection test both twins share. */

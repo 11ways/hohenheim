@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.orm.RecordRef;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.ModelRef;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -64,8 +66,11 @@ public class InstanceVariableModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
+    /** The owning app, which an assistant names by its code ({@code list kind=variable of=AP12}). */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id")
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(InstanceModel.MODEL_ID)))
+            .build());
 
     /** The owning environment (environments.id) when this is an environment-scoped value. */
     public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(

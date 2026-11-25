@@ -9153,7 +9153,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The private key (OpenSSH or PEM, without a passphrase) that may read the repository, such as a deploy key. Stored encrypted.",
+      "text": "The private key (OpenSSH or PEM, without a passphrase) that may read the repository, such as a deploy key. Stored encrypted. Left empty on a new connection, Hohenheim makes a new key pair and shows its public key here, to add to the repository as a read-only deploy key.",
       "scope": "help"
     }
   ],
@@ -20068,6 +20068,7 @@
   "app_create_host": {"text": "The host's code (SR1); left out, any host that runs this kind and has room is picked.", "scope": "help"},
   "app_create_project": {"text": "The project (PR3) whose members manage the new app; left out, the app is yours. It counts against the limits of the project's membership role.", "scope": "help"},
   "app_backup_target": {"text": "The backup target (BT1) the app's backups go to; an app without one cannot be backed up.", "scope": "help"},
+  "app_image_app": {"text": "The Application (AP12), on the same host and of the same owner, whose serving image this container runs instead of image and tag; null clears it. A running container restarts on each new release of that app (deploy or roll_back); a stopped one takes it at its next start.", "scope": "help"},
   "app_change_kind": {"text": "Set true to turn the app of another kind named by code into this kind; without it such a code is refused. The new kind must be one the app's host runs, and a deployed app never switches between a virtual machine and another kind. Settings the new kind lacks are deleted for good.", "scope": "help"},
   "create_application_app": {"text": "Create an Application", "scope": "hohenheim"},
   "create_application_app_description": {"text": "Creates an Application from its settings through the panel's own create; nothing is deployed.", "scope": "hohenheim"},
@@ -20109,7 +20110,7 @@
   "mcp_code_variables": {"text": "The app whose variables to change.", "scope": "hohenheim"},
   "mcp_code_set": {"text": "The app's code; leave out to create one.", "scope": "hohenheim"},
   "mcp_tool_app_application_set": {"text": "Creates or changes an Application: a git repository built with a Dockerfile or Nixpacks, or a prebuilt image, released behind a health check; roll_back returns to the release before. Only an administrator creates one; anyone else uses app_create_from_template and changes only name and crash_policy. Creating does not deploy: call deploy. Changes, limits too, reach it at its next deploy. A deploy starts the new release beside the old, which serves until the drain ends; an exclusive volume stops the old first. Its variables are variable_set. A code of an app of another kind is refused, naming that kind's tool; change_kind: true turns it into this kind. Answers the new app's code, or what changed.", "scope": "hohenheim"},
-  "mcp_tool_app_docker_container_set": {"text": "Creates or changes a Docker container app: one image run as it is; no build, health check or releases, so roll_back refuses it. Only an administrator creates one; anyone else uses app_create_from_template and changes only name and crash_policy. Creating does not start it: call deploy. Changes reach it at its next deploy; memory_limit_mb and cpu_limit redeploy a running one at once. A deploy kills the running container before the new one starts; power stop and restart give it 10 s. Its variables are variable_set. A code of an app of another kind is refused, naming that kind's tool; change_kind: true turns it into this kind. Answers the new app's code, or what changed.", "scope": "hohenheim"},
+  "mcp_tool_app_docker_container_set": {"text": "Creates or changes a Docker container app: one image run as it is; no build, health check or releases, so roll_back refuses it. Only an administrator creates one; anyone else uses app_create_from_template and changes only name and crash_policy. Creating does not start it: call deploy. image_app runs another app's image instead of its own. Changes reach it at its next deploy; memory_limit_mb and cpu_limit redeploy a running one at once. A deploy kills the running container before the new one starts; power stop and restart give it 10 s. Its variables are variable_set. A code of an app of another kind is refused, naming that kind's tool; change_kind: true turns it into this kind. Answers the new app's code, or what changed.", "scope": "hohenheim"},
   "mcp_tool_app_static_site_set": {"text": "Creates or changes a Static site app: a repository built by build_command, served as files. Only an administrator creates one; anyone else uses app_create_from_template and changes only name and crash_policy. Creating does not deploy: call deploy; changes reach it at its next deploy. A code of an app of another kind is refused, naming that kind's tool; change_kind: true turns it into this kind. Answers the new app's code, or what changed.", "scope": "hohenheim"},
   "generate_instance_secret_description": {"text": "Has the server make a random secret for a key that holds no value yet; the value is never shown. The app sees it from its next deploy.", "scope": "hohenheim"},
   "delete_game_domain_description": {"text": "Deletes this game domain mapping and the records it generated.", "scope": "hohenheim"},
@@ -20263,5 +20264,18 @@
   "mcp_tool_app_file_delete": {"text": "Deletes a file, link or whole folder tree in an app's volumes, as the Files tab's delete does. A volume's root cannot be deleted, and a managed configuration file (or a folder holding one) is refused. The app must be running. This cannot be undone; take a snapshot first with snapshot_set if the data may matter. Answers the path deleted.", "scope": "hohenheim"},
   "mcp_code_app_file_delete": {"text": "The app (AP12) whose file or folder to delete.", "scope": "hohenheim"},
   "mcp_tool_app_file_move": {"text": "Renames or moves a file or folder inside an app's volumes; both paths must be inside the app's volumes and the target must not exist. A volume's root and a managed configuration file cannot be moved. The app must be running. Answers both paths.", "scope": "hohenheim"},
-  "mcp_code_app_file_move": {"text": "The app (AP12) whose file or folder to move.", "scope": "hohenheim"}
+  "mcp_code_app_file_move": {"text": "The app (AP12) whose file or folder to move.", "scope": "hohenheim"},
+  "create_git_connection": {"text": "Add a git connection", "scope": "hohenheim"},
+  "create_git_connection_description": {"text": "Adds a git connection through the panel's own create.", "scope": "hohenheim"},
+  "change_git_connection": {"text": "Change a git connection", "scope": "hohenheim"},
+  "change_git_connection_description": {"text": "Changes the settings sent of a git connection through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
+  "git_connection_thing": {"text": "a git connection", "scope": "hohenheim"},
+  "mcp_tool_git_connection_set": {"text": "Creates or changes a git connection apps build from: GitHub, GitLab or Gitea through their API with a token (or, for GitHub, an App key), or any git service over SSH with a private key. Credentials go in once, stored encrypted, and never come out. An SSH connection created without ssh_private_key gets a new key pair: the answer and read show its public_key, to add to the repository as a read-only deploy key; regenerate_key makes a new pair. A change sends only what changes. Only an administrator shares a connection with everyone. Answers the code (G2).", "scope": "hohenheim"},
+  "mcp_code_git_connection": {"text": "The connection's code; leave out to create one.", "scope": "hohenheim"},
+  "git_connection_kind": {"text": "How Hohenheim reaches the repositories: github, gitlab or gitea through their API with a token, ssh with a private key.", "scope": "help"},
+  "git_connection_repository": {"text": "The repository the SSH key reaches, as git clones it over SSH, such as git@github.com:you/site.git.", "scope": "help"},
+  "git_connection_regenerate_key": {"text": "Set true to replace the SSH key with a new pair; add the new public key to the repository, the old one stops working.", "scope": "help"},
+  "provider_ssh_public_key": {"text": "Its public key, to add to the repository as a read-only deploy key: {$key}. Leave this empty to keep the key.", "scope": "help"},
+  "git_connection_applies": {"text": "{$arguments} apply to {$kinds}.", "scope": "violations"},
+  "git_connection_key_twice": {"text": "Give ssh_private_key or regenerate_key, not both.", "scope": "violations"}
 }

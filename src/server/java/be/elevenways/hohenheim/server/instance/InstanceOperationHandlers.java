@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DeployTrigger;
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -58,6 +59,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.server.operation.InputScope;
+import be.elevenways.zenit.server.operation.RecordCodes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -237,13 +239,16 @@ public final class InstanceOperationHandlers {
             .applies(InstanceOperationHandlers::authored)
             .handle(call -> new InstanceVariableOperations.Variables(InstanceVariables.listed(
                 Models.get(InstanceVariableModel.class).findByInstanceId(instanceId(call)))));
-        // An app's variables are rows of their own, never a field of its form: a read of the app names the tool that
-        // lists them (plain ones with their values, secret ones as set) to whoever may call it.
-        String listVariables = Objects.requireNonNull(InstanceVariableOperations.LIST_VARIABLES.assistantName());
+        // An app's variables are rows of their own, never a field of its form: a read of the app names the call that
+        // lists them (plain ones with their values, secret ones as set) to whoever may read them.
         RecordReadLines.register(InstanceModel.MODEL_ID, InstanceOperationHandlers.class, (keys, access) -> {
             if (!InstanceVariableOperations.LIST_VARIABLES.gate().admits(access)) return Map.of();
             Map<String, List<RecordReadLines.Line>> lines = new HashMap<>();
-            for (String key : keys) lines.put(key, List.of(new RecordReadLines.Line("variables", listVariables)));
+            for (String key : keys) {
+                lines.put(key, List.of(new RecordReadLines.Line("variables", "list kind="
+                    + AssistantNoun.of(InstanceVariableModel.MODEL_ID) + " of="
+                    + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key))));
+            }
             return lines;
         });
         OperationHandlers.attach(InstanceVariableOperations.SET_VARIABLE).source(SUBJECTS)

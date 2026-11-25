@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.source;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.zenit.common.edit.EditView;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -157,7 +159,9 @@ public final class GitSourceSchema {
         // URL, which GitRepository refuses). The marker field classes derive the admin
         // picker entries (GitPickerFormEntries): provider select, then a repository picker
         // following it, then a branch picker following both.
-        schema.addField(GitProviderRefField.builder(PROVIDER_ID)
+        // An assistant names the connection by its code (G2), as git_connection.
+        schema.addField(GitProviderRefField.builder(PROVIDER_ID).inputName("git_connection")
+            .attribute(FieldAttributes.NAMES_RECORD_OF, RecordModels.supplied(() -> List.of(GitProviderModel.MODEL_ID)))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("git_provider"))
             .help(HohenheimMicrocopy.HELP.of("git_provider")).build());
 

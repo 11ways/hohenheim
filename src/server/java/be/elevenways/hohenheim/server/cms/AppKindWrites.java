@@ -21,9 +21,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
-import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,9 +63,23 @@ public final class AppKindWrites {
     /** The argument naming the backup target an app's backups go to. */
     public static final String BACKUP_TARGET = "backup_target";
 
-    /** The record each linking argument names, by the app's own column it is written into; a refusal names it back. */
-    private static final Map<String, Field<?, ?>> LINKS = Map.of(HOST, InstanceModel.HOST_ID,
-        PROJECT, InstanceParts.PROJECT, BACKUP_TARGET, InstanceModel.BACKUP_TARGET_ID);
+    /** The argument naming the app whose serving image a Docker container runs. */
+    public static final String IMAGE_APP = "image_app";
+
+    /**
+     * The records an app links to, each by the argument naming it and the app's own column it is written into: its
+     * host and project on a create, its backup target, and for a Docker container the app whose image it runs. A link
+     * a change sets or clears (null) is an administrator's alone.
+     */
+    private static final KindSettingsWrites.Links LINKS = KindSettingsWrites.links(
+        KindSettingsWrites.link(HOST, HohenheimMicrocopy.HELP.of("app_create_host"), HostModel.MODEL_ID,
+            InstanceModel.HOST_ID).onCreateOnly(),
+        KindSettingsWrites.link(PROJECT, HohenheimMicrocopy.HELP.of("app_create_project"), ProjectModel.MODEL_ID,
+            InstanceParts.PROJECT).onCreateOnly(),
+        KindSettingsWrites.link(BACKUP_TARGET, HohenheimMicrocopy.HELP.of("app_backup_target"),
+            BackupTargetModel.MODEL_ID, InstanceModel.BACKUP_TARGET_ID),
+        KindSettingsWrites.link(IMAGE_APP, HohenheimMicrocopy.HELP.of("app_image_app"), InstanceModel.MODEL_ID,
+            InstanceModel.IMAGE_APP_ID).onlyFor(DockerContainerKind.ID::equals));
 
     /**
      * Creates and changes run as one command of their caller, so the same request id answers the first result.
@@ -87,12 +99,8 @@ public final class AppKindWrites {
             InstanceOperations.INSTANCE, InstanceModel.ID, InstanceModel.KIND, InstanceModel.SETTINGS)
         .common(List.of(InstanceModel.NAME, InstanceModel.CRASH_POLICY))
         .settings(AppKindWrites::settings)
-        .createEntries(kind -> List.of(
-            OperationForms.recordId(HOST, HohenheimMicrocopy.HELP.of("app_create_host"), HostModel.MODEL_ID, false),
-            OperationForms.recordId(PROJECT, HohenheimMicrocopy.HELP.of("app_create_project"), ProjectModel.MODEL_ID,
-                false),
-            backupTarget()))
-        .changeEntries(kind -> List.of(backupTarget()))
+        .createEntries(kind -> LINKS.entries(kind, true))
+        .changeEntries(kind -> LINKS.entries(kind, false))
         .changeGate(InstanceOperations.gate(HohenheimCapabilities.CONFIG))
         .commands(CREATES, CHANGES)
         .writers(AppKindWrites::created, AppKindWrites::changed);
@@ -119,12 +127,6 @@ public final class AppKindWrites {
             HohenheimMicrocopy.HOHENHEIM.of("app_thing_" + word));
     }
 
-    /** @return the entry naming the backup target an app's backups go to, by its code */
-    private static @NonNull FormEntry backupTarget() {
-        return OperationForms.recordId(BACKUP_TARGET, HohenheimMicrocopy.HELP.of("app_backup_target"),
-            BackupTargetModel.MODEL_ID, false);
-    }
-
     /** @return every kind's writes, in the order their tools are offered */
     public static @NonNull List<Kind> all() {
         return APPS.kinds();
@@ -142,7 +144,7 @@ public final class AppKindWrites {
             throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, words.describe(), words);
         }
         Map<String, Object> raw = APPS.created(kind, input);
-        LINKS.forEach((argument, column) -> {
+        LINKS.columns().forEach((argument, column) -> {
             Object linked = input.get(argument);
             if (linked != null) raw.put(column.getInputName(), Integer.valueOf(String.valueOf(linked)));
         });
@@ -150,7 +152,7 @@ public final class AppKindWrites {
         raw.put(InstanceModel.SETTINGS.getName(), KindSettingsWrites.posted(kind.schema().getFields().values(),
             settings));
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(LINKS,
+        Object key = KindSettingsWrites.speaking(LINKS.columns(),
             () -> ResourceWrites.create(panel, instances(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -175,12 +177,12 @@ public final class AppKindWrites {
             }
         }
         boolean admin = HohenheimAccess.isAdmin(caller);
-        if (sent.contains(BACKUP_TARGET)) {
+        for (KindSettingsWrites.Link link : LINKS.changeable()) {
+            if (!sent.contains(link.argument())) continue;
             if (!admin) throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
-            Object target = input.get(BACKUP_TARGET);
-            raw.put(InstanceModel.BACKUP_TARGET_ID.getName(), target == null ? null
-                : Integer.valueOf(String.valueOf(target)));
-            written.add(BACKUP_TARGET);
+            Object linked = input.get(link.argument());
+            raw.put(link.column().getName(), linked == null ? null : Integer.valueOf(String.valueOf(linked)));
+            written.add(link.argument());
         }
         // The form posts only what this kind declares (its settings sub-form is closed-world); the instance resource
         // puts the stored keys it does not declare back unless the kind changes (InstanceParts.keepUndeclaredSettings).
@@ -211,7 +213,7 @@ public final class AppKindWrites {
         }
         if (raw.isEmpty()) return "";
         Panel panel = admin ? ApiConduits.adminPanel() : ApiConduits.managePanel();
-        KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.update(panel, instances(panel),
+        KindSettingsWrites.speaking(LINKS.columns(), () -> ResourceWrites.update(panel, instances(panel),
             Objects.requireNonNull(app.get(InstanceModel.ID)), app, raw, caller));
         return String.join(", ", written);
     }

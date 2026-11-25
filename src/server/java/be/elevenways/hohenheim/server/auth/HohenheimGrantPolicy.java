@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -129,6 +130,20 @@ final class HohenheimGrantPolicy {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
                 .derivedFrom(SiteModel.MODEL_ID, SiteDomainModel.SITE_ID));
+
+        // An app's variables: no grant surface of their own either, so their one capability is VIEW, held through the
+        // app they belong to, exactly as an address holds it through its site. It is the model's VISIBILITY: whoever
+        // may view the app reads its variables (secrets only as set), as the app's Provisioning tab and its variable
+        // list (TenantScopes.INSTANCE_VARIABLES) always showed them; every write still asks config on the app.
+        KnownCapabilities.register(InstanceVariableModel.MODEL_ID,
+            KnownCapability.of(VIEW)
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description")));
+        RecordCapabilityRules.declare(InstanceVariableModel.MODEL_ID,
+            RecordCapabilityRules.create().visibility(VIEW)
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                .derivedFrom(InstanceModel.MODEL_ID, InstanceVariableModel.INSTANCE_ID));
 
         // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
         // and are NOT grantable, PERMANENTLY and by decision.

@@ -3,18 +3,23 @@ package be.elevenways.hohenheim.server.mcp;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
+import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.TerminalText;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.common.operation.AssistantNoun;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.delivery.server.DeliveryOutcome;
 import be.elevenways.zenit.server.operation.RecordCodes;
+import be.elevenways.zenit.server.security.SshPublicKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -133,20 +138,6 @@ final class HohenheimMcpAnswers {
         return response;
     }
 
-    /** An app's own variables: a plain one with its value, a secret only as set or not. */
-    static @NonNull McpResponse variables(@NonNull McpToolContext context,
-                                          InstanceVariableOperations.@Nullable Variables variables) {
-        McpResponse response = McpResponse.create();
-        if (variables == null || variables.variables().isEmpty()) return response.line("variables: none");
-        StringBuilder rows = new StringBuilder();
-        for (InstanceVariableOperations.Variable variable : variables.variables()) {
-            rows.append("- ").append(variable.key()).append(variable.kind().isSecret()
-                ? (variable.set() ? " (secret, set)" : " (secret, not set)")
-                : " = " + Objects.requireNonNullElse(variable.value(), "")).append('\n');
-        }
-        return response.untrusted("variables", rows.toString().stripTrailing());
-    }
-
     /** The keys a variable write changed, and when the app sees them. */
     static @NonNull McpResponse variableWritten(@NonNull McpToolContext context, @Nullable String keys) {
         return McpResponse.create().untrustedLine("variables: ", "keys", keys)
@@ -156,6 +147,23 @@ final class HohenheimMcpAnswers {
     /** The record a change wrote and the settings it wrote, as its writer says them ({@code S20 changed: name}). */
     static @NonNull McpResponse changed(@NonNull McpToolContext context, @Nullable String said) {
         return McpResponse.create().line(said == null ? "" : said);
+    }
+
+    /**
+     * A new git connection's code, and the public key of its SSH key: no secret, and what the person adds to the
+     * repository as a read-only deploy key.
+     */
+    static @NonNull McpResponse connectionMade(@NonNull McpToolContext context, @Nullable Integer key) {
+        McpResponse response = McpResponse.create();
+        if (key == null) return response;
+        String code = RecordCodes.codes(GitProviderModel.MODEL_ID, List.of(String.valueOf(key)), context.access())
+            .get(String.valueOf(key));
+        response.line(Objects.requireNonNullElse(code, "?") + " (" + AssistantNoun.of(GitProviderModel.MODEL_ID)
+            + ")");
+        Row connection = Models.get(GitProviderModel.class).findById(key);
+        SshPublicKey publicKey = connection == null ? null : GitConnectionWrites.publicKeyOf(connection);
+        if (publicKey != null) response.line(GitConnectionWrites.PUBLIC_KEY + ": " + publicKey.fileLine());
+        return response;
     }
 
     /** A zone's record lines; their names and values are what someone typed, so they come as untrusted text. */

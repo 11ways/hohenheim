@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
-import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.HohenheimHostWiring;
 import be.elevenways.hohenheim.server.cms.*;
@@ -69,14 +68,14 @@ public final class HohenheimMcpModule implements ZenitModule {
     /**
      * The models whose sources the server lists, in the order its tools are offered. Deploys and builds are not among
      * them: app_list_deploys lists an app's history, both merged, newest first (KeptFromAssistants.DEPLOY_HISTORY).
-     * Nor are variables: they carry no code, and a key reads a model's records only by a code kind or a declared read
-     * capability, which variables lack; app_list_variables lists an app's own under the app's view capability.
+     * Variables carry no code: they are listed by their app ({@code list kind=variable of=AP12}), read by whoever may
+     * view it, as their declared visibility says (HohenheimGrantPolicy).
      */
     private static final List<Identifier> LISTED = List.of(SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID, SiteRedirectModel.MODEL_ID, AccessListModel.MODEL_ID, AccessRuleModel.MODEL_ID,
         CertificateModel.MODEL_ID, InstanceModel.MODEL_ID, InstanceTemplateModel.MODEL_ID,
         InstanceDeviceModel.MODEL_ID, InstanceVolumeModel.MODEL_ID, InstanceDatabaseModel.MODEL_ID,
-        InstanceBackupModel.MODEL_ID, InstanceSnapshotModel.MODEL_ID,
+        InstanceVariableModel.MODEL_ID, InstanceBackupModel.MODEL_ID, InstanceSnapshotModel.MODEL_ID,
         PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID,
         DatabaseDumpModel.MODEL_ID, GitProviderModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID,
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
@@ -153,8 +152,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
             .answersWith(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
             .answersWith(DnsOperations.NEGOTIATE_KEY, HohenheimMcpAnswers::told)
-            .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys)
-            .answersWith(InstanceVariableOperations.LIST_VARIABLES, HohenheimMcpAnswers::variables);
+            .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys);
         for (var operation : HostParts.lifecycleForAssistants()) {
             set.answersWith(operation, HohenheimMcpAnswers::said);
         }
@@ -189,8 +187,9 @@ public final class HohenheimMcpModule implements ZenitModule {
     }
 
     /**
-     * The operator's list of each kind whose model declares no source of its own (a panel's derived one reads it, which
-     * no programmatic caller reads), registered under its own id so no panel or picker changes.
+     * The list of each kind whose model declares no source of its own (a panel's derived one reads it, which no
+     * programmatic caller reads), registered under its own id so no panel or picker changes: the operator's, or for an
+     * app's variables everyone's who may view the app.
      *
      * AIDEV-NOTE: a model that declares its own source later is listed by that one (install prefers it); this one then
      * goes.
@@ -211,6 +210,13 @@ public final class HohenheimMcpModule implements ZenitModule {
         made.put(StackModel.MODEL_ID, RecordSource.of(StackModel.REF).search(StackModel.NAME));
         made.put(DnsZoneModel.MODEL_ID, RecordSource.of(DnsZoneModel.REF).search(DnsZoneModel.ORIGIN));
         made.put(DnsPeerModel.MODEL_ID, RecordSource.of(DnsPeerModel.REF).search(DnsPeerModel.NAME));
+        made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
+        // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
+        // value is never projected (a source refuses it); its kind says it is one.
+        made.put(InstanceVariableModel.MODEL_ID, RecordSource.of(InstanceVariableModel.REF).project(
+            InstanceVariableModel.KEY, InstanceVariableModel.KIND, InstanceVariableModel.PLAIN_VALUE,
+            InstanceVariableModel.INSTANCE_ID)
+            .search(InstanceVariableModel.KEY).scopedBy(TenantScopes.INSTANCE_VARIABLES));
         Map<Identifier, RecordSource<?>> lists = new LinkedHashMap<>();
         for (Map.Entry<Identifier, RecordSource.Builder<?>> kind : made.entrySet()) {
             Identifier model = kind.getKey();
@@ -219,7 +225,7 @@ public final class HohenheimMcpModule implements ZenitModule {
             Identifier id = HohenheimIds.id(model.getPath() + "_list");
             RecordSource<?> source = RecordSourceRegistry.INSTANCE.declaredFor(id);
             if (source == null) {
-                source = builder.id(id).permission(HohenheimSources.ADMIN_ACCESS).build();
+                source = builder.id(id).build();
                 RecordSourceRegistry.INSTANCE.register(source);
             }
             lists.put(model, source);

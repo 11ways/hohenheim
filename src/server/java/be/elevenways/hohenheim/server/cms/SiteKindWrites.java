@@ -21,7 +21,6 @@ import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -58,9 +57,15 @@ public final class SiteKindWrites {
     /** The argument naming the access list every request of the site must pass. */
     public static final String ACCESS_LIST = "access_list";
 
-    /** The record each linking argument names, by the site's own column it is written into; a refusal names it back. */
-    private static final Map<String, Field<?, ?>> LINKS = Map.of(APP, SiteModel.INSTANCE_ID,
-        ACCESS_LIST, SiteModel.ACCESS_LIST_ID);
+    /**
+     * The records a site links to, each by the argument naming it and the site's own column it is written into: its app
+     * where its kind serves one, and its access list.
+     */
+    private static final KindSettingsWrites.Links LINKS = KindSettingsWrites.links(
+        KindSettingsWrites.link(APP, HohenheimMicrocopy.HELP.of("site_app"), InstanceModel.MODEL_ID,
+            SiteModel.INSTANCE_ID).onlyFor(InstanceUpstreamKind.ID::equals),
+        KindSettingsWrites.link(ACCESS_LIST, HohenheimMicrocopy.HELP.of("site_access_list"), AccessListModel.MODEL_ID,
+            SiteModel.ACCESS_LIST_ID));
 
     /** What the delegated save writes: the name, the switch and the description. */
     private static final Set<String> DELEGATED = Set.of(SiteModel.NAME.getName(), SiteModel.ENABLED.getName(),
@@ -75,11 +80,11 @@ public final class SiteKindWrites {
         .common(List.of(SiteModel.NAME, SiteModel.ENABLED, SiteModel.DESCRIPTION, SiteModel.TRUSTED_UPSTREAM))
         .createEntries(kind -> {
             List<FormEntry> entries = new ArrayList<>(List.of(Plain.of(SiteWrites.CREATE_HOSTNAME)));
-            entries.addAll(links(kind));
+            entries.addAll(LINKS.entries(kind, true));
             return entries;
         })
         .settings(SiteKindWrites::settings)
-        .changeEntries(SiteKindWrites::links)
+        .changeEntries(kind -> LINKS.entries(kind, false))
         .commands(CREATES, CmsCommands.TRANSACTIONAL)
         .writers(SiteKindWrites::created, SiteKindWrites::changed);
 
@@ -109,19 +114,7 @@ public final class SiteKindWrites {
 
     /** @return whether a site of the kind serves one of Hohenheim's apps, so it names the app */
     private static boolean servesApp(@NonNull Identifier kind) {
-        return InstanceUpstreamKind.ID.equals(kind);
-    }
-
-    /** @return the records a site of the kind links to: its app where it serves one, and its access list */
-    private static @NonNull List<FormEntry> links(@NonNull Identifier kind) {
-        List<FormEntry> entries = new ArrayList<>();
-        if (servesApp(kind)) {
-            entries.add(OperationForms.recordId(APP, HohenheimMicrocopy.HELP.of("site_app"), InstanceModel.MODEL_ID,
-                false));
-        }
-        entries.add(OperationForms.recordId(ACCESS_LIST, HohenheimMicrocopy.HELP.of("site_access_list"),
-            AccessListModel.MODEL_ID, false));
-        return entries;
+        return LINKS.takes(APP, kind);
     }
 
     /** Creates the site, with its first address when the call gives one, through the panel's own create. */
@@ -137,7 +130,7 @@ public final class SiteKindWrites {
             raw.put(SiteModel.ACCESS_LIST_ID.getName(), String.valueOf(input.get(ACCESS_LIST)));
         }
         Panel panel = ApiConduits.adminPanel();
-        Object key = KindSettingsWrites.speaking(LINKS,
+        Object key = KindSettingsWrites.speaking(LINKS.columns(),
             () -> ResourceWrites.create(panel, sites(panel), raw, caller));
         return Integer.valueOf(String.valueOf(key));
     }
@@ -193,7 +186,7 @@ public final class SiteKindWrites {
         raw.put(SiteModel.SETTINGS.getName(), settings);
         if (turned) written.add(0, SiteModel.UPSTREAM_KIND.getName());
         Panel panel = ApiConduits.adminPanel();
-        KindSettingsWrites.speaking(LINKS, () -> ResourceWrites.update(panel, sites(panel),
+        KindSettingsWrites.speaking(LINKS.columns(), () -> ResourceWrites.update(panel, sites(panel),
             Objects.requireNonNull(site.get(SiteModel.ID)), site, raw, caller));
         return String.join(", ", written);
     }

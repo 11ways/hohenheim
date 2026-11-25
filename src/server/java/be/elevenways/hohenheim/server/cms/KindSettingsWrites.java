@@ -13,13 +13,17 @@ import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationForms;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.zenit.common.orm.code.RecordModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Secret;
@@ -40,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -320,10 +325,92 @@ public final class KindSettingsWrites {
     }
 
     /**
+     * One argument naming a linked record by its code, written into the record's own column, so a read and a refusal
+     * of that column name it back by the argument.
+     *
+     * @param kinds      whether a record of a kind takes it; every kind's record does when null
+     * @param createOnly whether only a create takes it (an app's host), never a change
+     */
+    record Link(@NonNull String argument, @NonNull Microcopy help, @NonNull Identifier model,
+                @NonNull Field<?, ?> column, @Nullable Predicate<Identifier> kinds, boolean createOnly) {
+
+        /** @return the same link, taken only by the records of the kinds the test accepts */
+        @NonNull Link onlyFor(@NonNull Predicate<Identifier> test) {
+            return new Link(this.argument, this.help, this.model, this.column, test, this.createOnly);
+        }
+
+        /** @return the same link, taken by a create alone */
+        @NonNull Link onCreateOnly() {
+            return new Link(this.argument, this.help, this.model, this.column, this.kinds, true);
+        }
+
+        /** @return whether a record of the kind takes this link */
+        boolean takenBy(@NonNull Identifier kind) {
+            return this.kinds == null || this.kinds.test(kind);
+        }
+    }
+
+    /** @return a link every kind's record takes, on a create and a change alike */
+    static @NonNull Link link(@NonNull String argument, @NonNull Microcopy help, @NonNull Identifier model,
+                              @NonNull Field<?, ?> column) {
+        return new Link(argument, help, model, column, null, false);
+    }
+
+    /** The links a family's records take, declared once: their tool entries per kind and the columns they write. */
+    static final class Links {
+
+        private final List<Link> links;
+
+        private Links(@NonNull List<Link> links) {
+            this.links = List.copyOf(links);
+        }
+
+        /** @return the entries a create (or a change) of a record of the kind takes, in declaration order */
+        @NonNull List<FormEntry> entries(@NonNull Identifier kind, boolean creating) {
+            List<FormEntry> entries = new ArrayList<>();
+            for (Link link : this.links) {
+                if (link.takenBy(kind) && (creating || !link.createOnly())) {
+                    entries.add(OperationForms.recordId(link.argument(), link.help(), link.model(), link.column()));
+                }
+            }
+            return entries;
+        }
+
+        /** @return the links a change sets or clears, in declaration order */
+        @NonNull List<Link> changeable() {
+            return this.links.stream().filter(link -> !link.createOnly()).toList();
+        }
+
+        /** @return each link's argument to the column it writes, for {@link #speaking} */
+        @NonNull Map<String, Field<?, ?>> columns() {
+            Map<String, Field<?, ?>> columns = new LinkedHashMap<>();
+            for (Link link : this.links) columns.put(link.argument(), link.column());
+            return columns;
+        }
+
+        /** @return whether a record of the kind takes the link of this argument */
+        boolean takes(@NonNull String argument, @NonNull Identifier kind) {
+            return this.links.stream().anyMatch(link -> link.argument().equals(argument) && link.takenBy(kind));
+        }
+    }
+
+    /** @return the links, declared once per family */
+    static @NonNull Links links(@NonNull Link @NonNull ... links) {
+        return new Links(List.of(links));
+    }
+
+    /**
      * @return the setting's entry as the panel derives it, or the field itself where the panel draws an editor of its
-     *     own over the field's text (a repository picked from its provider): the tool takes that text
+     *     own over the field's text (a repository picked from its provider): the tool takes that text. A key naming a
+     *     record of a coded kind ({@code FieldAttributes.NAMES_RECORD_OF}) is taken as that record's code, read back
+     *     under the same name.
      */
     static @NonNull FormEntry entryOf(@NonNull Field<?, ?> field) {
+        RecordModels named = field.getAttribute(FieldAttributes.NAMES_RECORD_OF);
+        Microcopy help = field.getAttribute(FieldAttributes.HELP);
+        if (named != null && !(field instanceof StringField) && named.models().size() == 1 && help != null) {
+            return OperationForms.recordId(field.getInputName(), help, named.models().get(0), field);
+        }
         FormEntry derived = FieldFormEntryRegistry.INSTANCE.deriveEntry(field);
         return derived instanceof FormEntry.Embedded embedded && embedded.jsonSchema() == null
             ? Plain.of(field) : derived;

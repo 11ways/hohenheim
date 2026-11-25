@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.AddressWrites;
@@ -22,6 +23,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.hohenheim.server.cms.DnsRecordSets;
 import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.server.cms.KindSettingsWrites;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.ProjectParts;
@@ -196,8 +198,16 @@ public final class HohenheimTools extends McpToolCollection {
             .route(CertificateOperations.RENEW, null)
             .routeByState(CertificateOperations.CONTINUE_DNS, null)
             .build();
+        // A connection is a credential: a key made for it shows its public half in the answer, never the private one.
+        McpHostTool gitConnection = McpCodeTool.builder("git_connection_set", words("mcp_tool_git_connection_set"),
+                writes())
+            .code(words("mcp_code_git_connection"))
+            .creates(GitConnectionWrites.CREATE, HohenheimMcpAnswers::connectionMade,
+                List.of(GitProviderModel.NAME.getName(), GitConnectionWrites.KIND), words("git_connection_thing"))
+            .route(GitConnectionWrites.CHANGE, HohenheimMcpAnswers::changed)
+            .build();
         List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, restore, power, backUp,
-            exec, variables, test, recordList, recordSet, address, order, renew));
+            exec, variables, test, recordList, recordSet, address, order, renew, gitConnection));
         for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
             tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
                 .code(words("mcp_code_set"))
