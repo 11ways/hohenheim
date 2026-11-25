@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.domino.common.audio.AudioCodec;
 import be.elevenways.pepperglass.agent.ClipboardReply;
 import be.elevenways.pepperglass.agent.ClipboardType;
 import be.elevenways.pepperglass.agent.Selection;
@@ -26,7 +27,6 @@ import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
-import be.elevenways.zenit.kvm.common.AudioCodec;
 import be.elevenways.zenit.kvm.common.RectEncoding;
 import be.elevenways.zenit.kvm.common.ScreenCapability;
 import be.elevenways.zenit.kvm.common.ScreenMessage;

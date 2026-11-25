@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.domino.common.audio.AudioCodec;
 import be.elevenways.pepperglass.Pepperglass;
 import be.elevenways.pepperglass.agent.ClipboardReply;
 import be.elevenways.pepperglass.agent.ClipboardType;
@@ -22,7 +23,6 @@ import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.SpiceException;
 import be.elevenways.protoblast.common.input.KeyCode;
 import be.elevenways.protoblast.server.io.BulkInputStream;
-import be.elevenways.zenit.kvm.common.AudioCodec;
 import be.elevenways.zenit.kvm.common.RectEncoding;
 import be.elevenways.zenit.kvm.common.ScreenCapability;
 import be.elevenways.zenit.kvm.common.ScreenCursor;
@@ -40,7 +40,6 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
