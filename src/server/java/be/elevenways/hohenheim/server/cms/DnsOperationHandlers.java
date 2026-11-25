@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.Availability;
@@ -66,8 +67,12 @@ final class DnsOperationHandlers {
         return (row, input, access) -> HohenheimAccess.isAdmin(access) ? null : concealed();
     }
     private static <I> Authorizer<Row, I> dynamic() {
-        return (row, input, access) -> HohenheimAccess.reachesRecord(access, DnsRecordModel.MODEL_ID,
-            row.get(DnsRecordModel.ID), HohenheimCapabilities.DYNDNS) ? null : concealed();
+        return (row, input, access) -> keysDynamic(access, row.get(DnsRecordModel.ID)) ? null : concealed();
+    }
+
+    /** @return whether the caller may make, re-key or drop the record's dynamic DNS token, on every lane */
+    static boolean keysDynamic(AccessContext access, Integer recordId) {
+        return HohenheimAccess.reachesRecord(access, DnsRecordModel.MODEL_ID, recordId, HohenheimCapabilities.DYNDNS);
     }
     private static DomainRefusal concealed() {
         return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "the DNS subject is not reachable");

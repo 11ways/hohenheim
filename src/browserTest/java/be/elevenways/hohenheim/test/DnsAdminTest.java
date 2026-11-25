@@ -38,8 +38,8 @@ class DnsAdminTest extends HohenheimTestBase {
 
         // Creating a zone normalizes the origin.
         var response = adminPostForm("/admin/dns-zones/new",
-            "origin=Admin-Zone.Example.&soa_primary_ns=&soa_contact="
-            + "&default_ttl=3600&negative_ttl=300&soa_refresh=7200&soa_retry=3600&soa_expire=1209600"
+            "origin=Admin-Zone.Example.&primary_ns=&contact="
+            + "&default_ttl=3600&negative_ttl=300&refresh=7200&retry=3600&expire=1209600"
             + "&enabled=on");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -51,7 +51,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // Invalid origins are refused with a violation.
         var invalidOrigin = adminPostForm("/admin/dns-zones/new",
             "origin=*.bad-origin&default_ttl=3600&negative_ttl=300"
-            + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
+            + "&refresh=7200&retry=3600&expire=1209600");
         assertThat(invalidOrigin.statusCode()).isEqualTo(422);
         assertThat(invalidOrigin.body()).contains("bare domain");
         assertThat(Models.get(DnsZoneModel.class).findByOrigin("*.bad-origin")).isNull();
@@ -59,7 +59,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // Duplicate origins are refused too.
         var duplicate = adminPostForm("/admin/dns-zones/new",
             "origin=admin-zone.example&default_ttl=3600&negative_ttl=300"
-            + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
+            + "&refresh=7200&retry=3600&expire=1209600");
         assertThat(duplicate.statusCode()).isEqualTo(422);
         assertThat(duplicate.body()).contains("already exists");
 

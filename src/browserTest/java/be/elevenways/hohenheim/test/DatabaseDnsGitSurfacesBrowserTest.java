@@ -251,7 +251,8 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         for (Row peer : Models.get(DnsPeerModel.class).find().all()) {
             allPeers.add(String.valueOf((Object) peer.get(DnsPeerModel.ID)));
         }
-        SurfaceCase keyed = fixture.hostOptions("peer_id", enabledPeers).hostOptions("primary_peer_id", allPeers)
+        SurfaceCase keyed = fixture.hostOptions("peer_id", enabledPeers)
+            .hostOptions(DnsZoneModel.PRIMARY_PEER_ID.getInputName(), allPeers)
             .key(GIT_PROVIDERS, "shared_provider", sharedProviderId)
             .key(GIT_PROVIDERS, "tenant_provider", tenantProviderId)
             .key(GAME_DOMAINS, "mapping", gameDomainId)

@@ -840,9 +840,8 @@ public final class InstanceParts {
     }
 
     /**
-     * Puts back the stored settings keys the kind's form does not declare, which its closed-world sub-form cannot post
-     * and so would drop: a change writes only what it was sent. Only a kind change leaves behind what the new kind
-     * lacks.
+     * Puts back the stored settings keys the kind's form does not declare (KindSettingsWrites.keptUndeclared): only a
+     * kind change leaves behind what the new kind lacks.
      *
      * @param stored the record as stored before this save, null when it is gone
      */
@@ -850,14 +849,10 @@ public final class InstanceParts {
         if (stored == null || !Objects.equals(row.get(InstanceModel.KIND), stored.get(InstanceModel.KIND))) return;
         InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
         if (handler == null) return;
-        Map<String, Object> settings = new LinkedHashMap<>(InstanceModel.settingsOf(row));
-        boolean kept = false;
-        for (Map.Entry<String, Object> entry : InstanceModel.settingsOf(stored).entrySet()) {
-            if (handler.getSchema().getField(entry.getKey()) != null || settings.containsKey(entry.getKey())) continue;
-            settings.put(entry.getKey(), entry.getValue());
-            kept = true;
-        }
-        if (kept) row.set(InstanceModel.SETTINGS, settings);
+        Map<String, Object> written = InstanceModel.settingsOf(row);
+        Map<String, Object> settings = KindSettingsWrites.keptUndeclared(handler.getSchema(),
+            InstanceModel.settingsOf(stored), written);
+        if (settings != written) row.set(InstanceModel.SETTINGS, settings);
     }
 
     /** A changed game address takes its records along (GameAddresses, the address's one home). */

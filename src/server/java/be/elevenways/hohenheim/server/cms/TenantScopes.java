@@ -117,6 +117,12 @@ public final class TenantScopes {
     public static final RowScope DNS_RECORDS = RowScope.perPrincipal(TenantScopes::dnsRecordAccess);
 
     /**
+     * DNS zones; tenants only those they reach on the record API ({@link #reachesZone}): a zone holding a record they
+     * see, or a hostname of a site they manage. Their record tools name such a zone; every other stays unknown.
+     */
+    public static final RowScope DNS_ZONES = RowScope.perPrincipal(TenantScopes::zoneAccess);
+
+    /**
      * Certificates minus the ACME account row; tenants only the walk-reachable ones.
      *
      * AIDEV-NOTE: the base is THE admin {@link CertificateParts#ROWS} (itself
@@ -469,11 +475,42 @@ public final class TenantScopes {
                 .where(scope).first() != null) {
             return true;
         }
+        return holdsManagedHost(zone, managedDomains(ctx));
+    }
+
+    /**
+     * The zones {@link #reachesZone} answers yes for, as one criteria: one read of the records the context sees and,
+     * when it manages sites, one of the zones.
+     *
+     * @return null for every zone
+     */
+    private static @Nullable Criteria zoneAccess(@NonNull AccessContext ctx) {
+        Criteria scope = DNS_RECORDS.criteria(ctx);
+        if (scope == null) {
+            return null;
+        }
+        Set<Integer> reached = new LinkedHashSet<>();
+        for (Row record : Models.get(DnsRecordModel.class).find().where(scope).all()) {
+            reached.add(record.get(DnsRecordModel.ZONE_ID));
+        }
+        List<Row> domains = managedDomains(ctx);
+        if (!domains.isEmpty()) {
+            for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
+                if (holdsManagedHost(zone, domains)) {
+                    reached.add(zone.get(DnsZoneModel.ID));
+                }
+            }
+        }
+        return reached.isEmpty() ? Models.get(DnsZoneModel.class).matchNone() : DnsZoneModel.ID.in(reached);
+    }
+
+    /** @return whether a hostname of one of the domains lies inside the zone */
+    private static boolean holdsManagedHost(@NonNull Row zone, @NonNull List<Row> domains) {
         String origin = zone.get(DnsZoneModel.ORIGIN);
         if (origin == null) {
             return false;
         }
-        for (Row domain : managedDomains(ctx)) {
+        for (Row domain : domains) {
             String pattern = SiteDomainModel.canonicalHostname(domain.get(SiteDomainModel.HOSTNAME),
                 domain.get(SiteDomainModel.MATCH_TYPE));
             HostPattern wildcard = pattern != null ? HostPattern.tryParse(pattern) : null;

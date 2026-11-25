@@ -174,11 +174,11 @@ public final class DnsZoneParts {
         // fold -- and on a primary zone the diagnostics are hidden entirely, which simply
         // leaves the section with fewer members.
         .section(FormSection.advanced(
-            DnsZoneModel.DEFAULT_TTL.getName(),
-            DnsZoneModel.NEGATIVE_TTL.getName(),
-            DnsZoneModel.SOA_REFRESH.getName(),
-            DnsZoneModel.SOA_RETRY.getName(),
-            DnsZoneModel.SOA_EXPIRE.getName(),
+            DnsZoneModel.DEFAULT_TTL.getInputName(),
+            DnsZoneModel.NEGATIVE_TTL.getInputName(),
+            DnsZoneModel.SOA_REFRESH.getInputName(),
+            DnsZoneModel.SOA_RETRY.getInputName(),
+            DnsZoneModel.SOA_EXPIRE.getInputName(),
             DnsZoneModel.TRANSFER_STATUS.getName(),
             DnsZoneModel.LAST_TRANSFER_AT.getName(),
             DnsZoneModel.TRANSFER_MESSAGE.getName(),
@@ -527,10 +527,10 @@ public final class DnsZoneParts {
         // explicit value is the operator's and stands. A secondary's SOA comes from the
         // transfer, so nothing is defaulted there.
         if (primary) {
-            Object named = values.get(DnsZoneModel.SOA_PRIMARY_NS.getName());
+            Object named = values.get(DnsZoneModel.SOA_PRIMARY_NS.getInputName());
             String declared = DnsNameservers.defaultPrimaryNs();
             if (declared != null && (named == null || String.valueOf(named).isBlank())) {
-                values.put(DnsZoneModel.SOA_PRIMARY_NS.getName(), declared);
+                values.put(DnsZoneModel.SOA_PRIMARY_NS.getInputName(), declared);
             }
         }
         Object id = DnsRowWrites.create(this.model(), this.formSpec(), values, accessContext);
@@ -648,34 +648,34 @@ public final class DnsZoneParts {
             }
         }
 
-        if (creating || coerced.containsKey(DnsZoneModel.SOA_PRIMARY_NS.getName())) {
-            Object nsValue = coerced.get(DnsZoneModel.SOA_PRIMARY_NS.getName());
+        if (creating || coerced.containsKey(DnsZoneModel.SOA_PRIMARY_NS.getInputName())) {
+            Object nsValue = coerced.get(DnsZoneModel.SOA_PRIMARY_NS.getInputName());
             String primaryNs = Hostnames.stripTrailingDots(
                 nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "");
             if (!primaryNs.isEmpty() && DnsNames.normalizeOrigin(primaryNs) == null) {
-                throw Violations.ofField("soa_primary_ns", primaryNs,
+                throw Violations.ofField(DnsZoneModel.SOA_PRIMARY_NS.getInputName(), primaryNs,
                     HohenheimMicrocopy.VIOLATIONS.of("dns_target_format"));
             }
-            coerced.put(DnsZoneModel.SOA_PRIMARY_NS.getName(), primaryNs);
+            coerced.put(DnsZoneModel.SOA_PRIMARY_NS.getInputName(), primaryNs);
         }
 
-        if (creating || coerced.containsKey(DnsZoneModel.SOA_CONTACT.getName())) {
-            Object contactValue = coerced.get(DnsZoneModel.SOA_CONTACT.getName());
+        if (creating || coerced.containsKey(DnsZoneModel.SOA_CONTACT.getInputName())) {
+            Object contactValue = coerced.get(DnsZoneModel.SOA_CONTACT.getInputName());
             String contact = trimmed(contactValue);
             // A contact's domain may be written fully qualified ("hostmaster@example.com."); the shape is zenit's.
-            if (!Email.instance().validate(Hostnames.stripTrailingDots(contact), ValidationContext.of("soa_contact"))
-                    .isValid()) {
-                throw Violations.ofField("soa_contact", contact,
+            if (!Email.instance().validate(Hostnames.stripTrailingDots(contact),
+                    ValidationContext.of(DnsZoneModel.SOA_CONTACT.getInputName())).isValid()) {
+                throw Violations.ofField(DnsZoneModel.SOA_CONTACT.getInputName(), contact,
                     HohenheimMicrocopy.VIOLATIONS.of("dns_contact_format"));
             }
-            coerced.put(DnsZoneModel.SOA_CONTACT.getName(), contact);
+            coerced.put(DnsZoneModel.SOA_CONTACT.getInputName(), contact);
         }
 
-        checkDuration(coerced, "default_ttl", MAX_TTL, "dns_ttl_range");
-        checkDuration(coerced, "negative_ttl", MAX_TTL, "dns_ttl_range");
-        checkDuration(coerced, "soa_refresh", MAX_INTERVAL, "dns_interval_range");
-        checkDuration(coerced, "soa_retry", MAX_INTERVAL, "dns_interval_range");
-        checkDuration(coerced, "soa_expire", MAX_INTERVAL, "dns_interval_range");
+        checkDuration(coerced, DnsZoneModel.DEFAULT_TTL.getInputName(), MAX_TTL, "dns_ttl_range");
+        checkDuration(coerced, DnsZoneModel.NEGATIVE_TTL.getInputName(), MAX_TTL, "dns_ttl_range");
+        checkDuration(coerced, DnsZoneModel.SOA_REFRESH.getInputName(), MAX_INTERVAL, "dns_interval_range");
+        checkDuration(coerced, DnsZoneModel.SOA_RETRY.getInputName(), MAX_INTERVAL, "dns_interval_range");
+        checkDuration(coerced, DnsZoneModel.SOA_EXPIRE.getInputName(), MAX_INTERVAL, "dns_interval_range");
     }
 
     private static void checkDuration(@NonNull Map<String, Object> coerced, @NonNull String field,

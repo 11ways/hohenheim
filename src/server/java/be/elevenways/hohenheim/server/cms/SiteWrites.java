@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.ArchiveOperations;
@@ -254,6 +255,30 @@ public final class SiteWrites {
         ArchiveOperations.purge(SiteModel.REF, SubjectArity.ONE, HohenheimSources.OPERATOR);
     public static final Operation<Row, Void, Integer> PURGE_MANY =
         ArchiveOperations.purge(SiteModel.REF, SubjectArity.MANY, HohenheimSources.OPERATOR);
+
+    /** The saved revision a live site is set back to, as its history names it. */
+    public static final IntegerField REVISION = IntegerField.builder().name("revision").required()
+        .help(HohenheimMicrocopy.HELP.of("site_revision")).build();
+
+    /** What a revision restore asks: the revision to set the site back to. */
+    public record RevisionInput(@Nullable Integer revision) {
+    }
+
+    /**
+     * Sets a live site back to one of its saved revisions through the site resource's own restore (the history tab's
+     * Restore): who may is that resource's edit right, what may change its field access. Its result names the site.
+     */
+    public static final Operation<Row, RevisionInput, String> RESTORE_REVISION =
+        Operation.declare(HohenheimIds.id("restore_site_revision"))
+            .label(HohenheimMicrocopy.HOHENHEIM.of("restore_site_revision"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("restore_site_revision_description"))
+            .one(SiteOperations.SITE)
+            .gate(OperationGate.open())
+            .input(OperationInput.of(FormSpec.builder().add(Plain.of(REVISION)).build(), RevisionInput.class,
+                v -> new RevisionInput(v.get(REVISION))))
+            .result(String.class)
+            .command(CmsCommands.TRANSACTIONAL)
+            .register();
 
     private SiteWrites() {
     }

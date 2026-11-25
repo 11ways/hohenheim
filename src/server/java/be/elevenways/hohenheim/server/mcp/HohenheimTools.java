@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
@@ -22,6 +23,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.hohenheim.server.cms.DnsRecordSets;
+import be.elevenways.hohenheim.server.cms.DnsZoneWrites;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
@@ -134,10 +136,12 @@ public final class HohenheimTools extends McpToolCollection {
             .route(StackOperations.ROLLBACK, null)
             .route(SiteOperations.ROLLBACK_RELEASE, null)
             .build();
-        // A trashed site comes back as it was deleted, through the panel trash's own restore.
+        // A trashed site comes back as it was deleted, through the panel trash's own restore; a live one goes back to a
+        // saved revision, through its history tab's own restore.
         McpHostTool restore = McpCodeTool.builder("site_restore", words("mcp_tool_site_restore"), writes())
             .code(words("mcp_code_site_restore"))
             .route(SiteWrites.RESTORE, null)
+            .routeByState(SiteWrites.RESTORE_REVISION, HohenheimMcpAnswers::changed)
             .build();
         McpHostTool power = McpCodeTool.builder("power", words("mcp_tool_power"), writes())
             .code(words("mcp_code_power"))
@@ -180,6 +184,12 @@ public final class HohenheimTools extends McpToolCollection {
             .subject(DNS_ZONE, words("mcp_code_dns_zone_set"))
             .route(DnsRecordSets.SET, HohenheimMcpAnswers::recordsSet)
             .build();
+        // A zone is named by its origin as well as its code, as every tool taking a zone takes it.
+        McpHostTool zoneSet = McpCodeTool.builder("dns_zone_set", words("mcp_tool_dns_zone_set"), writes())
+            .code(words("mcp_code_dns_zone"))
+            .creates(DnsZoneWrites.CREATE, null, DnsZoneModel.ORIGIN.getInputName(), words("dns_zone_thing"))
+            .route(DnsZoneWrites.CHANGE, HohenheimMcpAnswers::changed)
+            .build();
         McpHostTool address = McpCodeTool.builder("address_set", words("mcp_tool_address_set"), writes())
             .code(words("mcp_code_address"))
             .creates(AddressWrites.CREATE, null,
@@ -211,7 +221,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(GitConnectionWrites.CHANGE, HohenheimMcpAnswers::changed)
             .build();
         List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, restore, power, backUp,
-            exec, variables, test, recordList, recordSet, address, order, renew, gitConnection));
+            exec, variables, test, recordList, recordSet, zoneSet, address, order, renew, gitConnection));
         for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
             tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
                 .code(words("mcp_code_set"))

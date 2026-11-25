@@ -421,6 +421,28 @@ public final class KindSettingsWrites {
         return code + " changed: " + (written.isBlank() ? "nothing" : written);
     }
 
+    /**
+     * Puts back the stored settings keys the kind does not declare, which its closed-world sub-form cannot post and so
+     * drops: a save writes only what it was sent. The caller asks this only when the save keeps the kind; a kind change
+     * leaves behind what the new kind lacks.
+     *
+     * @param declared the kind's settings schema, keyed by stored names
+     * @param stored   the settings as stored before the save
+     * @param written  the settings the save writes, null for none
+     * @return the written settings with the undeclared stored keys beside them, or {@code written} when there are none
+     */
+    static @Nullable Map<String, Object> keptUndeclared(@NonNull Schema declared, @NonNull Map<String, Object> stored,
+                                                       @Nullable Map<String, Object> written) {
+        Map<String, Object> settings = written == null ? new LinkedHashMap<>() : new LinkedHashMap<>(written);
+        boolean kept = false;
+        for (Map.Entry<String, Object> entry : stored.entrySet()) {
+            if (declared.getField(entry.getKey()) != null || settings.containsKey(entry.getKey())) continue;
+            settings.put(entry.getKey(), entry.getValue());
+            kept = true;
+        }
+        return kept ? settings : written;
+    }
+
     /** Runs a write that answers nothing, its refusals naming each linked column by the argument that set it. */
     static void speaking(@NonNull Map<String, ? extends Field<?, ?>> columns, @NonNull Runnable write) {
         speaking(columns, () -> {

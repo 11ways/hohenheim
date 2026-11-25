@@ -39,17 +39,20 @@ public class DnsZoneModel extends Model {
     public static final SharedWithPeersBehaviour KEPT_BY_MASTER =
         SCHEMA.addBehaviour(SharedWithPeersBehaviour.of(MODEL_ID));
 
-    /** THE short code a DNS zone is named by in an assistant's tools: "Z12". */
-    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
-        RecordCodeBehaviour.allocated(MODEL_ID, "Z"));
-
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField ORIGIN = SCHEMA.addField(StringField.builder().name("origin")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("origin")).help(HohenheimMicrocopy.HELP.of("origin")).build());
+
+    /** THE short code a DNS zone is named by in an assistant's tools: "Z12"; its origin names it too. */
+    public static final RecordCodeBehaviour.Allocated CODE = SCHEMA.addBehaviour(
+        RecordCodeBehaviour.allocated(MODEL_ID, "Z").alsoNamedBy(ORIGIN));
+
     public static final StringField SOA_PRIMARY_NS = SCHEMA.addField(StringField.builder().name("soa_primary_ns")
+        .inputName("primary_ns")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_primary_ns"))
         .help(HohenheimMicrocopy.HELP.of("soa_primary_ns")).build());
     public static final StringField SOA_CONTACT = SCHEMA.addField(StringField.builder().name("soa_contact")
+        .inputName("contact")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_contact")).help(HohenheimMicrocopy.HELP.of("soa_contact"))
         .build());
     public static final IntegerField SERIAL = SCHEMA.addField(IntegerField.builder().name("serial").defaultValue(1)
@@ -63,15 +66,15 @@ public class DnsZoneModel extends Model {
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("negative_ttl"))
         .help(HohenheimMicrocopy.HELP.of("negative_ttl")).build());
     public static final IntegerField SOA_REFRESH = SCHEMA.addField(IntegerField.builder().name("soa_refresh")
-            .defaultValue(7200)
+            .defaultValue(7200).inputName("refresh")
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_refresh"))
         .help(HohenheimMicrocopy.HELP.of("soa_refresh")).build());
     public static final IntegerField SOA_RETRY = SCHEMA.addField(IntegerField.builder().name("soa_retry")
-            .defaultValue(3600)
+            .defaultValue(3600).inputName("retry")
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_retry"))
         .help(HohenheimMicrocopy.HELP.of("soa_retry")).build());
     public static final IntegerField SOA_EXPIRE = SCHEMA.addField(IntegerField.builder().name("soa_expire")
-            .defaultValue(1209600)
+            .defaultValue(1209600).inputName("expire")
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_expire"))
         .help(HohenheimMicrocopy.HELP.of("soa_expire")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
@@ -99,7 +102,7 @@ public class DnsZoneModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("zone_role")).help(HohenheimMicrocopy.HELP.of("zone_role"))
         .build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
-        IntegerField.builder().name("primary_peer_id")
+        IntegerField.builder().name("primary_peer_id").inputName("primary_peer")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("primary_peer"))
             .help(HohenheimMicrocopy.HELP.of("primary_peer")).build());
     /** {@link #TRANSFER_STATUS} value: the last AXFR from the primary peer succeeded. */
@@ -171,7 +174,7 @@ public class DnsZoneModel extends Model {
 
     // --- DNSSEC (online signing; one Combined Signing Key per zone) ---
     public static final BooleanField DNSSEC_ENABLED = SCHEMA.addField(
-        BooleanField.builder("dnssec_enabled").defaultValue(false)
+        BooleanField.builder("dnssec_enabled").defaultValue(false).inputName("dnssec")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("dnssec_enabled"))
         .help(HohenheimMicrocopy.HELP.of("dnssec_enabled")).build());
     public static final IntegerField DNSSEC_ALGORITHM = SCHEMA.addField(

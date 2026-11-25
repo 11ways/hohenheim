@@ -266,6 +266,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("head", recordHead(conduit));
+        // Tokens an assistant's dns_record_set made for this viewer's account, shown here once (DnsTokenDisclosures).
+        vars.put("disclosedTokens", Objects.toString(DnsTokenDisclosures.claim(accessContext, zoneId), ""));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by the record entry's quick-create presets, which read THIS route.
         vars.put("quickAdd", QuickAddState.of(panel, resource, accessContext, PageAddress.of(conduit), refreshUrl,
@@ -333,47 +335,34 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
 
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
         Row peer = Models.get(DnsPeerModel.class).findById(peerId);
-        DnsPeerApi api = DnsPeerApi.forPeer(peer);
 
         List<DnsRecordView> records = new ArrayList<>();
-        boolean reachable = false;
-        String notice = "";
         DnsRecordFormView editRecord = null;
         Endpoint.declareQueryOn(conduit, MalformedQuery.ABSENT, List.of(HohenheimParams.REMOTE_RECORD));
         String requestedRecord = conduit.getParameter(HohenheimParams.REMOTE_RECORD);
 
-        if (api != null) {
-            try {
-                for (DnsRecordDto remote : api.listRecords(origin)) {
-                    String id = Objects.toString(remote.id(), "");
-                    records.add(new DnsRecordView(
-                        id,
-                        Objects.toString(remote.name(), ""),
-                        Objects.toString(remote.type(), ""),
-                        Objects.toString(remote.ttl(), ""),
-                        remoteDisplayValue(remote),
-                        remote.enabled(),
-                        remote.managed_by() != null,
-                        remoteRecordTarget(zoneId, id)));
-                    if (id.equals(requestedRecord)) {
-                        editRecord = formView(remote);
-                    }
+        OwnerRead owner = readOwner(zone);
+        boolean reachable = owner.records() != null;
+        String notice = owner.notice() == null ? "" : owner.notice().asString(conduit);
+        if (owner.records() != null) {
+            for (DnsRecordDto remote : owner.records()) {
+                String id = Objects.toString(remote.id(), "");
+                records.add(new DnsRecordView(
+                    id,
+                    Objects.toString(remote.name(), ""),
+                    Objects.toString(remote.type(), ""),
+                    Objects.toString(remote.ttl(), ""),
+                    remoteDisplayValue(remote),
+                    remote.enabled(),
+                    remote.managed_by() != null,
+                    remoteRecordTarget(zoneId, id)));
+                if (id.equals(requestedRecord)) {
+                    editRecord = formView(remote);
                 }
-                reachable = true;
-            }
-            catch (RuntimeException e) {
-                notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_unreachable")
-                    .withArg("message", String.valueOf(e.getMessage()))
-                    .asString(conduit);
             }
         }
         else {
-            notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured")
-                .asString(conduit);
-        }
-
-        if (!reachable) {
-            replicaRecords(origin, records);
+            records.addAll(replicaRecords(origin));
         }
         // A read-only zone still reads its owner's records, but offers none of their edits: the submit is refused.
         boolean editable = reachable && !this.hostReadOnly(conduit);
@@ -415,6 +404,31 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("deleteForms", deletes);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_REMOTE_RECORDS, vars);
+    }
+
+    /**
+     * What a secondary zone's owning peer answers for its records.
+     *
+     * @param records the owner's records, null when it was not asked or did not answer
+     * @param notice  why there are none from the owner, null when there are
+     */
+    record OwnerRead(@Nullable List<DnsRecordDto> records, @Nullable Microcopy notice) {
+    }
+
+    /** @return the secondary zone's records as its owning peer answers them, or why it could not */
+    static @NonNull OwnerRead readOwner(@NonNull Row zone) {
+        Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        if (api == null) {
+            return new OwnerRead(null, HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured"));
+        }
+        try {
+            return new OwnerRead(api.listRecords(zone.get(DnsZoneModel.ORIGIN)), null);
+        }
+        catch (RuntimeException e) {
+            return new OwnerRead(null, HohenheimMicrocopy.DNS_REMOTE.of("peer_unreachable")
+                .withArg("message", String.valueOf(e.getMessage())));
+        }
     }
 
     /**
@@ -473,11 +487,12 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             .with(HohenheimParams.REMOTE_RECORD, recordId);
     }
 
-    /** Read-only listing from the replica snapshot when the owner cannot be reached. */
-    private static void replicaRecords(@NonNull String origin, @NonNull List<DnsRecordView> records) {
+    /** @return the read-only listing from the replica snapshot, for when the owner cannot be reached */
+    static @NonNull List<DnsRecordView> replicaRecords(@NonNull String origin) {
+        List<DnsRecordView> records = new ArrayList<>();
         DnsZoneSnapshot snapshot = DnsZoneStore.INSTANCE.getZone(origin);
         if (snapshot == null) {
-            return;
+            return records;
         }
         for (org.xbill.DNS.Record record : snapshot.allRecordsExceptSoa()) {
             records.add(new DnsRecordView(
@@ -491,6 +506,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
                 null));
         }
         records.sort(Comparator.comparing(DnsRecordView::name));
+        return records;
     }
 
     /** @return remote fields encoded as strings for HTML form controls */

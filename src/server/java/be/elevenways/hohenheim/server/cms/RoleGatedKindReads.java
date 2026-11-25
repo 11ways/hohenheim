@@ -56,12 +56,13 @@ public final class RoleGatedKindReads {
         operatorsRead(DatabaseDumpModel.REF);
         operatorsRead(DatabaseEngineModel.REF);
         operatorsRead(DnsPeerModel.REF);
-        operatorsRead(DnsZoneModel.REF);
         operatorsRead(GameDomainModel.REF);
         operatorsRead(ReconcileFindingModel.REF);
         operatorsRead(ReleasedRouteClaimModel.REF);
         operatorsRead(StackModel.REF);
         operatorsRead(StackServiceModel.REF);
+        // A zone is read where its records are: a tenant reaches the zones holding his names (TenantScopes.DNS_ZONES).
+        scopeReads(DnsZoneModel.REF, TenantScopes.DNS_ZONES);
         scopeReads(BuildHookModel.REF, TenantScopes.BUILD_HOOKS);
         scopeReads(InstanceBackupModel.REF, TenantScopes.INSTANCE_BACKUPS);
         scopeReads(InstanceSnapshotModel.REF, TenantScopes.INSTANCE_SNAPSHOTS);

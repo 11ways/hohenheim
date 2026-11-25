@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.HostParts;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
@@ -51,6 +52,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -1031,7 +1033,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
      * What a create asks is what it is judged by, a refusal names the argument that was sent, and a change writes only
      * what it was sent: a create's memory limit decides whether its host has room, the refusal names {@code host}, a
      * site setting set and then cleared leaves its settings as empty as they were, its defaults still in force, and a
-     * stored key the app's kind does not declare survives a change of another setting.
+     * stored key the app's or the site's kind does not declare survives a change of another setting.
      */
     @Test
     void aCreateIsJudgedByWhatItAsksAndAChangeWritesOnlyWhatItSends() throws Exception {
@@ -1136,6 +1138,18 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .as("step 6: the undeclared key is still stored beside the change")
                 .containsEntry("undeclared_note", "kept").containsEntry("tag", "v2")
                 .containsEntry("memory_limit_mb", 128);
+
+            // 7. The site side too: a stored key the site's kind does not declare survives a change of another of its
+            //    settings, through the operator's save the tool and the panel share.
+            Row siteNow = Models.get(SiteModel.class).find().noCache().where(SiteModel.ID.eq(siteId)).first();
+            Map<String, Object> siteExtra = new LinkedHashMap<>(RawValues.map(siteNow.get(SiteModel.SETTINGS)));
+            siteExtra.put("undeclared_note", "kept");
+            siteNow.set(SiteModel.SETTINGS, siteExtra);
+            Models.get(SiteModel.class).save(siteNow);
+            McpHttpSession.Answer retimed = admin.call("site_app_set", Map.of("code", site, "idle_timeout", 600));
+            assertThat(retimed.error()).as("step 7: " + retimed.text()).isFalse();
+            assertThat(siteSettings(siteId)).as("step 7: the undeclared key is still stored beside the change")
+                .containsEntry("undeclared_note", "kept").containsEntry("idle_timeout", 600);
         } finally {
             if (appId != null) {
                 for (Row site : Models.get(SiteModel.class).find().withTrashed()
@@ -1325,6 +1339,8 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         String savedDirectory = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
         String savedEmail = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
         Integer zoneId = null;
+        Integer secondaryId = null;
+        Integer peerId = null;
         try (FakeApps apps = FakeApps.install((SqlDatasource) Models.get(InstanceModel.class)
                 .getResolvedDatasource()); FakeAcmeServer ca = new FakeAcmeServer()) {
             HostFixtures.makeLocalPlaceable(16L * 1024);
@@ -1365,8 +1381,24 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(String.valueOf(settings.get("idle_timeout")) + " " + settings.get("request_timeout"))
                 .as("step 1: merged").isEqualTo("900 120");
 
-            // 2. An address on the site.
-            String hostname = letters() + "-shop.mcp-journey.test";
+            // 2. A zone made by dns_zone_set and named by its origin from then on; an address on the site inside it.
+            String origin = letters() + ".mcp-journey.test";
+            McpHttpSession.Answer madeZone = admin.call("dns_zone_set", Map.of("origin", origin, "contact",
+                "hostmaster@" + origin, "default_ttl", 600));
+            assertThat(madeZone.error()).as("step 2: dns_zone_set " + madeZone.text()).isFalse();
+            String zone = found(Pattern.compile("Z\\d+"), madeZone.text(), "step 2: the zone's code");
+            zoneId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(DnsZoneModel.MODEL_ID, zone)));
+            McpHttpSession.Answer retimed = admin.call("dns_zone_set", Map.of("code", origin, "refresh", 3600));
+            assertThat(retimed.error()).as("step 2: changed by its origin " + retimed.text()).isFalse();
+            assertThat(retimed.text()).as("step 2: the zone's code and what changed").contains(zone)
+                .contains("refresh").doesNotContain("soa_refresh");
+            Row madeRow = Models.get(DnsZoneModel.class).find().noCache().where(DnsZoneModel.ID.eq(zoneId)).first();
+            assertThat(madeRow.get(DnsZoneModel.SOA_REFRESH) + " " + madeRow.get(DnsZoneModel.DEFAULT_TTL) + " "
+                + madeRow.get(DnsZoneModel.SOA_CONTACT)).as("step 2: the change kept what it did not send")
+                .isEqualTo("3600 600 hostmaster@" + origin);
+            assertThat(admin.call("dns_zone_set", Map.of("origin", origin)).text())
+                .as("step 2: one zone per origin").contains("origin");
+            String hostname = "shop." + origin;
             McpHttpSession.Answer address = admin.call("address_set", Map.of("site", siteCode, "hostname",
                 hostname, "response_headers", List.of(Map.of("name", "X-Frame-Options", "value", "DENY"))));
             assertThat(address.error()).as("step 2: " + address.text()).isFalse();
@@ -1426,13 +1458,11 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(admin.call("certificate_order", Map.of("address", addressCode, "code", "C1")).text())
                 .as("step 3: one record at a time").contains("Give only one of code, address.");
 
-            // 4. An A and a TXT record in one call, in an existing zone.
-            zoneId = zone(letters() + ".mcp-journey.test");
-            String zone = code(DnsZoneModel.MODEL_ID, zoneId, operator);
+            // 4. An A and a TXT record in one call, in the zone named by its origin.
             McpHttpSession.Answer zones = admin.call("list", Map.of("kind", "dns_zone", "search", "mcp-journey"));
             assertThat(zones.error()).as("step 4: list kind=dns_zone: " + zones.text()).isFalse();
             assertThat(zones.text()).as("step 4: the zone listed by its code").contains(zone);
-            McpHttpSession.Answer set = admin.call("dns_record_set", Map.of("dns_zone", zone, "records", List.of(
+            McpHttpSession.Answer set = admin.call("dns_record_set", Map.of("dns_zone", origin, "records", List.of(
                 Map.of("name", "shop", "type", "A", "values", List.of(Map.of("value", "203.0.113.10"))),
                 Map.of("name", "@", "type", "TXT", "ttl", 300, "values", List.of(Map.of("value", "hello"))))));
             assertThat(set.error()).as("step 4: " + set.text()).isFalse();
@@ -1466,6 +1496,111 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(Models.get(DnsRecordModel.class).findById(proof.get(DnsRecordModel.ID)))
                 .as("step 6: the proof stays").isNotNull();
 
+            // 6a. The order's TXT records published with dns_record_set under their names in the zone; certificate_renew
+            //     then finishes the waiting manual order.
+            String certificate = found(Pattern.compile("C\\d+"), ordered.text(), "step 6a: the certificate's code");
+            Matcher txt = Pattern.compile("_acme-challenge\\.(\\S+?)\\.?\\s+TXT\\s+(\\S+)").matcher(ordered.text());
+            List<Map<String, Object>> proofs = new ArrayList<>();
+            while (txt.find()) {
+                String under = txt.group(1).equals(origin) ? "" : "." + txt.group(1).substring(0,
+                    txt.group(1).length() - origin.length() - 1);
+                proofs.add(Map.of("name", "_acme-challenge" + under, "type", "TXT", "values",
+                    List.of(Map.of("value", txt.group(2)))));
+            }
+            assertThat(proofs).as("step 6a: the TXT records the order waits for: " + ordered.text()).isNotEmpty();
+            McpHttpSession.Answer published = admin.call("dns_record_set", Map.of("dns_zone", origin, "records",
+                proofs));
+            assertThat(published.error()).as("step 6a: published " + published.text()).isFalse();
+            // The CA says yes only when the zone really holds a TXT record under the challenge's name.
+            int proofZone = zoneId;
+            ca.validateDnsWith((token, identifier) -> {
+                String owner = identifier.equals(origin) ? "_acme-challenge"
+                    : "_acme-challenge." + identifier.substring(0, identifier.length() - origin.length() - 1);
+                return Models.get(DnsRecordModel.class).find().noCache().where(DnsRecordModel.ZONE_ID.eq(proofZone))
+                    .where(DnsRecordModel.NAME.eq(owner)).where(DnsRecordModel.TYPE.eq(DnsRecordModel.TYPE_TXT))
+                    .count() > 0;
+            });
+            McpHttpSession.Answer renewed = admin.call("certificate_renew", Map.of("code", certificate));
+            assertThat(renewed.error()).as("step 6a: the order finished " + renewed.text()).isFalse();
+
+            // 6b. Someone who manages the site and is no administrator: he renames it, and reads the zone's records
+            //     under the names he manages and no other.
+            assertThat(admin.call("dns_record_set", Map.of("dns_zone", zone, "records", List.of(Map.of("name",
+                "other", "type", "A", "values", List.of(Map.of("value", "203.0.113.30"))))))
+                .error()).as("step 6b: a record under a name he does not manage").isFalse();
+            UUID managerId = user(PREFIX + letters() + "@surface.test", "Mcp Site Manager");
+            RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE, true);
+            McpHttpSession manager = presetSession(server, endpoint, managerId, "Mcp Site Manager");
+            McpHttpSession.Answer renamed = manager.call("site_app_set", Map.of("code", siteCode, "name",
+                siteName + "-renamed"));
+            assertThat(renamed.error()).as("step 6b: his site renamed " + renamed.text()).isFalse();
+            assertThat((String) Models.get(SiteModel.class).find().noCache().where(SiteModel.ID.eq(siteId)).first()
+                .get(SiteModel.NAME)).as("step 6b: stored").isEqualTo(siteName + "-renamed");
+            McpHttpSession.Answer his = manager.call("dns_record_list", Map.of("dns_zone", zone));
+            assertThat(his.error()).as("step 6b: his list " + his.text()).isFalse();
+            assertThat(his.text()).as("step 6b: the records of his names, and none other").contains("shop A")
+                .doesNotContain("203.0.113.30");
+            assertThat(manager.call("dns_zone_set", Map.of("code", zone, "refresh", 7200)).error())
+                .as("step 6b: a zone is installation administration").isTrue();
+            // The site goes back to the operator alone: step 8's trash and restore are the operator's own.
+            RecordGrants.revoke(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE);
+
+            // 6c. A dynamic DNS token made for shop A is never in the answer: the zone's Records tab shows it to the
+            //     account that asked, once.
+            McpHttpSession.Answer keyed = admin.call("dns_record_set", Map.of("dns_zone", origin, "records",
+                List.of(Map.of("name", "shop", "type", "A", "values", List.of(Map.of("value", "203.0.113.11",
+                    "dyndns", "new_token"))))));
+            assertThat(keyed.error()).as("step 6c: " + keyed.text()).isFalse();
+            assertThat(keyed.text()).as("step 6c: who sees it where, never the token").contains("shop A")
+                .contains("Records").doesNotContain(DynamicDnsService.TOKEN_MARKER);
+            Row shopA = Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                .where(DnsRecordModel.NAME.eq("shop")).where(DnsRecordModel.TYPE.eq("A")).first();
+            assertThat(DynamicDnsService.credentialFor(shopA.get(DnsRecordModel.ID))).as("step 6c: the token is armed")
+                .isNotNull();
+            String recordsTab = CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.DNS_ZONES, zoneId,
+                HohenheimSlugs.Tab.RECORDS).toUrl();
+            assertThat(rendered(adminGet(recordsTab).body())).as("step 6c: shown on the Records tab")
+                .contains(DynamicDnsService.TOKEN_MARKER);
+            assertThat(rendered(adminGet(recordsTab).body())).as("step 6c: and only once")
+                .doesNotContain(DynamicDnsService.TOKEN_MARKER);
+            assertThat(admin.call("dns_record_set", Map.of("dns_zone", origin, "records", List.of(Map.of("name",
+                "other", "type", "TXT", "values", List.of(Map.of("value", "x", "dyndns", "on")))))).error())
+                .as("step 6c: only an address takes a token").isTrue();
+
+            // 6d. A secondary zone copied from a peer: a change of its records is refused naming the server that keeps
+            //     them, a read answers this server's copy; the primary zone's secondaries are exactly the list given.
+            String peerName = PREFIX + "peer-" + letters();
+            Row peer = Models.get(DnsPeerModel.class).createEmptyRow();
+            peer.set(DnsPeerModel.NAME, peerName);
+            peer.set(DnsPeerModel.TRANSFER_HOST, "192.0.2.10");
+            Models.get(DnsPeerModel.class).save(peer);
+            peerId = peer.get(DnsPeerModel.ID);
+            String peerCode = code(DnsPeerModel.MODEL_ID, peerId, operator);
+            String copyOrigin = letters() + ".mcp-journey-copy.test";
+            McpHttpSession.Answer copy = admin.call("dns_zone_set", Map.of("origin", copyOrigin, "role",
+                "secondary", "primary_peer", peerCode));
+            assertThat(copy.error()).as("step 6d: a secondary zone " + copy.text()).isFalse();
+            secondaryId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(DnsZoneModel.MODEL_ID,
+                found(Pattern.compile("Z\\d+"), copy.text(), "step 6d: its code"))));
+            McpHttpSession.Answer copyRefused = admin.call("dns_record_set", Map.of("dns_zone", copyOrigin,
+                "records", List.of(Map.of("name", "www", "type", "A", "values", List.of(Map.of("value",
+                    "203.0.113.40"))))));
+            assertThat(copyRefused.error()).as("step 6d: refused " + copyRefused.text()).isTrue();
+            assertThat(copyRefused.text()).as("step 6d: naming the server that keeps them").contains(peerName);
+            McpHttpSession.Answer copied = admin.call("dns_record_list", Map.of("dns_zone", copyOrigin));
+            assertThat(copied.error()).as("step 6d: read " + copied.text()).isFalse();
+            assertThat(copied.text()).as("step 6d: from this server's copy, saying so").contains("copy");
+            assertThat(admin.call("dns_zone_set", Map.of("code", zone, "secondaries", List.of(peerCode))).error())
+                .as("step 6d: one secondary").isFalse();
+            assertThat(Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).count())
+                .as("step 6d: linked").isEqualTo(1L);
+            assertThat(admin.call("dns_zone_set", Map.of("code", zone, "secondaries", List.of())).error())
+                .as("step 6d: none").isFalse();
+            assertThat(Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).count())
+                .as("step 6d: unlinked").isEqualTo(0L);
+
             // 7. The site and the address read in full; describe names the exact calls.
             String read = admin.call("read", Map.of("ids", List.of(siteCode, addressCode))).text();
             assertThat(read).as("step 7: the reads").contains(siteName).contains(app).contains(hostname);
@@ -1477,6 +1612,15 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .doesNotContain("site_proxy_set")
                 .as("step 7: and what one makes on it next, the site as an argument")
                 .contains("address_set site=" + siteCode + " hostname=...");
+
+            // 7a. A live site goes back to a saved revision: its first, under its first name.
+            assertThat(admin.call("site_restore", Map.of("code", siteCode)).error())
+                .as("step 7a: a live site is given its revision").isTrue();
+            McpHttpSession.Answer back = admin.call("site_restore", Map.of("code", siteCode, "revision", 1));
+            assertThat(back.error()).as("step 7a: " + back.text()).isFalse();
+            assertThat(back.text()).as("step 7a: the site and its revision").contains(siteCode);
+            assertThat((String) Models.get(SiteModel.class).find().noCache().where(SiteModel.ID.eq(siteId)).first()
+                .get(SiteModel.NAME)).as("step 7a: its first name again").isEqualTo(siteName);
 
             // 8. roll_back takes a site (its release engine then answers in its own words); delete sends the site to
             //    the trash; site_restore brings it back; trashed again, permanent removes it for good.
@@ -1532,6 +1676,15 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .isFalse();
             }
         } finally {
+            if (secondaryId != null) HardDeletes.byId(Models.get(DnsZoneModel.class), secondaryId);
+            if (zoneId != null) {
+                Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).delete();
+                for (Row record : Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                        .all()) {
+                    DynamicDnsService.revokeFor(record.get(DnsRecordModel.ID));
+                }
+            }
+            if (peerId != null) HardDeletes.byId(Models.get(DnsPeerModel.class), peerId);
             if (zoneId != null) {
                 // The proof is Hohenheim's own record: only its system scope takes it away.
                 int zone = zoneId;

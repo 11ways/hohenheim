@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -56,12 +57,13 @@ import java.util.function.Function;
  * their input names and its linked records by code.
  *
  * AIDEV-NOTE: the one home of "a panel resource's row create and change as operations" (AddressWrites, the database
- * tier, attachments, backup targets declare one each). A declaration says only what differs: its settings, which of
- * them a create alone takes, its linked records, the fixed parent a create is made under and, for a change, entries
- * a writer of their own handles (a database's password). An administrator writes through the operator's panel,
- * anyone else through its /manage twin, whose
- * smaller form refuses what it does not take. A setting left at its field's default is not posted on a create, so a
- * twin's smaller form takes a create that names only what it offers.
+ * tier, attachments, backup targets, DNS zones declare one each). A declaration says only what differs: its
+ * settings, which of them a create alone takes, its linked records, the fixed parent a create is made under and
+ * entries a writer of their own handles: on a change (a database's password), and on a create too when it declares
+ * one for creates (a zone's secondaries). An administrator writes through the operator's panel, anyone else through
+ * its /manage twin, whose smaller form refuses what it does not take, and a resource the twin does not declare is
+ * refused there. A setting left at its field's default is not posted on a create, so a twin's smaller form takes a
+ * create that names only what it offers.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -84,6 +86,21 @@ public final class PanelRecordWrites {
          */
         @NonNull Runnable judge(@NonNull Row record, OperationInput.@NonNull Values input, @NonNull Set<String> sent,
                                 @NonNull AccessContext caller);
+    }
+
+    /**
+     * A create's entries a writer of their own handles: it judges them before the record is created, and its write
+     * runs once it was.
+     */
+    @FunctionalInterface
+    public interface AlsoCreated {
+
+        /**
+         * @param sent the entries of the create this writer handles that the call sent
+         * @return the write to run with the created record's key
+         */
+        @NonNull Consumer<Integer> judge(OperationInput.@NonNull Values input, @NonNull Set<String> sent,
+                                         @NonNull AccessContext caller);
     }
 
     /**
@@ -180,6 +197,7 @@ public final class PanelRecordWrites {
     private final List<Part> parts;
     private final List<FormEntry> alsoEntries;
     private final @Nullable Also also;
+    private final @Nullable AlsoCreated alsoCreated;
     private final Operation<Void, OperationInput.Values, Integer> create;
     private final Operation<Row, OperationInput.Values, String> change;
 
@@ -190,6 +208,7 @@ public final class PanelRecordWrites {
         this.parts = List.copyOf(builder.parts);
         this.alsoEntries = List.copyOf(builder.alsoEntries);
         this.also = builder.also;
+        this.alsoCreated = builder.alsoCreated;
         this.create = Operation.declare(HohenheimIds.id("create_" + builder.word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word + "_description"))
@@ -248,7 +267,7 @@ public final class PanelRecordWrites {
         for (Part part : this.parts) {
             if (creating || !part.createOnly()) form.add(part.entry());
         }
-        if (!creating) {
+        if (!creating || this.alsoCreated != null) {
             for (FormEntry entry : this.alsoEntries) form.add(entry);
         }
         return form.build();
@@ -303,7 +322,10 @@ public final class PanelRecordWrites {
         return null;
     }
 
-    /** Creates the record through the caller's panel resource, under the parent a fixed-parent link names. */
+    /**
+     * Creates the record through the caller's panel resource, under the parent a fixed-parent link names, then hands
+     * the entries a writer of their own handles the created record.
+     */
     private @NonNull Integer created(OperationInput.@NonNull Values input, @NonNull AccessContext caller) {
         Map<String, Object> raw = new LinkedHashMap<>();
         Object parentKey = null;
@@ -317,6 +339,13 @@ public final class PanelRecordWrites {
                 put(raw, part, part.written(value), null);
             }
         }
+        Set<String> handled = new LinkedHashSet<>();
+        for (FormEntry entry : this.alsoEntries) {
+            if (input.get(entry.name()) != null) handled.add(entry.name());
+        }
+        // Judged before the record is written: a create is no transaction of its own.
+        @Nullable Consumer<Integer> after = handled.isEmpty() || this.alsoCreated == null ? null
+            : this.alsoCreated.judge(input, handled, caller);
         Panel panel = panelOf(caller);
         PanelResource<Row> resource = this.resource(panel);
         Map<String, Object> posted = this.posted(resource, raw);
@@ -324,7 +353,9 @@ public final class PanelRecordWrites {
         Object key = KindSettingsWrites.speaking(() -> under == null
             ? ResourceWrites.create(panel, resource, posted, caller)
             : ResourceWrites.createUnder(panel, resource, under, posted, caller), this.named());
-        return Integer.valueOf(String.valueOf(key));
+        Integer created = Integer.valueOf(String.valueOf(key));
+        if (after != null) after.accept(created);
+        return created;
     }
 
     /**
@@ -419,6 +450,7 @@ public final class PanelRecordWrites {
         private final List<Part> parts = new ArrayList<>();
         private final List<FormEntry> alsoEntries = new ArrayList<>();
         private @Nullable Also also;
+        private @Nullable AlsoCreated alsoCreated;
         private @Nullable Field<?, ?> container;
         private OperationCommand creates = CREATES;
         private OperationCommand changes = CmsCommands.TRANSACTIONAL;
@@ -502,6 +534,12 @@ public final class PanelRecordWrites {
         public @NonNull Builder also(@NonNull List<? extends FormEntry> entries, @NonNull Also writer) {
             this.alsoEntries.addAll(entries);
             this.also = writer;
+            return this;
+        }
+
+        /** Declares that a create takes the {@link #also} entries too, the writer handling them once it is created. */
+        public @NonNull Builder alsoOnCreate(@NonNull AlsoCreated writer) {
+            this.alsoCreated = writer;
             return this;
         }
 

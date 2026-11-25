@@ -83,7 +83,7 @@ class DnsZoneSoaPartialWriteTest extends HohenheimHttpTestBase {
 
         // 2. A write that DOES carry the SOA contact still normalizes it (trimmed).
         PartsWrites.updateRow(resource, zones.findById(zoneId),
-            Map.of(DnsZoneModel.SOA_CONTACT.getName(), "  dns@" + ORIGIN + " "), admin);
+            Map.of(DnsZoneModel.SOA_CONTACT.getInputName(), "  dns@" + ORIGIN + " "), admin);
         Row trimmed = zones.findById(zoneId);
         assertThat((String) trimmed.get(DnsZoneModel.SOA_CONTACT))
             .as("step 2: a carried contact is normalized").isEqualTo("dns@" + ORIGIN);
@@ -92,13 +92,13 @@ class DnsZoneSoaPartialWriteTest extends HohenheimHttpTestBase {
 
         // 3. A carried blank is a deliberate clear, never confused with absence.
         PartsWrites.updateRow(resource, zones.findById(zoneId),
-            Map.of(DnsZoneModel.SOA_PRIMARY_NS.getName(), ""), admin);
+            Map.of(DnsZoneModel.SOA_PRIMARY_NS.getInputName(), ""), admin);
         assertThat((String) zones.findById(zoneId).get(DnsZoneModel.SOA_PRIMARY_NS))
             .as("step 3: a submitted blank clears the primary NS").isNullOrEmpty();
 
         // 4. And a carried malformed value is still refused on its own field.
         assertThatThrownBy(() -> PartsWrites.updateRow(resource, zones.findById(zoneId),
-                Map.of(DnsZoneModel.SOA_CONTACT.getName(), "not an address"), admin))
+                Map.of(DnsZoneModel.SOA_CONTACT.getInputName(), "not an address"), admin))
             .as("step 4: a malformed carried contact is refused")
             .isInstanceOf(Violations.class);
         assertThat((String) zones.findById(zoneId).get(DnsZoneModel.SOA_CONTACT))

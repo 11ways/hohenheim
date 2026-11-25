@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import java.util.List;
 import java.util.ArrayList;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -15,14 +16,20 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.SlugText;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.RecordRef;
@@ -41,6 +48,7 @@ import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -132,6 +140,13 @@ public final class SiteOperationHandlers {
             .availability((site, access) -> SiteParts.panelLockoutReason("delete_self_lockout", site, access))
             .authorize(administers())
             .handle(call -> deleteSite(call.subject()));
+        // A live site set back to a saved revision; one in the trash comes out of it first (SiteWrites.RESTORE).
+        OperationHandlers.attach(SiteWrites.RESTORE_REVISION)
+            .applies(SiteOperationHandlers::live)
+            .authorize(administers())
+            .handle(call -> restoreRevision(call.subject(), Objects.requireNonNull(Objects.requireNonNull(
+                call.input(), "a revision restore has its input").revision(), "a required revision"),
+                Objects.requireNonNull(call.access(), "a restore has its caller")));
     }
 
     private SiteOperationHandlers() {
@@ -252,6 +267,21 @@ public final class SiteOperationHandlers {
 
     private static @NonNull DomainRefusal concealed(@NonNull Row site) {
         return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "site " + site.get(SiteModel.ID) + " is not reachable");
+    }
+
+    /**
+     * Sets the site back to its revision through the operator's site resource, the history tab's own restore.
+     *
+     * @return the site's code and the revision it now reads as
+     */
+    private static @NonNull String restoreRevision(@NonNull Row site, int revision, @NonNull AccessContext caller) {
+        Panel panel = ApiConduits.adminPanel();
+        PanelResource<Row> sites = Objects.requireNonNull(CmsSupport.declaredRowEntry(panel, HohenheimSlugs.SITES),
+            "the panel declares its sites");
+        ResourceWrites.restoreRevision(panel, sites, site, revision, caller);
+        String code = RecordCodes.codeUnjudged(SiteModel.MODEL_ID, String.valueOf(site.get(SiteModel.ID)));
+        return caller.text(HohenheimMicrocopy.SITE.of("restored_revision").withArg("site", code)
+            .withArg("revision", revision));
     }
 
     /**
@@ -467,6 +497,8 @@ public final class SiteOperationHandlers {
         requireReviewedRevision(site, call.expectedVersion());
         SiteWrites.EditInput input = Objects.requireNonNull(call.input(), "an edit has its input");
         Set<String> written = call.patched();
+        String storedKind = site.get(SiteModel.UPSTREAM_KIND);
+        Map<String, Object> storedSettings = RawValues.map(site.get(SiteModel.SETTINGS));
         if (writes(written, SiteModel.NAME)) {
             site.set(SiteModel.NAME, requiredName(input.name()));
         }
@@ -476,9 +508,14 @@ public final class SiteOperationHandlers {
         if (writes(written, SiteModel.INSTANCE_ID)) {
             site.set(SiteModel.INSTANCE_ID, input.instance_id());
         }
-        // The settings are read under their kind, so a new kind re-reads them even when they were not posted.
+        // The settings are read under their kind, so a new kind re-reads them even when they were not posted. A save
+        // keeping the kind keeps the stored keys the kind does not declare, which its sub-form cannot post.
         if (writes(written, SiteModel.SETTINGS) || writes(written, SiteModel.UPSTREAM_KIND)) {
-            site.set(SiteModel.SETTINGS, settingsOf(input.upstream_kind(), input.settings(), site));
+            Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), site);
+            UpstreamKindHandler kept = Objects.equals(input.upstream_kind(), storedKind)
+                ? UpstreamKindHandlers.getHandler(storedKind) : null;
+            site.set(SiteModel.SETTINGS, kept == null ? settings
+                : KindSettingsWrites.keptUndeclared(kept.getSchema(), storedSettings, settings));
         }
         if (writes(written, SiteModel.TRUSTED_UPSTREAM)) {
             site.set(SiteModel.TRUSTED_UPSTREAM, input.trusted_upstream());
