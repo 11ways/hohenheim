@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.test.instance.FakeHostVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -248,10 +249,20 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void volumesDeclareThroughTheFunnelAndTheGuardsHold() throws Exception {
+        // A declaration makes the volume's directory on its host before its row, so the host is the fake one.
+        FakeHostVolumes.install();
+        try {
+            this.volumesDeclared();
+        } finally {
+            FakeHostVolumes.uninstall();
+        }
+    }
+
+    private void volumesDeclared() throws Exception {
         // 1. Declare via the CMS form opened under the workspace: quota entered in MB, stored in bytes. The owner is
         //    the create's parent, so a posted instance_id (here the docker instance) is never written.
         HttpResponse<String> create = httpPostForm("/admin/instance-volumes/new?parent=" + workspaceId,
-            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&quota_mb=100&"
+            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&size_limit_mb=100&"
                 + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(create.statusCode()).isIn(302, 303);
@@ -433,7 +444,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .doesNotContain("No install step");
         assertThat(quietOverview)
             .as("step 2: the card itself still renders the states that DO say something")
-            .contains("data-filter-scope=\"app_overview\">Details</pb-microcopy></pl-card-title>")
+            .containsPattern("data-filter-scope=\"app_overview\"[^>]*>Details</pb-microcopy>")
             .contains("<pl-badge");
 
         try {

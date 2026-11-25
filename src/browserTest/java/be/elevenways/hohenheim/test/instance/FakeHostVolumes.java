@@ -32,7 +32,7 @@ import java.util.zip.ZipOutputStream;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-final class FakeHostVolumes implements VolumeOperations.Hosts {
+public final class FakeHostVolumes implements VolumeOperations.Hosts {
 
     /** What every fake host reports free on its volume storage. */
     static volatile long availableBytes = Long.MAX_VALUE / 4;
@@ -47,7 +47,7 @@ final class FakeHostVolumes implements VolumeOperations.Hosts {
     }
 
     /** Install a fresh storage tree; {@link #uninstall} puts the real hosts back. */
-    static @NonNull FakeHostVolumes install() throws IOException {
+    public static @NonNull FakeHostVolumes install() throws IOException {
         FakeHostVolumes fake = new FakeHostVolumes(Files.createTempDirectory("fake-host-volumes"));
         VolumeOperations.HOSTS.install(fake);
         availableBytes = Long.MAX_VALUE / 4;
@@ -55,7 +55,7 @@ final class FakeHostVolumes implements VolumeOperations.Hosts {
         return fake;
     }
 
-    static void uninstall() {
+    public static void uninstall() {
         VolumeOperations.HOSTS.uninstall();
     }
 

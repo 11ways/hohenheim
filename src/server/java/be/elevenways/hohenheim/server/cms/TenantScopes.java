@@ -41,6 +41,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -175,7 +176,14 @@ public final class TenantScopes {
      * composition here, the set is one tenant's schedules, and an empty set becomes matchNone
      * rather than IN () (which some backends widen).
      */
-    public static final RowScope INSTANCE_SCHEDULE_STEPS = RowScope.perPrincipal(TenantScopes::scheduleStepAccess);
+    public static final RowScope INSTANCE_SCHEDULE_STEPS = RowScope.perPrincipal(ctx -> scheduleChildAccess(ctx,
+        Models.get(RecordScheduleStepModel.class), RecordScheduleStepModel.SCHEDULE_ID));
+
+    /** Runs of instance schedules, visible exactly when their schedule is, as its steps are. */
+    public static final RowScope INSTANCE_SCHEDULE_RUNS = RowScope.within(
+        () -> RecordScheduleRunModel.MODEL.eq(InstanceModel.MODEL_ID.toString())).andPerPrincipal(
+        ctx -> scheduleChildAccess(ctx, Models.get(RecordScheduleRunModel.class),
+            RecordScheduleRunModel.SCHEDULE_ID));
 
     /** Projects: THE visibility policy (membership, narrowed by an API key's scopes). */
     public static final RowScope PROJECTS = RowScope.perPrincipal(Projects::visibleScope);
@@ -273,8 +281,9 @@ public final class TenantScopes {
         return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteModel.class), SiteModel.ID::in);
     }
 
-    /** @return null when the parent schedule scope leaves this principal unconstrained, else its steps */
-    private static @Nullable Criteria scheduleStepAccess(@NonNull AccessContext ctx) {
+    /** @return null when the parent schedule scope leaves this principal unconstrained, else the schedules' children */
+    private static @Nullable Criteria scheduleChildAccess(@NonNull AccessContext ctx, @NonNull Model children,
+                                                          @NonNull IntegerField scheduleId) {
         if (INSTANCE_SCHEDULES.accessCriteria(ctx) == null) {
             return null;
         }
@@ -283,8 +292,7 @@ public final class TenantScopes {
         for (Row schedule : Models.get(RecordScheduleModel.class).find().where(schedules).all()) {
             scheduleIds.add(schedule.get(RecordScheduleModel.ID));
         }
-        return scheduleIds.isEmpty() ? Models.get(RecordScheduleStepModel.class).matchNone()
-            : RecordScheduleStepModel.SCHEDULE_ID.in(scheduleIds);
+        return scheduleIds.isEmpty() ? children.matchNone() : scheduleId.in(scheduleIds);
     }
 
     /** Record schedules key their target polymorphically, so the id set folds to strings. */

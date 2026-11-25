@@ -12,9 +12,9 @@ control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number re
 control CREATE%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control CREATE%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
@@ -40,18 +40,18 @@ control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number re
 control CREATE%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control CREATE%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview,zenit:power_stop binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control EDIT%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
@@ -69,9 +69,9 @@ control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number re
 control CREATE%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control CREATE%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
@@ -93,18 +93,18 @@ control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number re
 control CREATE%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview binding=searchable:false,clearable:false,presentation:DEFAULT
 control CREATE%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control CREATE%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control CREATE%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20step_order at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20action at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:start_instance,hohenheim:stop_instance,hohenheim:restart_instance,hohenheim:backup_instance,hohenheim:snapshot_instance,hohenheim:console_command_instance,hohenheim:app_update_instance,hohenheim:expire_preview,zenit:power_stop binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20input at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:action,sibling:action,variants:hohenheim:start_instance%252Chohenheim:stop_instance%252Chohenheim:restart_instance%252Chohenheim:backup_instance%252Chohenheim:snapshot_instance%252Chohenheim:console_command_instance%252Chohenheim:app_update_instance%252Chohenheim:expire_preview
-control EDIT%20offset_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
-control EDIT%20failure_policy at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20retry_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20delay_seconds at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20on_failure at=5 kind=zenitforms:form/select input=select required=false readonly=false options=abort,continue,retry binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20retries at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20input[hohenheim:snapshot_instance]/input.note at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20input[hohenheim:console_command_instance]/input.command at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 

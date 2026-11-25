@@ -66,7 +66,7 @@ column mode at=1 shown=false hidden=true sortable=false filterable=false copyabl
 column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 tab history at=0 landing=false view=false
 control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
-control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 
@@ -220,11 +220,11 @@ row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= tar
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
-control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
-control EDIT%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 
@@ -265,7 +265,7 @@ column mode at=1 shown=false hidden=true sortable=false filterable=false copyabl
 column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 tab history at=0 landing=false view=false
 control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
-control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 

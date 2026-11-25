@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
@@ -9,10 +10,13 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -26,10 +30,13 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.history.ChangeOp;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -56,16 +63,18 @@ import java.util.function.Function;
 /**
  * A panel resource's create and change as two operations, writing through the resource's own form lane
  * ({@link ResourceWrites}) so its gates, hooks and refusals decide as they do for the panel's form; its settings go by
- * their input names and its linked records by code.
+ * their input names and its linked records by code. A record named by its natural key under its parent (a config file
+ * by its path) is set by one operation instead, which creates, changes or removes it.
  *
  * AIDEV-NOTE: the one home of "a panel resource's row create and change as operations" (AddressWrites, the database
- * tier, attachments, backup targets, DNS zones declare one each). A declaration says only what differs: its
- * settings, which of them a create alone takes, its linked records, the fixed parent a create is made under and
- * entries a writer of their own handles: on a change (a database's password), and on a create too when it declares
- * one for creates (a zone's secondaries). An administrator writes through the operator's panel, anyone else through
- * its /manage twin, whose smaller form refuses what it does not take, and a resource the twin does not declare is
- * refused there. A setting left at its field's default is not posted on a create, so a twin's smaller form takes a
- * create that names only what it offers.
+ * tier, attachments, backup targets, DNS zones, volumes, config files and schedules declare one each). A declaration
+ * says only what differs: its settings, which of them a create alone takes, its linked records, the fixed parent a
+ * create is made under and entries a writer of their own handles: on a change (a database's password), and on a create
+ * too when it declares one for creates (a zone's secondaries, a schedule's steps). An administrator writes through the
+ * operator's panel, anyone else through its /manage twin, whose smaller form refuses what it does not take, and a
+ * resource the twin does not declare is refused there. A setting left at its field's default is not posted on a
+ * create, so a twin's smaller form takes a create that names only what it offers. A parent the child's form names
+ * (one not fixed) is posted as that entry, as the form opened under it posts it.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -194,24 +203,60 @@ public final class PanelRecordWrites {
     }
 
     private final Identifier model;
+    private final String word;
     private final Field<?, ?> idField;
     private final String slug;
     private final List<Part> parts;
     private final List<FormEntry> alsoEntries;
     private final @Nullable Also also;
     private final @Nullable AlsoCreated alsoCreated;
-    private final Operation<Void, OperationInput.Values, Integer> create;
-    private final Operation<Row, OperationInput.Values, String> change;
+    private final @Nullable Operation<Void, OperationInput.Values, Integer> create;
+    private final @Nullable Operation<Row, OperationInput.Values, String> change;
+    private final @Nullable Operation<Row, OperationInput.Values, String> set;
+    private final @Nullable SubjectType<Row> keyedUnder;
+    private final @Nullable Field<?, ?> keyedColumn;
+    private final List<Field<?, ?>> keys;
+    private final @Nullable BooleanField remove;
 
     private PanelRecordWrites(@NonNull Builder builder) {
         this.model = builder.model;
+        this.word = builder.word;
         this.idField = builder.idField;
         this.slug = builder.slug;
         this.parts = List.copyOf(builder.parts);
         this.alsoEntries = List.copyOf(builder.alsoEntries);
         this.also = builder.also;
         this.alsoCreated = builder.alsoCreated;
-        this.create = Operation.declare(HohenheimIds.id("create_" + builder.word))
+        this.keyedUnder = builder.keyedUnder;
+        this.keyedColumn = builder.keyedColumn;
+        this.keys = List.copyOf(builder.keys);
+        this.remove = builder.remove;
+        if (this.keyedUnder != null) {
+            this.create = null;
+            this.change = null;
+            this.set = Operation.declare(HohenheimIds.id("set_" + builder.word))
+                .label(HohenheimMicrocopy.HOHENHEIM.of("set_" + builder.word))
+                .description(HohenheimMicrocopy.HOHENHEIM.of("set_" + builder.word + "_description"))
+                .happened(OperationSentences.of("set_" + builder.word))
+                .one(this.keyedUnder)
+                // The resource's create, change and delete decide who may, as they do for the panel's form.
+                .gate(OperationGate.open())
+                .input(OperationInput.derived(this.keyedForm()))
+                .result(String.class)
+                .patchable()
+                .facts(OperationFact.IDEMPOTENT)
+                .command(builder.changes)
+                .register();
+            // No stored record is a keyed call's base (its keys name the record), so a change writes what it sent.
+            OperationHandlers.attach(this.set)
+                .patchBase(PatchBase.ofValues(this.set, (parent, access) -> Map.of()))
+                .handle(call -> this.setUnder(call.subject(), Objects.requireNonNull(call.input()), call.patched(),
+                    Objects.requireNonNull(call.access(), "a set has its caller")));
+            return;
+        }
+        this.set = null;
+        Operation<Void, OperationInput.Values, Integer> create = Operation.declare(
+                HohenheimIds.id("create_" + builder.word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("create_" + builder.word + "_description"))
             .happened(ChangeOp.CREATE.happened())
@@ -224,7 +269,8 @@ public final class PanelRecordWrites {
             .facts(OperationFact.IDEMPOTENT)
             .command(builder.creates)
             .register();
-        this.change = Operation.declare(HohenheimIds.id("change_" + builder.word))
+        Operation<Row, OperationInput.Values, String> change = Operation.declare(
+                HohenheimIds.id("change_" + builder.word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("change_" + builder.word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("change_" + builder.word + "_description"))
             .happened(ChangeOp.UPDATE.happened())
@@ -236,10 +282,12 @@ public final class PanelRecordWrites {
             .facts(OperationFact.IDEMPOTENT)
             .command(builder.changes)
             .register();
-        OperationHandlers.attach(this.create).handle(call -> this.created(Objects.requireNonNull(call.input()),
-            Objects.requireNonNull(call.access(), "a create has its caller")));
-        OperationHandlers.attach(this.change)
-            .patchBase(PatchBase.ofValues(this.change, (record, access) -> this.stored(Objects.requireNonNull(record))))
+        this.create = create;
+        this.change = change;
+        OperationHandlers.attach(create).handle(call -> this.created(Objects.requireNonNull(call.input()),
+            Objects.requireNonNull(call.access(), "a create has its caller"), null));
+        OperationHandlers.attach(change)
+            .patchBase(PatchBase.ofValues(change, (record, access) -> this.stored(Objects.requireNonNull(record))))
             .handle(call -> this.changed(call.subject(), Objects.requireNonNull(call.input()), call.patched(),
                 Objects.requireNonNull(call.access(), "a change has its caller")));
     }
@@ -256,13 +304,21 @@ public final class PanelRecordWrites {
         return new Builder(word, model, subject, idField, slug);
     }
 
-    /** @return the create operation, answering the new record's key */
+    /**
+     * @return the create operation, answering the new record's key
+     * @throws IllegalStateException for a record set by its keys
+     */
     public @NonNull Operation<Void, OperationInput.Values, Integer> create() {
+        if (this.create == null) throw new IllegalStateException(this.word + " is set by its keys");
         return this.create;
     }
 
-    /** @return the change operation, answering the record's code and what it wrote */
+    /**
+     * @return the change operation, answering the record's code and what it wrote
+     * @throws IllegalStateException for a record set by its keys
+     */
     public @NonNull Operation<Row, OperationInput.Values, String> change() {
+        if (this.change == null) throw new IllegalStateException(this.word + " is set by its keys");
         return this.change;
     }
 
@@ -280,6 +336,7 @@ public final class PanelRecordWrites {
         Operation<Row, Void, Integer> delete = Operation.declare(HohenheimIds.id("delete_" + word))
             .label(HohenheimMicrocopy.HOHENHEIM.of("delete_" + word))
             .description(HohenheimMicrocopy.HOHENHEIM.of("delete_" + word + "_description"))
+            .happened(ChangeOp.DELETE.happened())
             .one(subject)
             // The resource's delete decides who may, as it does for the panel's button.
             .gate(OperationGate.open())
@@ -302,6 +359,69 @@ public final class PanelRecordWrites {
                 return 1;
             });
         return delete;
+    }
+
+    /**
+     * @return the operation setting the record its keys name under the parent it acts on, answering what it did
+     * @throws IllegalStateException for a record made by a create
+     */
+    public @NonNull Operation<Row, OperationInput.Values, String> set() {
+        if (this.set == null) throw new IllegalStateException(this.word + " is made by a create");
+        return this.set;
+    }
+
+    /** @return the form of the keyed set: every entry, and the removal where the record can be removed */
+    private @NonNull FormSpec keyedForm() {
+        FormSpec.Builder form = FormSpec.builder();
+        for (Part part : this.parts) form.add(part.entry());
+        if (this.remove != null) form.add(Plain.of(this.remove));
+        return form.build();
+    }
+
+    /**
+     * Creates, changes or removes the record the call's keys name under the parent, each through the caller's panel
+     * resource.
+     *
+     * @return what was done, by the record's code where it has one
+     */
+    private @NonNull String setUnder(@NonNull Row parent, OperationInput.@NonNull Values input,
+                                     @Nullable Set<String> patched, @NonNull AccessContext caller) {
+        Model parentModel = Objects.requireNonNull(Models.get(Objects.requireNonNull(
+            Objects.requireNonNull(this.keyedUnder).modelId())), "a parent's model is registered");
+        Object parentKey = Objects.requireNonNull(parent.get(parentModel.getPrimaryKeyField().getName()));
+        Row found = this.keyed(parentKey, input);
+        if (this.remove != null && Boolean.TRUE.equals(input.get(this.remove.getName()))) {
+            if (found == null) return this.word + " absent: nothing removed";
+            Panel panel = panelOf(caller);
+            ResourceWrites.delete(panel, offering(resourceOf(panel, this.slug), ResourceVerb.DELETE), found, caller);
+            return this.label(found.get(this.idField.getName())) + " removed";
+        }
+        if (found == null) {
+            return this.label(this.created(input, caller, parentKey)) + " created";
+        }
+        Set<String> sent = new LinkedHashSet<>(patched != null ? patched : input.coerced().keySet());
+        if (this.remove != null) sent.remove(this.remove.getName());
+        return this.changed(found, input, sent, caller);
+    }
+
+    /** @return the record under the parent the call's keys name, null for none */
+    private @Nullable Row keyed(@NonNull Object parentKey, OperationInput.@NonNull Values input) {
+        Model own = Objects.requireNonNull(Models.get(this.model), "a keyed record's model is registered");
+        @SuppressWarnings("unchecked")
+        Field<Object, ?> column = (Field<Object, ?>) Objects.requireNonNull(this.keyedColumn);
+        var query = own.find().where(column.eq(parentKey));
+        for (Field<?, ?> key : this.keys) {
+            @SuppressWarnings("unchecked")
+            Field<Object, ?> each = (Field<Object, ?>) key;
+            query = query.where(each.eq(input.get(key.getInputName())));
+        }
+        return query.first();
+    }
+
+    /** @return the record's code, or the word of its kind for one without codes */
+    private @NonNull String label(@Nullable Object key) {
+        String code = key == null ? null : RecordCodes.codeUnjudged(this.model, String.valueOf(key));
+        return code != null ? code : this.word;
     }
 
     private @NonNull FormSpec form(boolean creating) {
@@ -365,18 +485,22 @@ public final class PanelRecordWrites {
     }
 
     /**
-     * Creates the record through the caller's panel resource, under the parent a fixed-parent link names, then hands
-     * the entries a writer of their own handles the created record.
+     * Creates the record through the caller's panel resource, under the parent a fixed-parent link names (or
+     * {@code under}, the parent a keyed set acts on), then hands the entries a writer of their own handles the created
+     * record.
      */
-    private @NonNull Integer created(OperationInput.@NonNull Values input, @NonNull AccessContext caller) {
+    private @NonNull Integer created(OperationInput.@NonNull Values input, @NonNull AccessContext caller,
+                                     @Nullable Object under) {
         Map<String, Object> raw = new LinkedHashMap<>();
-        Object parentKey = null;
+        Object parentKey = under;
+        Field<?, ?> parentColumn = this.keyedColumn;
         for (Part part : this.parts) {
             Object value = input.get(part.argument());
             if (value == null || String.valueOf(value).isBlank()) continue;
             if (part.linked() == null && value.equals(part.field().getDefaultValue())) continue;
             if (part.parent()) {
                 parentKey = part.written(value);
+                parentColumn = part.field();
             } else {
                 put(raw, part, part.written(value), null);
             }
@@ -389,15 +513,35 @@ public final class PanelRecordWrites {
         @Nullable Consumer<Integer> after = handled.isEmpty() || this.alsoCreated == null ? null
             : this.alsoCreated.judge(input, handled, caller);
         Panel panel = panelOf(caller);
-        PanelResource<Row> resource = this.resource(panel);
+        PanelResource<Row> resource = offering(this.resource(panel), ResourceVerb.CREATE);
+        Object parent = parentKey == null ? null
+            : postParent(resource, raw, parentKey, Objects.requireNonNull(parentColumn, "a parent has its column"));
         Map<String, Object> posted = this.posted(resource, raw);
-        Object under = parentKey;
-        Object key = KindSettingsWrites.speaking(() -> under == null
+        Object key = KindSettingsWrites.speaking(() -> parent == null
             ? ResourceWrites.create(panel, resource, posted, caller)
-            : ResourceWrites.createUnder(panel, resource, under, posted, caller), this.named());
+            : ResourceWrites.createUnder(panel, resource, parent, posted, caller), this.named());
         Integer created = Integer.valueOf(String.valueOf(key));
         if (after != null) after.accept(created);
         return created;
+    }
+
+    /**
+     * Posts the parent as the child's form opened from it posts it: a field parent is the create's parent (a fixed one
+     * read from the create, another posted under its field too); a path parent's nearest record (a stack file's
+     * service) is posted under the child's own column, as the tab linking to the form preselects it.
+     *
+     * @param column the child's column naming the parent
+     * @return the key the record is created under, null for a plain create
+     */
+    private static @Nullable Object postParent(@NonNull PanelResource<Row> resource, @NonNull Map<String, Object> raw,
+                                               @NonNull Object parentKey, @NonNull Field<?, ?> column) {
+        ResourceParent<?> parent = resource.parent();
+        if (parent != null && parent.field() != null) {
+            if (!parent.isFixed()) raw.put(parent.field().getName(), parentKey);
+            return parentKey;
+        }
+        raw.put(column.getName(), parentKey);
+        return null;
     }
 
     /**
@@ -421,18 +565,15 @@ public final class PanelRecordWrites {
                 put(raw, part, part.written(value), record);
             }
         }
-        String code = RecordCodes.codeUnjudged(this.model, String.valueOf(record.get(this.idField.getName())));
+        String code = this.label(record.get(this.idField.getName()));
         // A caller whose panel declares no such resource changes nothing, an entry of its own writer neither.
         Panel panel = panelOf(caller);
         PanelResource<Row> resource = this.resource(panel);
         @Nullable Runnable after = handled.isEmpty() || this.also == null ? null
             : this.also.judge(record, input, handled, caller);
         if (!raw.isEmpty()) {
-            if (!resource.offers(ResourceVerb.UPDATE)) {
-                throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "resource " + resource.id()
-                    + " offers this caller no change");
-            }
-            Map<String, Object> posted = this.posted(resource, raw);
+            offering(resource, ResourceVerb.UPDATE);
+            Map<String, Object> posted = edited(resource, record, this.posted(resource, raw));
             KindSettingsWrites.speaking(() -> {
                 ResourceWrites.update(panel, resource, Objects.requireNonNull(record.get(this.idField.getName())),
                     record, posted, caller);
@@ -441,6 +582,23 @@ public final class PanelRecordWrites {
         }
         if (after != null) after.run();
         return KindSettingsWrites.changedLine(code, String.join(", ", sent));
+    }
+
+    /**
+     * @return what the resource's edit form posts for a change of only {@code sent}: those values, over the form's
+     *     stored ones where an operation writes the change, as it takes its whole input (ResourceWrites.update)
+     */
+    private static @NonNull Map<String, Object> edited(@NonNull PanelResource<Row> resource, @NonNull Row record,
+                                                       @NonNull Map<String, Object> sent) {
+        Operation<?, ?, ?> writer = resource.operationOf(ResourceVerb.UPDATE);
+        if (writer == null) return sent;
+        Map<String, Object> stored = PartsReads.valuesFromRow(resource, record);
+        Map<String, Object> whole = new LinkedHashMap<>();
+        for (FormEntry entry : writer.input().form().entries()) {
+            if (stored.containsKey(entry.name())) whole.put(entry.name(), stored.get(entry.name()));
+        }
+        whole.putAll(sent);
+        return whole;
     }
 
     /**
@@ -469,19 +627,58 @@ public final class PanelRecordWrites {
         return HohenheimAccess.isAdmin(caller) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
     }
 
-    /**
-     * @return the panel's resource, the one whose form the panel posts
-     * @throws DomainRefusal forbidden for a caller whose panel declares none (an operator-only resource on /manage)
-     */
+    /** @return the panel's resource, the one whose form the panel posts */
     private @NonNull PanelResource<Row> resource(@NonNull Panel panel) {
         return resourceOf(panel, this.slug);
     }
 
-    /** {@link #resource(Panel)} of the resource of this slug. */
+    /**
+     * @return the panel's resource of this slug
+     * @throws DomainRefusal forbidden for a caller whose panel declares none (an operator-only resource on /manage)
+     */
     private static @NonNull PanelResource<Row> resourceOf(@NonNull Panel panel, @NonNull String slug) {
         PanelResource<Row> resource = CmsSupport.declaredRowEntry(panel, slug);
         if (resource == null) {
             throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "the caller's panel declares no " + slug);
+        }
+        return resource;
+    }
+
+    /**
+     * Creates a record of the resource under its parent through the caller's panel, as its form opened under that
+     * parent would: the child rows a writer of a parent's own entry writes (a schedule's steps).
+     *
+     * @param column the child's column naming the parent
+     * @param stored the record's values by their stored names
+     * @return the created record's key
+     */
+    public static @NonNull Object createChild(@NonNull String slug, @NonNull Field<?, ?> column,
+                                              @NonNull Object parentKey, @NonNull Map<String, Object> stored,
+                                              @NonNull AccessContext caller) {
+        Panel panel = panelOf(caller);
+        PanelResource<Row> resource = resourceOf(panel, slug);
+        Map<String, Object> raw = new LinkedHashMap<>(stored);
+        Object under = postParent(resource, raw, parentKey, column);
+        Map<String, Object> posted = KindSettingsWrites.posted(List.of(), ApiConduits.formValues(resource, raw));
+        return under == null ? ResourceWrites.create(panel, resource, posted, caller)
+            : ResourceWrites.createUnder(panel, resource, under, posted, caller);
+    }
+
+    /** Deletes a record of the resource through the caller's panel, as its delete button does. */
+    public static void deleteChild(@NonNull String slug, @NonNull Row record, @NonNull AccessContext caller) {
+        Panel panel = panelOf(caller);
+        ResourceWrites.delete(panel, offering(resourceOf(panel, slug), ResourceVerb.DELETE), record, caller);
+    }
+
+    /**
+     * @return the resource, once it offers the caller's panel the verb
+     * @throws DomainRefusal forbidden where it does not (a read-only /manage twin), as its missing button says
+     */
+    private static @NonNull PanelResource<Row> offering(@NonNull PanelResource<Row> resource,
+                                                        @NonNull ResourceVerb verb) {
+        if (!resource.offers(verb)) {
+            throw new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "resource " + resource.id() + " offers this caller"
+                + " no " + verb);
         }
         return resource;
     }
@@ -501,6 +698,10 @@ public final class PanelRecordWrites {
         private @Nullable Field<?, ?> container;
         private OperationCommand creates = CREATES;
         private OperationCommand changes = CmsCommands.TRANSACTIONAL;
+        private @Nullable SubjectType<Row> keyedUnder;
+        private @Nullable Field<?, ?> keyedColumn;
+        private final List<Field<?, ?>> keys = new ArrayList<>();
+        private @Nullable BooleanField remove;
 
         private Builder(@NonNull String word, @NonNull Identifier model, @NonNull SubjectType<Row> subject,
                         @NonNull Field<?, ?> idField, @NonNull String slug) {
@@ -611,6 +812,31 @@ public final class PanelRecordWrites {
          */
         public @NonNull Builder createsOutsideTransaction() {
             this.creates = CREATES.execution(CommandExecution.OUTSIDE_TRANSACTION);
+            return this;
+        }
+
+        /**
+         * Declares the record set by its natural key under its parent instead of made by a create and a change: one
+         * operation {@code set_<word>} on the parent creates the record its keys name, or changes it. The keys are
+         * settings a call always gives, declared here; the other settings follow.
+         *
+         * @param column the record's field naming its parent
+         */
+        public @NonNull Builder keyedUnder(@NonNull SubjectType<Row> parent, @NonNull Field<?, ?> column,
+                                           @NonNull List<? extends Field<?, ?>> keys) {
+            this.keyedUnder = parent;
+            this.keyedColumn = column;
+            this.keys.addAll(keys);
+            return this.settings(keys);
+        }
+
+        /**
+         * Declares that a keyed set takes {@code remove}, deleting the record its keys name as its delete button does.
+         *
+         * @param help what removing it does
+         */
+        public @NonNull Builder removable(@NonNull Microcopy help) {
+            this.remove = BooleanField.builder("remove").defaultValue(false).help(help).build();
             return this;
         }
 

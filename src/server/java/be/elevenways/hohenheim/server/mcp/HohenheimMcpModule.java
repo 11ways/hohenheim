@@ -30,6 +30,8 @@ import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.server.operation.OperationRunOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -81,7 +83,9 @@ public final class HohenheimMcpModule implements ZenitModule {
         PreviewDeploymentModel.MODEL_ID, ProjectModel.MODEL_ID, DatabaseModel.MODEL_ID, DatabaseEngineModel.MODEL_ID,
         DatabaseDumpModel.MODEL_ID, GitProviderModel.MODEL_ID, HostModel.MODEL_ID, RuntimeImageModel.MODEL_ID,
         BackupTargetModel.MODEL_ID, SystemUserModel.MODEL_ID, StackModel.MODEL_ID, DnsZoneModel.MODEL_ID,
-        DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID);
+        DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID,
+        InstanceFileModel.MODEL_ID, InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID,
+        RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -216,6 +220,15 @@ public final class HohenheimMcpModule implements ZenitModule {
         made.put(GameDomainModel.MODEL_ID, RecordSource.of(GameDomainModel.REF).project(GameDomainModel.SITE_DOMAIN_ID,
             GameDomainModel.BACKEND_INSTANCE_ID, GameDomainModel.PROXY_INSTANCE_ID, GameDomainModel.BACKEND_PORT,
             GameDomainModel.ENABLED));
+        // A config file's content is encrypted and never projected: a list shows its path and mode, by its owner.
+        made.put(InstanceFileModel.MODEL_ID, RecordSource.of(InstanceFileModel.REF).project(
+            InstanceFileModel.CONTAINER_PATH, InstanceFileModel.MODE, InstanceFileModel.INSTANCE_ID)
+            .search(InstanceFileModel.CONTAINER_PATH));
+        made.put(InstanceTemplateFileModel.MODEL_ID, RecordSource.of(InstanceTemplateFileModel.REF).project(
+            InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE,
+            InstanceTemplateFileModel.TEMPLATE_ID).search(InstanceTemplateFileModel.CONTAINER_PATH));
+        made.put(StackFileModel.MODEL_ID, RecordSource.of(StackFileModel.REF).project(StackFileModel.CONTAINER_PATH,
+            StackFileModel.MODE, StackFileModel.STACK_SERVICE_ID).search(StackFileModel.CONTAINER_PATH));
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
         // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
         // value is never projected (a source refuses it); its kind says it is one.
@@ -223,6 +236,11 @@ public final class HohenheimMcpModule implements ZenitModule {
             InstanceVariableModel.KEY, InstanceVariableModel.KIND, InstanceVariableModel.PLAIN_VALUE,
             InstanceVariableModel.INSTANCE_ID)
             .search(InstanceVariableModel.KEY).scopedBy(TenantScopes.INSTANCE_VARIABLES));
+        // The runs of an app's schedules, for whoever may view the app; its schedules are ManagePanel's own source.
+        made.put(RecordScheduleRunModel.MODEL_ID, RecordSource.of(RecordScheduleRunModel.REF).project(
+            RecordScheduleRunModel.STATUS, RecordScheduleRunModel.TRIGGER, RecordScheduleRunModel.ERROR,
+            RecordScheduleRunModel.STARTED_AT, RecordScheduleRunModel.ENDED_AT, RecordScheduleRunModel.SCHEDULE_ID)
+            .scopedBy(TenantScopes.INSTANCE_SCHEDULE_RUNS));
         Map<Identifier, RecordSource<?>> lists = new LinkedHashMap<>();
         for (Map.Entry<Identifier, RecordSource.Builder<?>> kind : made.entrySet()) {
             Identifier model = kind.getKey();

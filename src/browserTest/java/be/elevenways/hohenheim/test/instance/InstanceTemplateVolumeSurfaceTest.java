@@ -109,7 +109,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
             "name", "data",
             "container_path", "/var/lib/app",
-            "quota_mb", 256,
+            "size_limit_mb", 256,
              "exclusive", true), TenantConduits.operatorUnder(templateId));
         List<Row> declared = Models.get(InstanceTemplateVolumeModel.class)
             .findByTemplateId(templateId);
@@ -181,7 +181,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
             HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("name", "cache",
-                    "container_path", "/var/cache/app", "quota_mb", 0,
+                    "container_path", "/var/cache/app", "size_limit_mb", 0,
                      "exclusive", false), TenantConduits.operatorUnder(templateId)))))
             .as("step 4: a non-positive quota is refused, named")
             .contains("volume_quota_invalid");
@@ -241,7 +241,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 3. A create posting the other template is written under the one its form was opened from.
         assertThat(httpPostForm("/admin/" + VOLUMES + "/new?parent=" + owner,
-            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fapp&quota_mb=64&"
+            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fapp&size_limit_mb=64&"
                 + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
             .as("step 3: the volume create is accepted").isIn(302, 303);
         assertThat(httpPostForm("/admin/" + DATABASES + "/new?parent=" + owner,
@@ -253,7 +253,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
                 + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
             .as("step 3: the variable create is accepted").isIn(302, 303);
         assertThat(httpPostForm("/admin/" + FILES + "/new?parent=" + owner,
-            "template_id=" + other + "&container_path=%2Fetc%2Fapp.conf&content=greeting&mode=0644&"
+            "template_id=" + other + "&path=%2Fetc%2Fapp.conf&content=greeting&mode=0644&"
                 + PanelResourceCalls.createEnvelope(), sessionToken, csrfToken).statusCode())
             .as("step 3: the file create is accepted").isIn(302, 303);
         List<Row> volumes = Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(owner);
@@ -290,7 +290,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 5. An edit posting the other template writes its other fields and keeps the template.
         assertThat(httpPostEdit("/admin/" + VOLUMES + "/" + volumeId,
-            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fmoved&quota_mb=64&"
+            "template_id=" + other + "&name=data&container_path=%2Fvar%2Flib%2Fmoved&size_limit_mb=64&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, VOLUMES, volumeId, TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the volume edit is accepted").isIn(302, 303);
         assertThat(httpPostEdit("/admin/" + DATABASES + "/" + databaseId,
@@ -314,7 +314,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
                     TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the variable edit is accepted").isIn(302, 303);
         assertThat(httpPostEdit("/admin/" + FILES + "/" + fileId,
-            "template_id=" + other + "&container_path=%2Fetc%2Fmoved.conf&content=greeting&mode=0644&"
+            "template_id=" + other + "&path=%2Fetc%2Fmoved.conf&content=greeting&mode=0644&"
                 + PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, FILES, fileId, TenantConduits.operator()),
             sessionToken, csrfToken).statusCode()).as("step 5: the file edit is accepted").isIn(302, 303);
         Row variable = Models.get(InstanceTemplateVariableModel.class).findById(variableId);

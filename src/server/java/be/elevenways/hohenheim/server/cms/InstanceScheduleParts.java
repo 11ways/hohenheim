@@ -36,6 +36,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -212,15 +213,21 @@ public final class InstanceScheduleParts {
             parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)), HohenheimCapabilities.CONFIG);
     }
 
-    /** Run the chain off-cron, offered on an enabled schedule to a CONFIG holder. */
+    /** Run the chain off-cron, offered on an enabled schedule to a CONFIG holder; the toast says how the run ended. */
     private static @NonNull PanelAction<Row> runNow() {
-        return PanelAction.<Row, String>places(InstanceScheduleOperations.RUN_SCHEDULE, ActionPlacement.ROW,
-                (request, status) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SCHEDULE
+        return PanelAction.<Row, Integer>places(InstanceScheduleOperations.RUN_SCHEDULE, ActionPlacement.ROW,
+                (request, run) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SCHEDULE
                     .of("run_finished")
-                    .withArg("status", status)))
+                    .withArg("status", runStatus(run))))
             .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
             .icon(Icon.of("play"))
             .build();
+    }
+
+    /** @return the run's status, {@code busy} when none was made because the chain already runs */
+    public static @NonNull String runStatus(@Nullable Integer run) {
+        Row row = run == null ? null : Models.get(RecordScheduleRunModel.class).findById(run);
+        return row == null ? "busy" : String.valueOf(row.get(RecordScheduleRunModel.STATUS));
     }
 
     /**

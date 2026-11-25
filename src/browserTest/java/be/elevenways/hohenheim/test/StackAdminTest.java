@@ -383,7 +383,7 @@ class StackAdminTest extends HohenheimTestBase {
 
     /** The raw values of a config file of one service. */
     private static Map<String, Object> file(int serviceId, String path) {
-        return new LinkedHashMap<>(Map.of("stack_service_id", String.valueOf(serviceId), "container_path", path,
+        return new LinkedHashMap<>(Map.of("stack_service_id", String.valueOf(serviceId), "path", path,
             "content", "secret=1", "mode", "0600"));
     }
 

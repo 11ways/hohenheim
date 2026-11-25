@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
@@ -80,6 +81,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimDataTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimHostTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimCatalogTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimAppPartTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -131,6 +133,7 @@ public final class HohenheimTools extends McpToolCollection {
             .route(RuntimeImageParts.DELETE, null)
             .route(ProjectParts.DELETE, null)
             .route(EnvironmentParts.DELETE, null)
+            .route(InstanceScheduleOperations.DELETE_SCHEDULE, null)
             .route(ReconcileFindingParts.REMOVE, null)
             .route(ReleasedClaimParts.LIFT, null)
             .route(GitConnectionWrites.DELETE, null)

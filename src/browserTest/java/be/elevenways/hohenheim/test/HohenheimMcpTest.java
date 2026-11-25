@@ -125,7 +125,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:build_hook_create", "hohenheim:build_hook_regenerate", "hohenheim:change_database_password",
         "hohenheim:confirm_host_key", "hohenheim:confirm_incus_cert", "hohenheim:create_game_domain",
         "hohenheim:create_site", "hohenheim:declare_volume", "hohenheim:delete_dns_record",
-        "hohenheim:delete_schedule", "hohenheim:delete_schedule_step", "hohenheim:dyndns_revoke",
+        "hohenheim:delete_schedule_step", "hohenheim:dyndns_revoke",
         "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record", "hohenheim:lift_ban",
         "hohenheim:linked_server_add", "hohenheim:linked_server_check", "hohenheim:linked_server_offer_join",
         "hohenheim:linked_server_remove", "hohenheim:manage_update_site",
@@ -134,7 +134,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:put_online", "hohenheim:put_service_online", "hohenheim:put_stream_online",
         "hohenheim:put_volume_file", "hohenheim:put_workload_online", "hohenheim:put_workload_service_online",
         "hohenheim:redeclare_volume", "hohenheim:repin_host_key", "hohenheim:repin_incus_cert",
-        "hohenheim:route_notification_events", "hohenheim:run_schedule",
+        "hohenheim:route_notification_events",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
         "hohenheim:spamservice_mark_ham", "hohenheim:spamservice_mark_spam", "hohenheim:spamservice_rescore",
@@ -375,6 +375,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         McpHostServer server = Objects.requireNonNull(McpHostServers.get(HohenheimMcpModule.SERVER_NAME));
         AccessContext operator = TenantConduits.operator();
         Set<String> stored = new TreeSet<>();
+        Set<String> inputs = new HashSet<>();
         Set<String> declared = new HashSet<>();
         for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
             declared.add(tool.name());
@@ -382,12 +383,17 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
                 for (FormEntry entry : operation.input().form().entries()) {
                     Field<?, ?> field = entry.field();
                     if (field != null && !field.getName().equals(field.getInputName())) stored.add(field.getName());
+                    if (field != null) inputs.add(field.getInputName());
                 }
             }
         }
         assertThat(stored).as("step 1: the stored names that go by another name")
             .contains("nice_name", "force_ssl", "custom_headers", "more_backends", "port_protocol", "delay",
                 "db_password");
+        // A stored name another field goes by for people is that field's own name (a volume's container_path, where a
+        // config file's container_path goes by path).
+        Set<String> renamed = new TreeSet<>(stored);
+        renamed.removeAll(inputs);
         // Whole words of a name: "hsts_subdomains" names subdomains, never a domain for an address.
         List<String> forbidden = List.of("domain", "domains", "ssl", "letsencrypt", "server");
         int arguments = 0;
@@ -396,7 +402,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             Map<?, ?> properties = (Map<?, ?>) tool.inputSchema(operator).get("properties");
             for (Object argument : properties.keySet()) {
                 String name = tool.name() + "." + argument;
-                assertThat(stored).as("step 2: " + name + " is a stored name").doesNotContain(String.valueOf(argument));
+                assertThat(renamed).as("step 2: " + name + " is a stored name").doesNotContain(String.valueOf(argument));
                 for (String word : String.valueOf(argument).split("_")) {
                     assertThat(forbidden).as("step 2: " + name + " says " + word).doesNotContain(word);
                 }

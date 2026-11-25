@@ -135,7 +135,7 @@ public final class TemplateChildParts {
                 .relation(RelationPick.of(InstanceTemplateVolumeModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
                         .build()).build())
             .build();
-        String quotaMb = VolumeOperations.QUOTA_MB.getName();
+        String quotaMb = VolumeOperations.QUOTA_MB.getInputName();
         return entry(InstanceTemplateVolumeModel.REF, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
             HohenheimMicrocopy.TEMPLATE_VOLUME, 20,
             Icon.of("folder-open"),

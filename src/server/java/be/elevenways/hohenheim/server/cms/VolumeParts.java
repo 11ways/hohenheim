@@ -142,10 +142,10 @@ public final class VolumeParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
                 .computed(Objects.requireNonNull(table.column(USAGE_COLUMN)), (volume, request) -> usageCell(volume))
                 .build())
-            .reads(ResourceReads.rows().mapValues(Set.of(VolumeOperations.QUOTA_MB.getName()), (row, base) -> {
+            .reads(ResourceReads.rows().mapValues(Set.of(VolumeOperations.QUOTA_MB.getInputName()), (row, base) -> {
                 Map<String, Object> values = new LinkedHashMap<>(base);
-                values.put(VolumeOperations.QUOTA_MB.getName(), VolumeDeclarationOperations.declaration(row)
-                        .quota_mb());
+                values.put(VolumeOperations.QUOTA_MB.getInputName(), VolumeDeclarationOperations.declaration(row)
+                        .size_limit_mb());
                 return values;
             }));
     }

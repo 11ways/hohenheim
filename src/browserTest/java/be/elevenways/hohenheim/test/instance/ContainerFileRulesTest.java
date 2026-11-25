@@ -40,18 +40,18 @@ class ContainerFileRulesTest extends HohenheimHttpTestBase {
         assertThat((String) stored.get(InstanceFileModel.CONTAINER_PATH)).as("step 1: the stored path is trimmed")
             .isEqualTo("/etc/rules/app.conf");
 
-        // 2. A relative path is refused on create, anchored on the path.
+        // 2. A relative path is refused on create, anchored on the path as its form and tools name it.
         Row relative = files.createEmptyRow();
         relative.set(InstanceFileModel.INSTANCE_ID, instance);
         relative.set(InstanceFileModel.CONTAINER_PATH, "etc/rules/app.conf");
         assertThat(refusedField(() -> files.save(relative))).as("step 2: a relative path is refused")
-            .isEqualTo(InstanceFileModel.CONTAINER_PATH.getName());
+            .isEqualTo(InstanceFileModel.CONTAINER_PATH.getInputName());
 
         // 3. An update that climbs, or a mode that is not octal, is refused; the stored row keeps its values.
         Row climbing = files.findById(file.get(InstanceFileModel.ID));
         climbing.set(InstanceFileModel.CONTAINER_PATH, "/etc/../root/.ssh/authorized_keys");
         assertThat(refusedField(() -> files.save(climbing))).as("step 3: a climbing path is refused")
-            .isEqualTo(InstanceFileModel.CONTAINER_PATH.getName());
+            .isEqualTo(InstanceFileModel.CONTAINER_PATH.getInputName());
         Row decimal = files.findById(file.get(InstanceFileModel.ID));
         decimal.set(InstanceFileModel.MODE, "0999");
         assertThat(refusedField(() -> files.save(decimal))).as("step 3: a non-octal mode is refused")

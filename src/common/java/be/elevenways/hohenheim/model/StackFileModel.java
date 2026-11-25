@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.operation.AssistantNoun;
 import be.elevenways.protoblast.common.i18n.wording.Noun;
 import be.elevenways.protoblast.common.i18n.wording.NounFact;
 import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
@@ -30,6 +31,11 @@ public class StackFileModel extends Model {
     /** The stack file model's reference: its class and MODEL_ID, resolved at first use. */
     public static final ModelRef<StackFileModel> REF = ModelRef.of(StackFileModel.class, MODEL_ID);
 
+    static {
+        // Listed beside an app's config files (config_file_set sets all three kinds); a stack service names them.
+        AssistantNoun.declare(MODEL_ID, StackFileModel.class, "stack_config_file");
+    }
+
     public static final Schema SCHEMA = new Schema();
 
     /** A linked master keeps a stored record of these rows (docs/cluster.md says which kinds and why). */
@@ -51,6 +57,7 @@ public class StackFileModel extends Model {
             .build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(StringField.builder().name("container_path")
+        .inputName("path")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
         .help(HohenheimMicrocopy.HELP.of("file_container_path"))

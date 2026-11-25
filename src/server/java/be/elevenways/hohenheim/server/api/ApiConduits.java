@@ -15,7 +15,10 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.edit.FormEntry;
+import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -245,6 +248,22 @@ public final class ApiConduits {
                                                           @NonNull Map<String, Object> submitted) {
         ResourceForm<Row> form = entry.form();
         return form == null ? submitted : form.spec().byEntryNames(submitted);
+    }
+
+    /**
+     * @return the refusals of a write whose values a caller sent by their stored names ({@link #formValues}), each of
+     *     those refused by the name the caller gave it
+     */
+    public static @NonNull Violations asSent(@NonNull FormSpec spec, @NonNull Map<String, Object> submitted,
+                                             @NonNull Violations refused) {
+        Map<String, String> named = new LinkedHashMap<>();
+        for (FormEntry entry : spec.entries()) {
+            Field<?, ?> field = entry.field();
+            if (field != null && !entry.name().equals(field.getName()) && submitted.containsKey(field.getName())) {
+                named.put(entry.name(), field.getName());
+            }
+        }
+        return refused.renamed(named);
     }
 
     private static @NonNull Panel registeredPanel(@NonNull String slug) {

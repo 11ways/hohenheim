@@ -218,7 +218,7 @@ class InstanceVolumesTest {
             // 1. Create through the operation: the form coerces the MB quota into bytes.
             var created = OperationPipeline.invoke(OperationRequest.of(VolumeOperations.CREATE,
                 CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(Map.of("instance_id", ownerId, "name",
-                "journey", "container_path", "/journey", "quota_mb", 64, "exclusive", false)));
+                "journey", "container_path", "/journey", "size_limit_mb", 64, "exclusive", false)));
             Row row = volumes.findById(created.value());
             assertThat(row.get(InstanceVolumeModel.QUOTA_BYTES)).as("step 1: the MB quota is stored as bytes")
                 .isEqualTo(64L * 1024L * 1024L);
@@ -234,7 +234,8 @@ class InstanceVolumesTest {
 
             // 3. A partial update changes the quota and keeps the mount path and the usage.
             OperationPipeline.invoke(OperationRequest.of(VolumeOperations.UPDATE, CmsPlacementSurface.ADMIN_ACTION)
-                .caller(operator).subjectKeys(List.of(key)).expectedVersion(reviewed).patch(Map.of("quota_mb", 128)));
+                .caller(operator).subjectKeys(List.of(key)).expectedVersion(reviewed)
+                .patch(Map.of("size_limit_mb", 128)));
             Row changed = volumes.findById(created.value());
             assertThat(changed.get(InstanceVolumeModel.QUOTA_BYTES)).as("step 3: the quota edit lands")
                 .isEqualTo(128L * 1024L * 1024L);
@@ -245,7 +246,7 @@ class InstanceVolumesTest {
             // 4. The earlier review is stale now, and its refusal keeps the newer quota.
             assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(VolumeOperations.UPDATE,
                     CmsPlacementSurface.ADMIN_ACTION).caller(operator).subjectKeys(List.of(key))
-                .expectedVersion(reviewed).patch(Map.of("quota_mb", 256))))
+                .expectedVersion(reviewed).patch(Map.of("size_limit_mb", 256))))
                 .as("step 4: a stale edit is refused").isInstanceOf(DomainRefusal.class)
                 .satisfies(error -> assertThat(((DomainRefusal) error).reason()).isEqualTo(ZenitRefusalReason.STALE));
             assertThat(volumes.findById(created.value()).get(InstanceVolumeModel.QUOTA_BYTES))

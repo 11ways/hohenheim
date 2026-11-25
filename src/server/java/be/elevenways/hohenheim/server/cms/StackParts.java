@@ -749,7 +749,8 @@ public final class StackParts {
                 continue;
             }
             if (path.equals(trimmed(sibling.get(StackFileModel.CONTAINER_PATH)))) {
-                throw Violations.ofField("container_path", path, HohenheimMicrocopy.VIOLATIONS.of("file_path_taken"));
+                throw Violations.ofField(StackFileModel.CONTAINER_PATH.getInputName(), path,
+                    HohenheimMicrocopy.VIOLATIONS.of("file_path_taken"));
             }
         }
         Row service = Models.get(StackServiceModel.class).findById(serviceId);
@@ -763,7 +764,7 @@ public final class StackParts {
             }
             String prefix = mountPath.endsWith("/") ? mountPath : mountPath + "/";
             if (path.equals(mountPath) || path.startsWith(prefix)) {
-                throw Violations.ofField("container_path", path,
+                throw Violations.ofField(StackFileModel.CONTAINER_PATH.getInputName(), path,
                     HohenheimMicrocopy.VIOLATIONS.of("file_path_shadowed"));
             }
         }

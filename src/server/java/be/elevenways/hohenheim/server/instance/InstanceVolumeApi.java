@@ -66,14 +66,17 @@ final class InstanceVolumeApi {
         HohenheimEndpoints.API_INSTANCE_VOLUME_DECLARE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             Integer volumeId;
+            // The frozen v1 wire keeps its stored names (quota_mb) both ways; a caller using the input names is taken
+            // and refused as it named them.
+            Map<String, Object> sent = FormSubmissionRawValues.fromConduit(conduit);
             try {
                 volumeId = OperationPipeline.invoke(OperationRequest.of(VolumeOperations.CREATE,
                         ZenitPlacementSurface.HTTP_API)
                     .caller(ctx)
                     .fixed(Map.of(InstanceVolumeModel.INSTANCE_ID.getName(), String.valueOf(instanceId)))
-                    .form(FormSubmissionRawValues.fromConduit(conduit))).value();
+                    .form(VolumeOperations.FORM.byEntryNames(sent))).value();
             } catch (Violations refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, ApiConduits.asSent(VolumeOperations.FORM, sent, refused));
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused, row);
             }
@@ -87,7 +90,8 @@ final class InstanceVolumeApi {
 
         HohenheimEndpoints.API_INSTANCE_VOLUME_REDECLARE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
-            Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
+            Map<String, Object> sent = FormSubmissionRawValues.fromConduit(conduit);
+            Map<String, Object> form = VolumeOperations.FORM.byEntryNames(sent);
             Row volume = namedVolume(conduit, ctx, VolumeOperations.UPDATE, instanceId, form);
             if (volume == null) {
                 return null;
@@ -99,7 +103,7 @@ final class InstanceVolumeApi {
                     .subjects(List.of(volume))
                     .patch(form));
             } catch (Violations refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, ApiConduits.asSent(VolumeOperations.FORM, sent, refused));
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused, row);
             }
@@ -164,7 +168,7 @@ final class InstanceVolumeApi {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("name", declaration.name());
         entry.put("container_path", declaration.container_path());
-        entry.put("quota_mb", declaration.quota_mb());
+        entry.put("quota_mb", declaration.size_limit_mb());
         entry.put("exclusive", Boolean.TRUE.equals(declaration.exclusive()));
         entry.put("used_bytes", volume.get(InstanceVolumeModel.USED_BYTES));
         Object observed = volume.get(InstanceVolumeModel.OBSERVED_AT);

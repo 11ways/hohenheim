@@ -36,20 +36,20 @@ public final class InstanceScheduleOperations {
     /** One chain step of a record schedule. */
     public static final SubjectType<Row> STEP = SubjectType.record(RecordScheduleStepModel.REF);
 
-    /** Why the schedule operations are kept from assistants. */
-    private static final String UNCODED = "a record schedule is zenit core's model, which declares no record code"
-        + " yet; its tool comes once it does";
+    /** Why a step's own delete is kept from assistants. */
+    private static final String IN_CHAIN = "a step has no code of its own: an assistant gives a schedule's whole"
+        + " chain of steps with schedule_set";
 
-    /** Fires the chain now; offered on an enabled schedule. The result is the run's status. */
-    public static final Operation<Row, Void, String> RUN_SCHEDULE =
+    /** Fires the chain now; offered on an enabled schedule. Its result is the run's key, null while one runs. */
+    public static final Operation<Row, Void, Integer> RUN_SCHEDULE =
         Operation.declare(HohenheimIds.id("run_schedule"))
             .happened(OperationSentences.of("run_schedule"))
             .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("run_schedule_description"))
             .icon(Icon.of("play"))
             .one(SCHEDULE)
-            .notForAssistants(InstanceScheduleOperations.UNCODED)
             .gate(OperationGate.open())
-            .result(String.class)
+            .result(Integer.class)
             .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
@@ -58,9 +58,9 @@ public final class InstanceScheduleOperations {
         Operation.declare(HohenheimIds.id("delete_schedule"))
             .happened(OperationSentences.of("delete_schedule"))
             .label(CmsMicrocopy.of("delete"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("delete_schedule_description"))
             .icon(Icon.TRASH)
             .one(SCHEDULE)
-            .notForAssistants(InstanceScheduleOperations.UNCODED)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)
@@ -73,7 +73,7 @@ public final class InstanceScheduleOperations {
             .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(STEP)
-            .notForAssistants(InstanceScheduleOperations.UNCODED)
+            .notForAssistants(InstanceScheduleOperations.IN_CHAIN)
             .gate(OperationGate.open())
             .result(Integer.class)
             .command(COMMAND)

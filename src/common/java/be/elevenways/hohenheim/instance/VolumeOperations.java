@@ -33,7 +33,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class VolumeOperations {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
-    public static final IntegerField QUOTA_MB = IntegerField.builder().name("quota_mb")
+    public static final IntegerField QUOTA_MB = IntegerField.builder().name("quota_mb").inputName("size_limit_mb")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_mb")).help(HohenheimMicrocopy.HELP.of("volume_quota_mb"))
         .byteSize(ByteUnit.MEGABYTE).build();
     /**
@@ -46,7 +46,7 @@ public final class VolumeOperations {
         .add(QUOTA_MB).add(InstanceVolumeModel.EXCLUSIVE).build();
 
     public record Declaration(@Nullable Integer instance_id, @Nullable String name,
-                              @Nullable String container_path, @Nullable Integer quota_mb,
+                              @Nullable String container_path, @Nullable Integer size_limit_mb,
                               @Nullable Boolean exclusive) {}
 
     private static final OperationInput<Declaration> INPUT = OperationInput.of(FORM, Declaration.class,
@@ -114,7 +114,7 @@ public final class VolumeOperations {
             return null;
         }
         if (megabytes <= 0) {
-            throw Violations.ofField(QUOTA_MB.getName(), megabytes,
+            throw Violations.ofField(QUOTA_MB.getInputName(), megabytes,
                 HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
         }
         return ByteUnit.MEGABYTE.bytes(megabytes);

@@ -122,7 +122,7 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
         // 4. Add a stop step through its form: the action vocabulary is the operations placed as schedule steps.
         HttpResponse<String> step = httpPostForm("/admin/instance-schedule-steps/new",
             "schedule_id=" + scheduleId + "&step_order=1&action=" + InstanceOperations.STOP.id()
-                + "&offset_seconds=0&failure_policy=abort&retry_limit=3",
+                + "&delay_seconds=0&on_failure=abort&retries=3",
             sessionToken, csrfToken);
         assertThat(step.statusCode()).as("step 4: the step saves").isEqualTo(302);
         Row stored = Models.get(RecordScheduleStepModel.class).find()

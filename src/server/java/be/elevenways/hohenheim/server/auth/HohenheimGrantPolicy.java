@@ -7,11 +7,15 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.InstanceFileModel;
+import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackFileModel;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.SiteGuards;
@@ -144,6 +148,29 @@ final class HohenheimGrantPolicy {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
                 .derivedFrom(InstanceModel.MODEL_ID, InstanceVariableModel.INSTANCE_ID));
+
+        // An app's config files, likewise: whoever may view the app reads which files it is given (their path and
+        // mode; the content is encrypted and never projected); every write asks the file resource's own gates.
+        KnownCapabilities.register(InstanceFileModel.MODEL_ID,
+            KnownCapability.of(VIEW)
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description")));
+        RecordCapabilityRules.declare(InstanceFileModel.MODEL_ID,
+            RecordCapabilityRules.create().visibility(VIEW)
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                .derivedFrom(InstanceModel.MODEL_ID, InstanceFileModel.INSTANCE_ID));
+
+        // A template's and a stack service's config files: read by the administrator alone, as their tabs are; the
+        // declared read lets an assistant list them by their owner's code (list kind=template_config_file of=TP3).
+        for (Identifier files : List.of(InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID)) {
+            KnownCapabilities.register(files,
+                KnownCapability.of(VIEW)
+                    .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                    .describe(HohenheimMicrocopy.CAPABILITY.of("view_description")));
+            RecordCapabilityRules.declare(files, RecordCapabilityRules.create().visibility(VIEW)
+                .admin(HohenheimPanel.ACCESS));
+        }
 
         // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
         // and are NOT grantable, PERMANENTLY and by decision.

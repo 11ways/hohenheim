@@ -125,7 +125,7 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         assertThat(volume(appId, "data")).as("step 2: and nothing was declared").isNull();
 
         // 3. The admin key declares it; the route's app is fixed, so a body naming another app is refused, and the
-        //    declaration's own refusals answer by name.
+        //    declaration's own refusals answer by name. The v1 wire's stored name (quota_mb) is still taken.
         HttpResponse<String> declared = keyPost(adminKey, volumes, declaration("data", "/data") + "&quota_mb=512");
         assertThat(declared.statusCode()).as("step 3: declared (%s)", declared.body()).isEqualTo(200);
         assertThat(declared.body()).as("step 3: answering the volume").contains("\"status\":\"declared\"")
@@ -145,12 +145,18 @@ class InstanceVolumeApiTest extends HohenheimHttpTestBase {
         HttpResponse<String> badName = keyPost(adminKey, volumes, declaration("../etc", "/etc"));
         assertThat(badName.statusCode()).as("step 3: a path for a name is refused").isEqualTo(422);
         assertThat(codeOf(badName.body())).as("step 3: by name").isEqualTo("volume_name_invalid");
+        HttpResponse<String> zero = keyPost(adminKey, volumes, declaration("zero", "/zero") + "&quota_mb=0");
+        assertThat(zero.statusCode()).as("step 3: a size limit of 0 is refused (%s)", zero.body()).isEqualTo(422);
+        assertThat(zero.body()).as("step 3: by the name the caller sent").contains("\"field\":\"quota_mb\"")
+            .doesNotContain("size_limit_mb");
+        assertThat(volume(appId, "zero")).as("step 3: and nothing is declared").isNull();
 
         // 4. Redeclared: only what the body names changes; the viewer is refused for a known and an unknown name
         //    alike (the refusal on the app comes before the lookup), and an unknown name is the 404 only to a caller
         //    who may redeclare.
+        // The input name (size_limit_mb) is taken too.
         HttpResponse<String> redeclared = keyPost(adminKey, volumes + "/update", form("name", "data",
-            "quota_mb", "1024"));
+            "size_limit_mb", "1024"));
         assertThat(redeclared.statusCode()).as("step 4: redeclared (%s)", redeclared.body()).isEqualTo(200);
         assertThat(redeclared.body()).as("step 4: the new limit").contains("\"quota_mb\":1024");
         assertThat((String) volume(appId, "data").get(InstanceVolumeModel.CONTAINER_PATH))

@@ -43,7 +43,7 @@ public final class VolumeDeclarationOperations {
             int owner = requireOwner(input.instance_id());
             HohenheimAccess.requireOperationCapability(owner, HohenheimCapabilities.CONFIG);
             Row volume = InstanceVolumes.declareOnHost(owner, Objects.requireNonNull(input.name()),
-                Objects.requireNonNull(input.container_path()), VolumeOperations.quotaBytes(input.quota_mb()),
+                Objects.requireNonNull(input.container_path()), VolumeOperations.quotaBytes(input.size_limit_mb()),
                 Boolean.TRUE.equals(input.exclusive()));
             History.event(Models.get(InstanceModel.class), owner, Change.fact(HohenheimActivityAction.VOLUME_DECLARED,
                 Map.of(HohenheimActivityAction.VOLUME_KEY, input.name())));
@@ -68,7 +68,7 @@ public final class VolumeDeclarationOperations {
                         HohenheimMicrocopy.VIOLATIONS.of("volume_rehome_unsupported"));
                 }
                 InstanceVolumes.declare(owner, name, Objects.requireNonNull(input.container_path()),
-                    VolumeOperations.quotaBytes(input.quota_mb()), Boolean.TRUE.equals(input.exclusive()),
+                    VolumeOperations.quotaBytes(input.size_limit_mb()), Boolean.TRUE.equals(input.exclusive()),
                     call.expectedVersion());
                 History.event(Models.get(InstanceModel.class), owner, Change.fact(
                     HohenheimActivityAction.VOLUME_REDECLARED, Map.of(HohenheimActivityAction.VOLUME_KEY, name)));

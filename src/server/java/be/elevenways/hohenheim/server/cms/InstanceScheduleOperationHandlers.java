@@ -55,12 +55,12 @@ public final class InstanceScheduleOperationHandlers {
         return writable ? null : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "shaping a schedule demands CONFIG");
     }
 
-    private static @NonNull String runNow(@NonNull OperationCall<Row, Void> call) {
+    private static @Nullable Integer runNow(@NonNull OperationCall<Row, Void> call) {
         Row schedule = call.subject();
         InstanceScheduleParts.requireManage(access(call),
             InstanceScheduleParts.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)));
         Row run = InstanceScheduleParts.recordSchedules().runNow(schedule.get(RecordScheduleModel.ID));
-        return run != null ? run.get(RecordScheduleRunModel.STATUS) : "busy";
+        return run != null ? run.get(RecordScheduleRunModel.ID) : null;
     }
 
     /** Removes the chain and its run history with the schedule. */

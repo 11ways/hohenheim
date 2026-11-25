@@ -36,7 +36,8 @@ public class InstanceTemplateFileModel extends Model {
         ModelRef.of(InstanceTemplateFileModel.class, MODEL_ID);
 
     static {
-        AssistantNoun.declare(MODEL_ID, InstanceTemplateFileModel.class, "template_file");
+        // Listed beside an app's config files (config_file_set sets all three kinds); a template names them.
+        AssistantNoun.declare(MODEL_ID, InstanceTemplateFileModel.class, "template_config_file");
     }
 
     public static final Schema SCHEMA = new Schema();
@@ -60,6 +61,7 @@ public class InstanceTemplateFileModel extends Model {
             .build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(StringField.builder().name("container_path")
+        .inputName("path")
         .required()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
         .help(HohenheimMicrocopy.HELP.of("file_container_path"))
