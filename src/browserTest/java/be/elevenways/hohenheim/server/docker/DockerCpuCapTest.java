@@ -76,6 +76,23 @@ class DockerCpuCapTest {
         assertThat(uncapped.infoCalls).as("step 3: no question for the daemon").isZero();
     }
 
+    /** A reservation below the cap reaches the daemon through the strict create, beside the cap. */
+    @Test
+    void aReservationBelowTheCapIsSentBesideTheCap() throws IOException {
+        OneHostDaemon daemon = new OneHostDaemon(1);
+        DockerClient docker = new DockerClient(daemon, 5_000);
+
+        // 1. Reserved below the maximum: both figures are created, the strict hardening refusing neither.
+        docker.createContainer("reserving", spec(new ResourceLimits(64, null, 32)), ContainerHardening.STRICT);
+        assertThat(daemon.creates.get(0)).as("step 1: the cap and the soft limit below it")
+            .contains("\"Memory\":67108864").contains("\"MemoryReservation\":33554432");
+
+        // 2. No reservation stated: only the cap.
+        docker.createContainer("capped", spec(ResourceLimits.of(64, null)), ContainerHardening.STRICT);
+        assertThat(daemon.creates.get(1)).as("step 2: the cap alone").contains("\"Memory\":67108864")
+            .doesNotContain("MemoryReservation");
+    }
+
     private static Map<String, Object> spec(ResourceLimits limits) {
         Map<String, Object> hostConfig = new LinkedHashMap<>();
         limits.applyTo(hostConfig);

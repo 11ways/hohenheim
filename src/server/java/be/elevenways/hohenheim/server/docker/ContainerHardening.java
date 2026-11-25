@@ -309,6 +309,9 @@ public final class ContainerHardening {
             + " already claimed.",
         "Memory", "the operator-configured cgroup memory cap (ResourceLimits): a cap the"
             + " operator chooses, on top of policy the operator cannot weaken.",
+        "MemoryReservation", "the app's declared reservation as the cgroup soft limit below"
+            + " that cap (ResourceLimits): it only tells the kernel what to reclaim first under"
+            + " pressure, and can never raise what the workload may use.",
         "NanoCpus", "the operator-configured cgroup cpu cap (ResourceLimits)."));
 
     /** {@link #PERMITTED_KEYS} folded once, because Go matches HostConfig fields case-insensitively. */

@@ -101,6 +101,7 @@ class ContainerEscapeKeyTest {
         hostConfig.put("PortBindings", Map.of("80/tcp",
             List.of(Map.of("HostIp", "127.0.0.1", "HostPort", "8081"))));
         hostConfig.put("Memory", 512L * 1024 * 1024);
+        hostConfig.put("MemoryReservation", 256L * 1024 * 1024);
         hostConfig.put("NanoCpus", 1_500_000_000L);
         legitimate.put("HostConfig", hostConfig);
         assertThat(hostConfig.keySet())
@@ -113,6 +114,7 @@ class ContainerEscapeKeyTest {
             .isNotNull()
             .contains("hohenheim-wl-1")
             .contains("\"Memory\":536870912")
+            .contains("\"MemoryReservation\":268435456")
             .contains("\"NanoCpus\":1500000000")
             .contains("8081");
 
