@@ -5,6 +5,8 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
@@ -37,6 +39,19 @@ public final class HohenheimViolations {
     public static @NonNull Violations instanceRefusal(@NonNull String key, @NonNull Row instance,
                                                       @Nullable Throwable cause) {
         return Violations.ofForm(instanceRefusalText(key, instance, cause));
+    }
+
+    /**
+     * A refusal raised after the request, as the words of the background run it ends: the first violation's words and
+     * entry, so the run reads why instead of a bare failure.
+     *
+     * @param what what was refused, for the diagnostic alone
+     * @return the refusal the run ends with
+     */
+    public static @NonNull DomainRefusal runRefusal(@NonNull String what, @NonNull Violations refused) {
+        return new DomainRefusal(ZenitRefusalReason.INVALID, what + " refused: " + refused.getMessage(),
+            refused.all().isEmpty() ? null : refused.all().getFirst().fieldName(),
+            refused.all().isEmpty() ? null : refused.all().getFirst().message());
     }
 
     /**

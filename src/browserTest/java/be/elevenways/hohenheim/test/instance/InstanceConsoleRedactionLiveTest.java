@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -180,7 +181,7 @@ class InstanceConsoleRedactionLiveTest {
 
                 // 7. The one-shot automation read is the same door, not a wider one: the
                 //    daemon's own captured log goes through redaction before it is returned.
-                String tail = InstanceConsoles.tail(id, 200);
+                String tail = InstanceConsoles.tail(id, 200, TenantConduits.operator());
                 assertThat(tail)
                     .as("step 7: the logs API returns redacted output")
                     .doesNotContain(DEPLOY_SECRET)

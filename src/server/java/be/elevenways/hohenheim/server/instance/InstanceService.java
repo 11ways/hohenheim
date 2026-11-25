@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
@@ -397,7 +398,7 @@ public final class InstanceService {
                 return support.runPreDeploy(resolved.spec(), argv, env, timeoutMs, tailLines,
                     oneShot -> InstanceDatabaseNetworks.attachLinks(resolved, instanceId, oneShot));
             } catch (IOException failed) {
-                throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), failed);
+                throw DeployFailure.refusal(resolved.row(), failed);
             }
         });
     }
@@ -469,6 +470,7 @@ public final class InstanceService {
             haltForRestart(resolved, instanceId);
         }
         InstanceConsoles.Watch watch = null;
+        boolean started = false;
         try {
             // A previous run's console session (if any) watches a container this
             // deploy is about to replace, and a shell's process lives in it: end both
@@ -526,6 +528,7 @@ public final class InstanceService {
             InstanceOperationGuard.stampStarted(this.leases, instanceId, resolved.serverId(),
                 watch != null ? watch.initialStatus() : InstanceModel.STATUS_RUNNING,
                 String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
+            started = true;
             // Every record-after publication's observed port is recorded in ONE call: the
             // ledger supersedes whatever observed claims the owner held that are not in
             // the set, so a call per publication kept only the last one.
@@ -559,19 +562,37 @@ public final class InstanceService {
             recordPower(instanceId, HohenheimActivityAction.DEPLOYED, resolved);
             return status;
         } catch (IOException e) {
-            InstanceConsoles.closeSession(instanceId);
-            // Fence first, ledger second: a fenced-out loser must not park the
-            // winner's claims. Whatever the previous deploy held is unverifiable
-            // for a still-fenced controller: park, never delete.
-            stampGuardedError(resolved, InstanceOperationGuard.startFailureOf(e), e.getMessage());
-            PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
-        } catch (Violations refused) {
+            throw failedDeploy(resolved, instanceId, e);
+        } catch (Violations | DomainRefusal refused) {
             // stampGuarded (fenced out) or the console's own named refusal: never
             // leave a console session attached to a deploy this controller lost.
             InstanceConsoles.closeSession(instanceId);
             throw refused;
+        } catch (RuntimeException failed) {
+            // A failure Hohenheim recognises before the start was stamped is a failed deploy in its own words (the
+            // hardening policy's refusal); any other is left as it was thrown, as a controller that died there leaves
+            // it, and the run it ends says it is unknown (DeployFailure.inRun).
+            if (started || DeployFailure.of(failed) == DeployFailure.UNKNOWN) {
+                throw failed;
+            }
+            throw failedDeploy(resolved, instanceId, failed);
         }
+    }
+
+    /**
+     * Settles a deploy that failed before its start was stamped: the record is stamped {@code error} with the failure's
+     * words, its port claims released, and the refusal in those words is what the deploy answers.
+     */
+    private @NonNull Violations failedDeploy(@NonNull Resolved resolved, int instanceId, @NonNull Exception failure) {
+        InstanceConsoles.closeSession(instanceId);
+        Violations refused = DeployFailure.refusal(resolved.row(), failure);
+        // Fence first, ledger second: a fenced-out loser must not park the
+        // winner's claims. Whatever the previous deploy held is unverifiable
+        // for a still-fenced controller: park, never delete.
+        stampGuardedError(resolved, InstanceOperationGuard.startFailureOf(failure),
+            HohenheimViolations.reasonOf(refused));
+        PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
+        return refused;
     }
 
     /**

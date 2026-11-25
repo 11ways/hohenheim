@@ -540,14 +540,15 @@ class PaasApiTest extends HohenheimHttpTestBase {
         assertThat(deployLog.body()).as("step 1: the deployment log reads back")
             .contains("deploy-log-of-alpha");
 
-        // 2. The instance log tail is a NAMED refusal when the workload has no
-        //    answerable container -- never a 500, never a silent empty success.
+        // 2. The instance log tail of a workload with no answerable container is a NAMED refusal -- never a 500,
+        //    never a silent empty success: no container yet where the daemon says so, unavailable where it is
+        //    not reached (this lane's real daemon may be absent).
         HttpResponse<String> logs = keyGet(keyPaasA,
             "/api/v1/instances/" + instanceAId + "/logs");
         assertThat(logs.statusCode())
             .as("step 2: a container-less workload's tail is a typed refusal")
             .isEqualTo(422);
-        assertThat(logs.body()).as("step 2: named").contains("logs_unavailable");
+        assertThat(logs.body()).as("step 2: named").containsAnyOf("logs_no_container", "logs_unavailable");
 
         // 3. The narrowed key reads NONE of it: the same paths answer 404, proving the
         //    operation lanes ride the site visibility walk rather than their own.

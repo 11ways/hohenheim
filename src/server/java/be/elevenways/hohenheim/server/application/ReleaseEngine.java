@@ -35,6 +35,7 @@ import be.elevenways.hohenheim.server.instance.PublishedPortProbe;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -451,6 +452,91 @@ public final class ReleaseEngine {
                     serving, desired);
             });
         });
+    }
+
+    /**
+     * Drop the release the application keeps for roll back, under the application's operation lock: the release's
+     * record is destroyed as a drain destroys an older one ({@link InstanceService#destroy}), which takes its
+     * container, its network and its memory booking with it. A roll back is then refused, in
+     * {@link #NO_ROLLBACK_TARGET}'s words, until the next deploy keeps a release again.
+     *
+     * @throws Violations {@link #NO_ROLLBACK_TARGET} when nothing is kept, the lock's in-progress refusal while
+     *         another operation of the application runs, or the destroy's own when the host cannot confirm the
+     *         removal (the release then stays kept)
+     */
+    public static void dropKept(int applicationId) {
+        InstanceOperationLock.production().exclusive(applicationId, InstanceOperationLock.Contention.REFUSE, () -> {
+            Row kept = newestRetired(applicationId);
+            if (kept == null) {
+                throw Violations.ofForm(NO_ROLLBACK_TARGET);
+            }
+            destroyKept(applicationId, kept.get(InstanceModel.ID));
+        });
+    }
+
+    /**
+     * Drop every kept release on these hosts whose container the daemon no longer has: one removed outside Hohenheim
+     * can never be rolled back to, so it reads dropped instead of failing a roll back at its start.
+     *
+     * AIDEV-NOTE: the hourly Docker reconcile's one act on records (found 2026-11-25 on Robbedoes, a kept release
+     * removed by hand at Docker level stayed listed as kept). Only a container the daemon OBSERVED absent counts, as an
+     * unreachable daemon proves nothing, and it is asked again under the application's lock; an application busy
+     * with another operation is left for the next sweep.
+     *
+     * @param hostNames the hosts whose daemon this sweep could list
+     * @return how many kept releases were dropped
+     */
+    public static int dropVanishedKept(@NonNull Collection<String> hostNames) {
+        int dropped = 0;
+        for (Row kept : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_RETIRED)).all()) {
+            int keptId = kept.get(InstanceModel.ID);
+            Integer applicationId = kept.get(InstanceModel.GENERATED_FOR_ID);
+            String hostName = HostModel.nameOf(HostModel.canonicalHostId(kept.get(InstanceModel.HOST_ID)));
+            if (applicationId == null || !hostNames.contains(hostName) || !vanished(keptId)) {
+                continue;
+            }
+            try {
+                boolean dropping = InstanceOperationLock.production().exclusive(applicationId,
+                    InstanceOperationLock.Contention.REFUSE, () -> {
+                        Row still = Models.get(InstanceModel.class).findById(keptId);
+                        if (still == null || !InstanceModel.ROLE_RETIRED.equals(still.get(InstanceModel.RUNTIME_ROLE))
+                                || !vanished(keptId)) {
+                            return false;
+                        }
+                        destroyKept(applicationId, keptId);
+                        return true;
+                    });
+                dropped += dropping ? 1 : 0;
+            } catch (RuntimeException notNow) {
+                Blast.log("RELEASE: application", applicationId, "keeps release", keptId,
+                    "whose container is gone; not dropped this sweep -", HohenheimViolations.reasonOf(notNow));
+            }
+        }
+        return dropped;
+    }
+
+    /** @return whether the daemon answered that this release's container does not exist */
+    private static boolean vanished(int releaseId) {
+        try {
+            return new InstanceService().liveStatus(releaseId).state() == ContainerState.ABSENT;
+        } catch (RuntimeException unresolved) {
+            return false;
+        }
+    }
+
+    /**
+     * The kept release's destroy, written by whoever runs it: the person whose drop the application's gate admitted,
+     * or the sweep's own system identity for a vanished one.
+     *
+     * AIDEV-NOTE: inside the application's release scope, as the swap that reclaims older releases runs: a release
+     * row is generated by its application, and the guard on generated rows admits its destroy only there. Never
+     * under another identity than the running action's: its write is attributed to that action.
+     */
+    private static void destroyKept(int applicationId, int keptId) {
+        ApplicationReleases.inScopeUnchecked(applicationId, () -> new InstanceService().destroy(keptId));
+        Blast.log("RELEASE: application", applicationId, "dropped its kept release", keptId);
     }
 
     /**

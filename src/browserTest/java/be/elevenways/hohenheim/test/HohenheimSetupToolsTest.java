@@ -270,6 +270,12 @@ class HohenheimSetupToolsTest extends HohenheimHttpTestBase {
             Integer quotaId = quota.get(InstanceQuotaModel.ID);
             cleanUp.push(() -> HardDeletes.byId(Models.get(InstanceQuotaModel.class), quotaId));
             assertThat((Integer) quota.get(InstanceQuotaModel.MAX_INSTANCES)).as("step 5: set").isEqualTo(3);
+            McpHttpSession.Answer ownerless = admin.call("quota_set", Map.of("max_apps", 9));
+            assertThat(ownerless.error()).as("step 5: a call naming no owners is refused: " + ownerless.text())
+                .isTrue();
+            assertThat(ownerless.text()).as("step 5: the refusal names it").contains("owners");
+            assertThat((Integer) quota(pack).get(InstanceQuotaModel.MAX_INSTANCES)).as("step 5: nothing changed")
+                .isEqualTo(3);
             Map<String, Object> raised = new HashMap<>(Map.of("owners", List.of(bobCode, annCode), "max_apps", 5));
             raised.put("max_sites", null);
             McpHttpSession.Answer changed = admin.call("quota_set", raised);

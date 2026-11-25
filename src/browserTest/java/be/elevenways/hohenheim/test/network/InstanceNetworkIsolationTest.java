@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -213,9 +214,9 @@ class InstanceNetworkIsolationTest {
                             assertThat(violation.message().key())
                                 .as("step 1: as the named deploy failure")
                                 .isEqualTo("instance_deploy_failed");
-                            assertThat(String.valueOf(violation.message().args().get("reason")))
+                            assertThat(((Microcopy) violation.message().args().get("reason")).key())
                                 .as("step 1: naming the missing enforcement, not a bare failure")
-                                .contains("security.nftables_enabled");
+                                .isEqualTo("deploy_failed_isolation");
                         }));
 
                 // 2. NOT MERELY REFUSED: no container exists on the daemon. NftService would

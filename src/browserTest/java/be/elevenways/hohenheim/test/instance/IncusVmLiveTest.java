@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.protoblast.testsupport.time.Poll;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.HostService;
@@ -540,9 +541,9 @@ class IncusVmLiveTest {
                         assertThat(refused.all()).anySatisfy(violation -> {
                             assertThat(violation.message().key())
                                 .isEqualTo("instance_deploy_failed");
-                            assertThat(String.valueOf(violation.message().args().get("reason")))
-                                .as("step 4: and the reason names the stopped-only rule")
-                                .contains("STOPPED");
+                            assertThat(((Microcopy) violation.message().args().get("reason")).key())
+                                .as("step 4: the stopped-only rule is an unrecognised failure, said in words")
+                                .isEqualTo("deploy_failed_unknown");
                         }));
                 assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
                     .as("step 4: and the guest's disk is untouched by the refusal")

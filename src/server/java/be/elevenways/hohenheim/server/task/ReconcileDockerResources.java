@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.protoblast.common.Blast;
@@ -19,7 +20,8 @@ import java.util.Map;
 /**
  * Attributes every Docker container, volume and network on every inventoried server
  * to its owning record and persists the findings (report-only; the dashboard reads
- * the stored result -- per-render daemon probing is refused by design).
+ * the stored result -- per-render daemon probing is refused by design), then drops a
+ * release kept for roll back whose container a swept daemon no longer has.
  */
 public class ReconcileDockerResources extends ScheduledTask {
 
@@ -67,6 +69,15 @@ public class ReconcileDockerResources extends ScheduledTask {
                 Blast.log("DOCKER RECONCILE:", entry.getKey(), "-", entry.getValue().size(),
                     "resources,", orphaned, "orphaned,", colliding, "colliding");
             }
+        }
+        try {
+            int dropped = ReleaseEngine.dropVanishedKept(results.keySet());
+            if (dropped > 0) {
+                Blast.log("DOCKER RECONCILE:", dropped, "kept release(s) without a container dropped");
+            }
+        } catch (RuntimeException unread) {
+            // The findings above are stored either way; the next sweep looks again.
+            Blast.log("DOCKER RECONCILE: kept releases not checked -", unread.getMessage());
         }
     }
 }

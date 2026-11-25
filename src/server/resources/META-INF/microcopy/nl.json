@@ -6491,6 +6491,42 @@
     "text": "Deploy van {$name} is mislukt: {$reason}",
     "scope": "violations"
   },
+  "deploy_failed_hardening": {
+    "text": "de containerveiligheidsregels van Hohenheim weigerden haar containerinstellingen. Dit is een fout in Hohenheim, niet in de app; het serverlog bevat de details",
+    "scope": "violations"
+  },
+  "deploy_failed_image": {
+    "text": "haar image werd niet gevonden of kon niet opgehaald worden. Controleer de imagenaam, de tag en de toegang tot de registry",
+    "scope": "violations"
+  },
+  "deploy_failed_isolation": {
+    "text": "haar host kan de eigen netwerkafscherming van de app niet afdwingen. Een beheerder zet eerst nftables-afdwinging aan in de beveiligingsinstellingen",
+    "scope": "violations"
+  },
+  "deploy_failed_port_taken": {
+    "text": "een poort die ze publiceert is al in gebruik op haar host",
+    "scope": "violations"
+  },
+  "deploy_failed_networks": {
+    "text": "haar host heeft geen vrij eigen netwerk meer. Verbreed het adresbereik voor app-netwerken in de instellingen, of verwijder netwerken die niets gebruikt",
+    "scope": "violations"
+  },
+  "deploy_failed_memory": {
+    "text": "haar host heeft geen geheugen meer",
+    "scope": "violations"
+  },
+  "deploy_failed_unreachable": {
+    "text": "Hohenheim kon de container-engine op haar host niet bereiken",
+    "scope": "violations"
+  },
+  "deploy_failed_unknown": {
+    "text": "Hohenheim herkent de reden niet; het serverlog bevat de details",
+    "scope": "violations"
+  },
+  "deploy_failed_unknown_run": {
+    "text": "Hohenheim herkent de reden niet; het serverlog vermeldt ze onder {$run}",
+    "scope": "violations"
+  },
   "instance_stop_failed": {
     "text": "Stoppen van {$name} is mislukt: {$reason}. De poortclaims blijven gereserveerd tot ze vrij zijn waargenomen.",
     "scope": "violations"
@@ -7374,6 +7410,14 @@
   },
   "logs_unavailable": {
     "text": "De logs van {$name} kunnen nu niet gelezen worden",
+    "scope": "violations"
+  },
+  "logs_no_container": {
+    "text": "{$name} heeft nog geen container: ze werd nooit uitgerold, of haar laatste deploy startte er geen",
+    "scope": "violations"
+  },
+  "logs_no_container_failed": {
+    "text": "{$name} heeft nog geen container: haar laatste deploy mislukte, zie {$run}",
     "scope": "violations"
   },
   "variable_type_unknown": {
@@ -8793,7 +8837,7 @@
     "scope": "violations"
   },
   "release_no_rollback_target": {
-    "text": "Deze applicatie heeft geen bewaarde release om naar terug te draaien",
+    "text": "Deze app bewaart geen eerdere release; haar volgende deploy bewaart de release die ze vervangt",
     "scope": "violations"
   },
   "release_no_serving_release": {
@@ -17068,6 +17112,12 @@
   "console_command_instance": { "text": "{$actor} stuurde een consoleopdracht naar {$subject}", "scope": "hohenheim", "target": "happened" },
   "exec_instance": { "text": "{$actor} voerde een opdracht uit in {$subject}", "scope": "hohenheim", "target": "happened" },
   "rollback_instance": { "text": "{$actor} zette {$subject} terug", "scope": "hohenheim", "target": "happened" },
+  "drop_kept_release": [
+    { "text": "{$actor} verwijderde de bewaarde release van {$subject}", "scope": "hohenheim", "target": "happened" },
+    { "text": "Bewaarde release verwijderen", "scope": "instance" }
+  ],
+  "drop_kept_release_confirm": { "text": "De release verwijderen die deze app bewaart om terug te zetten? Haar container verdwijnt, en terugzetten heeft niets meer om naar terug te gaan tot de volgende deploy.", "scope": "instance" },
+  "kept_release_dropped_toast": { "text": "De bewaarde release van {$name} werd verwijderd", "scope": "instance" },
   "install_instance": { "text": "{$actor} installeerde {$subject}", "scope": "hohenheim", "target": "happened" },
   "reinstall_instance": { "text": "{$actor} installeerde {$subject} opnieuw", "scope": "hohenheim", "target": "happened" },
   "destroy_instance_data": { "text": "{$actor} verwijderde {$subject} met zijn gegevens", "scope": "hohenheim", "target": "happened" },
@@ -20188,6 +20238,7 @@
   "stop_instance_description": {"text": "Stopt de app. Gegevens, volumes en poorten blijven bewaard, zodat starten hem terugbrengt; een app die al gestopt is, blijft zoals hij is.", "scope": "hohenheim"},
   "restart_instance_description": {"text": "Stopt de app en start hem opnieuw met de huidige instellingen; de gegevens blijven bewaard. Een app waarvan Hohenheim de releases beheert, start opnieuw als een nieuwe deploy.", "scope": "hohenheim"},
   "deploy_instance_description": {"text": "Zet de nieuwste versie van de app online, op de achtergrond. Een app of statische site wordt gebouwd, het pre-deploy-commando draait, de nieuwe versie start naast de oude, wordt over HTTP gecontroleerd en neemt over; een mislukte stap laat de oude versie draaien. Een werkruimte bouwt vanuit haar repository en herstart; andere soorten starten hun app opnieuw.", "scope": "hohenheim"},
+  "drop_kept_release_description": {"text": "Verwijdert de eerdere release die een app bewaart om terug te zetten: haar container, haar netwerk en het geheugen dat ze op haar host vasthoudt. Terugzetten heeft daarna niets om naar terug te gaan tot de volgende deploy er een bewaart.", "scope": "hohenheim"},
   "backup_instance_description": {"text": "Maakt nu een back-up van de volumes van de app naar haar back-updoel. De app wordt gestopt terwijl de gegevens gekopieerd worden en weer gestart voor het uploaden.", "scope": "hohenheim"},
   "connect_push_webhook_description": {"text": "Registreert de push-webhook bij de git-provider waar de bron van de app vandaan komt, of werkt hem bij, zodat een push een deploy start. Bewaart een webhookgeheim als de app er nog geen heeft.", "scope": "hohenheim"},
   "snapshot_instance_description": {"text": "Neemt een snapshot van de volumes van de app op haar host, die herstellen later kan terugzetten. De app wordt gestopt tijdens het kopiëren en daarna weer gestart.", "scope": "hohenheim"},
@@ -20254,11 +20305,12 @@
   "mcp_with_data": {"text": "Verwijdert ook de volumes van de app en hun gegevens van de host, wat niet ongedaan kan worden; zonder dit toont de hostcontrole ze als restanten.", "scope": "hohenheim"},
   "mcp_force": {"text": "Verwijdert het record zonder na te gaan of zijn container en volume weg zijn, voor een onbereikbare host. De hostcontrole toont wat overblijft als restanten.", "scope": "hohenheim"},
   "mcp_permanent": {"text": "Verwijdert een site die in de prullenbak zit voorgoed; zonder dit gaat een site naar de prullenbak.", "scope": "hohenheim"},
+  "mcp_drop": {"text": "Verwijdert de release die een app bewaart om terug te zetten in plaats van ernaar terug te gaan: haar container, netwerk en geheugen verdwijnen. Alleen voor apps.", "scope": "hohenheim"},
   "mcp_tool_site_restore": {"text": "Haalt een site terug. Een site in de prullenbak komt eruit zoals ze verwijderd werd; geweigerd zolang een andere ingeschakelde site een van haar adressen routeert, of een ervan in vrijgavequarantaine zit, en alleen beheerders halen een site uit de prullenbak. Een actieve site gaat terug naar de opgegeven bewaarde revisie (history noemt ze); haar certificaten en app blijven onaangeroerd. Om een site in de prullenbak naar een oudere revisie terug te zetten, haalt u ze eerst uit de prullenbak.", "scope": "hohenheim"},
   "mcp_code_site_restore": {"text": "De site (S20) om terug te halen.", "scope": "hohenheim"},
   "mcp_tool_deploy": {"text": "Zet de nieuwste versie online. Een app (AP12) deployt op de achtergrond: een application of statische site wordt gebouwd, voert haar pre-deploy-commando uit en neemt over zodra ze over HTTP antwoordt, terwijl een mislukte stap de oude laat draaien; andere soorten starten opnieuw. Een app aanmaken deployt ze niet; variabelen en configuratiebestanden bereiken ze pas nu. Een stack (ST2) wordt herbouwd vanuit zijn configuratie, in de wachtrij gezet, en start als hij gestopt was. Antwoordt voor een app een RUN-code om te volgen met run_read.", "scope": "hohenheim"},
   "mcp_code_deploy": {"text": "De app of stack om te deployen.", "scope": "hohenheim"},
-  "mcp_tool_roll_back": {"text": "Zet de release terug die diende voor de huidige, zonder te herbouwen, van een application of statische site (AP12), of van een site (S20) die er een draait (beheerders). Een mislukte deploy diende nooit: de vorige dient nog, en terugzetten gaat er een verder terug. Geweigerd als er niets eerders bewaard is, of voor andere soorten. Het pre-deploy-commando loopt nooit: een database blijft zoals de nieuwere release ze achterliet. Een stack (ST2) wordt in de wachtrij teruggezet naar zijn laatste goede configuratie. Antwoordt voor een app of een site een RUN-code voor run_read.", "scope": "hohenheim"},
+  "mcp_tool_roll_back": {"text": "Zet de release terug die diende voor de huidige, zonder te herbouwen, van een application of statische site (AP12), of van een site (S20) die er een draait (beheerders). Een mislukte deploy diende nooit: de vorige dient nog, en terugzetten gaat er een verder terug. Geweigerd als er niets eerders bewaard is, of voor andere soorten. Het pre-deploy-commando loopt nooit: een database blijft zoals de nieuwere release ze achterliet. Een stack (ST2) gaat terug naar zijn laatste goede configuratie. Een app of site antwoordt een RUN-code voor run_read; met drop verdwijnt de bewaarde release van een app.", "scope": "hohenheim"},
   "mcp_code_roll_back": {"text": "De app, stack of site om terug te zetten.", "scope": "hohenheim"},
   "mcp_tool_power": {"text": "Start, stopt of herstart een app (AP12), of stopt een stack (ST2). Het starten van een app brengt ze op zoals een deploy; stoppen houdt haar gegevens, volumes en poorten. Het herstarten (of starten) van een application voert de release die ze dient opnieuw uit, zonder te herbouwen of haar pre-deploy-commando, tenzij haar bron of instellingen sindsdien wijzigden: dan wordt het een nieuwe release die het commando uitvoert. Een stack stopt alleen, afhankelijken eerst, volumes behouden; deploy start hem. Het loopt terwijl de aanroep wacht, zonder run om te volgen. Antwoordt de toestand achteraf.", "scope": "hohenheim"},
   "mcp_code_power": {"text": "De app of stack om te starten, stoppen of herstarten.", "scope": "hohenheim"},

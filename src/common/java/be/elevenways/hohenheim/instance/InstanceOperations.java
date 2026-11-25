@@ -279,6 +279,27 @@ public final class InstanceOperations {
             .register();
 
     /**
+     * Drop the release a release-managed instance keeps for roll back: its container, its network and its memory
+     * booking go with its record, and a roll back is refused until the next deploy keeps one; POWER on the record.
+     *
+     * AIDEV-NOTE: the way to free what a kept release holds without a person at the daemon (Robbedoes, 2026-11-25: a
+     * kept release removed by hand stayed listed as kept). The hourly Docker reconcile drops one whose container is
+     * gone through the same engine call (ReleaseEngine.dropKept).
+     */
+    public static final Operation<Row, Void, Void> DROP_KEPT_RELEASE =
+        Operation.declare(HohenheimIds.id("drop_kept_release"))
+            .happened(OperationSentences.of("drop_kept_release"))
+            .label(HohenheimMicrocopy.INSTANCE.of("drop_kept_release").withFallback("Drop kept release"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("drop_kept_release_description"))
+            .icon(Icon.of("trash-can"))
+            .one(INSTANCE)
+            .verb(HohenheimVerbs.DROP_KEPT_RELEASE)
+            .gate(gate(HohenheimCapabilities.POWER))
+            .command(COMMAND_FACET)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+            .register();
+
+    /**
      * Run (or resume, or retry) the template's install step; OPERATOR-ONLY through its gate, applicable while the
      * install is neither absent nor done.
      */

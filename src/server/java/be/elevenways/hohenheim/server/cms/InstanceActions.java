@@ -72,7 +72,7 @@ final class InstanceActions {
             deployAction(false),
             stopAction(), restartAction(false), snapshotAction(), backupAction(),
             appUpdateAction(false), connectWebhookAction(), consoleCommandAction(), exposeAction(), rollbackAction(),
-            installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
+            dropKeptReleaseAction(), installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
             destroyWithDataAction(), checkHostAction());
     }
 
@@ -263,6 +263,23 @@ final class InstanceActions {
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("rollback"),
                 HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
+            .build();
+    }
+
+    /**
+     * Drop the release kept for roll back, beside Roll back: the engine destroys it (its container, its network and
+     * its memory booking), and Roll back is then refused until the next deploy keeps one. Dead, in Roll back's own
+     * words, while nothing is kept.
+     */
+    private static @NonNull PanelAction<Row> dropKeptReleaseAction() {
+        return PanelAction.<Row, Void>places(InstanceOperations.DROP_KEPT_RELEASE, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(
+                    HohenheimMicrocopy.INSTANCE.of("kept_release_dropped_toast")
+                        .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .inlineInRow(false)
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("drop_kept_release"),
+                HohenheimMicrocopy.INSTANCE.of("drop_kept_release_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
 

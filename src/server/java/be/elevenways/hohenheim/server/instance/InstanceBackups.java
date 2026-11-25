@@ -378,7 +378,8 @@ public final class InstanceBackups {
                     if (application) {
                         InstanceOperationGuard.stampError(this.instances.leases(), instanceId,
                             resolved.serverId(), owner.get(InstanceModel.NAME),
-                            InstanceOperationGuard.startFailureOf(restartFailed), restartFailed.getMessage());
+                            InstanceOperationGuard.startFailureOf(restartFailed),
+                            HohenheimViolations.reasonOf(restartFailed));
                     }
                     failedRow(instanceId, targetId, null,
                         "The workload could not be started again after the capture: "

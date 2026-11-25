@@ -55,6 +55,8 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.validation.validator.Required;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -293,10 +295,14 @@ public final class InstanceQuotaParts {
      */
     private static @NonNull String set(OperationInput.@NonNull Values input, @Nullable Set<String> sent,
                                        @NonNull AccessContext caller) {
-        Set<String> subjects = new LinkedHashSet<>();
-        if (input.get(OWNERS_ARGUMENT) instanceof List<?> owners) {
-            for (Object owner : owners) subjects.add(subjectOf(String.valueOf(owner)));
+        Set<String> given = sent != null ? sent : input.coerced().keySet();
+        // An empty list is the administrators' own limits; a call that names no owners names nobody, so it sets none.
+        if (!given.contains(OWNERS_ARGUMENT) || !(input.get(OWNERS_ARGUMENT) instanceof List<?> owners)) {
+            throw Violations.ofField(OWNERS_ARGUMENT, null,
+                Required.DEFAULT_MESSAGE_KEY.copy().withArg("field", OWNERS_ARGUMENT));
         }
+        Set<String> subjects = new LinkedHashSet<>();
+        for (Object owner : owners) subjects.add(subjectOf(String.valueOf(owner)));
         String pack = HohenheimAccess.packSubjects(subjects);
         String named = subjects.isEmpty() ? "the administrators" : HohenheimAccess.labelSubjects(pack);
         Panel panel = ApiConduits.adminPanel();
@@ -309,7 +315,6 @@ public final class InstanceQuotaParts {
             return "limits of " + named + " removed";
         }
         Map<String, Object> raw = new LinkedHashMap<>();
-        Set<String> given = sent != null ? sent : input.coerced().keySet();
         for (Map.Entry<String, Field<?, ?>> cap : CAPS.entrySet()) {
             if (given.contains(cap.getKey())) {
                 raw.put(cap.getValue().getName(), input.get(cap.getKey()));

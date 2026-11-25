@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -271,10 +272,9 @@ class IncusInstanceRuntimeLiveTest {
                         assertThat(violations.all()).anySatisfy(violation -> {
                             assertThat(violation.message().key())
                                 .isEqualTo("instance_deploy_failed");
-                            assertThat(String.valueOf(
-                                    violation.message().args().get("reason")))
-                                .as("step 2: and the reason names the attribution failure")
-                                .contains("does not attribute");
+                            assertThat(((Microcopy) violation.message().args().get("reason")).key())
+                                .as("step 2: the attribution failure is an unrecognised one, said in words")
+                                .isEqualTo("deploy_failed_unknown");
                         }));
 
                 // 3. ...and the DAEMON still has the stranger, untouched and label-less.

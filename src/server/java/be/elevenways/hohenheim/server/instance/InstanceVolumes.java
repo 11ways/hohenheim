@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.host.DiskSpace;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
@@ -126,7 +127,7 @@ public final class InstanceVolumes {
         Integer volumeOwner = instanceOfHostPath(hostPath);
 
         if (volumeOwner == null) {
-            throw new IllegalArgumentException("REFUSED to create container: host path '"
+            throw new ContainerHardening.Refused("REFUSED to create container: host path '"
                 + hostPath + "' is not a volume directory InstanceVolumes could have minted"
                 + " (<volume root>/<instance id>/<volume name>). The derivation IS the"
                 + " containment guarantee, so a path this policy cannot attribute to an"
@@ -134,7 +135,7 @@ public final class InstanceVolumes {
         }
 
         if (!mayMountVolumesOf(instanceId, volumeOwner)) {
-            throw new IllegalArgumentException("REFUSED to create container: instance #"
+            throw new ContainerHardening.Refused("REFUSED to create container: instance #"
                 + instanceId + " would bind '" + hostPath + "', which is a volume directory"
                 + " of instance #" + volumeOwner + ". A workload mounts its OWN volumes,"
                 + " and a release additionally mounts those of the application that"

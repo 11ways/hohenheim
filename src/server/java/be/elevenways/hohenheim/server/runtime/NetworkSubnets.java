@@ -66,6 +66,14 @@ public final class NetworkSubnets {
         }
     }
 
+    /** The declared range on a host has no free block left for another network; its message is diagnostics. */
+    public static final class NoFreeNetworkException extends IOException {
+
+        NoFreeNetworkException(@NonNull String message) {
+            super(message);
+        }
+    }
+
     /**
      * Create a bridge network on the lowest free block of the declared range.
      *
@@ -81,7 +89,7 @@ public final class NetworkSubnets {
             Room room = roomOn(docker, host);
             IpRanges.Range block = room.first();
             if (block == null) {
-                throw new IOException("REFUSED to create network '" + name + "': all " + room.total()
+                throw new NoFreeNetworkException("REFUSED to create network '" + name + "': all " + room.total()
                     + " networks of /" + room.prefix() + " in " + room.rangeText() + " on this host are taken by"
                     + " its Docker networks or overlap its routes. Widen "
                     + HohenheimSettings.Networks.ADDRESS_RANGE.getPath() + " (or remove networks nothing uses) to make"

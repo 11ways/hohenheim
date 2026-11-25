@@ -6491,6 +6491,42 @@
     "text": "Deploy of {$name} failed: {$reason}",
     "scope": "violations"
   },
+  "deploy_failed_hardening": {
+    "text": "Hohenheim's container safety rules refused its container settings. This is a defect in Hohenheim, not in the app; the server log has the details",
+    "scope": "violations"
+  },
+  "deploy_failed_image": {
+    "text": "its image could not be found or pulled. Check the image name, its tag and the access to its registry",
+    "scope": "violations"
+  },
+  "deploy_failed_isolation": {
+    "text": "its host cannot enforce the app's own network isolation. An administrator turns on nftables enforcement in the security settings first",
+    "scope": "violations"
+  },
+  "deploy_failed_port_taken": {
+    "text": "a port it publishes is already in use on its host",
+    "scope": "violations"
+  },
+  "deploy_failed_networks": {
+    "text": "its host has no free private network left. Widen the address range for app networks in the settings, or remove networks nothing uses",
+    "scope": "violations"
+  },
+  "deploy_failed_memory": {
+    "text": "its host is out of memory",
+    "scope": "violations"
+  },
+  "deploy_failed_unreachable": {
+    "text": "Hohenheim could not reach the container engine on its host",
+    "scope": "violations"
+  },
+  "deploy_failed_unknown": {
+    "text": "Hohenheim does not recognise the reason; the server log has the details",
+    "scope": "violations"
+  },
+  "deploy_failed_unknown_run": {
+    "text": "Hohenheim does not recognise the reason; the server log names it under {$run}",
+    "scope": "violations"
+  },
   "instance_stop_failed": {
     "text": "Stop of {$name} failed: {$reason}. Its port claims stay reserved until observed free.",
     "scope": "violations"
@@ -7374,6 +7410,14 @@
   },
   "logs_unavailable": {
     "text": "The logs of {$name} cannot be read right now",
+    "scope": "violations"
+  },
+  "logs_no_container": {
+    "text": "{$name} has no container yet: it was never deployed, or its last deploy did not start one",
+    "scope": "violations"
+  },
+  "logs_no_container_failed": {
+    "text": "{$name} has no container yet: its last deploy failed, see {$run}",
     "scope": "violations"
   },
   "variable_type_unknown": {
@@ -8793,7 +8837,7 @@
     "scope": "violations"
   },
   "release_no_rollback_target": {
-    "text": "This application has no retained release to roll back to",
+    "text": "This app keeps no earlier release; its next deploy keeps the one it replaces",
     "scope": "violations"
   },
   "release_no_serving_release": {
@@ -17068,6 +17112,12 @@
   "console_command_instance": { "text": "{$actor} sent a console command to {$subject}", "scope": "hohenheim", "target": "happened" },
   "exec_instance": { "text": "{$actor} ran a command in {$subject}", "scope": "hohenheim", "target": "happened" },
   "rollback_instance": { "text": "{$actor} rolled {$subject} back", "scope": "hohenheim", "target": "happened" },
+  "drop_kept_release": [
+    { "text": "{$actor} dropped the kept release of {$subject}", "scope": "hohenheim", "target": "happened" },
+    { "text": "Drop kept release", "scope": "instance" }
+  ],
+  "drop_kept_release_confirm": { "text": "Drop the release this app keeps for roll back? Its container goes, and roll back has nothing to go back to until the next deploy.", "scope": "instance" },
+  "kept_release_dropped_toast": { "text": "The kept release of {$name} was dropped", "scope": "instance" },
   "install_instance": { "text": "{$actor} installed {$subject}", "scope": "hohenheim", "target": "happened" },
   "reinstall_instance": { "text": "{$actor} reinstalled {$subject}", "scope": "hohenheim", "target": "happened" },
   "destroy_instance_data": { "text": "{$actor} deleted {$subject} with its data", "scope": "hohenheim", "target": "happened" },
@@ -20188,6 +20238,7 @@
   "stop_instance_description": {"text": "Stops the app. Its data, volumes and ports are kept, so start brings it back; an app that is already stopped stays as it is.", "scope": "hohenheim"},
   "restart_instance_description": {"text": "Stops the app and starts it again with its current settings; its data is kept. An app whose releases Hohenheim manages starts again as a fresh deploy.", "scope": "hohenheim"},
   "deploy_instance_description": {"text": "Puts the app's newest version online, in the background. An app or static site is built, its pre-deploy command runs, the new version starts beside the old one, is checked over HTTP and takes over; a failed step leaves the old version serving. A workspace builds from its repository and restarts; other kinds start their app again.", "scope": "hohenheim"},
+  "drop_kept_release_description": {"text": "Removes the earlier release an app keeps for roll back: its container, its network and the memory it holds on its host. Roll back then has nothing to go back to until the next deploy keeps one.", "scope": "hohenheim"},
   "backup_instance_description": {"text": "Backs the app's volumes up to its backup target now. The app is stopped while its data is copied and started again before the upload.", "scope": "hohenheim"},
   "connect_push_webhook_description": {"text": "Registers the push webhook at the git provider the app's source comes from, or brings it up to date, so a push starts a deploy. Stores a webhook secret when the app has none.", "scope": "hohenheim"},
   "snapshot_instance_description": {"text": "Takes a snapshot of the app's volumes on its host, which restore can put back later. The app is stopped while the copy is made and started again afterwards.", "scope": "hohenheim"},
@@ -20254,11 +20305,12 @@
   "mcp_with_data": {"text": "Also removes the app's volumes and their data from the host, which cannot be undone; without it the host check lists them as leftovers.", "scope": "hohenheim"},
   "mcp_force": {"text": "Removes the record without verifying its container and volume are gone, for an unreachable host. The host check lists what survives as leftovers.", "scope": "hohenheim"},
   "mcp_permanent": {"text": "Removes a site that is in the trash for good; without it a site is moved to the trash.", "scope": "hohenheim"},
+  "mcp_drop": {"text": "Removes the release an app keeps for roll back instead of going back to it: its container, network and memory go. Apps only.", "scope": "hohenheim"},
   "mcp_tool_site_restore": {"text": "Brings a site back. One in the trash comes out of it as it was deleted; refused while another enabled site routes one of its addresses, or one is in release quarantine, and only administrators bring a site out of the trash. A live site goes back to the saved revision given (history names them); its certificates and app are untouched. To set a trashed site back to an older revision, bring it out of the trash first.", "scope": "hohenheim"},
   "mcp_code_site_restore": {"text": "The site (S20) to bring back.", "scope": "hohenheim"},
   "mcp_tool_deploy": {"text": "Puts the newest version online. An app (AP12) deploys in the background: an application or static site is built, runs its pre-deploy command and takes over once it answers over HTTP, a failed step leaving the old one serving; other kinds start again. Creating an app does not deploy it; variables and config files reach it only now. A stack (ST2) is rebuilt from its configuration, queued, and starts if stopped. Answers for an app a RUN code to follow with run_read.", "scope": "hohenheim"},
   "mcp_code_deploy": {"text": "The app or stack to deploy.", "scope": "hohenheim"},
-  "mcp_tool_roll_back": {"text": "Puts back the release that served before the one serving now, without rebuilding, of an application or static site (AP12), or of a site (S20) running one (administrators). A failed deploy never served: the one before it still serves, and roll back goes one further back. Refused when nothing earlier is kept, or for other kinds. The pre-deploy command never runs: a database stays as the newer release left it. A stack (ST2) is queued back to its last good configuration. Answers for an app or a site a RUN code for run_read.", "scope": "hohenheim"},
+  "mcp_tool_roll_back": {"text": "Puts back the release that served before the one serving now, without rebuilding, of an application or static site (AP12), or of a site (S20) running one (administrators). A failed deploy never served: the one before it still serves, and roll back goes one further back. Refused when nothing earlier is kept, or for other kinds. The pre-deploy command never runs: a database stays as the newer release left it. A stack (ST2) is queued back to its last good configuration. An app or site answers a RUN code for run_read; with drop an app's kept release is removed instead.", "scope": "hohenheim"},
   "mcp_code_roll_back": {"text": "The app, stack or site to roll back.", "scope": "hohenheim"},
   "mcp_tool_power": {"text": "Starts, stops or restarts an app (AP12), or stops a stack (ST2). An app's start brings it up as a deploy does; stop keeps its data, volumes and ports. An application's restart (or start) runs the release it serves again, without rebuilding or its pre-deploy command, unless its source or settings changed since: then it becomes a new release that runs the command. A stack only stops, dependents first, volumes kept; deploy starts it. It runs while the call waits, with no run to follow. Answers the state afterwards.", "scope": "hohenheim"},
   "mcp_code_power": {"text": "The app or stack to start, stop or restart.", "scope": "hohenheim"},

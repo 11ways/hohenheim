@@ -266,7 +266,7 @@ public final class InstanceApi {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 return ApiConduits.json(Map.of("id", instanceId,
-                    "lines", InstanceConsoles.tail(instanceId, clampLines(conduit))));
+                    "lines", InstanceConsoles.tail(instanceId, clampLines(conduit), ctx)));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }

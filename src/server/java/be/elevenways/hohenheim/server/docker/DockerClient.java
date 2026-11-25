@@ -77,6 +77,25 @@ public class DockerClient {
         }
     }
 
+    /**
+     * The daemon answered that it cannot give this image: no such repository or tag, no access to it, a pull whose
+     * progress stream failed, or a content-addressed image it does not hold. Its message is diagnostics.
+     */
+    public static final class ImageUnavailableException extends IOException {
+
+        private final @NonNull String reference;
+
+        ImageUnavailableException(@NonNull String reference, @NonNull String message, @Nullable Throwable cause) {
+            super(message, cause);
+            this.reference = reference;
+        }
+
+        /** @return the image reference the daemon could not give */
+        public @NonNull String reference() {
+            return this.reference;
+        }
+    }
+
     /** Default per-request deadline (connect + full read); generous enough for a
      *  container stop grace period, short enough to catch a truly-hung daemon. */
     public static final long DEFAULT_TIMEOUT_MS = 60_000;
@@ -205,12 +224,30 @@ public class DockerClient {
      */
     public void pullImage(String image, String tag, RegistryAuth auth) throws IOException {
         String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
-        String path = "/images/create?fromImage=" + enc(image) + "&tag=" + enc(resolvedTag);
+        pull(image, resolvedTag, image + ":" + resolvedTag, auth);
+    }
+
+    /**
+     * THE pull of both reference shapes ({@code fromImage} and its tag or digest).
+     *
+     * @throws ImageUnavailableException when the daemon refuses the pull, in its status line or its progress stream
+     * @throws IOException               when the daemon cannot be asked
+     */
+    private void pull(String fromImage, String tagOrDigest, String reference, RegistryAuth auth) throws IOException {
+        String path = "/images/create?fromImage=" + enc(fromImage) + "&tag=" + enc(tagOrDigest);
         Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
-        String body = new String(
-            exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
-            StandardCharsets.UTF_8);
-        throwIfStreamError(body, "Docker image pull for " + image + ":" + resolvedTag);
+        String body;
+        try {
+            body = new String(exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
+                StandardCharsets.UTF_8);
+        } catch (ApiException refused) {
+            throw new ImageUnavailableException(reference, refused.getMessage(), refused);
+        }
+        try {
+            throwIfStreamError(body, "Docker image pull for " + reference);
+        } catch (IOException streamed) {
+            throw new ImageUnavailableException(reference, streamed.getMessage(), streamed);
+        }
     }
 
     /**
@@ -328,9 +365,9 @@ public class DockerClient {
                     return;
                 }
             }
-            throw new IOException("Image '" + image + "' is a content-addressed reference that"
+            throw new ImageUnavailableException(image, "Image '" + image + "' is a content-addressed reference that"
                 + " this daemon does not have. A digest-pinned release cannot be satisfied by"
-                + " pulling (nothing publishes it); rebuild it.");
+                + " pulling (nothing publishes it); rebuild it.", null);
         }
         // Digest-pinned reference (repo@sha256:...): present iff the digest is in
         // RepoDigests; pulls pass the digest via the tag parameter per the Engine API.
@@ -364,12 +401,7 @@ public class DockerClient {
                     }
                 }
             }
-            String path = "/images/create?fromImage=" + enc(repo) + "&tag=" + enc(digest);
-            Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
-            String body = new String(
-                exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
-                StandardCharsets.UTF_8);
-            throwIfStreamError(body, "Docker image pull for " + repo + "@" + digest);
+            pull(repo, digest, repo + "@" + digest, auth);
             return;
         }
 

@@ -145,8 +145,11 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     /** Consumed by the next start: a writer that appears while the daemon is working. */
     private @Nullable Runnable duringNextStart;
 
-    /** Consumed by the next create of the runtime face: thrown unchecked before anything is made. */
-    private volatile @Nullable RuntimeException failNextCreate;
+    /** Consumed by the next create of the runtime face: thrown before anything is made, unchecked or as IO. */
+    private volatile @Nullable Exception failNextCreate;
+
+    /** image reference -> the words the daemon's pull of it is refused with (404); see {@link #refusePull}. */
+    private final Map<String, String> refusedPulls = new ConcurrentHashMap<>();
 
     /**
      * owner record ({@code model#id}) -> the most containers its owner labels named at once, sampled after every
@@ -235,11 +238,34 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
     }
 
     /**
-     * The NEXT create of the runtime face throws {@code death} unchecked before it makes anything: a controller that
-     * dies inside a deploy, which no catch of the deploy stamps (a killed process stamps nothing).
+     * The NEXT create of the runtime face throws {@code death} before it makes anything. An unchecked one is a
+     * controller that dies inside a deploy, which no catch of the deploy stamps (a killed process stamps nothing); an
+     * IOException is the daemon or the client refusing the create, as a failure the real driver raised.
      */
-    public void failNextCreate(@NonNull RuntimeException death) {
+    public void failNextCreate(@NonNull Exception death) {
+        if (!(death instanceof RuntimeException) && !(death instanceof IOException)) {
+            throw new IllegalArgumentException("a create fails unchecked or with an IOException, not " + death);
+        }
         this.failNextCreate = death;
+    }
+
+    /** The daemon refuses every pull of {@code reference} ({@code repo:tag}) with a 404 in these words. */
+    public void refusePull(@NonNull String reference, @NonNull String message) {
+        this.refusedPulls.put(reference, message);
+    }
+
+    /**
+     * The container under {@code handle} is removed outside Hohenheim (an operator's {@code docker rm}): gone from the
+     * daemon with nothing in the control plane told.
+     */
+    public void removeOutside(@NonNull String handle) {
+        Workload workload = this.workloads.remove(handle);
+        if (workload == null) {
+            throw new IllegalStateException("no workload " + handle);
+        }
+        unbind(workload);
+        leaveLinkNetworks(handle);
+        this.calls.add("removed-outside:" + handle);
     }
 
     /**
@@ -564,10 +590,13 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         @Override
         public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
             OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
-            RuntimeException death = FakeDockerDaemon.this.failNextCreate;
+            Exception death = FakeDockerDaemon.this.failNextCreate;
             if (death != null) {
                 FakeDockerDaemon.this.failNextCreate = null;
-                throw death;
+                if (death instanceof IOException refused) {
+                    throw refused;
+                }
+                throw (RuntimeException) death;
             }
             if (owner == null) {
                 throw new IOException("spec without owner labels");
@@ -881,6 +910,10 @@ public final class FakeDockerDaemon implements DockerTransport, DockerStreamTran
         }
         if ("POST".equals(method) && "/images/create".equals(path)) {
             String reference = param(query, "fromImage") + ":" + param(query, "tag");
+            String refused = this.refusedPulls.get(reference);
+            if (refused != null) {
+                return json(404, Map.of("message", refused));
+            }
             this.images.add(reference);
             return response(200, "{\"status\":\"Downloaded " + reference + "\"}",
                 "application/json");

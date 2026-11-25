@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -361,7 +362,7 @@ class InstanceObservabilityContractTest {
             int laneless = instanceRecord("console-laneless",
                 FakeNativeDaemons.FakeVolumeKind.ID);
             new InstanceService().deploy(laneless);
-            assertThatThrownBy(() -> InstanceConsoles.tail(laneless, 10))
+            assertThatThrownBy(() -> InstanceConsoles.tail(laneless, 10, TenantConduits.operator()))
                 .as("step 1: a driver without a console lane is refused by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("console_unsupported");
@@ -371,7 +372,7 @@ class InstanceObservabilityContractTest {
                 FakeNativeDaemons.FakeNativeKind.ID);
             new InstanceService().deploy(unreadable);
             FakeNativeDaemons.TAIL_FAILS.add(FakeNativeDaemons.handleOf(unreadable));
-            assertThatThrownBy(() -> InstanceConsoles.tail(unreadable, 10))
+            assertThatThrownBy(() -> InstanceConsoles.tail(unreadable, 10, TenantConduits.operator()))
                 .as("step 2: an unreadable console is a named refusal, never empty output")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("logs_unavailable");
@@ -385,7 +386,7 @@ class InstanceObservabilityContractTest {
             new InstanceService().deploy(readable);
             FakeNativeDaemons.TAILS.put(FakeNativeDaemons.handleOf(readable),
                 "started with " + secret + "\n");
-            assertThat(InstanceConsoles.tail(readable, 10))
+            assertThat(InstanceConsoles.tail(readable, 10, TenantConduits.operator()))
                 .as("step 3: the one-shot read carries its own redaction")
                 .doesNotContain(secret)
                 .contains(KnownValueRedactor.PLACEHOLDER);

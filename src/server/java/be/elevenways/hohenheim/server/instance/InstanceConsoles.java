@@ -27,6 +27,12 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationRun;
+import be.elevenways.zenit.server.operation.OperationRuns;
 import be.elevenways.zenit.common.bootstrap.RuntimeJobs;
 import be.elevenways.zenit.common.security.KnownValueRedactor;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -59,6 +65,9 @@ import java.util.function.Consumer;
  * when the watch was armed, so test datasources and the production default both work.
  */
 public final class InstanceConsoles {
+
+    /** How many of an app's newest runs a log read of a missing container looks through for its last deploy. */
+    private static final int RECENT_RUNS = 5;
 
     /** How long an armed readiness matcher waits before stamping error. */
     private static final long READINESS_TIMEOUT_MS = 180_000;
@@ -434,10 +443,12 @@ public final class InstanceConsoles {
      * them. Redaction below is not a substitute for the gate; it only keeps stored
      * secrets out of output the caller is already entitled to.
      *
+     * @param reader who asks, whose read of the app's newest deploy run names it when that deploy left no container
      * @throws Violations {@code instance_not_permitted}, {@code app_not_serving},
-     *         {@code console_unsupported}, {@code logs_unavailable}
+     *         {@code console_unsupported}, {@code logs_no_container}, {@code logs_no_container_failed},
+     *         {@code logs_unavailable}
      */
-    public static @NonNull String tail(int instanceId, int lines) {
+    public static @NonNull String tail(int instanceId, int lines, @NonNull AccessContext reader) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONSOLE);
         int workloadId = ApplicationReleases.requireWorkloadIdOf(instanceId);
         InstanceService.Resolved resolved = new InstanceService().resolve(workloadId);
@@ -450,8 +461,35 @@ public final class InstanceConsoles {
             return ConsoleRedaction.redactWhole(
                 support.consoleTail(resolved.spec().handle(), lines), workloadId);
         } catch (IOException e) {
+            if (resolved.liveStatus().state() == ContainerState.ABSENT) {
+                Row app = Models.get(InstanceModel.class).findById(instanceId);
+                throw noContainer(app != null ? app : resolved.row(), reader);
+            }
             throw HohenheimViolations.instanceRefusal("logs_unavailable", resolved.row(), null);
         }
+    }
+
+    /**
+     * The refusal of a log read of an app the daemon has no container of: never deployed, or its newest deploy failed,
+     * whose run the reader may read the reason in.
+     *
+     * @param app the app the reader asked for, whose runs are read (an application's, never its release's)
+     */
+    private static @NonNull Violations noContainer(@NonNull Row app, @NonNull AccessContext reader) {
+        for (OperationRun run : OperationRuns.recentFor(InstanceOperations.INSTANCE,
+                InstanceOperations.INSTANCE.keyOf(app), RECENT_RUNS, reader)) {
+            if (run.operation() != InstanceOperations.DEPLOY) {
+                continue;
+            }
+            String code = run.status().isTerminal() && run.status() != OperationRunStatus.SUCCEEDED
+                ? DeployFailure.codeOf(run, reader) : null;
+            if (code == null) {
+                break;
+            }
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("logs_no_container_failed")
+                .withArg("name", String.valueOf((Object) app.get(InstanceModel.NAME))).withArg("run", code));
+        }
+        return HohenheimViolations.instanceRefusal("logs_no_container", app, null);
     }
 
     /**

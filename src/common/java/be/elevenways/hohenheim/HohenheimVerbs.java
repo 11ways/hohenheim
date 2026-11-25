@@ -35,6 +35,10 @@ public final class HohenheimVerbs {
     /** Stores a backup of the subject's data now. */
     public static final OperationVerb BACK_UP = OperationVerb.declare(HohenheimVerbs.class, "back_up", Effect.WRITES);
 
+    /** Drops what a subject keeps to go back to (a release kept for roll back). */
+    public static final OperationVerb DROP_KEPT_RELEASE = OperationVerb.declare(HohenheimVerbs.class,
+        "drop_kept_release", Effect.DESTROYS);
+
     /** Takes a snapshot of the subject's disks now. */
     public static final OperationVerb SNAPSHOT = OperationVerb.declare(HohenheimVerbs.class, "snapshot",
         Effect.WRITES);

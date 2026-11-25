@@ -73,6 +73,17 @@ public final class ContainerHardening {
     public record Profile(@NonNull String name, @NonNull List<String> capabilities) {}
 
     /**
+     * A container setting this policy refuses: a Hohenheim defect or a forbidden declaration, never a daemon answer.
+     * Its message is diagnostics; a deploy says it in words of its own.
+     */
+    public static final class Refused extends IllegalArgumentException {
+
+        public Refused(@NonNull String message) {
+            super(message);
+        }
+    }
+
+    /**
      * Drop ALL, add nothing back: a container that never needs to touch a uid, a gid
      * or a file it does not already own.
      *
@@ -373,7 +384,7 @@ public final class ContainerHardening {
                 continue;
             }
             if (!DECLARABLE.containsKey(capability) && !capabilities.contains(capability)) {
-                throw new IllegalArgumentException("REFUSED capability '" + capability
+                throw new Refused("REFUSED capability '" + capability
                     + "' declared by '" + name + "': "
                     + REFUSAL_REASONS.getOrDefault(capability,
                         "it is not on the declarable allow-list")
@@ -530,7 +541,7 @@ public final class ContainerHardening {
         for (Object rawKey : hostConfig.keySet()) {
             String key = String.valueOf(rawKey);
             if (!PERMITTED_FOLDED.contains(fold(key))) {
-                throw new IllegalArgumentException("REFUSED to create container: HostConfig."
+                throw new Refused("REFUSED to create container: HostConfig."
                     + key + " is not on ContainerHardening's permitted key list "
                     + PERMITTED_KEYS.keySet() + ", so it may not be set by a caller."
                     + " A workload that needs a capability declares a ContainerHardening.Profile;"
@@ -542,12 +553,12 @@ public final class ContainerHardening {
         for (String key : NAMESPACE_KEYS) {
             Object value = folded.get(fold(key));
             if (value instanceof String text && text.equalsIgnoreCase("host")) {
-                throw new IllegalArgumentException("REFUSED to create container: HostConfig."
+                throw new Refused("REFUSED to create container: HostConfig."
                     + key + " = \"host\" shares a host namespace with the container, which is a"
                     + " container escape by definition.");
             }
             if (value instanceof String text && fold(text).startsWith(JOIN_CONTAINER)) {
-                throw new IllegalArgumentException("REFUSED to create container: HostConfig."
+                throw new Refused("REFUSED to create container: HostConfig."
                     + key + " = \"" + text + "\" joins another container's namespace, which"
                     + " inherits that container's isolation instead of having any of its own"
                     + " (a workload sharing another workload's network namespace is not on its"
@@ -608,7 +619,7 @@ public final class ContainerHardening {
         }
 
         if (!contained) {
-            throw new IllegalArgumentException("REFUSED to create container: a bind mount"
+            throw new Refused("REFUSED to create container: a bind mount"
                 + " of host path '" + source + "' is not an isolation boundary (a bind of"
                 + " the Docker socket is root on the host). The only permitted bind source"
                 + " is a volume directory under '" + root + "/', created by InstanceVolumes;"
@@ -628,7 +639,7 @@ public final class ContainerHardening {
         for (Object rawKey : containerSpec.keySet()) {
             String key = String.valueOf(rawKey);
             if (!PERMITTED_BODY_FOLDED.contains(fold(key))) {
-                throw new IllegalArgumentException("REFUSED to create container: "
+                throw new Refused("REFUSED to create container: "
                     + key + " is not on ContainerHardening's permitted create-body key list "
                     + PERMITTED_BODY_KEYS.keySet() + ", so it may not be set by a caller."
                     + " Permission on this list is DECLARED with a reviewed reason, never"
@@ -673,14 +684,14 @@ public final class ContainerHardening {
         }
 
         if (!(raw instanceof Map<?, ?> config)) {
-            throw new IllegalArgumentException("REFUSED to create container:"
+            throw new Refused("REFUSED to create container:"
                 + " NetworkingConfig is not an object, so what it would attach the"
                 + " container to cannot be read, let alone bounded.");
         }
 
         for (Object rawKey : config.keySet()) {
             if (!fold(String.valueOf(rawKey)).equals(fold("EndpointsConfig"))) {
-                throw new IllegalArgumentException("REFUSED to create container:"
+                throw new Refused("REFUSED to create container:"
                     + " NetworkingConfig." + rawKey + " is not EndpointsConfig, which is"
                     + " the only member of it this policy has reviewed.");
             }
@@ -691,7 +702,7 @@ public final class ContainerHardening {
             ? mode : null;
 
         if (!(endpointsRaw instanceof Map<?, ?> endpoints) || endpoints.size() != 1) {
-            throw new IllegalArgumentException("REFUSED to create container:"
+            throw new Refused("REFUSED to create container:"
                 + " NetworkingConfig.EndpointsConfig must attach the container to EXACTLY"
                 + " ONE network -- the private one this workload's own policy is keyed to."
                 + " A second endpoint puts it on a network whose subnet no deny rule of"
@@ -703,7 +714,7 @@ public final class ContainerHardening {
         String attached = String.valueOf(only.getKey());
 
         if (networkMode == null || !networkMode.equals(attached)) {
-            throw new IllegalArgumentException("REFUSED to create container: it would attach"
+            throw new Refused("REFUSED to create container: it would attach"
                 + " to network '" + attached + "' while HostConfig.NetworkMode names "
                 + (networkMode == null ? "no network at all" : "'" + networkMode + "'")
                 + ". The create-body attachment may only ever be the workload's own"
@@ -711,7 +722,7 @@ public final class ContainerHardening {
         }
 
         if (!(only.getValue() instanceof Map<?, ?> options) || !options.isEmpty()) {
-            throw new IllegalArgumentException("REFUSED to create container: the endpoint"
+            throw new Refused("REFUSED to create container: the endpoint"
                 + " config for network '" + attached + "' is not empty. Endpoint options"
                 + " (IPAMConfig, Links, DriverOpts) are not reviewed here -- a workload"
                 + " choosing its own address inside a subnet-keyed policy is the policy"
@@ -750,7 +761,7 @@ public final class ContainerHardening {
         Integer instanceId = OwnerLabels.instanceIdOf(owner);
 
         if (instanceId == null) {
-            throw new IllegalArgumentException("REFUSED to create container: it binds host"
+            throw new Refused("REFUSED to create container: it binds host"
                 + " path '" + source + "' while declaring no instance owner ("
                 + OwnerLabels.MODEL + "=" + InstanceModel.MODEL_ID + " plus a numeric "
                 + OwnerLabels.ID + "). A bind is permitted per INSTANCE, so a container"

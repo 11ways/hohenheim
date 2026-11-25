@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.docker.*;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.DeployFailure;
 import be.elevenways.hohenheim.server.instance.StaticSiteKind;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -949,10 +950,10 @@ public final class ApplicationReleases {
                 return String.valueOf(docker.inspectImage(ref).get("Id"));
             }
         } catch (IOException unavailable) {
+            Blast.log("RELEASE: image", ref, "could not be resolved -", unavailable.getMessage());
             throw Violations.ofField("settings.image", ref,
                 HohenheimMicrocopy.VIOLATIONS.of("application_image_unresolvable")
-                    .withArg("reason", unavailable.getMessage() != null
-                        ? unavailable.getMessage() : "daemon unreachable"));
+                    .withArg("reason", DeployFailure.of(unavailable).reason()));
         }
     }
 

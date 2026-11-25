@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -157,7 +158,7 @@ public final class IncusDefinitions {
                 continue;
             }
             if (instanceId == null) {
-                throw new IllegalArgumentException("REFUSED to create container: '"
+                throw new ContainerHardening.Refused("REFUSED to create container: '"
                     + spec.handle() + "' binds host path '" + bind.getKey() + "' while"
                     + " declaring no instance owner. A bind is permitted per INSTANCE, so a"
                     + " workload with no instance identity may bind nothing.");

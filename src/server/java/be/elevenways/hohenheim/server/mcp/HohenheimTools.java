@@ -74,6 +74,7 @@ public final class HohenheimTools extends McpToolCollection {
     private static final String WITH_DATA = "with_data";
     private static final String FORCE = "force";
     private static final String PERMANENT = "permanent";
+    private static final String DROP = "drop";
     private static final String ACTION = "action";
     private static final String CONSOLE = "console";
     private static final String OWNER = "owner";
@@ -164,9 +165,12 @@ public final class HohenheimTools extends McpToolCollection {
             .route(InstanceOperations.DEPLOY, null)
             .route(StackOperations.DEPLOY, null)
             .build();
-        McpHostTool rollBack = McpCodeTool.builder("roll_back", words("mcp_tool_roll_back"), writes())
+        // The release an app keeps is dropped by the same tool that goes back to it: one act on it, two variants.
+        McpHostTool rollBack = McpCodeTool.builder("roll_back", words("mcp_tool_roll_back"), destroys())
             .code(words("mcp_code_roll_back"))
-            .route(InstanceOperations.ROLLBACK, null)
+            .flag(DROP, words("mcp_drop"))
+            .route(InstanceOperations.ROLLBACK, null, DROP, "false")
+            .route(InstanceOperations.DROP_KEPT_RELEASE, null, DROP, "true")
             .route(StackOperations.ROLLBACK, null)
             .route(SiteOperations.ROLLBACK_RELEASE, null)
             .build();

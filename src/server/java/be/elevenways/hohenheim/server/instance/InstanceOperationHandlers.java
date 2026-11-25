@@ -140,8 +140,19 @@ public final class InstanceOperationHandlers {
             .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
                 ReleaseEngine::rollbackRefusals))
             .handle(call -> {
-                ReleaseEngine.rollback(instanceId(call), triggerOf(call.surface()));
+                DeployFailure.inRun(call, call.subject(),
+                    () -> ReleaseEngine.rollback(instanceId(call), triggerOf(call.surface())));
                 call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"));
+                return null;
+            });
+        // Offered where a roll back is: refused at once, in the roll back's own words, while nothing is kept.
+        OperationHandlers.attach(InstanceOperations.DROP_KEPT_RELEASE).source(SUBJECTS)
+            .applies(instance -> authored(instance)
+                && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
+            .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
+                ReleaseEngine::rollbackRefusals))
+            .handle(call -> {
+                ReleaseEngine.dropKept(instanceId(call));
                 return null;
             });
         // AIDEV-NOTE: the panel's deploy, a background run (START answers the API and a schedule in the call). What
@@ -153,7 +164,8 @@ public final class InstanceOperationHandlers {
             .availability(Availability.keyed((Row instance) -> instance.get(InstanceModel.ID),
                 InstanceOperationHandlers::deployRefusals))
             .handle(call -> {
-                new InstanceService().deploy(instanceId(call), triggerOf(call.surface()));
+                DeployFailure.inRun(call, call.subject(),
+                    () -> new InstanceService().deploy(instanceId(call), triggerOf(call.surface())));
                 call.reportStepDone(HohenheimMicrocopy.DEPLOYMENTS.of("deploy_done"));
                 return null;
             });
@@ -234,8 +246,8 @@ public final class InstanceOperationHandlers {
         // again (console for the log, config for a variable write).
         OperationHandlers.attach(InstanceLogOperations.READ_LOG).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
-            .handle(call -> InstanceConsoles.tail(instanceId(call),
-                InstanceConsoles.tailLines(call.input() == null ? null : call.input().lines())));
+            .handle(call -> InstanceConsoles.tail(instanceId(call), InstanceConsoles.tailLines(
+                call.input() == null ? null : call.input().lines()), call.subjectAccess()));
         OperationHandlers.attach(InstanceVariableOperations.LIST_VARIABLES).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(call -> new InstanceVariableOperations.Variables(InstanceVariables.listed(
