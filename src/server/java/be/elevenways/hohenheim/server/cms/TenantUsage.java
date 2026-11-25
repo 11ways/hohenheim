@@ -1,12 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.app.UsageLine;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.value.Percent;
+import be.elevenways.zenit.auth.server.AccountFacts;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,12 +30,40 @@ import java.util.List;
  * holds while a granted app is charged to the operator. The card once showed only the one default-capped budget
  * (previews) and so said nothing about apps. Websites, which the list leaves out, show only when capped.
  *
+ * AIDEV-NOTE: the same lines are the account's own read for its assistant ({@code account_read}), registered as a
+ * zenit-auth account fact ({@link AccountFacts}), so the card and the read never disagree.
+ *
  * @author Jelle De Loecker
  * @since  0.9.0
  */
-final class TenantUsage {
+@BlastAutoLoad
+public final class TenantUsage {
+
+    /** Autoload sentinel; reading it registers the lines as an account fact. */
+    public static final boolean LOADED = install();
 
     private TenantUsage() {
+    }
+
+    private static boolean install() {
+        AccountFacts.SOURCES.add(HohenheimIds.id("tenant_usage"), TenantUsage.class, TenantUsage::said);
+        return true;
+    }
+
+    /** @return one line per budget the card shows, as the account's own read words it: used, limit, percent */
+    static @NonNull List<Microcopy> said(@NonNull AccessContext access) {
+        List<Microcopy> said = new ArrayList<>();
+        for (UsageLine line : of(access)) {
+            if (!line.capped()) {
+                said.add(HohenheimMicrocopy.TENANT_USAGE.of("account_line_uncapped").withArg("label", line.label()));
+                continue;
+            }
+            Microcopy amount = HohenheimMicrocopy.TENANT_USAGE.of(line.bytes() ? "of_size" : "of_count")
+                .withArg("used", line.used()).withArg("limit", line.limit());
+            said.add(HohenheimMicrocopy.TENANT_USAGE.of("account_line").withArg("label", line.label())
+                .withArg("amount", amount).withArg("percent", Percent.of(line.percent())));
+        }
+        return said;
     }
 
     /** @return one line per budget the card shows on a tier this node runs, none for an operator */

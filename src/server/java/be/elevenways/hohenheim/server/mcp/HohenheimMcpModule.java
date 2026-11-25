@@ -18,6 +18,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpRecordTools;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSet;
+import be.elevenways.zenit.auth.server.mcp.AccountTools;
 import be.elevenways.zenit.auth.server.mcp.AuthMcp;
 import be.elevenways.zenit.auth.server.mcp.AuthTools;
 import be.elevenways.zenit.common.ZenitModule;
@@ -68,6 +69,9 @@ public final class HohenheimMcpModule implements ZenitModule {
 
     /** The hand-declared tools {@link #install()} built, for the coverage check. */
     private static volatile @Nullable HohenheimTools declared;
+
+    /** The own-account tools {@link #install()} mounted, for the coverage check. */
+    private static volatile @Nullable AccountTools accountTools;
 
     /**
      * The models whose sources the server lists, in the order its tools are offered. Deploys and builds are not among
@@ -125,6 +129,11 @@ public final class HohenheimMcpModule implements ZenitModule {
         return declared;
     }
 
+    /** @return zenit-auth's own-account tools {@link #install()} mounted, null before it */
+    public static @Nullable AccountTools accountTools() {
+        return accountTools;
+    }
+
     /** Registers the server once per process; a second call changes nothing. */
     public static synchronized void install() {
         if (McpHostServers.get(SERVER_NAME) != null) return;
@@ -158,10 +167,13 @@ public final class HohenheimMcpModule implements ZenitModule {
         HohenheimTools hand = HohenheimTools.build();
         declared = hand;
         AuthTools people = AuthTools.build();
+        AccountTools account = AccountTools.build();
+        accountTools = account;
         List<McpHostTool> described = new ArrayList<>(hand.tools());
         described.addAll(people.tools());
+        described.addAll(account.tools());
         McpHostServers.register(McpHostServer.builder(SERVER_NAME)
-            .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand, people,
+            .collections(McpRecordTools.byCode(), McpListTool.over(tools, AuthMcp.tools()), hand, people, account,
                 McpDescribeTool.over(SERVER_NAME, described))
             .codeExamples(code(SiteModel.MODEL_ID, 14), code(InstanceModel.MODEL_ID, 33),
                 code(DnsZoneModel.MODEL_ID, 7))

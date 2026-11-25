@@ -49,6 +49,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolCollection;
+import be.elevenways.zenit.auth.server.mcp.AccountTools;
 import be.elevenways.zenit.auth.server.mcp.AuthTools;
 import be.elevenways.zenit.common.operation.Operation;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -146,8 +147,10 @@ public final class HohenheimTools extends McpToolCollection {
             .route(SiteRedirectParts.DELETE, null)
             .route(AuthProviderParts.DELETE, null)
             .route(InstanceTemplateParts.DELETE, null);
-        // zenit-auth's people and roles are deleted here too, by their own operations.
+        // zenit-auth's people and roles are deleted here too, by their own operations, and the caller's own API keys
+        // revoked.
         for (Operation<?, ?, ?> operation : AuthTools.DELETES) deletes.route(operation, null);
+        AccountTools.routeRevoke(deletes);
         McpHostTool delete = deletes.build();
         McpHostTool deploy = McpCodeTool.builder("deploy", words("mcp_tool_deploy"), writes())
             .code(words("mcp_code_deploy"))

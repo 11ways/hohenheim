@@ -268,9 +268,13 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
             .as("step 3: a kind that never builds says what its image is")
             .doesNotContain("Dockerfile");
 
-        // 4. Every hand-declared tool and each of its arguments is described, in English and in Dutch.
+        // 4. Every hand-declared tool and each of its arguments is described, in English and in Dutch: Hohenheim's
+        //    own and zenit-auth's own-account tools alike.
         Set<String> declared = new HashSet<>();
         for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.declared()).tools()) {
+            declared.add(tool.name());
+        }
+        for (McpHostTool tool : Objects.requireNonNull(HohenheimMcpModule.accountTools()).tools()) {
             declared.add(tool.name());
         }
         declared.add(McpDescribeTool.NAME);
@@ -507,7 +511,7 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         // 2. The tools derive from the sources, the operations and zenit-auth's accounts; an app is an app.
         assertThat(session.toolNames()).as("step 2: the tools")
             .contains("read", "list", "describe", "site_pause", "site_resume", "power", "deploy", "run_read",
-                "certificate_renew", "user_whoami");
+                "certificate_renew", "account_read");
 
         // 3. Listing sites by a word names the site by its code; reading that code reads the site.
         String code = RecordCodes.codes(SiteModel.MODEL_ID, List.of(String.valueOf(siteId)), operator)
@@ -2110,13 +2114,18 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         return runs.save(row).get(OperationRunModel.ID);
     }
 
-    /** A session of a key the account mints from the "Hohenheim assistant" preset, as its API keys page does. */
-    static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name) {
+    /**
+     * A session of a key the account mints from the "Hohenheim assistant" preset, as its API keys page does, holding
+     * the scopes named beside it too ("Choose access myself" beside the preset).
+     */
+    static McpHttpSession presetSession(McpHostServer server, URI endpoint, UUID accountId, String name,
+                                        String... extraScopes) {
         AccessContext account = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(accountId, name)));
         CredentialPresets.Preset preset = server.credentialPreset(account);
         assertThat(preset).as(name + " is offered the preset").isNotNull();
-        List<String> scopes = ApiKeyService.presetScopes(account, preset);
+        List<String> scopes = new ArrayList<>(ApiKeyService.presetScopes(account, preset));
         assertThat(scopes).as("the preset admits the server").contains(McpScopes.server("hohenheim"));
+        scopes.addAll(List.of(extraScopes));
         String key = ApiKeyService.create(account, accountId, PREFIX + letters(), scopes, null).plaintext();
         return McpHttpSession.open(endpoint, bearer(key));
     }
