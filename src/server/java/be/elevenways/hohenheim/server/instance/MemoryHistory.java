@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.util.RecentSamples;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,8 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * after a boot for "stays above its reservation", but a whole week of uptime for "far below over a week", so a
  * controller redeployed more often than {@code capacity.memory_far_below_days} never raises that hint. A gap longer
  * than {@link #MAX_GAP} (missed sweeps, an app that was stopped) breaks coverage the same way, so a window is never
- * judged from a handful of samples. Bounded twice: samples older than the longest window go at every record, and an
- * app that is no longer running is forgotten by {@link #retain}.
+ * judged from a handful of samples. Bounded twice: samples older than the longest window go at every record (a
+ * {@link RecentSamples} bounded by age), and an app that is no longer running is forgotten by {@link #retain}.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -59,7 +59,7 @@ public final class MemoryHistory {
         }
     }
 
-    private static final Map<Integer, ArrayDeque<Sample>> TRACKS = new ConcurrentHashMap<>();
+    private static final Map<Integer, RecentSamples<Sample>> TRACKS = new ConcurrentHashMap<>();
 
     private MemoryHistory() {
     }
@@ -70,24 +70,22 @@ public final class MemoryHistory {
      * @param keep the longest window any check judges
      */
     public static void record(int instanceId, @NonNull Sample sample, @NonNull Duration keep) {
-        ArrayDeque<Sample> track = TRACKS.computeIfAbsent(instanceId, id -> new ArrayDeque<>());
+        RecentSamples<Sample> track = TRACKS.computeIfAbsent(instanceId, id -> new RecentSamples<>());
         synchronized (track) {
             Instant oldest = sample.at().minus(keep);
-            while (!track.isEmpty() && track.peekFirst().at().isBefore(oldest)) {
-                track.pollFirst();
-            }
-            track.addLast(sample);
+            track.dropOldestWhile(held -> held.at().isBefore(oldest));
+            track.add(sample);
         }
     }
 
     /** @return the app's track, null while nothing was recorded for it */
     public static @Nullable Track trackOf(int instanceId) {
-        ArrayDeque<Sample> track = TRACKS.get(instanceId);
+        RecentSamples<Sample> track = TRACKS.get(instanceId);
         if (track == null) {
             return null;
         }
         synchronized (track) {
-            return new Track(List.copyOf(track));
+            return new Track(List.copyOf(track.list()));
         }
     }
 

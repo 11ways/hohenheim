@@ -9,11 +9,11 @@ import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.util.RecentSamples;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +37,8 @@ import java.util.function.Consumer;
  */
 public final class InstanceStats {
 
-    /** Samples kept per instance; docker emits roughly one per second. */
-    public static final int HISTORY = 60;
+    /** Samples kept per instance, the points a series plots; docker emits roughly one per second. */
+    public static final int HISTORY = HohenheimStatsFunctions.WINDOW;
 
     private static final Map<Integer, Session> SESSIONS = new ConcurrentHashMap<>();
 
@@ -161,7 +161,7 @@ public final class InstanceStats {
 
         private final int instanceId;
         private final List<Consumer<Sample>> viewers = new CopyOnWriteArrayList<>();
-        private final List<Sample> ring = new ArrayList<>();
+        private final RecentSamples<Sample> ring = new RecentSamples<>(HISTORY);
 
         private @Nullable StatsFeed stream;
         private @Nullable JobRunner pumps;
@@ -199,7 +199,7 @@ public final class InstanceStats {
          * under: a sample read meanwhile waits for the replay, then reaches the viewer live, never in neither.
          */
         synchronized void attach(@NonNull Consumer<Sample> viewer) {
-            for (Sample sample : List.copyOf(this.ring)) {
+            for (Sample sample : this.ring.list()) {
                 viewer.accept(sample);
             }
             this.viewers.add(viewer);
@@ -230,15 +230,12 @@ public final class InstanceStats {
         }
 
         synchronized @NonNull List<Sample> history() {
-            return List.copyOf(this.ring);
+            return this.ring.list();
         }
 
         /** Records a sample in the ring and names the viewers it reaches; one attached after this finds it there. */
         private synchronized @NonNull List<Consumer<Sample>> record(@NonNull Sample sample) {
             this.ring.add(sample);
-            while (this.ring.size() > HISTORY) {
-                this.ring.remove(0);
-            }
             return List.copyOf(this.viewers);
         }
 

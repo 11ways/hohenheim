@@ -114,8 +114,8 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
     private static @NonNull List<Object> ratesOf(@NonNull List<Map<String, Object>> wire, @NonNull Metric metric) {
         List<Object> points = new ArrayList<>();
         for (int i = 1; i < wire.size(); i++) {
-            double rate = HohenheimStatsFunctions.rateBetween(wire.get(i - 1), wire.get(i), metric);
-            if (rate >= 0) {
+            Double rate = HohenheimStatsFunctions.rateBetween(wire.get(i - 1), wire.get(i), metric);
+            if (rate != null) {
                 points.add(metric.scaled(rate));
             }
         }

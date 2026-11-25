@@ -10,14 +10,15 @@ import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.CounterRate;
 import be.elevenways.protoblast.common.util.BlastCollection;
+import be.elevenways.protoblast.common.util.RecentSamples;
 import be.elevenways.protoblast.common.value.Percent;
 import be.elevenways.zenit.common.channel.ChannelLinks;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,8 @@ import java.util.Map;
  */
 public final class HohenheimStatsFunctions {
 
-    /** Points plotted per series; matches the hub's server-side ring. */
-    private static final int WINDOW = 60;
+    /** Points plotted per series, and the samples the hub keeps per app ({@code InstanceStats.HISTORY}). */
+    public static final int WINDOW = 60;
 
     /** Wire key of a sample's timestamp (epoch millis). */
     public static final String AT_KEY = "at";
@@ -87,19 +88,6 @@ public final class HohenheimStatsFunctions {
         /** The raw wire value scaled to plot units. */
         public double scaled(double raw) {
             return raw / this.divisor;
-        }
-
-        /**
-         * The raw per-second rate between two samples of a cumulative counter.
-         *
-         * @return the rate, or -1 when the pair has no honest rate (no time passed, or the
-         *         counter went backwards because the workload restarted)
-         */
-        public double perSecond(double previousRaw, long previousAt, double raw, long at) {
-            if (at <= previousAt || raw < previousRaw) {
-                return -1d;
-            }
-            return (raw - previousRaw) / ((at - previousAt) / 1000d);
         }
 
         static @Nullable Metric byKey(@Nullable String key) {
@@ -240,8 +228,8 @@ public final class HohenheimStatsFunctions {
         if (resolved == null || !resolved.cumulative()) {
             return null;
         }
-        double rate = rateBetween(previous, sample, resolved);
-        if (rate < 0) {
+        Double rate = rateBetween(previous, sample, resolved);
+        if (rate == null) {
             return null;
         }
         return appendTrimmed(current != null ? current : seed, resolved.scaled(rate));
@@ -251,20 +239,21 @@ public final class HohenheimStatsFunctions {
      * The raw per-second rate of a cumulative metric between two sample maps; the server
      * seeds its rate series through this same method.
      *
-     * @return the rate, or -1 when either sample lacks the metric or no honest rate exists
+     * @return the rate, or null when either sample lacks the metric or no honest rate exists
      */
-    public static double rateBetween(@Nullable Object previous, @Nullable Object sample, @NonNull Metric metric) {
+    public static @Nullable Double rateBetween(@Nullable Object previous, @Nullable Object sample,
+                                               @NonNull Metric metric) {
         if (!(previous instanceof Map<?, ?> before) || !(sample instanceof Map<?, ?> after)) {
-            return -1d;
+            return null;
         }
         if (!(before.get(metric.key()) instanceof Number previousRaw)
                 || !(after.get(metric.key()) instanceof Number raw)
                 || !(before.get(AT_KEY) instanceof Number previousAt)
                 || !(after.get(AT_KEY) instanceof Number at)) {
-            return -1d;
+            return null;
         }
-        return metric.perSecond(previousRaw.doubleValue(), previousAt.longValue(),
-            raw.doubleValue(), at.longValue());
+        return CounterRate.perSecond(previousRaw.doubleValue(), previousAt.longValue(), raw.doubleValue(),
+            at.longValue());
     }
 
     /**
@@ -389,8 +378,8 @@ public final class HohenheimStatsFunctions {
         if (resolved == null || !resolved.cumulative()) {
             return null;
         }
-        double rate = rateBetween(previous, sample, resolved);
-        return rate < 0 ? null : Math.round(rate);
+        Double rate = rateBetween(previous, sample, resolved);
+        return rate == null ? null : Math.round(rate);
     }
 
     /**
@@ -540,18 +529,15 @@ public final class HohenheimStatsFunctions {
     }
 
     private static @NonNull List<Double> appendTrimmed(@Nullable List<Object> base, double value) {
-        List<Double> next = new ArrayList<>();
+        RecentSamples<Double> series = new RecentSamples<>(WINDOW);
         if (base != null) {
             for (Object point : base) {
-                next.add(point instanceof Number n ? n.doubleValue() : 0d);
+                series.add(point instanceof Number n ? n.doubleValue() : 0d);
             }
         }
-        next.add(value);
-        if (next.size() > WINDOW) {
-            // A new trimmed list per fold, never a mutation in place: the tag assigns the
-            // RESULT to its property, which is what makes the chart repaint.
-            return new ArrayList<>(next.subList(next.size() - WINDOW, next.size()));
-        }
-        return next;
+        series.add(value);
+        // A new list per fold, never a mutation in place: the tag assigns the RESULT to its property, which is what
+        // makes the chart repaint.
+        return series.list();
     }
 }
