@@ -21,7 +21,9 @@ import java.util.Map;
 /**
  * A TCP/UDP stream site carries a list of public ports: every stream's single port becomes a list of one.
  *
- * AIDEV-NOTE: the old shape and both conversions are SinglePortStreamSettings', frozen, which SiteModel's revisions
+ * AIDEV-NOTE: PUBLISHED: starfleet, robbedoes and kuifje applied it on 2026-11-25 (pinned in migration-pins.txt), so
+ * it is frozen; never edit this one again: a schema change is a NEW migration. The old shape and both conversions are
+ * SinglePortStreamSettings', frozen, which SiteModel's revisions
  * read through too, so a revision stored before this upgrade restores as a list of one. It merges no sites: that is a
  * person's act (SitePortMoves). Trashed streams are converted too, so a restore brings back a stream the relay reads.
  * Down turns a list of one back into the single-port keys and refuses, naming them, while a stream holds several

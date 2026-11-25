@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.migration.M004_SiteOutages;
 import be.elevenways.hohenheim.migration.M005_LinkedServers;
 import be.elevenways.hohenheim.migration.M006_SharedRecords;
 import be.elevenways.hohenheim.migration.M007_LinkConfirmations;
+import be.elevenways.hohenheim.migration.M008_StreamPortLists;
 import be.elevenways.zenit.common.orm.migration.M001_ZenitBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationException;
@@ -339,7 +340,7 @@ class MigrationIntegrityTest {
         // that the published M006 depends on.
         List<Supplier<Migration>> chain = List.of(M001_ZenitBaseline::new, M001_HohenheimBaseline::new,
             M002_AfterBaseline::new, M003_CertificateSigningRequests::new, M004_SiteOutages::new,
-            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new);
+            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new, M008_StreamPortLists::new);
 
         // 1. Build the whole schema with no stream but core's baseline beside it; it depends on nothing else.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess()).as("step 1: the schema builds")
@@ -350,7 +351,8 @@ class MigrationIntegrityTest {
         // 2. Rolling the chain back is refused up front at the baseline, and every table survives it, the published
         //    migrations' own included: no down() ran.
         assertThatThrownBy(() -> new MigrationRunner(datasource, chain).rollback(List.of(
-                MigrationKey.of(new M007_LinkConfirmations()), MigrationKey.of(new M006_SharedRecords()),
+                MigrationKey.of(new M008_StreamPortLists()), MigrationKey.of(new M007_LinkConfirmations()),
+                MigrationKey.of(new M006_SharedRecords()),
                 MigrationKey.of(new M005_LinkedServers()),
                 MigrationKey.of(new M004_SiteOutages()),
                 MigrationKey.of(new M003_CertificateSigningRequests()),
@@ -371,18 +373,19 @@ class MigrationIntegrityTest {
         SqliteDatasource datasource = emptyDatabase("site-outages");
         List<Supplier<Migration>> chain = List.of(M001_ZenitBaseline::new, M001_HohenheimBaseline::new,
             M002_AfterBaseline::new, M003_CertificateSigningRequests::new, M004_SiteOutages::new,
-            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new);
-        List<MigrationKey> throughM004 = List.of(MigrationKey.of(new M007_LinkConfirmations()),
-            MigrationKey.of(new M006_SharedRecords()), MigrationKey.of(new M005_LinkedServers()),
-            MigrationKey.of(new M004_SiteOutages()));
+            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new, M008_StreamPortLists::new);
+        List<MigrationKey> throughM004 = List.of(MigrationKey.of(new M008_StreamPortLists()),
+            MigrationKey.of(new M007_LinkConfirmations()), MigrationKey.of(new M006_SharedRecords()),
+            MigrationKey.of(new M005_LinkedServers()), MigrationKey.of(new M004_SiteOutages()));
         String outageTable = "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'site_outages'";
         String sites = "SELECT name FROM pragma_table_info('sites')";
         String instances = "SELECT name FROM pragma_table_info('instances')";
 
         // 1. The chain through M004 builds, a site stored before it included, and the sites table keeps its columns.
-        //    A runner admits no chain short of the published M007 (with core's baseline M006 depends on), so the
-        //    database before M004 is the whole chain with M007 down to M004 rolled back; M005 to M007 only add
-        //    linked_servers tables, columns and generation rows of their own, which apply again with M004.
+        //    A runner admits no chain short of the published M008 (with core's baseline M006 depends on), so the
+        //    database before M004 is the whole chain with M008 down to M004 rolled back; M005 to M008 only add
+        //    linked_servers tables, columns, generation rows and stream settings of their own, which apply again with
+        //    M004.
         assertThat(new MigrationRunner(datasource, chain).migrate().isSuccess())
             .as("step 1: the published chain builds").isTrue();
         assertThat(new MigrationRunner(datasource, chain).rollback(throughM004).isSuccess())
@@ -464,8 +467,8 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline and its published successors through M007, then"
-                + " the open M008; a new one is appended here")
+            .as("step 1: and the stream is the published baseline and its published successors through M008; no"
+                + " migration is open, a new one is appended here")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
                 "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM,
