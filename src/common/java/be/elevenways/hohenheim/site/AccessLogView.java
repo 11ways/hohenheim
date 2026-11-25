@@ -39,7 +39,7 @@ public record AccessLogView(@NonNull List<Line> lines, @NonNull Microcopy summar
      * @param variant   the status badge's variant, null for a status shown plainly
      * @param size      the bytes sent, in the reader's words
      * @param took      how long it took, null on a line from before that was logged
-     * @param referrer  the site the visitor came from, "" when none was sent
+     * @param referrer  the host the visitor came from, as the referrers table counts it; "" when none was sent
      * @param browser   the browser and system the user agent names, in the reader's words
      * @param userAgent the user agent as sent, "" when none was sent
      */

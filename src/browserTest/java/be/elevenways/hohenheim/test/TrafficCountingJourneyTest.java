@@ -97,6 +97,7 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             int pathed = site(cleanUp, "pathed-" + tag, upstream, "/app");
             int guarded = site(cleanUp, "guarded-" + tag, upstream, null);
             int timed = site(cleanUp, "timed-" + tag, upstream, null);
+            int quiet = site(cleanUp, "quiet-" + tag, upstream, null);
             redirect(cleanUp, served, "/old");
             refuseThisMachine(cleanUp, guarded);
             ProxyServer proxy = ProxyTestSupport.startProxy();
@@ -145,10 +146,11 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             assertThat(Objects.requireNonNull(timedTotals.medianMillis())).as("step 2: one stopwatch, two readers")
                 .isBetween(logged * 0.95, (logged + 1) * 1.05);
 
-            // 3. The stores stop as the process does and open again: the count continues from what they wrote.
+            // 3. The stores stop as the process does and open again: the count continues from what they wrote. The
+            //    request after the restart comes from a tool no family names, which it names itself.
             HohenheimTraffic.stop();
             HohenheimTraffic.start();
-            ask(port, hostOf(served), "/ok", "User-Agent: " + FIREFOX);
+            ask(port, hostOf(served), "/ok", "User-Agent: Proteus-Client/3");
             assertThat(counted(HohenheimTraffic.sourceOf(served), 4, began).requests())
                 .as("step 3: the count continues over the restart").isEqualTo(4);
 
@@ -169,10 +171,18 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             assertThat(pages.error()).as("step 4: " + pages.text()).isFalse();
             assertThat(pages.text()).as("step 4: the hour per minute, its pages").contains("per minute")
                 .contains("/ok").contains("/missing").contains("/old");
-            assertThat(admin.call("traffic_read", Map.of("site", servedCode, "top", "browsers")).text())
-                .as("step 4: the browsers").contains("Firefox");
+            assertThat(pages.text()).as("step 4: the minutes without a request are left out, and it says so")
+                .contains("steps without requests are left out").doesNotContainPattern("(?m)^\\S+: 0$");
+            McpHttpSession.Answer browsers = admin.call("traffic_read", Map.of("site", servedCode, "top",
+                "browsers"));
+            assertThat(browsers.text()).as("step 4: the browsers, a tool no family names by the name it sent")
+                .contains("Firefox").contains("Proteus-Client").doesNotContain("agent_").doesNotContain("tool:");
             assertThat(admin.call("traffic_read", Map.of("site", servedCode, "top", "visitors")).text())
                 .as("step 4: the visitors in full").contains("127.0.0.1");
+            McpHttpSession.Answer none = admin.call("traffic_read", Map.of("site",
+                HohenheimMcpTest.code(SiteModel.MODEL_ID, quiet, operator)));
+            assertThat(none.text()).as("step 4: a span without a request says so in one line")
+                .contains("steps: none, no requests in this span").doesNotContain("steps, each");
             McpHttpSession.Answer everySite = admin.call("traffic_read", Map.of());
             assertThat(everySite.error()).as("step 4: " + everySite.text()).isFalse();
             assertThat(everySite.text()).as("step 4: every site at once, the name nobody serves among them")

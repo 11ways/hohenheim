@@ -48,6 +48,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.live.LiveReads;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.traffic.common.StatusClass;
+import be.elevenways.zenit.traffic.server.HitKeys;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -351,7 +352,7 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
             HohenheimMicrocopy.ACCESS_LOG.of("access_log_size").withArg("bytes", line.bytes()),
             line.millis() == null ? null : HohenheimMicrocopy.ACCESS_LOG.of("access_log_took")
                 .withArg("took", Duration.ofMillis(line.millis())),
-            Objects.requireNonNullElse(line.referrer(), ""), browser,
+            HitKeys.referrerHost(line.referrer()), browser,
             Objects.requireNonNullElse(line.userAgent(), ""));
     }
 

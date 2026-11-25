@@ -120,16 +120,22 @@ final class HohenheimTrafficTools {
             : "response time: median " + millis(totals.medianMillis()) + " ms, slowest 5 percent from "
                 + millis(totals.slowestMillis()) + " ms");
         List<DataSeries> series = read.steps().series();
-        response.line("steps, each its start and requests per status class:");
-        int steps = series.isEmpty() ? 0 : series.getFirst().buckets().size();
-        for (int step = 0; step < steps; step++) {
-            List<String> counts = new ArrayList<>();
-            for (DataSeries each : series) {
-                Double value = each.buckets().get(step).value();
-                if (value != null && value > 0) counts.add(each.key() + " " + Math.round(value));
+        if (totals.requests() == 0) {
+            response.line("steps: none, no " + asked + " in this span");
+        } else {
+            response.line("steps, each its start and " + asked + " per status class; steps without " + asked
+                + " are left out:");
+            int steps = series.isEmpty() ? 0 : series.getFirst().buckets().size();
+            for (int step = 0; step < steps; step++) {
+                List<String> counts = new ArrayList<>();
+                for (DataSeries each : series) {
+                    Double value = each.buckets().get(step).value();
+                    if (value != null && value > 0) counts.add(each.key() + " " + Math.round(value));
+                }
+                if (!counts.isEmpty()) {
+                    response.line(series.getFirst().buckets().get(step).key() + ": " + String.join(", ", counts));
+                }
             }
-            response.line(series.getFirst().buckets().get(step).key() + ": "
-                + (counts.isEmpty() ? "0" : String.join(", ", counts)));
         }
         TrafficReads.Top top = read.top();
         DataTable table = read.table();

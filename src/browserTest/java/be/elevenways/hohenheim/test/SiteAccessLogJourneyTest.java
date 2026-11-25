@@ -118,6 +118,21 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             assertThat(page.locator(longPath + " [data-hh-access-log-path]").boundingBox().width)
                 .as("step 1b: the path has room").isGreaterThan(220.0);
 
+            // 1c. A visitor's address shows whole on one line of its column, the referrer only the host the visitor
+            //     came from, and the "Time taken" head stands on one line as the others do.
+            assertThat(page.locator(LINE + " [data-hh-access-log-visitor]").allTextContents().stream()
+                .map(String::trim).toList()).as("step 1c: the whole address").containsOnly("127.0.0.1");
+            assertThat((Integer) page.locator(LINE + " [data-hh-access-log-visitor] span").first()
+                .evaluate("span => span.getClientRects().length")).as("step 1c: on one line").isEqualTo(1);
+            assertThat(page.locator(LINE + " [data-hh-access-log-referrer]").allTextContents().stream()
+                .map(String::trim).toList()).as("step 1c: the referrer's host").contains("from.example")
+                .noneMatch(referrer -> referrer.contains("/"));
+            // The lines its words stand on: the distinct tops of the rectangles its contents draw.
+            assertThat((Integer) page.locator("[data-hh-access-log-took-head]").evaluate("head => { const words ="
+                + " document.createRange(); words.selectNodeContents(head); return new Set([...words.getClientRects()]"
+                + ".filter(box => box.width > 0).map(box => Math.round(box.top))).size; }"))
+                .as("step 1c: Time taken on one line").isEqualTo(1);
+
             // 2. Following is on: a new request of the site appears without a navigation.
             String opened = page.url();
             fixture.request(fixture.siteA, "/arrived");

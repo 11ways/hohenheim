@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.common.data.DataBuckets;
 import be.elevenways.zenit.common.data.DataTable;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -23,6 +25,7 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.StorageKeyed;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -196,15 +199,15 @@ public final class TrafficReads {
             .authorize(SiteOperationHandlers.reachesSite())
             .handle(call -> read(HohenheimTraffic.Counted.WEB,
                 Set.of(HohenheimTraffic.sourceOf(call.subject().get(SiteModel.ID))),
-                Objects.requireNonNull(call.input(), "a read has its input"), false));
+                Objects.requireNonNull(call.input(), "a read has its input"), false, call.access()));
         OperationHandlers.attach(READ_SERVER)
             .handle(call -> read(HohenheimTraffic.Counted.WEB, Set.of(),
-                Objects.requireNonNull(call.input(), "a read has its input"), false));
+                Objects.requireNonNull(call.input(), "a read has its input"), false, call.access()));
         OperationHandlers.attach(READ_ZONE)
             .authorize(DnsOperationHandlers.admin())
             .handle(call -> read(HohenheimTraffic.Counted.DNS,
                 Set.of(HohenheimTraffic.zoneSource(call.subject().get(DnsZoneModel.ID))),
-                Objects.requireNonNull(call.input(), "a read has its input"), true));
+                Objects.requireNonNull(call.input(), "a read has its input"), true, call.access()));
     }
 
     private TrafficReads() {
@@ -218,10 +221,11 @@ public final class TrafficReads {
 
     /**
      * @param sources the sources read, empty for every one
+     * @param caller  whose words the tables and series are named in, null for the catalog's default
      * @throws DomainRefusal SERVICE_UNAVAILABLE while counting is stopped (the process is ending)
      */
     private static @NonNull Read read(HohenheimTraffic.@NonNull Counted counted, @NonNull Set<String> sources,
-                                      @NonNull ReadInput input, boolean zone) {
+                                      @NonNull ReadInput input, boolean zone, @Nullable AccessContext caller) {
         TrafficStore store = HohenheimTraffic.store(counted);
         if (store == null) {
             throw new DomainRefusal(ZenitRefusalReason.SERVICE_UNAVAILABLE, "traffic counting is stopped");
@@ -233,9 +237,12 @@ public final class TrafficReads {
             input.until() != null ? input.until() : Now.instant(), OfficeZone.office());
         TrafficReader reader = store.reader();
         Top top = Top.forToken(input.top(), zone);
+        // Every label is a name the caller reads: a family's, a catch-all's in the caller's words, never a key.
+        LocaleChain chain = caller != null ? caller.locales() : LocaleChain.empty();
+        MessageResolver resolver = caller != null ? caller.messageResolver() : null;
         return new Read(query, reader.totals(query), reader.totals(query.before()).requests(),
-            reader.series(query, TrafficMeasure.REQUESTS_BY_STATUS, null, null), top,
-            top == null ? null : reader.top(query, TopRead.busiest(top.table(), TOP_ROWS), null, null));
+            reader.series(query, TrafficMeasure.REQUESTS_BY_STATUS, chain, resolver), top,
+            top == null ? null : reader.top(query, TopRead.busiest(top.table(), TOP_ROWS), chain, resolver));
     }
 
     /** @return the period field carrying every window, so no list of them is spelled twice */

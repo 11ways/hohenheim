@@ -4,9 +4,11 @@
        the rest. The lines are the live part (AccessLogView): while following, each new line of the site re-reads
        this part alone, the filters standing as the reader set them. The filters are a GET form, so the tab's address
        always says what it shows. The path takes the width the other columns leave, on one line, cut with an
-       ellipsis; the cut columns show their whole value on hover. A reading table's snug rows and the scale's small
-       and medium widths for the referrer and the visitor keep the path well over 200 px beside the panel's rail at
-       1280 px (SiteAccessLogJourneyTest measures it). */
+       ellipsis; the browser is cut likewise; both show their whole value on hover. A visitor's address always shows
+       whole (the owner's ruling): an IPv4 address on one line in its column, a longer IPv6 one breaking inside it.
+       The referrer is the host the visitor came from, as wide as it is up to a small cap, then cut. A reading
+       table's snug rows keep the path well over 200 px beside the panel's rail at 1280 px
+       (SiteAccessLogJourneyTest measures it). */
     public required part: Live<AccessLogView>
     public required filters: AccessLogFilters
     /* The time choice, then the range's two ends, as the reader edits them before the tab reads them. */
@@ -52,6 +54,16 @@
 
         .hh-access-log-mono {
             font-family: var(--pl-font-family-mono);
+        }
+
+        /* The referrer's cap: a host as wide as it is up to 12em, then cut where the cap ends. */
+        .hh-access-log-referrer {
+            display: inline-block;
+            max-inline-size: 12em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
         }
 
         .hh-access-log-foot {
@@ -151,26 +163,26 @@
         <pl-table textSize="small" density="snug" data-hh-access-log-lines>
             <pl-table-header><pl-table-row>
                 <pl-table-head columnWidth="fit">{{ t("access_log_column_time", scope: "access_log") }}</pl-table-head>
-                <pl-table-head columnWidth="md">{{ t("access_log_column_visitor", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="lg">{{ t("access_log_column_visitor", scope: "access_log") }}</pl-table-head>
                 <pl-table-head columnWidth="fit">{{ t("access_log_column_method", scope: "access_log") }}</pl-table-head>
                 <pl-table-head columnWidth="fill">{{ t("access_log_column_path", scope: "access_log") }}</pl-table-head>
                 <pl-table-head columnWidth="fit">{{ t("access_log_column_status", scope: "access_log") }}</pl-table-head>
                 <pl-table-head columnWidth="fit" data-alignment="right">{{ t("access_log_column_size", scope: "access_log") }}</pl-table-head>
-                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("access_log_column_took", scope: "access_log") }}</pl-table-head>
-                <pl-table-head columnWidth="sm">{{ t("access_log_column_referrer", scope: "access_log") }}</pl-table-head>
-                <pl-table-head columnWidth="lg">{{ t("access_log_column_browser", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" nowrap data-alignment="right" data-hh-access-log-took-head>{{ t("access_log_column_took", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("access_log_column_referrer", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="md">{{ t("access_log_column_browser", scope: "access_log") }}</pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
                 {% each view{:}.lines as line key line.key %}
                 <pl-table-row data-hh-access-log-line={% line{:}.status %}>
                     <pl-table-cell nowrap>{{ line{:}.time }}</pl-table-cell>
-                    <pl-table-cell truncate title={% line{:}.visitor %}><span class="hh-access-log-mono">{{ line{:}.visitor }}</span></pl-table-cell>
+                    <pl-table-cell breakAnywhere data-hh-access-log-visitor><span class="hh-access-log-mono">{{ line{:}.visitor }}</span></pl-table-cell>
                     <pl-table-cell nowrap>{{ line{:}.method }}</pl-table-cell>
                     <pl-table-cell truncate title={% line{:}.path %} data-hh-access-log-path><span class="hh-access-log-mono">{{ line{:}.path }}</span></pl-table-cell>
                     <pl-table-cell nowrap>{% if line{:}.variant != null %}<pl-badge variant={% line{:}.variant %}>{{ line{:}.status }}</pl-badge>{% else %}{{ line{:}.status }}{% /if %}</pl-table-cell>
                     <pl-table-cell nowrap data-alignment="right">{{ line{:}.size }}</pl-table-cell>
                     <pl-table-cell nowrap data-alignment="right" data-hh-access-log-took>{% if line{:}.took != null %}{{ line{:}.took }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
-                    <pl-table-cell truncate title={% line{:}.referrer %}>{% if line{:}.referrer != "" %}{{ line{:}.referrer }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
+                    <pl-table-cell nowrap data-hh-access-log-referrer>{% if line{:}.referrer != "" %}<span class="hh-access-log-referrer" title={% line{:}.referrer %}>{{ line{:}.referrer }}</span>{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
                     <pl-table-cell truncate title={% line{:}.userAgent %} data-hh-access-log-browser>{{ line{:}.browser }}</pl-table-cell>
                 </pl-table-row>
                 {% /each %}
