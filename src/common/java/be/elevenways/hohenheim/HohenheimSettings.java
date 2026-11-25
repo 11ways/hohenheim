@@ -3,6 +3,7 @@ package be.elevenways.hohenheim;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.Objects;
+import be.elevenways.zenit.auth.ProteusSignInSettings;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -1028,43 +1029,20 @@ public class HohenheimSettings {
             .icon("user")
             .writePermission(HohenheimSources.ADMIN_SYSTEM);
 
-        public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
-            .defaultValue(false)
-            .description("Offer Proteus SSO as a login option")
-            .restartRequired()
-            .build();
+        /** The panel's Proteus sign-in, declared by zenit-auth in this group; its stored keys are unchanged. */
+        public static final ProteusSignInSettings SETTINGS = ProteusSignInSettings.declare(GROUP);
 
-        public static final SettingDefinition<String> ENDPOINT = GROUP.buildSetting("endpoint", String.class)
-            .hostOnly()
-            .description("Proteus realm server URL")
-            .restartRequired()
-            .build();
+        public static final SettingDefinition<Boolean> ENABLED = SETTINGS.enabled();
 
-        public static final SettingDefinition<String> REALM_CLIENT = GROUP.buildSetting("realm_client", String.class)
-            .description("Proteus realm client slug")
-            .restartRequired()
-            .build();
+        public static final SettingDefinition<String> ENDPOINT = SETTINGS.endpoint();
 
-        public static final SettingDefinition<String> ACCESS_KEY = GROUP.buildSetting("access_key", String.class)
-            .description("Proteus realm access key")
-            .secret()
-            .restartRequired()
-            .build();
+        public static final SettingDefinition<String> REALM_CLIENT = SETTINGS.realmClient();
 
-        // AIDEV-NOTE: no default. Unset, no authenticator is sent and the person lands on the realm's own login page;
-        // the old default "password" named an authenticator no Proteus serves.
-        public static final SettingDefinition<String> AUTHENTICATOR = GROUP.buildSetting("authenticator", String.class)
-            .description("Proteus authenticator slug; empty lands on the realm's own login page")
-            .restartRequired()
-            .build();
+        public static final SettingDefinition<String> ACCESS_KEY = SETTINGS.accessKey();
 
-        // AIDEV-NOTE: fail closed. Proteus sign-in switched on without it is not offered at all (ProteusSignIn), so a
-        // sign-in that admits everybody the realm knows cannot be configured.
-        public static final SettingDefinition<String> REQUIRED_PERMISSION = GROUP
-            .buildSetting("required_permission", String.class)
-            .description("Proteus permission a person must hold to sign in; wildcards that cover it count")
-            .restartRequired()
-            .build();
+        public static final SettingDefinition<String> AUTHENTICATOR = SETTINGS.authenticator();
+
+        public static final SettingDefinition<String> REQUIRED_PERMISSION = SETTINGS.requiredPermission();
     }
 
     // --- Per-site proxy auth (gating proxied upstreams behind a provider) ---
