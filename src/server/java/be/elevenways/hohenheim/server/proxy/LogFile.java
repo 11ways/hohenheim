@@ -12,9 +12,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Function;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * One append-only, line-oriented log file that rotates by office day and keeps the days the keeping setting names;
@@ -30,7 +34,8 @@ import java.util.Objects;
  * earlier day is moved aside the same way before the first line. Compressing the rotated day and deleting days past
  * the keeping period run off the request thread. A file moved away by someone else (an external logrotate left in
  * place) is still followed: before each line the file at the path is compared by file key (inode) with the one the
- * writer holds, and a renamed or deleted file or a changed path reopens it.
+ * writer holds, and a renamed or deleted file or a changed path reopens it. Such a second rotation is shown on the
+ * dashboard (OutsideRotation).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -45,6 +50,13 @@ final class LogFile {
     private LocalDate writerDay;
     /** The path whose rotated days were tidied since this process opened it. */
     private Path tidiedPath;
+    /** When a line of this log was written, null for a line no clock reads; the tidy splits old files by it. */
+    private final Function<String, @Nullable Instant> writtenAt;
+
+    /** @param writtenAt when a line of this log was written, null for a line no clock reads */
+    LogFile(@NonNull Function<String, @Nullable Instant> writtenAt) {
+        this.writtenAt = writtenAt;
+    }
 
     /** Append one line to the file the path setting names; nothing when it names none. */
     void appendTo(SettingDefinition<String> pathSetting, String line) {
@@ -74,7 +86,7 @@ final class LogFile {
         }
         if (tidy) {
             Integer keepDays = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Logging.KEEP_DAYS);
-            RotatedLogs.tidySoon(path, keepDays == null ? 0 : keepDays);
+            RotatedLogs.tidySoon(path, keepDays == null ? 0 : keepDays, this.writtenAt);
         }
     }
 

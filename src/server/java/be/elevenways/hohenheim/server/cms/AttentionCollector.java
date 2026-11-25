@@ -108,6 +108,7 @@ public final class AttentionCollector {
             ProxyAttention.openProtectedPaths(items);
             ProxyAttention.unhealthySites(items);
             ProxyAttention.routingProblems(items);
+            ProxyAttention.outsideLogRotations(items);
             InstanceAttention.failedDeployments(items, sitesHeld);
         }
         items.addAll(databases());

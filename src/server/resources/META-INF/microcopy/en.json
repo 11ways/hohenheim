@@ -21077,11 +21077,12 @@
   "access_log_time": {"text": "{$at :time precision=second}", "scope": "access_log"},
   "access_log_date_time": {"text": "{$at :datetime precision=second}", "scope": "access_log"},
   "access_log_size": {"text": "{$bytes :bytes}", "scope": "access_log"},
-  "access_log_took": {"text": "{$took :duration style=units}", "scope": "access_log"},
+  "access_log_took": {"text": "{$took :duration style=timing}", "scope": "access_log"},
   "access_log_browser": {"text": "{$browser}, {$os}", "scope": "access_log"},
   "access_log_none": {"text": "No lines match these filters.", "scope": "access_log"},
-  "access_log_summary": {"text": "{$first :integer} to {$last :integer} of {$total :integer}, newest first", "scope": "access_log"},
-  "access_log_summary_partial": {"text": "{$first :integer} to {$last :integer} of at least {$total :integer}, newest first", "scope": "access_log"},
+  "access_log_summary": {"text": ".match {$period :string}\nhour {{{$first :integer} to {$last :integer} of {$total :integer} in the last hour, newest first}}\ntoday {{{$first :integer} to {$last :integer} of {$total :integer} today, newest first}}\nyesterday {{{$first :integer} to {$last :integer} of {$total :integer} yesterday, newest first}}\n* {{{$first :integer} to {$last :integer} of {$total :integer}, newest first}}", "scope": "access_log"},
+  "access_log_summary_partial": {"text": ".match {$period :string}\nhour {{{$first :integer} to {$last :integer} of at least {$total :integer} in the last hour, newest first}}\ntoday {{{$first :integer} to {$last :integer} of at least {$total :integer} today, newest first}}\nyesterday {{{$first :integer} to {$last :integer} of at least {$total :integer} yesterday, newest first}}\n* {{{$first :integer} to {$last :integer} of at least {$total :integer}, newest first}}", "scope": "access_log"},
+  "access_log_range_unset": {"text": "Pick when the range starts and when it ends.", "scope": "access_log"},
   "access_log_stopped": {"text": "Read back to {$at :datetime}: older lines in this range were not read. Pick a shorter range to see them.", "scope": "access_log"},
   "access_log_stopped_early": {"text": "Older lines in this range were not read. Pick a shorter range to see them.", "scope": "access_log"},
   "access_log_kept": {"text": ".match {$days :integer}\none {{Lines are kept 1 day.}}\n* {{Lines are kept {$days :integer} days.}}", "scope": "access_log"},
@@ -21125,5 +21126,10 @@
   "traffic_period": {"text": "The span to read back from until: an hour per minute, a day per hour, a week or a month per day.", "scope": "help"},
   "traffic_until": {"text": "When the span ends, in office time; left out, now.", "scope": "help"},
   "traffic_top_site": {"text": "One table beside the totals: pages (ids grouped as :id), refused_pages (answered 4xx), referrers, browsers, statuses or visitors (addresses in full).", "scope": "help"},
-  "traffic_top_zone": {"text": "One table beside the totals: names asked with their type, missing_names (no such name or refused) or resolvers.", "scope": "help"}
+  "traffic_top_zone": {"text": "One table beside the totals: names asked with their type, missing_names (no such name or refused) or resolvers.", "scope": "help"},
+  "outside_log_rotation": [
+    {"text": "Another program also rotates {$file}", "scope": "attention_title"},
+    {"text": "Hohenheim rotates this log by day itself, and {$copy} beside it shows a second rotation: the lines that program copies away never reach a day the Access log tab reads. Remove {$rule} on the machine this Hohenheim runs on.", "scope": "attention_detail"}
+  ],
+  "outside_log_rotation_unnamed": {"text": "Hohenheim rotates this log by day itself, and {$copy} beside it shows a second rotation: the lines that program copies away never reach a day the Access log tab reads. Remove the logrotate rule that names this file on the machine this Hohenheim runs on.", "scope": "attention_detail"}
 }

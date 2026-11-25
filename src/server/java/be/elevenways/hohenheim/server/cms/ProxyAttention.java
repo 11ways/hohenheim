@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.proxy.OutsideRotation;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
@@ -40,7 +41,7 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
- * The PROXY role's attention items: certificates, listeners, force-SSL, site health and routing.
+ * The PROXY role's attention items: certificates, listeners, force-SSL, site health, routing and a log rotated twice.
  *
  * Every projection reads in-memory proxy state or stored rows; nothing here dials an upstream.
  * The collectors are public so a test proves each projection directly, positive and negative,
@@ -348,6 +349,23 @@ public final class ProxyAttention {
                 reasonOf(problem),
                 SiteParts.recordRoute(ADMIN, problem.siteId()),
                 HohenheimMicrocopy.ATTENTION_ACTION.of("act_fix_on").withArg("name", name)));
+        }
+    }
+
+    /**
+     * A log Hohenheim rotates by day that another program rotates too (an older install's logrotate rule): the lines
+     * that rotation copies away never reach a day the Access log tab reads. Hohenheim does not own that rule, so the
+     * item names the file to remove, or says to find it when no rule could be read.
+     */
+    public static void outsideLogRotations(@NonNull List<AttentionItem> items) {
+        for (OutsideRotation.Finding found : OutsideRotation.found()) {
+            Microcopy detail = found.rule() == null
+                ? HohenheimMicrocopy.ATTENTION_DETAIL.of("outside_log_rotation_unnamed")
+                : HohenheimMicrocopy.ATTENTION_DETAIL.of("outside_log_rotation")
+                    .withArg("rule", found.rule().toString());
+            items.add(item(AttentionSeverity.WARNING, "file-lines",
+                HohenheimMicrocopy.ATTENTION_TITLE.of("outside_log_rotation").withArg("file", found.log().toString()),
+                detail.withArg("copy", found.copy())));
         }
     }
 

@@ -43,12 +43,14 @@ import java.util.Objects;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.offset;
 
 /**
  * A site's Access log, as the board's tab draws it and as an assistant reads it: real requests through the proxy land
  * in the log with the time they took; the tab shows its own site's lines in nine columns, follows a new line without a
  * navigation, narrows by path and downloads the lines it shows; a customer who manages the site reads it, never
- * another site's; the tab's database cost stays flat as lines and addresses grow; access_log_read reads the same
+ * another site's; the tab's database cost stays flat as lines and addresses grow; a long path stands on one line, cut;
+ * a picked range shows its two ends without a reload and reads once both are set; access_log_read reads the same
  * lines through the real MCP endpoint, filtered, refused a wrong argument by its name and another's site.
  *
  * @author Jelle De Loecker
@@ -58,6 +60,7 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
     private static final String LINE = "[data-hh-access-log-line]";
+    private static final String LONG_PATH = "/migadmin/lang/legacy/legacy/filechecksum/" + "a".repeat(240);
 
     @Test
     void aSiteManagerReadsFollowsNarrowsAndDownloadsItsSitesAccessLog() throws Exception {
@@ -65,25 +68,32 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             fixture.request(fixture.siteA, "/ok", "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:133.0) "
                 + "Gecko/20100101 Firefox/133.0", "Referer: https://from.example/page");
             fixture.request(fixture.siteA, "/missing");
+            fixture.request(fixture.siteA, LONG_PATH, "User-Agent: Mozilla/5.0 (compatible; CensysInspect/1.1;"
+                + " +https://about.censys.io/)");
             fixture.request(fixture.siteB, "/other-site");
-            fixture.awaitLines(3);
+            fixture.awaitLines(4);
 
             // 1. The tab draws the site's lines newest first in the board's nine columns, the refused one badged, the
-            //    browser named from its user agent; the other site's line is not there.
+            //    browser named from its user agent with its version, a scanner by its own name, the time taken in
+            //    milliseconds; the other site's line is not there.
             navigateToApp(tab(HohenheimSlugs.ADMIN, fixture.siteA));
             waitForHydration();
-            awaitRows("step 1: the site's two lines", 2);
+            awaitRows("step 1: the site's three lines", 3);
             assertThat(page.locator("pl-table-head").allTextContents().stream().map(String::trim).toList())
                 .as("step 1: the nine columns").containsExactly("Time", "Visitor", "Method", "Path", "Status", "Size",
                     "Time taken", "Referrer", "Browser");
             String table = page.locator("[data-hh-access-log-lines]").textContent();
-            InOrder.assertThat(table).as("step 1: newest first").contains("/missing", "/ok");
-            assertThat(table).as("step 1: the browser in words").contains("Firefox, Linux");
+            InOrder.assertThat(table).as("step 1: newest first").contains("/migadmin/", "/missing", "/ok");
+            assertThat(page.locator("[data-hh-access-log-browser]").allTextContents().stream().map(String::trim)
+                .toList()).as("step 1: the browser and the scanner in words")
+                .contains("Firefox 133, Linux", "CensysInspect 1.1");
             assertThat(table).as("step 1: never another site's line").doesNotContain("/other-site");
+            assertThat(page.locator("[data-hh-access-log-took]").allTextContents()).as("step 1: milliseconds")
+                .allSatisfy(took -> assertThat(took.trim()).matches("\\d+ ms"));
             assertThat(page.locator(LINE + "[data-hh-access-log-line='404'] pl-badge").count())
                 .as("step 1: the refused line badged").isEqualTo(1);
             assertThat(page.locator("[data-hh-access-log-summary]").textContent())
-                .as("step 1: how many of how many").contains("1 to 2 of 2, newest first");
+                .as("step 1: how many of how many, and of which period").contains("1 to 3 of 3 today, newest first");
             assertThat(page.locator("[data-hh-access-log-keeping]").textContent()).as("step 1: the keeping period")
                 .contains("Lines are kept 90 days.");
             assertThat(page.locator("[data-hh-access-log-filters] pl-select[name='when']").textContent())
@@ -93,10 +103,22 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-access-log-tab.png"))
                 .setFullPage(true));
 
+            // 1b. The long path stands on one line in the free width, cut by an ellipsis, whole in its title and its
+            //     text: its row is as tall as a short path's.
+            String longPath = LINE + ":has([title='" + LONG_PATH + "'])";
+            assertThat(page.locator(longPath + " [data-hh-access-log-path]").textContent().trim())
+                .as("step 1b: the whole path in the document").isEqualTo(LONG_PATH);
+            assertThat((Boolean) page.locator(longPath + " [data-hh-access-log-path]")
+                .evaluate("cell => cell.scrollWidth > cell.clientWidth")).as("step 1b: cut where its column ends")
+                .isTrue();
+            assertThat(page.locator(longPath).boundingBox().height).as("step 1b: one line tall")
+                .isCloseTo(page.locator(LINE + ":has([title='/ok'])").boundingBox().height,
+                    offset(1.0));
+
             // 2. Following is on: a new request of the site appears without a navigation.
             String opened = page.url();
             fixture.request(fixture.siteA, "/arrived");
-            awaitRows("step 2: the new line followed", 3);
+            awaitRows("step 2: the new line followed", 4);
             assertThat(page.locator(LINE).first().textContent()).as("step 2: on top").contains("/arrived");
             assertThat(page.url()).as("step 2: no navigation").isEqualTo(opened);
 
@@ -122,7 +144,7 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             String session = sessionFor(customer).token();
             navigateToAppAs(tab(HohenheimSlugs.MANAGE, fixture.siteA), session);
             waitForHydration();
-            awaitRows("step 5: the customer reads his site's lines", 3);
+            awaitRows("step 5: the customer reads his site's lines", 4);
             HttpResponse<String> foreign = httpGet(tab(HohenheimSlugs.MANAGE, fixture.siteB), session);
             assertThat(foreign.statusCode()).as("step 5: another site's tab is no page of his").isIn(403, 404);
             assertThat(foreign.body()).as("step 5: and shows nothing of it").doesNotContain("/other-site");
@@ -131,10 +153,32 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             for (int i = 0; i < 30; i++) fixture.request(fixture.siteB, "/many-" + i);
             ProxyTestSupport.addDomain(Models.get(SiteModel.class).findById(fixture.siteB),
                 "more-" + fixture.tag + ".access.test", "exact", null, false);
-            fixture.awaitLines(34);
+            fixture.awaitLines(35);
             DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
             probe.requireFlat(() -> fetched(tab(HohenheimSlugs.ADMIN, fixture.siteA)),
                 () -> fetched(tab(HohenheimSlugs.ADMIN, fixture.siteB)), "step 6: a few lines or many, one query set");
+
+            // 7. A range you pick: its From and To appear at once, without a navigation and with the lines as they
+            //    were; nothing is read until both hold a value, then the tab reads the range.
+            navigateToApp(tab(HohenheimSlugs.ADMIN, fixture.siteA));
+            waitForHydration();
+            awaitRows("step 7: today's lines", 4);
+            String today = page.url();
+            page.click("[data-hh-access-log-filters] pl-select[name='when'] .pl-select-field");
+            page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='range']");
+            page.locator("[data-hh-access-log-filters] pl-input[name='from'] input").waitFor();
+            assertThat(page.locator("[data-hh-access-log-filters] pl-input[name='to'] input").isVisible())
+                .as("step 7: both ends appear").isTrue();
+            page.locator("[data-hh-access-log-filters] pl-input[name='from'] input").fill("2000-01-01T00:00");
+            waitForReactiveIdle();
+            assertThat(page.url()).as("step 7: one end read nothing").isEqualTo(today);
+            awaitRows("step 7: the lines as they were", 4);
+            page.locator("[data-hh-access-log-filters] pl-input[name='to'] input").fill("2100-01-01T00:00");
+            page.waitForURL(url -> url.contains("from=") && url.contains("to="), new Page.WaitForURLOptions()
+                .setTimeout(WAIT.toMillis()));
+            waitForHydration();
+            assertThat(page.locator("[data-hh-access-log-summary]").textContent())
+                .as("step 7: the range read, naming no period").contains("1 to 4 of 4, newest first");
         }
     }
 
@@ -224,6 +268,8 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
         private ProxyServer proxy;
         private int siteA;
         private int siteB;
+        /** The requests sent, so each waits for its own line. */
+        private int sent;
 
         static Fixture start(String name) throws Exception {
             Fixture fixture = new Fixture();
@@ -278,8 +324,13 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             return "site" + siteId + "-" + this.tag + ".access.test";
         }
 
+        /**
+         * Sends one request and waits for its line: the line lands after the client read the response, so a next
+         * request could otherwise be logged first.
+         */
         void request(int siteId, String path, String... headers) throws Exception {
             ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(this.proxy), this.hostOf(siteId), path, headers);
+            this.awaitLines(++this.sent);
         }
 
         /** Waits until the log holds this many lines; a line lands once its response is sent. */

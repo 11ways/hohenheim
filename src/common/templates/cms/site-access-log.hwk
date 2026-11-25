@@ -9,6 +9,7 @@
 {% block "main" %}
 <section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
-    <hh-access-log part={% part{:} %} filters={% filters %}></hh-access-log>
+    <hh-access-log part={% part{:} %} filters={% filters %} when={% filters.when %} from={% filters.from %}
+                   to={% filters.to %}></hh-access-log>
 </section>
 {% /block %}

@@ -57,7 +57,7 @@ public final class AccessLog {
     /** When the proxy took the exchange in, so the time logged covers the gates before the upstream too. */
     private static final AttachmentKey<Now.Stopwatch> STARTED = AttachmentKey.create(Now.Stopwatch.class);
 
-    private static final LogFile FILE = new LogFile();
+    private static final LogFile FILE = new LogFile(AccessLogLine::timeOf);
 
     /** Marks the moment the proxy took the exchange in; the logged time counts from here. */
     public static void start(@NonNull HttpServerExchange exchange) {

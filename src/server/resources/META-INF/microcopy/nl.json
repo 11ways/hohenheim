@@ -21077,11 +21077,12 @@
   "access_log_time": {"text": "{$at :time precision=second}", "scope": "access_log"},
   "access_log_date_time": {"text": "{$at :datetime precision=second}", "scope": "access_log"},
   "access_log_size": {"text": "{$bytes :bytes}", "scope": "access_log"},
-  "access_log_took": {"text": "{$took :duration style=units}", "scope": "access_log"},
+  "access_log_took": {"text": "{$took :duration style=timing}", "scope": "access_log"},
   "access_log_browser": {"text": "{$browser}, {$os}", "scope": "access_log"},
   "access_log_none": {"text": "Geen regels voldoen aan deze filters.", "scope": "access_log"},
-  "access_log_summary": {"text": "{$first :integer} tot {$last :integer} van {$total :integer}, nieuwste eerst", "scope": "access_log"},
-  "access_log_summary_partial": {"text": "{$first :integer} tot {$last :integer} van minstens {$total :integer}, nieuwste eerst", "scope": "access_log"},
+  "access_log_summary": {"text": ".match {$period :string}\nhour {{{$first :integer} tot {$last :integer} van {$total :integer} in het afgelopen uur, nieuwste eerst}}\ntoday {{{$first :integer} tot {$last :integer} van {$total :integer} vandaag, nieuwste eerst}}\nyesterday {{{$first :integer} tot {$last :integer} van {$total :integer} gisteren, nieuwste eerst}}\n* {{{$first :integer} tot {$last :integer} van {$total :integer}, nieuwste eerst}}", "scope": "access_log"},
+  "access_log_summary_partial": {"text": ".match {$period :string}\nhour {{{$first :integer} tot {$last :integer} van minstens {$total :integer} in het afgelopen uur, nieuwste eerst}}\ntoday {{{$first :integer} tot {$last :integer} van minstens {$total :integer} vandaag, nieuwste eerst}}\nyesterday {{{$first :integer} tot {$last :integer} van minstens {$total :integer} gisteren, nieuwste eerst}}\n* {{{$first :integer} tot {$last :integer} van minstens {$total :integer}, nieuwste eerst}}", "scope": "access_log"},
+  "access_log_range_unset": {"text": "Kies wanneer de periode begint en wanneer ze eindigt.", "scope": "access_log"},
   "access_log_stopped": {"text": "Teruggelezen tot {$at :datetime}: oudere regels in deze periode werden niet gelezen. Kies een kortere periode om ze te zien.", "scope": "access_log"},
   "access_log_stopped_early": {"text": "Oudere regels in deze periode werden niet gelezen. Kies een kortere periode om ze te zien.", "scope": "access_log"},
   "access_log_kept": {"text": ".match {$days :integer}\none {{Regels worden 1 dag bewaard.}}\n* {{Regels worden {$days :integer} dagen bewaard.}}", "scope": "access_log"},
@@ -21125,5 +21126,10 @@
   "traffic_period": {"text": "De periode terug vanaf until: een uur per minuut, een dag per uur, een week of een maand per dag.", "scope": "help"},
   "traffic_until": {"text": "Wanneer de periode eindigt, in kantoortijd; weggelaten nu.", "scope": "help"},
   "traffic_top_site": {"text": "Een tabel naast de totalen: pages (id's samengenomen als :id), refused_pages (beantwoord met 4xx), referrers, browsers, statuses of visitors (adressen volledig).", "scope": "help"},
-  "traffic_top_zone": {"text": "Een tabel naast de totalen: names (gevraagde namen met hun type), missing_names (naam bestaat niet of geweigerd) of resolvers.", "scope": "help"}
+  "traffic_top_zone": {"text": "Een tabel naast de totalen: names (gevraagde namen met hun type), missing_names (naam bestaat niet of geweigerd) of resolvers.", "scope": "help"},
+  "outside_log_rotation": [
+    {"text": "Een ander programma roteert {$file} ook", "scope": "attention_title"},
+    {"text": "Hohenheim roteert dit logbestand zelf per dag, en {$copy} ernaast toont een tweede rotatie: de regels die dat programma wegkopieert, komen nooit in een dag die het tabblad Toegangslog leest. Verwijder {$rule} op de machine waarop deze Hohenheim draait.", "scope": "attention_detail"}
+  ],
+  "outside_log_rotation_unnamed": {"text": "Hohenheim roteert dit logbestand zelf per dag, en {$copy} ernaast toont een tweede rotatie: de regels die dat programma wegkopieert, komen nooit in een dag die het tabblad Toegangslog leest. Verwijder de logrotate-regel die dit bestand noemt, op de machine waarop deze Hohenheim draait.", "scope": "attention_detail"}
 }

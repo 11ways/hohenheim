@@ -2,6 +2,11 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.time.Now;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 
 /**
  * The fail2ban domain-miss log of the Node original, written beside the native security event; best-effort.
@@ -16,7 +21,7 @@ import be.elevenways.protoblast.common.time.Now;
  */
 final class DomainMissLog {
 
-    private static final LogFile FILE = new LogFile();
+    private static final LogFile FILE = new LogFile(DomainMissLog::writtenAt);
 
     private DomainMissLog() {}
 
@@ -38,5 +43,15 @@ final class DomainMissLog {
             + " domain=" + LogFile.escape(domain).replace(' ', '_')
             + " path=" + LogFile.escape(path).replace(' ', '_')
             + " user_agent=\"" + LogFile.escape(userAgent == null ? "" : userAgent) + "\"";
+    }
+
+    /** @return when a domain-miss line was written, null for a line that does not open with its instant */
+    static @Nullable Instant writtenAt(@NonNull String line) {
+        int space = line.indexOf(' ');
+        try {
+            return Instant.parse(space < 0 ? line : line.substring(0, space));
+        } catch (DateTimeParseException unreadable) {
+            return null;
+        }
     }
 }

@@ -285,6 +285,9 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
     /** @return the page of lines the filters ask for, as the tab draws it */
     private static @NonNull AccessLogView view(@NonNull String panel, @NonNull Row site,
                                                @NonNull Map<String, String> filters, int requestedPage) {
+        if (rangeUnset(filters)) {
+            return new AccessLogView(List.of(), HohenheimMicrocopy.ACCESS_LOG.of("access_log_range_unset"), null, null);
+        }
         Instant[] range = range(filters, Now.instant());
         Clamped read = read(filtered(site, filters, PAGE_SIZE), requestedPage);
         AccessLogReader.Page found = read.page();
@@ -300,9 +303,11 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
         if (found.matched() == 0) {
             summary = HohenheimMicrocopy.ACCESS_LOG.of("access_log_none");
         } else {
+            // The period the choice names, as the board's summary says it ("of 1,234 today"); a range names none.
             summary = HohenheimMicrocopy.ACCESS_LOG.of(found.complete() ? "access_log_summary"
                     : "access_log_summary_partial")
-                .withArg("first", found.offset() + 1).withArg("last", position).withArg("total", found.matched());
+                .withArg("first", found.offset() + 1).withArg("last", position).withArg("total", found.matched())
+                .withArg("period", When.of(filters.get(WHEN.getName())).token);
         }
         Microcopy stopped = found.complete() ? null : found.readBackTo() == null
             ? HohenheimMicrocopy.ACCESS_LOG.of("access_log_stopped_early")
@@ -314,18 +319,25 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
         return new AccessLogView(lines, summary, stopped, pager);
     }
 
+    /** @return whether the filters pick a range without both its ends, which reads nothing until they are set */
+    private static boolean rangeUnset(@NonNull Map<String, String> filters) {
+        Instant[] range = range(filters, Now.instant());
+        return When.of(filters.get(WHEN.getName())) == When.RANGE && (range[0] == null || range[1] == null);
+    }
+
     /** One line in the tab's nine columns. */
     private static AccessLogView.@NonNull Line line(int position, @NonNull AccessLogLine line, boolean oneDay) {
         int status = line.status();
         BadgeVariant variant = StatusClass.SERVER_ERROR.admits(status) ? BadgeVariant.DESTRUCTIVE
             : StatusClass.CLIENT_ERROR.admits(status) ? BadgeVariant.WARNING : null;
         UserAgentSummary agent = UserAgentSummary.of(line.userAgent());
+        String product = agent.product();
         Microcopy browser;
-        if (agent.browser() != null && agent.os() != null) {
-            browser = HohenheimMicrocopy.ACCESS_LOG.of("access_log_browser").withArg("browser", agent.browser())
+        if (product != null && agent.os() != null) {
+            browser = HohenheimMicrocopy.ACCESS_LOG.of("access_log_browser").withArg("browser", product)
                 .withArg("os", agent.os());
         } else {
-            browser = Microcopy.literal(Objects.requireNonNullElse(agent.browser() != null ? agent.browser()
+            browser = Microcopy.literal(Objects.requireNonNullElse(product != null ? product
                 : agent.os() != null ? agent.os() : line.userAgent(), "-"));
         }
         return new AccessLogView.Line(String.valueOf(position),
@@ -339,20 +351,20 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
             Objects.requireNonNullElse(line.userAgent(), ""));
     }
 
-    /** The filtered lines as a file, oldest first, as the log holds them. */
+    /** The filtered lines as a file, oldest first, as the log holds them; none while a range misses an end. */
     private static @NonNull ActionResult<Object> download(@NonNull Row site, @NonNull Map<String, String> filters) {
         Instant end = range(filters, Now.instant())[1];
-        AccessLogReader.Page found = AccessLogReader.read(AccessLog.livePath(), filtered(site, filters,
-            DOWNLOAD_LINES));
+        AccessLogReader.Page found = rangeUnset(filters) ? null : AccessLogReader.read(AccessLog.livePath(),
+            filtered(site, filters, DOWNLOAD_LINES));
         StringBuilder text = new StringBuilder();
-        List<AccessLogLine> lines = found.lines();
+        List<AccessLogLine> lines = found == null ? List.of() : found.lines();
         for (int i = lines.size() - 1; i >= 0; i--) {
             text.append(AccessLog.withoutSite(lines.get(i).raw())).append('\n');
         }
         byte[] body = text.toString().getBytes(StandardCharsets.UTF_8);
         LocalDate day = (end == null ? Now.instant() : end).atZone(OfficeZone.office()).toLocalDate();
         // A file cut at the bound or at its line count says so in its name: a comment line would break its parsers.
-        boolean whole = found.complete() && found.matched() == lines.size();
+        boolean whole = found != null && found.complete() && found.matched() == lines.size();
         return HandlerSupport.downloadStream("text/plain; charset=utf-8", site.get(SiteModel.SLUG) + "-access-" + day
             + (whole ? "" : "-incomplete") + ".log", new ByteArrayInputStream(body), body.length);
     }

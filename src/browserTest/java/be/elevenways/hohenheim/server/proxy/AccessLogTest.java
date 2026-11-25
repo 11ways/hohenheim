@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.site.SiteAccessLogOperations.StatusClass;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -54,7 +56,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The access log writes the Node original's line (host prefix, Referer, user agent) byte for byte, then the time taken
  * and the answering site; escapes every control character a field could carry, logs the path the client sent (not
  * the stripped one), follows a file someone else rotated, rotates by office day itself, at a day's change and at a
- * restart, compresses old days and deletes those past the keeping period; its one reader reads one site's lines over
+ * restart, compresses old days and deletes those past the keeping period, splits an old file of several days into its
+ * days once, and sees another program rotating the same file; its one reader reads one site's lines over
  * the live file, a rotated and a compressed day, filtered and paged, within its bound. The fail2ban domain-miss log
  * writes the original's DOMAIN_MISS line again.
  */
@@ -208,7 +211,7 @@ class AccessLogTest {
         try {
             // Step 1: a line on one office day, then a line on the next: the first day's file moves aside under its
             //         day and is compressed off the request thread; the live file holds the new day alone.
-            LogFile file = new LogFile();
+            LogFile file = new LogFile(AccessLogLine::timeOf);
             file.append(live, "first");
             LocalDate firstDay = RotatedLogs.today();
             Now.setOffset(offset.plus(Duration.ofDays(1)));
@@ -224,7 +227,7 @@ class AccessLogTest {
             //         aside under the day it was written on.
             Instant written = Now.instant().minus(Duration.ofDays(2));
             Files.setLastModifiedTime(live, FileTime.from(written));
-            new LogFile().append(live, "third");
+            new LogFile(AccessLogLine::timeOf).append(live, "third");
             assertThat(Files.readAllLines(live)).as("step 2: the restart's file").containsExactly("third");
             LocalDate writtenDay = RotatedLogs.dayOf(written);
             assertThat(RotatedLogs.days(live)).as("step 2: the old file stands under its own day")
@@ -251,7 +254,7 @@ class AccessLogTest {
 
         // Step 1: with 90 days kept, the days before them go, plain or compressed; the kept ones are compressed, and
         //         what an ended tidy left half-written is removed; another log's files stay.
-        RotatedLogs.tidy(live, today, 90);
+        RotatedLogs.tidy(live, today, 90, AccessLogLine::timeOf);
         assertThat(List.of(Files.exists(tooOld), Files.exists(tooOldCompressed)))
             .as("step 1: past the keeping period, deleted").containsExactly(false, false);
         assertThat(gunzipped(RotatedLogs.compressedOf(lastKept))).as("step 1: the 90th day kept, compressed")
@@ -264,8 +267,113 @@ class AccessLogTest {
         leftover.close();
 
         // Step 2: keeping 0 days keeps every day.
-        RotatedLogs.tidy(live, today.plusYears(1), 0);
+        RotatedLogs.tidy(live, today.plusYears(1), 0, AccessLogLine::timeOf);
         assertThat(RotatedLogs.days(live)).as("step 2: nothing deleted").hasSize(2);
+    }
+
+    @Test
+    void aFileOfSeveralDaysIsSplitIntoItsDaysAtItsRotationOnce() throws Exception {
+        Path directory = Files.createTempDirectory("hh-access-split");
+        Path live = Files.createFile(directory.resolve("access.log"));
+        LocalDate today = LocalDate.of(2026, 11, 25);
+        LocalDate august = today.minusDays(88);
+        LocalDate before = today.minusDays(3);
+        LocalDate named = today.minusDays(2);
+        // The one old file of every line since August, named at its first rotation for the day of its last line: a
+        // torn line before any dated one, an old line from before the site field, a line no clock reads, bytes outside
+        // ASCII, and the day it is named for.
+        String accented = written(at(before, 9, 0), "seven.test", "198.51.100.3", "/café", 200, 7);
+        Path old = Files.write(directory.resolve("access.log." + named), List.of(
+            "torn line before any date",
+            AccessLog.line("seven.test", "198.51.100.1", at(august, 10, 0), "GET", "/legacy", "HTTP/1.1", 200, 12,
+                null, "curl/8.0"),
+            written(at(before, 8, 0), "seven.test", "198.51.100.2", "/before", 200, 7),
+            "a line no clock reads",
+            accented,
+            written(at(named, 7, 0), "seven.test", "198.51.100.4", "/named", 200, 7)), StandardCharsets.UTF_8);
+        // A rotated file of one day is no split's business.
+        Path single = Files.write(directory.resolve("access.log." + today.minusDays(1)), List.of(
+            written(at(today.minusDays(1), 12, 0), "seven.test", "198.51.100.5", "/single", 200, 7)));
+
+        // Step 1: each line lands in the day it was written on, compressed: the torn line with the first dated
+        //         line, the unreadable one with the line before it, every byte as it was; the old file is gone.
+        RotatedLogs.tidy(live, today, 0, AccessLogLine::timeOf);
+        assertThat(old).as("step 1: the old file is gone").doesNotExist();
+        assertThat(gunzipped(directory.resolve("access.log." + august + ".gz"))).as("step 1: August")
+            .containsExactly("torn line before any date", AccessLog.line("seven.test", "198.51.100.1",
+                at(august, 10, 0), "GET", "/legacy", "HTTP/1.1", 200, 12, null, "curl/8.0"));
+        assertThat(gunzipped(directory.resolve("access.log." + before + ".gz"))).as("step 1: the day before")
+            .containsExactly(written(at(before, 8, 0), "seven.test", "198.51.100.2", "/before", 200, 7),
+                "a line no clock reads", accented);
+        assertThat(gunzipped(RotatedLogs.compressedOf(old))).as("step 1: the day it was named for")
+            .containsExactly(written(at(named, 7, 0), "seven.test", "198.51.100.4", "/named", 200, 7));
+        assertThat(gunzipped(RotatedLogs.compressedOf(single))).as("step 1: the one-day file compressed whole")
+            .hasSize(1);
+
+        // Step 2: every old day is readable now, the line from before the site field by its hostname.
+        AccessLogReader.Page read = AccessLogReader.read(live, query(7, Set.of("seven.test"), null, null,
+            code -> true, null, null, 0, 10));
+        assertThat(paths(read)).as("step 2: newest first across the split days")
+            .containsExactly("/single", "/named", "/café", "/before", "/legacy");
+
+        // Step 3: once: a second tidy leaves every day as it is.
+        List<RotatedLogs.Day> days = RotatedLogs.days(live);
+        RotatedLogs.tidy(live, today, 0, AccessLogLine::timeOf);
+        assertThat(RotatedLogs.days(live)).as("step 3: nothing split again").isEqualTo(days);
+
+        // Step 4: with 90 days kept, a split keeps no day before them.
+        Path older = Files.write(directory.resolve("access.log." + today.minusDays(1) + ".1"), List.of(
+            written(at(today.minusDays(120), 9, 0), "seven.test", "198.51.100.6", "/ancient", 200, 7),
+            written(at(today.minusDays(1), 13, 0), "seven.test", "198.51.100.7", "/kept", 200, 7)));
+        RotatedLogs.tidy(live, today, 90, AccessLogLine::timeOf);
+        assertThat(directory.resolve("access.log." + today.minusDays(120) + ".gz"))
+            .as("step 4: past the keeping period, never written").doesNotExist();
+        assertThat(gunzipped(RotatedLogs.compressedOf(older))).as("step 4: the kept day")
+            .containsExactly(written(at(today.minusDays(1), 13, 0), "seven.test", "198.51.100.7", "/kept", 200, 7));
+    }
+
+    @Test
+    void anOutsideRotationOfTheSameLogIsSeenAndItsRuleNamed() throws Exception {
+        Path directory = Files.createTempDirectory("hh-access-outside");
+        Path live = directory.resolve("access.log");
+        Path rules = Files.createTempDirectory("hh-logrotate");
+        Files.writeString(rules.resolve("nginx"), "/var/log/nginx/*.log {\n    daily\n}\n");
+        Path rule = Files.writeString(rules.resolve("hohenheim"), directory + "/*.log {\n    daily\n"
+            + "    copytruncate\n    rotate 14\n}\n");
+        Files.writeString(directory.resolve("access.log." + LocalDate.of(2026, 11, 24)), "own day\n");
+
+        // Step 1: Hohenheim's own days alone: nothing is said.
+        OutsideRotation.look(live, rules);
+        assertThat(findings(live)).as("step 1: no outside rotation").isEmpty();
+
+        // Step 2: numbered copies appear beside the log: the copy and the rule naming its folder are found.
+        Files.writeString(directory.resolve("access.log.1"), "copied\n");
+        gzip(directory.resolve("access.log.2.gz"), List.of("copied before"));
+        OutsideRotation.look(live, rules);
+        assertThat(findings(live)).as("step 2: one finding")
+            .containsExactly(new OutsideRotation.Finding(live.toAbsolutePath(), "access.log.1", rule));
+
+        // Step 3: the dashboard says so in both languages, naming the file to remove.
+        List<AttentionItem> items = new ArrayList<>();
+        ProxyAttention.outsideLogRotations(items);
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        List<AttentionItem> ours = items.stream().filter(item -> item.title().resolve(LocaleChain.ofTags("en"),
+            catalogs).contains(live.toAbsolutePath().toString())).toList();
+        assertThat(ours).as("step 3: one item").hasSize(1);
+        for (String tag : List.of("en", "nl")) {
+            assertThat(ours.get(0).detail().resolve(LocaleChain.ofTags(tag), catalogs)).as("step 3: in " + tag)
+                .contains(rule.toString()).contains("access.log.1").doesNotContain("outside_log_rotation");
+        }
+
+        // Step 4: the copies removed, the next look forgets it.
+        Files.delete(directory.resolve("access.log.1"));
+        Files.delete(directory.resolve("access.log.2.gz"));
+        OutsideRotation.look(live, rules);
+        assertThat(findings(live)).as("step 4: solved").isEmpty();
+    }
+
+    private static List<OutsideRotation.Finding> findings(Path live) {
+        return OutsideRotation.found().stream().filter(found -> found.log().equals(live.toAbsolutePath())).toList();
     }
 
     @Test

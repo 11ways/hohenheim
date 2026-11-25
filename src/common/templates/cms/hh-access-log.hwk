@@ -3,9 +3,16 @@
        of the filtered lines, then one page of lines in nine columns, newest first, with what the read could say of
        the rest. The lines are the live part (AccessLogView): while following, each new line of the site re-reads
        this part alone, the filters standing as the reader set them. The filters are a GET form, so the tab's address
-       always says what it shows. */
+       always says what it shows. The path takes the width the other columns leave, on one line, cut with an
+       ellipsis; the cut columns show their whole value on hover. */
     public required part: Live<AccessLogView>
     public required filters: AccessLogFilters
+    /* The time choice, then the range's two ends, as the reader edits them before the tab reads them. */
+    public when: String = ""
+    public from: String = ""
+    public to: String = ""
+    /* The picked range once both its ends hold a value, "" until then: the tab reads it at each change. */
+    private computed range: String = when{:} == "range" and from{:} != "" and to{:} != "" ? from{:} + " " + to{:} : ""
     private computed view: AccessLogView = part{:}.value
     private following: Boolean = false
     private watch: LiveWatchHandle = null
@@ -45,20 +52,6 @@
             font-family: var(--pl-font-family-mono);
         }
 
-        .hh-access-log-cut {
-            display: inline-block;
-            max-inline-size: 14em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            vertical-align: bottom;
-        }
-
-        .hh-access-log-number {
-            text-align: end;
-            white-space: nowrap;
-        }
-
         .hh-access-log-foot {
             display: flex;
             flex-wrap: wrap;
@@ -92,6 +85,25 @@
         CmsFilterForm.apply("hh-access-log-filters", edit)
     }
 
+    /* A time choice reads at once, except a range: its two ends appear, and it is read once both hold a value. */
+    function whenPicked(edit: DominoCustomEvent) {
+        match edit.detail {
+            when String chosen {
+                if chosen != "range" {
+                    apply(edit)
+                }
+            }
+        }
+    }
+
+    /* A range is read once both its ends hold a value, and again at each later edit of either. */
+    @watch(range, skipInitial: true)
+    function rangeChanged() {
+        if range != "" {
+            CmsFilterForm.apply("hh-access-log-filters")
+        }
+    }
+
     template {
         <form method="get" action={% filters.listUrl %} id="hh-access-log-filters" class="hh-access-log-filters"
               data-hawkeye-navigation="replace" data-hh-access-log-filters>
@@ -107,21 +119,18 @@
                       placeholder={% t("access_log_path_placeholder", scope: "access_log") %}
                       ariaLabel={% t("access_log_path_placeholder", scope: "access_log") %}
                       event:input(debounce: 300)={% (e) => apply(e) %}></pl-input>
-            {#- Picking a range reads every line until its two ends are set: the ends stand once the tab is on it. -#}
-            <pl-select name="when" value={% filters.when %}
+            <pl-select name="when" value={% &when %}
                        ariaLabel={% t("access_log_when_label", scope: "access_log") %}
-                       event:change={% (e) => apply(e) %}>
+                       event:change={% (e) => whenPicked(e) %}>
                 {% each filters.times as choice %}
                 <pl-select-item value={% choice.value %} label={% choice.label %}></pl-select-item>
                 {% /each %}
             </pl-select>
-            {% if filters.when == "range" %}
-            <pl-input type="datetime-local" name="from" value={% filters.from %}
-                      ariaLabel={% t("access_log_from_label", scope: "access_log") %}
-                      event:change={% (e) => apply(e) %}></pl-input>
-            <pl-input type="datetime-local" name="to" value={% filters.to %}
-                      ariaLabel={% t("access_log_to_label", scope: "access_log") %}
-                      event:change={% (e) => apply(e) %}></pl-input>
+            {% if when{:} == "range" %}
+            <pl-input type="datetime-local" name="from" bind:value={% from %}
+                      ariaLabel={% t("access_log_from_label", scope: "access_log") %}></pl-input>
+            <pl-input type="datetime-local" name="to" bind:value={% to %}
+                      ariaLabel={% t("access_log_to_label", scope: "access_log") %}></pl-input>
             {% /if %}
             <pl-input class="hh-access-log-visitor" name="visitor" value={% filters.visitor %}
                       placeholder={% t("access_log_visitor_placeholder", scope: "access_log") %}
@@ -139,28 +148,28 @@
         {% if view{:}.lines %}
         <pl-table textSize="small" data-hh-access-log-lines>
             <pl-table-header><pl-table-row>
-                <pl-table-head>{{ t("access_log_column_time", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_visitor", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_method", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_path", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_status", scope: "access_log") }}</pl-table-head>
-                <pl-table-head class="hh-access-log-number">{{ t("access_log_column_size", scope: "access_log") }}</pl-table-head>
-                <pl-table-head class="hh-access-log-number">{{ t("access_log_column_took", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_referrer", scope: "access_log") }}</pl-table-head>
-                <pl-table-head>{{ t("access_log_column_browser", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("access_log_column_time", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="md">{{ t("access_log_column_visitor", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("access_log_column_method", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fill">{{ t("access_log_column_path", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("access_log_column_status", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("access_log_column_size", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("access_log_column_took", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="lg">{{ t("access_log_column_referrer", scope: "access_log") }}</pl-table-head>
+                <pl-table-head columnWidth="lg">{{ t("access_log_column_browser", scope: "access_log") }}</pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
                 {% each view{:}.lines as line key line.key %}
                 <pl-table-row data-hh-access-log-line={% line{:}.status %}>
                     <pl-table-cell nowrap>{{ line{:}.time }}</pl-table-cell>
-                    <pl-table-cell><span class="hh-access-log-mono hh-access-log-cut" title={% line{:}.visitor %}>{{ line{:}.visitor }}</span></pl-table-cell>
-                    <pl-table-cell>{{ line{:}.method }}</pl-table-cell>
-                    <pl-table-cell breakAnywhere><span class="hh-access-log-mono">{{ line{:}.path }}</span></pl-table-cell>
-                    <pl-table-cell>{% if line{:}.variant != null %}<pl-badge variant={% line{:}.variant %}>{{ line{:}.status }}</pl-badge>{% else %}{{ line{:}.status }}{% /if %}</pl-table-cell>
-                    <pl-table-cell class="hh-access-log-number">{{ line{:}.size }}</pl-table-cell>
-                    <pl-table-cell class="hh-access-log-number">{% if line{:}.took != null %}{{ line{:}.took }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
-                    <pl-table-cell>{% if line{:}.referrer != "" %}<span class="hh-access-log-cut" title={% line{:}.referrer %}>{{ line{:}.referrer }}</span>{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
-                    <pl-table-cell><span class="hh-access-log-cut" title={% line{:}.userAgent %}>{{ line{:}.browser }}</span></pl-table-cell>
+                    <pl-table-cell truncate title={% line{:}.visitor %}><span class="hh-access-log-mono">{{ line{:}.visitor }}</span></pl-table-cell>
+                    <pl-table-cell nowrap>{{ line{:}.method }}</pl-table-cell>
+                    <pl-table-cell truncate title={% line{:}.path %} data-hh-access-log-path><span class="hh-access-log-mono">{{ line{:}.path }}</span></pl-table-cell>
+                    <pl-table-cell nowrap>{% if line{:}.variant != null %}<pl-badge variant={% line{:}.variant %}>{{ line{:}.status }}</pl-badge>{% else %}{{ line{:}.status }}{% /if %}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ line{:}.size }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right" data-hh-access-log-took>{% if line{:}.took != null %}{{ line{:}.took }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
+                    <pl-table-cell truncate title={% line{:}.referrer %}>{% if line{:}.referrer != "" %}{{ line{:}.referrer }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
+                    <pl-table-cell truncate title={% line{:}.userAgent %} data-hh-access-log-browser>{{ line{:}.browser }}</pl-table-cell>
                 </pl-table-row>
                 {% /each %}
             </pl-table-body>
