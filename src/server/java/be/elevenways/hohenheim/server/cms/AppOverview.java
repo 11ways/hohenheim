@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.app.AppProtection;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -43,6 +44,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.ports.StreamPort;
 import java.util.Set;
 
 import static be.elevenways.hohenheim.server.cms.CmsSupport.opens;
@@ -76,16 +79,24 @@ final class AppOverview {
         Conduit conduit = access.conduit();
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         List<WidgetInstance> main = new ArrayList<>();
-        // A stream is reached on a public port of its own: where clients connect, never addresses or paths.
+        // A stream is reached on public ports of its own: where clients connect, never addresses or paths. Each port's
+        // row names where it forwards (host:port), as one site may forward many ports to as many ports upstream.
         if (SiteParts.reachOf(site).asksAddress()) {
             main.add(addresses(List.of(site), access));
             addIfPresent(main, protection(List.of(site), access));
         } else {
             Map<String, Object> settings = RawValues.map(site.get(SiteModel.SETTINGS));
+            Object host = settings.get(StreamUpstreamKind.FORWARD_HOST.getName());
+            List<PublishedPort> forwards = new ArrayList<>();
+            for (StreamPort port : StreamUpstreamKind.portsOf(settings)) {
+                for (String transport : port.protocol().protocols()) {
+                    forwards.add(new PublishedPort(host + ":" + port.forwardPort(), port.listenPort(),
+                        port.forwardPort(), transport, false));
+                }
+            }
             main.add(InstanceOverview.portsCard(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect"),
-                HohenheimMicrocopy.APP_OVERVIEW.of("stream_connect_hint")
-                    .withArg("target", settings.get("forward_host") + ":" + settings.get("forward_port")),
-                InstanceOverview.endpointsOf(SiteModel.MODEL_ID, site.get(SiteModel.ID), List.of(),
+                HohenheimMicrocopy.APP_OVERVIEW.of("stream_connect_hint"),
+                InstanceOverview.endpointsOf(SiteModel.MODEL_ID, site.get(SiteModel.ID), forwards,
                     AppHealth.forwarding(site), delegated)));
         }
 

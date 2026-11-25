@@ -8,10 +8,9 @@ import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * One port a workload publishes on its host, as its kind settings' {@code published_ports} map declares it: the
@@ -47,6 +46,9 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
     public static final String TCP = "tcp";
     public static final String UDP = "udp";
 
+    private static final PortMap<PublishedPort> MAP = new PortMap<>(FIELD, PublishedPort::parse, PublishedPort::name,
+        PublishedPort::spec);
+
     /** @return whether the settings declare any published port, without judging their spelling */
     public static boolean declaredIn(@NonNull Map<String, Object> settings) {
         return settings.get(FIELD) instanceof Map<?, ?> map && !map.isEmpty();
@@ -57,11 +59,7 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
      * @throws Violations naming the first entry that is not {@code [host:]container[/protocol]}
      */
     public static @NonNull List<PublishedPort> of(@NonNull Map<String, Object> settings) {
-        List<PublishedPort> ports = new ArrayList<>();
-        if (settings.get(FIELD) instanceof Map<?, ?> map) {
-            map.forEach((name, spec) -> ports.add(parse(String.valueOf(name), spec == null ? "" : spec.toString())));
-        }
-        return ports;
+        return MAP.of(settings);
     }
 
     /**
@@ -119,11 +117,7 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
 
     /** @return the settings map value for these entries, keyed by name */
     public static @NonNull Map<String, String> toSettings(@NonNull List<PublishedPort> ports) {
-        Map<String, String> map = new LinkedHashMap<>();
-        for (PublishedPort port : ports) {
-            map.put(port.name(), port.spec());
-        }
-        return map;
+        return MAP.toSettings(ports);
     }
 
     /**
@@ -131,21 +125,18 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
      *     {@link #parse} as a typed spelling is
      */
     public static @NonNull MapEntries entries() {
-        return MapEntries.keyedBy("name", HohenheimMicrocopy.HELP.of("port_entry_name"))
-            .member("container_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_container"))
-            .member("protocol", List.of(TCP, UDP), HohenheimMicrocopy.HELP.of("port_entry_protocol"))
-            .member("host_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_host"))
-            .member("loopback", JsonSchemaType.BOOLEAN, HohenheimMicrocopy.HELP.of("port_entry_loopback"))
-            .joinedBy((name, values) -> {
-                String host = values.get("host_port") instanceof Number number ? String.valueOf(number.longValue())
-                    : null;
-                String container = values.get("container_port") instanceof Number number
-                    ? String.valueOf(number.longValue()) : "";
+        return MAP.entries(MapEntries.keyedBy("name", HohenheimMicrocopy.HELP.of("port_entry_name"))
+                .member("container_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_container"))
+                .member("protocol", List.of(TCP, UDP), HohenheimMicrocopy.HELP.of("port_entry_protocol"))
+                .member("host_port", JsonSchemaType.INTEGER, HohenheimMicrocopy.HELP.of("port_entry_host"))
+                .member("loopback", JsonSchemaType.BOOLEAN, HohenheimMicrocopy.HELP.of("port_entry_loopback")),
+            values -> {
+                String host = PortMap.wholeNumber(values.get("host_port"));
+                String container = Objects.requireNonNullElse(PortMap.wholeNumber(values.get("container_port")), "");
                 String protocol = values.get("protocol") == null ? TCP : String.valueOf(values.get("protocol"));
                 String published = (host == null ? "" : host + ":") + container + "/" + protocol;
                 boolean loopback = Boolean.TRUE.equals(values.get("loopback"));
-                return parse(name, loopback ? LOOPBACK + ":" + (host == null ? ":" : "") + published : published)
-                    .spec();
+                return loopback ? LOOPBACK + ":" + (host == null ? ":" : "") + published : published;
             });
     }
 
@@ -161,7 +152,7 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
         if (LOOPBACK.equals(address) || "localhost".equals(address)) {
             return true;
         }
-        throw Violations.ofField("settings." + FIELD, bind, HohenheimMicrocopy.VIOLATIONS.of("port_bind_unsupported")
+        throw Violations.ofField(MAP.path(), bind, HohenheimMicrocopy.VIOLATIONS.of("port_bind_unsupported")
             .withArg("name", name).withArg("address", bind));
     }
 
@@ -178,7 +169,7 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
     }
 
     private static @NonNull Violations invalid(@NonNull String name, @NonNull String spec) {
-        return Violations.ofField("settings." + FIELD, spec, HohenheimMicrocopy.VIOLATIONS.of("port_spec_invalid")
+        return Violations.ofField(MAP.path(), spec, HohenheimMicrocopy.VIOLATIONS.of("port_spec_invalid")
             .withArg("name", name).withArg("spec", spec));
     }
 }

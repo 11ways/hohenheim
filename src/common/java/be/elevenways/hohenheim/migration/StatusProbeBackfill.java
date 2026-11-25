@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.zenit.common.Zenit;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -11,10 +11,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -84,7 +82,7 @@ final class StatusProbeBackfill {
                 return;
             }
             for (Row instance : tables.instances.find().where(tables.instanceTemplate.in(starters)).all()) {
-                Map<String, Object> settings = settingsOf(instance.get(tables.settings));
+                Map<String, Object> settings = RawValues.storedMapCopy(instance.get(tables.settings));
                 if (settings == null || !isProbedServer(settings)) {
                     continue;
                 }
@@ -109,7 +107,7 @@ final class StatusProbeBackfill {
                 return;
             }
             for (Row instance : tables.instances.find().where(tables.instanceId.in(touched)).all()) {
-                Map<String, Object> settings = settingsOf(instance.get(tables.settings));
+                Map<String, Object> settings = RawValues.storedMapCopy(instance.get(tables.settings));
                 if (settings != null && MINECRAFT_JAVA.equals(settings.get(PROBE_SETTING))) {
                     settings.remove(PROBE_SETTING);
                     tables.write(instance.get(tables.instanceId), settings);
@@ -122,17 +120,6 @@ final class StatusProbeBackfill {
     private static boolean isProbedServer(@NonNull Map<String, Object> settings) {
         return !settings.containsKey(PROBE_SETTING) && PROBED_IMAGES.contains(settings.get(IMAGE_SETTING))
             && settings.get(PORTS_SETTING) instanceof Map<?, ?> ports && ports.containsKey(GAME_PORT);
-    }
-
-    /** @return a mutable copy of the stored settings, null when the column holds no map */
-    private static @Nullable Map<String, Object> settingsOf(@Nullable Object stored) {
-        Object tree = stored instanceof String text ? Zenit.DRY.parseTree(text) : stored;
-        if (!(tree instanceof Map<?, ?> map)) {
-            return null;
-        }
-        Map<String, Object> settings = new LinkedHashMap<>();
-        map.forEach((key, value) -> settings.put(String.valueOf(key), value));
-        return settings;
     }
 
     /** The tables at this schema point. */

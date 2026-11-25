@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.ports.StreamProtocol;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * One stream's public port and where it forwards.
+ * One public port of a stream site and where it forwards.
  *
  * @param listenPort           the public port on the proxy's host
  * @param protocol             the transports forwarded on it

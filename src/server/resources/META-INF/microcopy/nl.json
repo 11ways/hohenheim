@@ -19547,23 +19547,25 @@
   "static_site_owns_no_container": {"scope": "violations", "text": "Een statische site draait zelf nooit een container; elke deploy maakt een release die hem serveert"},
   "stream": [
     {"scope": "upstream_kind", "text": "TCP/UDP-stream"},
-    {"scope": "upstream_kind_description", "text": "Stuur een publieke poort van deze proxy ongelezen door naar een adres en poort: SSH, een database, een gameserver"}
+    {"scope": "upstream_kind_description", "text": "Stuur publieke poorten van deze proxy ongelezen door naar poorten van een adres: SSH, een database, een gameserver, een mailserver"}
   ],
   "listen_port": [
-    {"scope": "hohenheim_field", "text": "Publieke poort"},
-    {"scope": "help", "text": "De poort waarmee clients verbinden, op de host waarop deze proxy draait. Geen andere app, stream of programma mag hem gebruiken."}
+    {"scope": "hohenheim_field", "text": "Publieke poort"}
   ],
-  "stream_protocol": [
-    {"scope": "hohenheim_field", "text": "Protocol"},
-    {"scope": "help", "text": "Wat er op de publieke poort wordt doorgestuurd: verbindingen (TCP), datagrammen (UDP) of beide."}
+  "stream_ports": [
+    {"scope": "hohenheim_field", "text": "Publieke poorten"},
+    {"scope": "help", "text": "Een rij per poort waarmee clients verbinden op de host waarop deze proxy draait, die geen andere app, stream of programma mag gebruiken: de publieke poort, dan de poort op het adres waarnaar hij doorstuurt met zijn protocol en, voor een PROXY v2-header, proxy-v2 erachter, zoals 2525/tcp proxy-v2. Een poort alleen stuurt TCP door."}
   ],
+  "stream_port_listen": {"scope": "help", "text": "De publieke poort waarmee clients verbinden; een item met een poort die de site al doorstuurt vervangt die."},
+  "stream_port_forward": {"scope": "help", "text": "De poort op forward_host die ontvangt wat op de publieke poort binnenkomt."},
+  "stream_port_protocol": {"scope": "help", "text": "tcp, udp of both; tcp als u het weglaat."},
+  "stream_port_proxy": {"scope": "help", "text": "Zet op true om elke TCP-verbinding te beginnen met een PROXY v2-header met het adres van de client; de upstream moet die verwachten."},
   "stream_forward_host": [
     {"scope": "hohenheim_field", "text": "Doorsturen naar adres"},
-    {"scope": "help", "text": "De hostnaam of het IP-adres waarnaar de stream doorstuurt: de host van de gepubliceerde poort van een app, een machine, of elk adres dat deze proxy bereikt."}
+    {"scope": "help", "text": "De hostnaam of het IP-adres waarnaar elke publieke poort doorstuurt: de host van de gepubliceerde poort van een app, een machine, of elk adres dat deze proxy bereikt."}
   ],
   "stream_forward_port": [
-    {"scope": "hohenheim_field", "text": "Doorsturen naar poort"},
-    {"scope": "help", "text": "De poort op dat adres."}
+    {"scope": "hohenheim_field", "text": "Stuurt door naar poort"}
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximaal aantal seconden om een TCP-verbinding met het doorgestuurde adres te openen."},
   "stream_access_list": {"scope": "help", "text": "Optioneel: op een stream gelden alleen de adresregels, dus clients uit een geweigerd netwerk worden geweigerd. Een wachtwoord of aanmelding kan op een kale poort niet gevraagd worden."},
@@ -19571,24 +19573,26 @@
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP en UDP"},
-  "stream_lead": {"scope": "put_online", "text": "Claimt een publieke poort op de host van deze proxy en stuurt wat daar binnenkomt ongelezen door naar een adres dat je opgeeft."},
-  "step_stream_where_lead": {"scope": "put_online", "text": "De naam en het adres en de poort waarnaar hij doorstuurt. Er draait niets op een host voor."},
-  "step_stream_ports_lead": {"scope": "put_online", "text": "De publieke poort waarmee clients verbinden en wat hij doorstuurt. Een toegangslijst geldt alleen op adres: een stream kan niet om een wachtwoord vragen."},
-  "run_stream_port": {"scope": "put_online", "text": "Zijn publieke poort claimen"},
-  "run_stream_forward": {"scope": "put_online", "text": "Hem doorsturen"},
-  "done_stream_port": {"scope": "put_online", "text": "Publieke poort {$port} geclaimd"},
-  "done_stream_forward": {"scope": "put_online", "text": "Poort {$port} stuurt door naar {$target}"},
-  "outcome_stream_live": {"scope": "put_online", "text": "Poort {$port} van de host van deze proxy stuurt nu door naar {$target}."},
+  "stream_lead": {"scope": "put_online", "text": "Claimt publieke poorten op de host van deze proxy en stuurt wat daar binnenkomt ongelezen door naar een adres dat u opgeeft."},
+  "step_stream_where_lead": {"scope": "put_online", "text": "De naam en het adres waarnaar hij doorstuurt. Er draait niets op een host voor."},
+  "step_stream_ports_lead": {"scope": "put_online", "text": "De publieke poorten waarmee clients verbinden, elk met de poort waarnaar hij doorstuurt. Een toegangslijst geldt alleen op adres: een stream kan niet om een wachtwoord vragen."},
+  "run_stream_port": {"scope": "put_online", "text": "Zijn publieke poorten claimen"},
+  "run_stream_forward": {"scope": "put_online", "text": "Ze doorsturen"},
+  "done_stream_port": {"scope": "put_online", "text": ".match {$count :integer}\none {{Publieke poort {$ports} geclaimd}}\n* {{Publieke poorten {$ports} geclaimd}}"},
+  "done_stream_forward": {"scope": "put_online", "text": ".match {$count :integer}\none {{Poort {$ports} stuurt door naar {$target}}}\n* {{Poorten {$ports} sturen door naar {$target}}}"},
+  "outcome_stream_live": {"scope": "put_online", "text": ".match {$count :integer}\none {{Poort {$ports} van de host van deze proxy stuurt nu door naar {$target}.}}\n* {{Poorten {$ports} van de host van deze proxy sturen nu door naar {$target}.}}"},
   "stream_no_http_auth": {"scope": "violations", "text": "Een TCP/UDP-stream wordt ongelezen doorgestuurd en kan dus niemand naar een login sturen. Verwijder de loginprovider."},
   "stream_access_list_credentials": {"scope": "violations", "text": "Deze toegangslijst vraagt om een wachtwoord of een login, wat een TCP/UDP-stream niet kan. Kies een lijst met alleen adresregels."},
-  "stream_proxy_protocol_tcp_only": {"scope": "violations", "text": "Een PROXY v2-header wordt alleen op TCP-verbindingen verstuurd, en deze stream stuurt UDP door. Zet het protocol op TCP of schakel de header uit."},
+  "stream_port_invalid": {"scope": "violations", "text": "Poort {$port} is niet geschreven als een poort om naar door te sturen met zijn protocol, zoals 2525/tcp, en proxy-v2 erachter voor een PROXY v2-header: {$spec}."},
+  "stream_port_proxy_protocol_tcp_only": {"scope": "violations", "text": "Poort {$port} stuurt UDP door, dat nooit een PROXY v2-header draagt. Stuur hem alleen over TCP door, of laat proxy-v2 weg."},
+  "stream_ports_required": {"scope": "violations", "text": "Een TCP/UDP-stream stuurt minstens een publieke poort door."},
   "not_forwarding": [
     {"scope": "app_health", "text": "Stuurt niet door"},
     {"scope": "attention_title", "text": "{$name} stuurt zijn poort niet door"}
   ],
-  "not_forwarding_detail": {"scope": "app_health", "text": "Poort {$port} kon niet worden geopend op de host van deze proxy: een ander programma gebruikt hem misschien, of deze installatie draait de proxy niet."},
-  "stream_forwarding": {"scope": "app_health", "text": "Stuurt poort {$port} door"},
-  "stream_connect_hint": {"scope": "app_overview", "text": "Clients verbinden met deze poort van de host van de proxy; die stuurt wat binnenkomt door naar {$target}."},
+  "not_forwarding_detail": {"scope": "app_health", "text": ".match {$count :integer}\none {{Poort {$ports} kon niet worden geopend op de host van deze proxy: een ander programma gebruikt hem misschien, of deze installatie draait de proxy niet.}}\n* {{Poorten {$ports} konden niet allemaal worden geopend op de host van deze proxy: een ander programma gebruikt er misschien een, of deze installatie draait de proxy niet.}}"},
+  "stream_forwarding": {"scope": "app_health", "text": ".match {$count :integer}\none {{Stuurt poort {$ports} door}}\n* {{Stuurt poorten {$ports} door}}"},
+  "stream_connect_hint": {"scope": "app_overview", "text": "Clients verbinden met deze poorten van de host van de proxy; elke poort stuurt wat binnenkomt ongelezen door naar het adres dat zijn rij noemt."},
   "variables_lead": {"scope": "environment", "text": "Elke app in deze omgeving krijgt deze waarden bij de volgende uitrol; een eigen waarde van de app voor dezelfde sleutel gaat voor."},
   "environments_lead": {"scope": "project", "text": "De omgevingen waarin dit project uitrolt, elk met de variabelen waarmee de apps erin starten."},
   "members_lead": {"scope": "project", "text": "Iemand hoort bij dit project door de rol ervan te hebben: geef die persoon onder Toegang, Personen de rol met de naam van dit project."},
@@ -20453,5 +20457,27 @@
   "service_health_timeout": {"text": "Seconden die een gezondheidscontrole mag duren voor ze als mislukt telt.", "scope": "help"},
   "service_health_retries": {"text": "Mislukte controles na elkaar voor de dienst als ongezond telt.", "scope": "help"},
   "service_health_start_period": {"text": "Seconden na de start waarin mislukte controles niet tellen.", "scope": "help"},
-  "service_restart_policy": {"text": "Wanneer Docker de container herstart nadat hij stopte; no herstart hem nooit.", "scope": "help"}
+  "service_restart_policy": {"text": "Wanneer Docker de container herstart nadat hij stopte; no herstart hem nooit.", "scope": "help"},
+  "create_site_stream": {"text": "Een TCP/UDP-stream maken", "scope": "hohenheim"},
+  "create_site_stream_description": {"text": "Maakt een TCP/UDP-streamsite die publieke poorten doorstuurt via het eigen aanmaken van het paneel.", "scope": "hohenheim"},
+  "change_site_stream": {"text": "Een TCP/UDP-stream wijzigen", "scope": "hohenheim"},
+  "change_site_stream_description": {"text": "Wijzigt de verstuurde instellingen van een TCP/UDP-stream via het eigen opslaan van het paneel; alle andere instellingen blijven zoals ze zijn.", "scope": "hohenheim"},
+  "site_thing_site_stream": {"text": "een TCP/UDP-stream", "scope": "hohenheim"},
+  "mcp_tool_site_stream_set": {"text": "Maakt of wijzigt een TCP/UDP-stream: publieke poorten op de host van de proxy, elk ongelezen doorgestuurd naar een poort van forward_host, zonder adres en zonder HTTPS. Een site draagt elke poort van een dienst; poorten worden samengevoegd op listen_port, remove: true laat er een vallen. Een poort die een andere site of een programma bezet, wordt geweigerd met zijn naam; uitgeschakeld houdt de stream zijn poorten. Zijn toegangslijst mag alleen netwerkregels bevatten. Wie geen beheerder is, wijzigt alleen name, enabled en description. Een site van een andere soort als code wordt geweigerd, tenzij change_kind true is. Antwoordt met de code van de site, of bij een wijziging de geschreven instellingen.", "scope": "hohenheim"},
+  "mcp_tool_site_ports_move": {"text": "Verplaatst elke publieke poort van een TCP/UDP-stream (code) naar een andere stream (into) die naar hetzelfde adres doorstuurt, dezelfde toegangslijst volgt en op dezelfde manier aan- of uitgeschakeld is, en stuurt de lege stream daarna naar de prullenbak, alles in een keer. De poorten blijven luisteren, dus open verbindingen blijven; nieuwe krijgen de verbindingstijd van de andere stream. Alleen een beheerder verplaatst poorten. De stream terugzetten wordt geweigerd zolang een andere site zijn poorten heeft. Antwoordt met de poorten die verhuisden, van welke stream naar welke.", "scope": "hohenheim"},
+  "mcp_code_site_ports_move": {"text": "De stream (S20) waarvan de poorten verhuizen; hij gaat naar de prullenbak.", "scope": "hohenheim"},
+  "move_site_ports": { "text": "{$actor} verplaatste de poorten van {$subject} naar een andere stream", "scope": "hohenheim", "target": "happened" },
+  "move_site_ports_description": {"text": "Verplaatst elke publieke poort van deze stream naar een andere stream die naar hetzelfde adres doorstuurt en stuurt deze naar de prullenbak, in een keer; de poorten blijven luisteren.", "scope": "hohenheim"},
+  "move_ports": {"text": "Poorten verplaatsen", "scope": "site"},
+  "move_ports_confirm": {"text": "Elke publieke poort van deze stream verplaatsen naar een andere stream die naar hetzelfde adres doorstuurt? Deze stream gaat daarna naar de prullenbak; zijn poorten blijven luisteren, dus open verbindingen blijven.", "scope": "site"},
+  "move_ports_into": [
+    {"text": "Naar de stream", "scope": "site"},
+    {"text": "De stream (S20) die de poorten krijgt: hij stuurt naar hetzelfde adres door, volgt dezelfde toegangslijst en is op dezelfde manier aan- of uitgeschakeld.", "scope": "help"}
+  ],
+  "ports_moved": {"text": ".match {$count :integer}\none {{Poort {$ports} is verplaatst van {$from} naar {$into}, die hem nu doorstuurt; {$from} staat in de prullenbak.}}\n* {{Poorten {$ports} zijn verplaatst van {$from} naar {$into}, die ze nu doorstuurt; {$from} staat in de prullenbak.}}", "scope": "site"},
+  "site_ports_move_no_stream": {"text": "{$target} is geen TCP/UDP-stream en kan dus de poorten van {$name} niet krijgen.", "scope": "violations"},
+  "site_ports_move_itself": {"text": "Kies een andere stream: {$name} kan zijn eigen poorten niet krijgen.", "scope": "violations"},
+  "site_ports_move_other_address": {"text": "{$target} stuurt door naar {$address}, niet naar waar {$name} naartoe stuurt. Poorten verhuizen alleen tussen streams die naar hetzelfde adres doorsturen.", "scope": "violations"},
+  "site_ports_move_other_access": {"text": "{$target} en {$name} volgen verschillende toegangslijsten. Geef beide eerst dezelfde lijst, zodat geen verplaatste poort andere clients toelaat.", "scope": "violations"},
+  "site_ports_move_other_switch": {"text": "Een van {$target} en {$name} is uitgeschakeld. Schakel eerst beide in, of beide uit, zodat geen verplaatste poort stopt of begint met doorsturen.", "scope": "violations"}
 }

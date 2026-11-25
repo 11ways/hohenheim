@@ -192,6 +192,10 @@ public final class HohenheimVerbs {
     public static final OperationVerb GENERATE_SECRET = OperationVerb.declare(HohenheimVerbs.class,
         "generate_secret", Effect.WRITES);
 
+    /** Moves the subject's public ports (a stream site's) into another record and sends the emptied subject away. */
+    public static final OperationVerb MOVE_PORTS = OperationVerb.declare(HohenheimVerbs.class, "move_ports",
+        Effect.DESTROYS);
+
     private HohenheimVerbs() {
     }
 }

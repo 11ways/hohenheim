@@ -2,17 +2,19 @@ package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Map;
 
-/** Site type capability for a TCP/UDP stream: a public port of its own on the proxy's host, relayed unread. */
+/** Site type capability for a TCP/UDP stream: public ports of its own on the proxy's host, relayed unread. */
 public interface StreamProvider extends UpstreamKindHandler {
 
     /**
-     * @return where the site's public port forwards to
-     * @throws IllegalArgumentException naming the setting that cannot be forwarded
+     * @return where each of the site's public ports forwards to, in the order the site declares them
+     * @throws IllegalArgumentException naming the setting that cannot be forwarded; the site then forwards no port
      */
-    StreamTarget streamTarget(Row site, Map<String, Object> settings);
+    @NonNull List<StreamTarget> streamTargets(Row site, Map<String, Object> settings);
 
     @Override
     default SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {

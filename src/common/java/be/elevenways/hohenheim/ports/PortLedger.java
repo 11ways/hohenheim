@@ -480,6 +480,22 @@ public final class PortLedger {
     }
 
     /**
+     * Hands every claim one record holds to another record of the same model, in place: the port is never free between
+     * the two, so no rival can take it and the kernel probe a new claim runs never meets the listener still serving it.
+     *
+     * @return the claims handed over
+     */
+    public static int handOver(@NonNull Identifier ownerModel, int fromId, int toId) {
+        Model ledger = Models.get(PortAllocationModel.class);
+        List<Row> claims = claimsOf(ownerModel, fromId);
+        for (Row claim : claims) {
+            claim.set(PortAllocationModel.OWNER_ID, toId);
+            ledger.save(claim);
+        }
+        return claims.size();
+    }
+
+    /**
      * THE record-after primitive for a single publication: {@link #recordObservedAll} with
      * one port.
      *

@@ -69,7 +69,7 @@ final class SiteActions {
      */
     static @NonNull List<PanelAction<Row>> operator() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
-            disableAction(), cloneAction(),
+            disableAction(), cloneAction(), movePortsAction(),
             rollbackAction(), deployFromRepositoryAction(), protectPathAction(), fixHttpsAction(),
             stopForcingHttpsAction(), addAddressAction(), fixProtectionAction(), changeConfigurationAction());
     }
@@ -258,6 +258,18 @@ final class SiteActions {
                 HohenheimMicrocopy.SITE.of("clone"),
                 HohenheimMicrocopy.SITE.of("clone_confirm"))
             .inputValues((site, request) -> Map.of(SiteOperations.CLONE_NAME.getName(), freeCloneName(site)))
+            .build();
+    }
+
+    /**
+     * A stream site's ports moved into another stream site of the same address, offered on stream sites only (the
+     * operation's own applicability); it lands on the site that now holds every port, the emptied one in the trash.
+     */
+    private static @NonNull PanelAction<Row> movePortsAction() {
+        return CmsSupport.opensWhatItMade(SitePortMoves.MOVE,
+                (panel, moved) -> SiteParts.recordRoute(panel, moved.into()).toUrl(),
+                HohenheimMicrocopy.SITE.of("move_ports"),
+                HohenheimMicrocopy.SITE.of("move_ports_confirm"))
             .build();
     }
 

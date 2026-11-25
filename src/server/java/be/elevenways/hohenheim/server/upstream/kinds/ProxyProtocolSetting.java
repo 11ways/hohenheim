@@ -6,7 +6,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * The one declaration of the upstream-kind setting that makes the proxy's relay send a PROXY protocol v2 header
- * (the original client and destination) before any other byte: TLS passthrough and TCP streams both build theirs here.
+ * (the original client and destination) before any other byte, on a TLS passthrough site; a TCP/UDP stream says it
+ * per public port instead ({@code proxy-v2}, StreamPort).
  *
  * @author Jelle De Loecker
  * @since  0.10.0

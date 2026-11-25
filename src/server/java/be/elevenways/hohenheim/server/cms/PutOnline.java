@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -364,22 +365,18 @@ public final class PutOnline {
         .build();
 
     /**
-     * A TCP/UDP stream (npmplus's streams): what it forwards to, then its Ports step: the public port on the proxy's
-     * host, its protocol and the access list. No address and no HTTPS: it is reached on its port, and nothing runs on
-     * a host for it.
+     * A TCP/UDP stream (npmplus's streams): what it forwards to, then its Ports step: the public ports on the proxy's
+     * host, each with its port upstream and protocol, and the access list. No address and no HTTPS: it is reached on
+     * its ports, and nothing runs on a host for it.
      */
     private static final FormSpec STREAM_INPUT = FormSpec.builder()
         .add(SiteModel.NAME)
         .add(StreamUpstreamKind.FORWARD_HOST)
-        .add(StreamUpstreamKind.FORWARD_PORT)
-        .add(StreamUpstreamKind.LISTEN_PORT)
-        .add(StreamUpstreamKind.PROTOCOL)
+        .add(StreamUpstreamKind.PORTS)
         .add(STREAM_ACCESS_LIST)
-        .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), StreamUpstreamKind.FORWARD_HOST.getName(),
-            StreamUpstreamKind.FORWARD_PORT.getName())
+        .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), StreamUpstreamKind.FORWARD_HOST.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_stream_where_lead")))
-        .step(FormStep.of(PORTS, STEP_PORTS, StreamUpstreamKind.LISTEN_PORT.getName(),
-            StreamUpstreamKind.PROTOCOL.getName(), SiteModel.ACCESS_LIST_ID.getName())
+        .step(FormStep.of(PORTS, STEP_PORTS, StreamUpstreamKind.PORTS.getName(), SiteModel.ACCESS_LIST_ID.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_stream_ports_lead")))
         .build();
 
@@ -546,20 +543,19 @@ public final class PutOnline {
     }
 
     /**
-     * A TCP/UDP stream: its name, its upstream, its public port and protocol, and its access list.
+     * A TCP/UDP stream: its name, its upstream address, its public ports and its access list.
      *
      * @param forward_host spelled as its form field, which the boot check holds every record component to
+     * @param ports        its public ports, as {@link StreamPort} spells them by public port
      */
-    public record Stream(@Nullable String name, @Nullable String forward_host, @Nullable Integer forward_port,
-                         @Nullable Integer listen_port, @Nullable String protocol, @Nullable Integer access_list_id) {
+    public record Stream(@Nullable String name, @Nullable String forward_host, @Nullable Map<String, String> ports,
+                         @Nullable Integer access_list_id) {
 
         /** @return the stream site's settings */
         public @NonNull Map<String, Object> settings() {
             Map<String, Object> settings = new LinkedHashMap<>();
-            settings.put(StreamUpstreamKind.LISTEN_PORT.getName(), this.listen_port);
-            settings.put(StreamUpstreamKind.PROTOCOL.getName(), this.protocol);
             settings.put(StreamUpstreamKind.FORWARD_HOST.getName(), this.forward_host);
-            settings.put(StreamUpstreamKind.FORWARD_PORT.getName(), this.forward_port);
+            settings.put(StreamUpstreamKind.PORTS.getName(), this.ports);
             return settings;
         }
     }
@@ -686,8 +682,7 @@ public final class PutOnline {
             .notForAssistants(KeptFromAssistants.RELATION_PICK)
             .gate(OperationGate.open())
             .input(OperationInput.of(STREAM_INPUT, Stream.class, values -> new Stream(values.get(SiteModel.NAME),
-                values.get(StreamUpstreamKind.FORWARD_HOST), values.get(StreamUpstreamKind.FORWARD_PORT),
-                values.get(StreamUpstreamKind.LISTEN_PORT), values.get(StreamUpstreamKind.PROTOCOL),
+                values.get(StreamUpstreamKind.FORWARD_HOST), values.get(StreamUpstreamKind.PORTS),
                 values.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE)

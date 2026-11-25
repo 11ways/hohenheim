@@ -252,3 +252,8 @@ table migration:be.elevenways.hohenheim@2026_11_24_000001
   name link_confirmations
   op add_column:linked_servers:confirmed_at|datetime|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op data:confirm every link made before a link could wait for its confirmation@1
+table migration:be.elevenways.hohenheim@2026_11_25_000001
+  checksum c095657ef6dbd716a3b1b8c74e15eec06d4f2c69f6ab53a76b81a52cb65ed800
+  class be.elevenways.hohenheim.migration.M008_StreamPortLists
+  name stream_port_lists
+  op data:give every TCP/UDP stream site its single public port as a list of one@1

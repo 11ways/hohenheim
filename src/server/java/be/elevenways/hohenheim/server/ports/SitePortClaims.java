@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.hohenheim.server.instance.PortPublications;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
@@ -25,7 +26,7 @@ import java.util.Set;
 
 /**
  * The public ports a site listens on itself (a TCP/UDP stream's), claimed in the port ledger on the proxy's host in
- * the save that sets them, so a port another owner holds is refused before the stream exists.
+ * the save that sets them, so a port another owner holds is refused before the stream forwards it.
  *
  * AIDEV-NOTE: the claims follow the site's LIVE state, never its record alone: a site in the trash holds none (its
  * port is closed by the reload its trashing triggers, so a delete frees the port at once, as npmplus's does), and
@@ -40,8 +41,8 @@ import java.util.Set;
  */
 public final class SitePortClaims {
 
-    /** The field a stream's public port is given in, where a refusal of it is shown. */
-    private static final String PORT_FIELD = "settings.listen_port";
+    /** The field a stream's public ports are given in, where a refusal of one is shown. */
+    private static final String PORT_FIELD = "settings." + StreamPort.FIELD;
 
     private static boolean installed;
 

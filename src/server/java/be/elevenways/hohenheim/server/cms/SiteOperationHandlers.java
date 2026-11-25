@@ -105,6 +105,12 @@ public final class SiteOperationHandlers {
             .applies(SiteOperationHandlers::live)
             .authorize(administers())
             .handle(call -> cloneSite(call.subject(), Objects.requireNonNull(call.input(), "a clone has its input")));
+        // A stream site's ports move into another live stream site; the emptied one is trashed as a delete trashes it.
+        OperationHandlers.attach(SitePortMoves.MOVE)
+            .applies(site -> live(site) && SitePortMoves.holdsPorts(site))
+            .authorize(administers())
+            .handle(call -> SitePortMoves.move(call.subject(), Objects.requireNonNull(call.input(),
+                "a move has its input"), SiteOperationHandlers::deleteSite));
         // Only a site exposing an application through the instance upstream has a release to roll back. A background
         // run: what refuses it at once (no application, nothing kept) is asked here, before any run starts. Who may
         // ask is the operation's own gate (installation administration), never an authorizer here alone.

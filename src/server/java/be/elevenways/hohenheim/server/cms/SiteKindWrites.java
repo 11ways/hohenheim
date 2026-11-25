@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -13,7 +14,10 @@ import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
+import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -79,7 +83,9 @@ public final class SiteKindWrites {
             SiteOperations.SITE, SiteModel.ID, SiteModel.UPSTREAM_KIND, SiteModel.SETTINGS)
         .common(List.of(SiteModel.NAME, SiteModel.ENABLED, SiteModel.DESCRIPTION, SiteModel.TRUSTED_UPSTREAM))
         .createEntries(kind -> {
-            List<FormEntry> entries = new ArrayList<>(List.of(Plain.of(SiteWrites.CREATE_HOSTNAME)));
+            // A site reached on ports of its own (a stream) has no address, so its create takes none.
+            List<FormEntry> entries = new ArrayList<>(reachedOnItsPorts(kind) ? List.of()
+                : List.of(Plain.of(SiteWrites.CREATE_HOSTNAME)));
             entries.addAll(LINKS.entries(kind, true));
             return entries;
         })
@@ -97,6 +103,9 @@ public final class SiteKindWrites {
     // The panel lets a redirect be made without its target, which answers 502: the tool asks for it (the spec's rule).
     public static final Kind REDIRECT = declare(RedirectUpstreamKind.ID, RedirectUpstreamKind.SETTINGS_SCHEMA,
         "site_redirect_set", RedirectUpstreamKind.TARGET_URL.getInputName());
+    // One site forwards every public port of one service, a list of ports (StreamPort); each create names at least one.
+    public static final Kind STREAM = declare(StreamUpstreamKind.ID, StreamUpstreamKind.SETTINGS_SCHEMA,
+        "site_stream_set", StreamUpstreamKind.FORWARD_HOST.getInputName(), StreamUpstreamKind.PORTS.getInputName());
 
     private SiteKindWrites() {
     }
@@ -117,10 +126,19 @@ public final class SiteKindWrites {
         return LINKS.takes(APP, kind);
     }
 
+    /** @return whether a site of the kind is reached on public ports of its own, never at an address */
+    private static boolean reachedOnItsPorts(@NonNull Identifier kind) {
+        UpstreamKindInfo info = UpstreamKinds.registry().get(kind);
+        return info != null && info.putOnlineReach() == PutOnlineReach.PORTS;
+    }
+
     /** Creates the site, with its first address when the call gives one, through the panel's own create. */
     private static @NonNull Integer created(@NonNull Kind kind, OperationInput.@NonNull Values input,
                                             @NonNull AccessContext caller) {
         Map<String, Object> raw = SITES.created(kind, input);
+        // A map setting (a stream's ports) is posted as the panel's key/value editor posts it, as the app writes do.
+        raw.put(SiteModel.SETTINGS.getName(), KindSettingsWrites.posted(kind.settings(),
+            RawValues.map(raw.get(SiteModel.SETTINGS.getName()))));
         Object hostname = input.get(SiteWrites.CREATE_HOSTNAME.getName());
         if (hostname != null) raw.put(SiteWrites.CREATE_HOSTNAME.getName(), hostname);
         if (servesApp(kind.id()) && input.get(APP) != null) {
@@ -183,7 +201,7 @@ public final class SiteKindWrites {
                 : turned && !kind.settings().contains(field) ? null : kept.get(field.getName());
             if (value != null) settings.put(field.getInputName(), value);
         }
-        raw.put(SiteModel.SETTINGS.getName(), settings);
+        raw.put(SiteModel.SETTINGS.getName(), KindSettingsWrites.posted(kind.schema().getFields().values(), settings));
         if (turned) written.add(0, SiteModel.UPSTREAM_KIND.getName());
         Panel panel = ApiConduits.adminPanel();
         KindSettingsWrites.speaking(LINKS.columns(), () -> ResourceWrites.update(panel, sites(panel),

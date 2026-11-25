@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.StatusProbe;
 import be.elevenways.hohenheim.migration.M002_AfterBaseline;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -11,7 +11,6 @@ import be.elevenways.zenit.test.support.TestSqliteFiles;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -122,13 +121,8 @@ class StatusProbeBackfillMigrationTest {
     }
 
     private static Map<String, Object> settingsOf(SqliteDatasource datasource, int id) {
-        Object stored = datasource.rawQuery("SELECT settings FROM instances WHERE id = " + id).get(0).get("settings");
-        Object tree = stored instanceof String text ? Zenit.DRY.parseTree(text) : stored;
-        Map<String, Object> settings = new LinkedHashMap<>();
-        if (tree instanceof Map<?, ?> map) {
-            map.forEach((key, value) -> settings.put(String.valueOf(key), value));
-        }
-        return settings;
+        return RawValues.map(RawValues.storedMapCopy(datasource.rawQuery("SELECT settings FROM instances WHERE id = "
+            + id).get(0).get("settings")));
     }
 
     private static List<Integer> ledger(SqliteDatasource datasource) {

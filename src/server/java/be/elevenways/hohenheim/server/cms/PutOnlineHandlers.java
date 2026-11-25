@@ -64,6 +64,7 @@ import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.hohenheim.ports.PortPurpose;
 import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.hohenheim.server.game.GameAddresses;
 import be.elevenways.hohenheim.server.instance.PortPublications;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
@@ -888,8 +889,8 @@ final class PutOnlineHandlers {
     }
 
     /**
-     * Port, forward: the stream site's save claims its public port (refused when another owner holds it), and the
-     * proxy's reload after the save's commit starts forwarding it.
+     * Ports, forward: the stream site's save claims its public ports (refused when another owner holds one), and the
+     * proxy's reload after the save's commit starts forwarding them.
      *
      * @return the new site's id
      */
@@ -899,11 +900,14 @@ final class PutOnlineHandlers {
             input.access_list_id());
         Row site = Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId));
         call.attachSubject(SiteOperations.SITE, site);
-        String port = input.listen_port() + "/" + input.protocol();
-        String target = input.forward_host() + ":" + input.forward_port();
-        call.reportStepDone(done("stream_port").withArg("port", port));
-        call.reportStepDone(done("stream_forward").withArg("port", port).withArg("target", target));
-        call.reportOutcome(message("stream_live").withArg("port", port).withArg("target", target));
+        List<StreamPort> ports = StreamUpstreamKind.portsOf(RawValues.map(site.get(SiteModel.SETTINGS)));
+        String spelled = StreamUpstreamKind.labels(ports);
+        String target = String.valueOf(input.forward_host());
+        call.reportStepDone(done("stream_port").withArg("ports", spelled).withArg("count", ports.size()));
+        call.reportStepDone(done("stream_forward").withArg("ports", spelled).withArg("count", ports.size())
+            .withArg("target", target));
+        call.reportOutcome(message("stream_live").withArg("ports", spelled).withArg("count", ports.size())
+            .withArg("target", target));
         return siteId;
     }
 

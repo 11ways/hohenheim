@@ -27,13 +27,15 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * The proxy's TCP/UDP streams: one public port per enabled stream site, relayed to its upstream, kept in step with
- * the stored sites at every route reload.
+ * The proxy's TCP/UDP streams: one bound public port per port of every enabled stream site, relayed to its upstream,
+ * kept in step with the stored sites at every route reload.
  *
- * AIDEV-NOTE: a reload swaps a stream's ROUTE (its upstream and its compiled access list) in place and rebinds only
- * when its port or protocol changed: an unrelated site edit must never cut every player off a game server. The
- * ledger claim of the port is the site's own (SitePortClaims, in the save that changed it); this class only binds
- * what the stored sites say. A port it cannot bind is kept as a {@link StreamBindFailure} (the attention item, the site's
+ * AIDEV-NOTE: a relay is keyed by its PUBLIC PORT, never by its site: a reload swaps a port's ROUTE (its site, its
+ * upstream and its compiled access list) in place and rebinds only when the port's protocol changed, so an unrelated
+ * site edit never cuts every player off a game server, and a port moved from one site into another
+ * (SitePortMoves) keeps its listener and every open connection: only the route new connections take changes. The
+ * ledger claim of a port is the site's own (SitePortClaims, in the save that changed it); this class only binds what
+ * the stored sites say. A port it cannot bind is kept as a {@link StreamBindFailure} (the attention item, the site's
  * verdict and the alert read it) and tried again at every reconcile, which the listener supervisor runs each minute
  * while one is failing.
  *
@@ -45,15 +47,15 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class StreamRelays {
 
-    /** Who a new connection or client is let through to: the upstream, behind the access list when one is set. */
-    private record Route(@NonNull StreamTarget target, @Nullable AccessRuleTree access) {
+    /** Who a new connection or client on one public port is let through to: the upstream, behind the access list. */
+    private record Route(int siteId, @NonNull StreamTarget target, @Nullable AccessRuleTree access) {
 
         boolean admits(@NonNull InetSocketAddress client) {
             return this.access == null || this.access.admitsConnection(client.getAddress().getAddress());
         }
     }
 
-    /** One stream's bound public port. */
+    /** One bound public port. */
     private static final class Relay {
         final int port;
         final StreamProtocol protocol;
@@ -78,6 +80,7 @@ final class StreamRelays {
     private static final int MAX_CONNECTIONS = 1_024;
 
     private final SessionStore sessionStore;
+    /* Both keyed by public port: the ledger lets one site at a time hold a port. */
     private final Map<Integer, Relay> relays = new HashMap<>();
     private final Map<Integer, StreamBindFailure> failures = new HashMap<>();
 
@@ -85,7 +88,7 @@ final class StreamRelays {
         this.sessionStore = sessionStore;
     }
 
-    /** Binds, rebinds or closes every stream's port so they match the enabled stream sites. */
+    /** Binds, rebinds or closes every public port so they match the ports of the enabled stream sites. */
     synchronized void reconcile() {
         Map<Integer, Relay> wanted = new HashMap<>();
         Map<Integer, StreamBindFailure> failed = new HashMap<>();
@@ -93,39 +96,46 @@ final class StreamRelays {
             UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(site.get(SiteModel.UPSTREAM_KIND));
             if (!(handler instanceof StreamProvider provider)) continue;
             int siteId = site.get(SiteModel.ID);
-            Route route;
+            String name = String.valueOf((Object) site.get(SiteModel.NAME));
+            List<StreamTarget> targets;
+            AccessRuleTree access;
             try {
                 Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
-                route = new Route(provider.streamTarget(site, settings == null ? Map.of() : settings),
-                    accessOf(site));
+                targets = provider.streamTargets(site, settings == null ? Map.of() : settings);
+                access = accessOf(site);
             } catch (RuntimeException refused) {
-                Blast.log("Stream relays: site", site.get(SiteModel.NAME), "is not forwarded -", refused.getMessage());
+                Blast.log("Stream relays: site", name, "is not forwarded -", refused.getMessage());
                 continue;
             }
-            Relay relay = this.relays.remove(siteId);
-            if (relay != null && relay.port == route.target().listenPort()
-                    && relay.protocol == route.target().protocol()) {
-                relay.route.set(route);
-                wanted.put(siteId, relay);
-                continue;
-            }
-            if (relay != null) {
-                relay.close();
-            }
-            String name = String.valueOf((Object) site.get(SiteModel.NAME));
-            try {
-                wanted.put(siteId, start(name, route));
-            } catch (IOException | RuntimeException failure) {
-                StreamBindFailure before = this.failures.get(siteId);
-                StreamTarget target = route.target();
-                int attempts = before != null && before.port() == target.listenPort()
-                    && before.protocol() == target.protocol() ? before.attempts() + 1 : 1;
-                failed.put(siteId, new StreamBindFailure(siteId, name, target.listenPort(), target.protocol(),
-                    ListenerBindFailures.explainStream(failure, name, target.listenPort(), target.protocol()),
-                    attempts));
+            for (StreamTarget target : targets) {
+                int port = target.listenPort();
+                if (wanted.containsKey(port) || failed.containsKey(port)) {
+                    // Only a store the ledger never judged holds one port twice: the first site keeps it.
+                    Blast.log("Stream relays: port", port, "of", name, "is another stream's already");
+                    continue;
+                }
+                Route route = new Route(siteId, target, access);
+                Relay relay = this.relays.remove(port);
+                if (relay != null && relay.protocol == target.protocol()) {
+                    relay.route.set(route);
+                    wanted.put(port, relay);
+                    continue;
+                }
+                if (relay != null) {
+                    relay.close();
+                }
+                try {
+                    wanted.put(port, start(name, route));
+                } catch (IOException | RuntimeException failure) {
+                    StreamBindFailure before = this.failures.get(port);
+                    int attempts = before != null && before.siteId() == siteId
+                        && before.protocol() == target.protocol() ? before.attempts() + 1 : 1;
+                    failed.put(port, new StreamBindFailure(siteId, name, port, target.protocol(),
+                        ListenerBindFailures.explainStream(failure, name, port, target.protocol()), attempts));
+                }
             }
         }
-        // Whatever is left belongs to a stream that was switched off, trashed, deleted or changed kind.
+        // Whatever is left belongs to a port no enabled stream lists any more: removed, switched off, trashed.
         this.relays.values().forEach(Relay::close);
         this.relays.clear();
         this.relays.putAll(wanted);
@@ -138,9 +148,9 @@ final class StreamRelays {
         return List.copyOf(this.failures.values());
     }
 
-    /** @return why a stream site's port is not bound, null when it is or the site is no stream */
-    synchronized @Nullable StreamBindFailure failureOf(int siteId) {
-        return this.failures.get(siteId);
+    /** @return why some of a stream site's ports are not bound, empty when every one is or the site is no stream */
+    synchronized @NonNull List<StreamBindFailure> failuresOf(int siteId) {
+        return this.failures.values().stream().filter(failure -> failure.siteId() == siteId).toList();
     }
 
     /** Closes every stream's port. */
@@ -150,16 +160,22 @@ final class StreamRelays {
         this.failures.clear();
     }
 
-    /** @return the bound TCP address of a stream site, null when it listens on none */
-    synchronized @Nullable InetSocketAddress tcpAddress(int siteId) {
-        Relay relay = this.relays.get(siteId);
+    /** @return the bound TCP address of a site's public port, null when nothing listens on it for that site */
+    synchronized @Nullable InetSocketAddress tcpAddress(int siteId, int port) {
+        Relay relay = this.relayOf(siteId, port);
         return relay == null || relay.tcp == null ? null : relay.tcp.getLocalAddress();
     }
 
-    /** @return the bound UDP address of a stream site, null when it listens on none */
-    synchronized @Nullable InetSocketAddress udpAddress(int siteId) {
-        Relay relay = this.relays.get(siteId);
+    /** @return the bound UDP address of a site's public port, null when nothing listens on it for that site */
+    synchronized @Nullable InetSocketAddress udpAddress(int siteId, int port) {
+        Relay relay = this.relayOf(siteId, port);
         return relay == null || relay.udp == null ? null : relay.udp.getLocalAddress();
+    }
+
+    /** @return the port's relay while it routes for this site, null when another site holds it or none listens */
+    private @Nullable Relay relayOf(int siteId, int port) {
+        Relay relay = this.relays.get(port);
+        return relay == null || relay.route.get().siteId() != siteId ? null : relay;
     }
 
     /** @throws IOException when a transport's port cannot be bound; whatever was bound is closed again */

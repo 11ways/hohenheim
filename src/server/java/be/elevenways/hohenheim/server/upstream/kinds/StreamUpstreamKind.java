@@ -5,16 +5,15 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.ports.PublishedPort;
-import be.elevenways.hohenheim.ports.StreamProtocol;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.hohenheim.server.sitetype.StreamProvider;
 import be.elevenways.hohenheim.server.sitetype.StreamTarget;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.BooleanField;
-import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -22,6 +21,7 @@ import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.ValidationContext;
 import be.elevenways.zenit.common.validation.ValidationResult;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -31,20 +31,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A TCP/UDP stream (npmplus's "streams"): a public port of its own on the proxy's host, forwarded unread to an
- * upstream address and port. Nothing runs on a host for it.
+ * A TCP/UDP stream (npmplus's "streams"): public ports of its own on the proxy's host, each forwarded unread to a port
+ * of one upstream address. Nothing runs on a host for it.
  *
  * AIDEV-NOTE: relayed by the proxy (StreamRelays), never kernel-forwarded. Measured on daystrom: Docker owns the
  * forward hook (`table ip filter`, chain FORWARD, policy drop), so a DNAT to any other host is dropped unless
  * Hohenheim writes into Docker's DOCKER-USER chain, an object it does not own; and an upstream on the proxy host's
  * loopback cannot be DNATed at all (route_localnet 0). The relay reaches every upstream the proxy can dial, the same
  * way TLS passthrough already does, and the access list is judged on the connecting address before anything is
- * dialled. On a host with IPv6 the public port listens on every address of both families (one dual-stack socket per
+ * dialled. On a host with IPv6 each public port listens on every address of both families (one dual-stack socket per
  * transport, see StreamRelays), so IPv6 clients reach it as IPv4 ones do. The upstream sees the proxy's address as
- * the client, as it would behind npmplus, unless {@link #PROXY_PROTOCOL_V2} is on: each TCP connection then starts
+ * the client, as it would behind npmplus, unless a port says {@code proxy-v2}: each TCP connection on it then starts
  * with a PROXY v2 header carrying the client's real address and port and the public address it connected to (TCP4
  * or TCP6, the client's own family), which the upstream must be set to expect (a mail server behind it learns who
- * connected). UDP never carries the header: the setting is refused on a stream that forwards datagrams.
+ * connected). UDP never carries the header: a port forwarding datagrams refuses it ({@link StreamPort#parse}).
+ *
+ * AIDEV-NOTE: ONE site holds every port of one service (a mail server's 25, 465, 587, 143 and 993): the ports are a
+ * list ({@link StreamPort}, {@link #PORTS}), what every port shares (the address, the connect timeout, the access
+ * list, the switch) is the site's. A stream with one port is a list of one; M008_StreamPortLists converted the
+ * single-port shape, and nothing here reads it: a site revision stored before it reads through
+ * SinglePortStreamSettings.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -54,16 +60,6 @@ public final class StreamUpstreamKind implements StreamProvider {
     public static final Identifier ID = HohenheimIds.id("stream");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
-    /** The public port clients connect to, on the proxy's own host. */
-    public static final IntegerField LISTEN_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("listen_port").required()
-            .validator(Range.of(1, 65535))
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("listen_port"))
-            .help(HohenheimMicrocopy.HELP.of("listen_port"))
-            .build());
-
-    public static final EnumField PROTOCOL = SETTINGS_SCHEMA.addField(StreamProtocol.field());
-
     public static final StringField FORWARD_HOST = SETTINGS_SCHEMA.addField(
         StringField.builder().name("forward_host").required()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stream_forward_host"))
@@ -71,24 +67,23 @@ public final class StreamUpstreamKind implements StreamProvider {
             .placeholder("10.0.0.20")
             .build());
 
-    public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("forward_port").required()
-            .validator(Range.of(1, 65535))
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stream_forward_port"))
-            .help(HohenheimMicrocopy.HELP.of("stream_forward_port"))
+    /** The public ports, each with where it goes at {@link #FORWARD_HOST} and how ({@link StreamPort}). */
+    public static final StringMapField PORTS = SETTINGS_SCHEMA.addField(
+        StringMapField.builder(StreamPort.FIELD).required()
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stream_ports"))
+            .help(HohenheimMicrocopy.HELP.of("stream_ports"))
+            .keyLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("listen_port"))
+            .valueLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stream_forward_port"))
+            .entries(StreamPort.entries())
+            .validator(StreamUpstreamKind::refuseUnreadablePorts)
             .build());
 
     public static final IntegerField CONNECT_TIMEOUT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("connect_timeout").defaultValue(10).required().suffix("s")
+        IntegerField.builder().name("connect_timeout").defaultValue(10).suffix("s")
             .validator(Range.of(1, 300))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("connect_timeout"))
             .help(HohenheimMicrocopy.HELP.of("stream_connect_timeout"))
             .build());
-
-    /** Sends a PROXY v2 header first on every TCP connection; refused while the stream forwards UDP. */
-    public static final BooleanField PROXY_PROTOCOL_V2 = SETTINGS_SCHEMA.addField(ProxyProtocolSetting.builder()
-        .validator(StreamUpstreamKind::refuseOverUdp)
-        .build());
 
     @Override public Identifier typeId() { return ID; }
     @Override public String getDisplayName() { return "TCP/UDP stream"; }
@@ -101,77 +96,85 @@ public final class StreamUpstreamKind implements StreamProvider {
         return PutOnlineReach.PORTS;
     }
 
-    /** One claim per transport, on the public port, forwarding to the upstream's port. */
+    /** One claim per public port and transport, each forwarding to its own port upstream. */
     @Override
     public @NonNull List<PublishedPort> proxyPorts(@NonNull Map<String, Object> settings) {
-        Integer listen = RawValues.parsedInt(settings.get(LISTEN_PORT.getName()));
-        Integer forward = RawValues.parsedInt(settings.get(FORWARD_PORT.getName()));
-        StreamProtocol protocol = protocolOf(settings);
-        if (listen == null || protocol == null) {
-            return List.of();
+        List<PublishedPort> claims = new ArrayList<>();
+        for (StreamPort port : portsOf(settings)) {
+            for (String transport : port.protocol().protocols()) {
+                claims.add(new PublishedPort(transport, port.listenPort(), port.forwardPort(), transport, false));
+            }
         }
-        List<PublishedPort> ports = new ArrayList<>();
-        for (String transport : protocol.protocols()) {
-            ports.add(new PublishedPort(transport, listen, forward == null ? listen : forward, transport, false));
-        }
-        return ports;
+        return claims;
     }
 
-    /** The public port and where it goes. */
+    /** The public ports and where they go: {@code 25, 465 -> mail.internal}. */
     @Override
     public String upstreamSummary(Map<String, Object> settings) {
-        Object listen = settings.get(LISTEN_PORT.getName());
-        Object host = settings.get(FORWARD_HOST.getName());
-        Object port = settings.get(FORWARD_PORT.getName());
-        if (listen == null || host == null || String.valueOf(host).isBlank()) {
+        String host = Texts.trimmedOrNull(settings.get(FORWARD_HOST.getName()));
+        List<StreamPort> ports = portsOf(settings);
+        if (host == null || ports.isEmpty()) {
             return null;
         }
-        StreamProtocol protocol = protocolOf(settings);
-        return listen + "/" + (protocol == null ? "?" : protocol.token()) + " -> " + host + ":" + port;
+        return labels(ports) + " -> " + host;
     }
 
     @Override
-    public StreamTarget streamTarget(Row site, Map<String, Object> settings) {
-        Integer listen = RawValues.parsedInt(settings.get(LISTEN_PORT.getName()));
-        Integer forward = RawValues.parsedInt(settings.get(FORWARD_PORT.getName()));
+    public @NonNull List<StreamTarget> streamTargets(Row site, Map<String, Object> settings) {
         String host = Texts.trimmedOrNull(settings.get(FORWARD_HOST.getName()));
-        StreamProtocol protocol = protocolOf(settings);
         Integer timeout = RawValues.parsedInt(settings.get(CONNECT_TIMEOUT.getName()));
-        if (listen == null || listen < 1 || listen > 65535) {
-            throw new IllegalArgumentException("the public port is missing or outside 1-65535");
-        }
-        if (forward == null || forward < 1 || forward > 65535) {
-            throw new IllegalArgumentException("the upstream port is missing or outside 1-65535");
-        }
         if (host == null) {
             throw new IllegalArgumentException("the upstream host is missing");
         }
-        if (protocol == null) {
-            // An unknown stored token forwards nothing rather than a guessed transport.
-            throw new IllegalArgumentException("the protocol '" + settings.get(StreamProtocol.SETTING)
-                + "' is not tcp, udp or both");
+        List<StreamPort> ports;
+        try {
+            ports = StreamPort.of(settings);
+        } catch (Violations unreadable) {
+            // An unreadable stored port forwards nothing rather than a guessed one.
+            throw new IllegalArgumentException("a public port is not written as forward port/protocol: "
+                + settings.get(StreamPort.FIELD), unreadable);
+        }
+        if (ports.isEmpty()) {
+            throw new IllegalArgumentException("the stream has no public port");
         }
         boolean publicOnly = TenantUpstreams.publicOnly(site);
         if (publicOnly && Boolean.FALSE.equals(TenantUpstreams.literalIsPublic(host))) {
             throw new IllegalArgumentException("a tenant-owned stream may only forward to a public address");
         }
-        int seconds = timeout == null ? 10 : Math.max(1, Math.min(300, timeout));
-        return new StreamTarget(listen, protocol, host, forward, seconds * 1000, publicOnly,
-            RawValues.isOn(settings, PROXY_PROTOCOL_V2));
+        int millis = (timeout == null ? 10 : Math.max(1, Math.min(300, timeout))) * 1000;
+        List<StreamTarget> targets = new ArrayList<>();
+        for (StreamPort port : ports) {
+            targets.add(new StreamTarget(port.listenPort(), port.protocol(), host, port.forwardPort(), millis,
+                publicOnly, port.proxyProtocolV2()));
+        }
+        return targets;
     }
 
-    /** A PROXY v2 header rides TCP connections only: on with UDP forwarded (alone or beside TCP), it is refused. */
-    private static @NonNull ValidationResult refuseOverUdp(@Nullable Boolean on, @NonNull ValidationContext context) {
-        StreamProtocol protocol = protocolOf(context.siblings());
-        if (Boolean.TRUE.equals(on) && protocol != null && protocol.forwardsUdp()) {
-            return ValidationResult.invalid(HohenheimMicrocopy.VIOLATIONS.of("stream_proxy_protocol_tcp_only"));
+    /** @return the site's public ports, none when their spelling is refused (its save refuses it first) */
+    public static @NonNull List<StreamPort> portsOf(@NonNull Map<String, Object> settings) {
+        try {
+            return StreamPort.of(settings);
+        } catch (Violations unreadable) {
+            return List.of();
+        }
+    }
+
+    /** @return the ports as a list names them: {@code 25, 465, 53/udp} */
+    public static @NonNull String labels(@NonNull List<StreamPort> ports) {
+        return String.join(", ", ports.stream().map(StreamPort::label).toList());
+    }
+
+    /** A stream forwards at least one public port, each written as {@link StreamPort} reads it. */
+    private static @NonNull ValidationResult refuseUnreadablePorts(@Nullable Map<String, String> ports,
+                                                                   @NonNull ValidationContext context) {
+        if (ports == null || ports.isEmpty()) {
+            return ValidationResult.invalid(HohenheimMicrocopy.VIOLATIONS.of("stream_ports_required"));
+        }
+        try {
+            StreamPort.of(Map.of(StreamPort.FIELD, ports));
+        } catch (Violations refused) {
+            return ValidationResult.invalid(refused.all().getFirst().message());
         }
         return ValidationResult.valid();
-    }
-
-    /** @return the stream's protocol, TCP when the setting is absent, null for a token the vocabulary does not know */
-    static StreamProtocol protocolOf(@NonNull Map<String, Object> settings) {
-        Object token = settings.get(StreamProtocol.SETTING);
-        return token == null || String.valueOf(token).isBlank() ? StreamProtocol.TCP : StreamProtocol.ofToken(token);
     }
 }

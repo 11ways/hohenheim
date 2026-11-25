@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,6 +103,22 @@ public final class RawValues {
     @SuppressWarnings("unchecked")
     public static @Nullable Map<String, Object> mapOrNull(@Nullable Object raw) {
         return raw instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
+    /**
+     * Reads a stored map column, raw or as its JSON text (a frozen migration model's and a raw query's read), into a
+     * copy the caller may change.
+     *
+     * @return a mutable string-keyed copy of the map, null when the value holds no map
+     */
+    public static @Nullable Map<String, Object> storedMapCopy(@Nullable Object stored) {
+        Object tree = stored instanceof String text ? Zenit.DRY.parseTree(text) : stored;
+        if (!(tree instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        map.forEach((key, value) -> copy.put(String.valueOf(key), value));
+        return copy;
     }
 
     /** @return the value itself as a list, or an empty list when it is not a list */

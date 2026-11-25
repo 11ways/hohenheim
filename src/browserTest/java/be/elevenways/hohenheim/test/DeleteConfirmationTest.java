@@ -194,8 +194,8 @@ class DeleteConfirmationTest {
             //     forwarding and are freed, in both languages, and nothing a website has.
             Row stream = Models.get(SiteModel.class).findById(site("relay", null));
             stream.set(SiteModel.UPSTREAM_KIND, "hohenheim:stream");
-            stream.set(SiteModel.SETTINGS, Map.of("listen_port", streamPort, "protocol", "both",
-                "forward_host", "10.0.0.20", "forward_port", 22));
+            stream.set(SiteModel.SETTINGS, Map.of("forward_host", "10.0.0.20", "ports",
+                Map.of(String.valueOf(streamPort), "22/both")));
             Models.get(SiteModel.class).save(stream);
             ConfirmationSpec relay = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
                 request);
@@ -209,8 +209,8 @@ class DeleteConfirmationTest {
                 .doesNotContain("hostnamen").doesNotContain("preview");
 
             // 7c. A stream on one port names it in the singular, in both languages.
-            stream.set(SiteModel.SETTINGS, Map.of("listen_port", streamPort, "protocol", "tcp",
-                "forward_host", "10.0.0.20", "forward_port", 22));
+            stream.set(SiteModel.SETTINGS, Map.of("forward_host", "10.0.0.20", "ports",
+                Map.of(String.valueOf(streamPort), "22/tcp")));
             Models.get(SiteModel.class).save(stream);
             ConfirmationSpec onePort = sites.forRow(Models.get(SiteModel.class).findById(stream.get(SiteModel.ID)),
                 request);

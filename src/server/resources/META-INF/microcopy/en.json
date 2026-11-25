@@ -19547,23 +19547,25 @@
   "static_site_owns_no_container": {"scope": "violations", "text": "A static site never runs a container itself; each deploy generates a release that serves it"},
   "stream": [
     {"scope": "upstream_kind", "text": "TCP/UDP stream"},
-    {"scope": "upstream_kind_description", "text": "Forward a public port of this proxy to an address and port, unread: SSH, a database, a game server"}
+    {"scope": "upstream_kind_description", "text": "Forward public ports of this proxy to ports of one address, unread: SSH, a database, a game server, a mail server"}
   ],
   "listen_port": [
-    {"scope": "hohenheim_field", "text": "Public port"},
-    {"scope": "help", "text": "The port clients connect to, on the host this proxy runs on. No other app, stream or program may use it."}
+    {"scope": "hohenheim_field", "text": "Public port"}
   ],
-  "stream_protocol": [
-    {"scope": "hohenheim_field", "text": "Protocol"},
-    {"scope": "help", "text": "What is forwarded on the public port: connections (TCP), datagrams (UDP) or both."}
+  "stream_ports": [
+    {"scope": "hohenheim_field", "text": "Public ports"},
+    {"scope": "help", "text": "One row per port clients connect to on the host this proxy runs on, which no other app, stream or program may use: the public port, then the port at the address it forwards to with its protocol and, for a PROXY v2 header, proxy-v2 after it, such as 2525/tcp proxy-v2. A port alone forwards TCP."}
   ],
+  "stream_port_listen": {"scope": "help", "text": "The public port clients connect to; an entry naming a port the site already forwards replaces it."},
+  "stream_port_forward": {"scope": "help", "text": "The port at forward_host that receives what arrives on the public port."},
+  "stream_port_protocol": {"scope": "help", "text": "tcp, udp or both; tcp when left out."},
+  "stream_port_proxy": {"scope": "help", "text": "Set true to start each TCP connection with a PROXY v2 header carrying the client's address; the upstream must expect it."},
   "stream_forward_host": [
     {"scope": "hohenheim_field", "text": "Forward to address"},
-    {"scope": "help", "text": "The host name or IP address the stream forwards to: the host of an app's published port, a machine, or any address this proxy can reach."}
+    {"scope": "help", "text": "The host name or IP address every public port forwards to: the host of an app's published port, a machine, or any address this proxy can reach."}
   ],
   "stream_forward_port": [
-    {"scope": "hohenheim_field", "text": "Forward to port"},
-    {"scope": "help", "text": "The port at that address."}
+    {"scope": "hohenheim_field", "text": "Forwards to port"}
   ],
   "stream_connect_timeout": {"scope": "help", "text": "Maximum seconds to open a TCP connection to the forwarded address."},
   "stream_access_list": {"scope": "help", "text": "Optional: only its address rules apply to a stream, so clients from a denied network are dropped. A password or a sign-in cannot be asked on a raw port."},
@@ -19571,24 +19573,26 @@
   "stream_protocol_tcp": {"scope": "port_protocol", "text": "TCP"},
   "stream_protocol_udp": {"scope": "port_protocol", "text": "UDP"},
   "stream_protocol_both": {"scope": "port_protocol", "text": "TCP and UDP"},
-  "stream_lead": {"scope": "put_online", "text": "Claims a public port on this proxy's host and forwards what arrives there, unread, to an address you give."},
-  "step_stream_where_lead": {"scope": "put_online", "text": "Its name and the address and port it forwards to. Nothing runs on a host for it."},
-  "step_stream_ports_lead": {"scope": "put_online", "text": "The public port clients connect to and what it forwards. An access list applies by address only: a stream cannot ask for a password."},
-  "run_stream_port": {"scope": "put_online", "text": "Claim its public port"},
-  "run_stream_forward": {"scope": "put_online", "text": "Forward it"},
-  "done_stream_port": {"scope": "put_online", "text": "Claimed public port {$port}"},
-  "done_stream_forward": {"scope": "put_online", "text": "Port {$port} forwards to {$target}"},
-  "outcome_stream_live": {"scope": "put_online", "text": "Port {$port} of this proxy's host now forwards to {$target}."},
+  "stream_lead": {"scope": "put_online", "text": "Claims public ports on this proxy's host and forwards what arrives there, unread, to an address you give."},
+  "step_stream_where_lead": {"scope": "put_online", "text": "Its name and the address it forwards to. Nothing runs on a host for it."},
+  "step_stream_ports_lead": {"scope": "put_online", "text": "The public ports clients connect to, each with the port it forwards to. An access list applies by address only: a stream cannot ask for a password."},
+  "run_stream_port": {"scope": "put_online", "text": "Claim its public ports"},
+  "run_stream_forward": {"scope": "put_online", "text": "Forward them"},
+  "done_stream_port": {"scope": "put_online", "text": ".match {$count :integer}\none {{Claimed public port {$ports}}}\n* {{Claimed public ports {$ports}}}"},
+  "done_stream_forward": {"scope": "put_online", "text": ".match {$count :integer}\none {{Port {$ports} forwards to {$target}}}\n* {{Ports {$ports} forward to {$target}}}"},
+  "outcome_stream_live": {"scope": "put_online", "text": ".match {$count :integer}\none {{Port {$ports} of this proxy's host now forwards to {$target}.}}\n* {{Ports {$ports} of this proxy's host now forward to {$target}.}}"},
   "stream_no_http_auth": {"scope": "violations", "text": "A TCP/UDP stream is forwarded unread, so it cannot send anyone to a login. Remove the login provider."},
   "stream_access_list_credentials": {"scope": "violations", "text": "This access list asks for a password or a login, which a TCP/UDP stream cannot do. Pick a list with address rules only."},
-  "stream_proxy_protocol_tcp_only": {"scope": "violations", "text": "A PROXY v2 header is sent on TCP connections only, and this stream forwards UDP. Set the protocol to TCP, or switch the header off."},
+  "stream_port_invalid": {"scope": "violations", "text": "Port {$port} is not written as a port to forward to with its protocol, such as 2525/tcp, and proxy-v2 after it for a PROXY v2 header: {$spec}."},
+  "stream_port_proxy_protocol_tcp_only": {"scope": "violations", "text": "Port {$port} forwards UDP, which never carries a PROXY v2 header. Forward it over TCP only, or leave proxy-v2 off."},
+  "stream_ports_required": {"scope": "violations", "text": "A TCP/UDP stream forwards at least one public port."},
   "not_forwarding": [
     {"scope": "app_health", "text": "Not forwarding"},
     {"scope": "attention_title", "text": "{$name} is not forwarding its port"}
   ],
-  "not_forwarding_detail": {"scope": "app_health", "text": "Port {$port} could not be opened on this proxy's host: another program may hold it, or this install does not run the proxy."},
-  "stream_forwarding": {"scope": "app_health", "text": "Forwards port {$port}"},
-  "stream_connect_hint": {"scope": "app_overview", "text": "Clients connect to this port of the proxy's host; it forwards what arrives to {$target}."},
+  "not_forwarding_detail": {"scope": "app_health", "text": ".match {$count :integer}\none {{Port {$ports} could not be opened on this proxy's host: another program may hold it, or this install does not run the proxy.}}\n* {{Ports {$ports} could not all be opened on this proxy's host: another program may hold one, or this install does not run the proxy.}}"},
+  "stream_forwarding": {"scope": "app_health", "text": ".match {$count :integer}\none {{Forwards port {$ports}}}\n* {{Forwards ports {$ports}}}"},
+  "stream_connect_hint": {"scope": "app_overview", "text": "Clients connect to these ports of the proxy's host; each forwards what arrives, unread, to the address its row names."},
   "variables_lead": {"scope": "environment", "text": "Every app in this environment gets these values at its next deploy; an app's own value for the same key wins."},
   "environments_lead": {"scope": "project", "text": "The environments this project deploys into, each with the variables its apps start with."},
   "members_lead": {"scope": "project", "text": "Someone belongs to this project by holding its role: under Access, People, give them the role named after this project."},
@@ -20453,5 +20457,27 @@
   "service_health_timeout": {"text": "Seconds one health check may take before it counts as failed.", "scope": "help"},
   "service_health_retries": {"text": "Failed checks in a row before the service counts as unhealthy.", "scope": "help"},
   "service_health_start_period": {"text": "Seconds after start during which failed checks do not count.", "scope": "help"},
-  "service_restart_policy": {"text": "When Docker restarts the container after it exits; no never restarts it.", "scope": "help"}
+  "service_restart_policy": {"text": "When Docker restarts the container after it exits; no never restarts it.", "scope": "help"},
+  "create_site_stream": {"text": "Create a TCP/UDP stream", "scope": "hohenheim"},
+  "create_site_stream_description": {"text": "Creates a TCP/UDP stream site forwarding public ports through the panel's own create.", "scope": "hohenheim"},
+  "change_site_stream": {"text": "Change a TCP/UDP stream", "scope": "hohenheim"},
+  "change_site_stream_description": {"text": "Changes the settings sent of a TCP/UDP stream through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
+  "site_thing_site_stream": {"text": "a TCP/UDP stream", "scope": "hohenheim"},
+  "mcp_tool_site_stream_set": {"text": "Creates or changes a TCP/UDP stream: public ports on the proxy's host, each forwarded unread to a port of forward_host, with no address and no HTTPS. One site carries every port of one service; ports merge by listen_port, remove: true drops one. A port another site or program holds is refused, naming it; switched off, the stream keeps its ports. Its access list may hold network rules only. Non-administrators change only name, enabled and description. A site of another kind given as code is refused unless change_kind is true. Answers the site's code, or on a change the settings written.", "scope": "hohenheim"},
+  "mcp_tool_site_ports_move": {"text": "Moves every public port of a TCP/UDP stream (code) into another stream (into) that forwards to the same address, follows the same access list and is switched the same way, then sends the emptied stream to the trash, all in one go. The ports keep listening, so open connections stay; new ones take the other stream's connect timeout. Only an administrator moves ports. Restoring the trashed stream is refused while another site holds its ports. Answers which ports moved, from which stream into which.", "scope": "hohenheim"},
+  "mcp_code_site_ports_move": {"text": "The stream (S20) whose ports move; it goes to the trash.", "scope": "hohenheim"},
+  "move_site_ports": { "text": "{$actor} moved the ports of {$subject} into another stream", "scope": "hohenheim", "target": "happened" },
+  "move_site_ports_description": {"text": "Moves every public port of this stream into another stream forwarding to the same address and sends this one to the trash, in one go; the ports keep listening.", "scope": "hohenheim"},
+  "move_ports": {"text": "Move ports", "scope": "site"},
+  "move_ports_confirm": {"text": "Move every public port of this stream into another stream that forwards to the same address? This stream then goes to the trash; its ports keep listening, so open connections stay.", "scope": "site"},
+  "move_ports_into": [
+    {"text": "Into the stream", "scope": "site"},
+    {"text": "The stream (S20) that takes the ports: it forwards to the same address, follows the same access list and is switched the same way.", "scope": "help"}
+  ],
+  "ports_moved": {"text": ".match {$count :integer}\none {{Port {$ports} moved from {$from} into {$into}, which now forwards it; {$from} is in the trash.}}\n* {{Ports {$ports} moved from {$from} into {$into}, which now forwards them; {$from} is in the trash.}}", "scope": "site"},
+  "site_ports_move_no_stream": {"text": "{$target} is no TCP/UDP stream, so it cannot take the ports of {$name}.", "scope": "violations"},
+  "site_ports_move_itself": {"text": "Pick another stream: {$name} cannot take its own ports.", "scope": "violations"},
+  "site_ports_move_other_address": {"text": "{$target} forwards to {$address}, not to where {$name} forwards. Ports move only between streams that forward to the same address.", "scope": "violations"},
+  "site_ports_move_other_access": {"text": "{$target} and {$name} follow different access lists. Give both the same list first, so no moved port admits other clients.", "scope": "violations"},
+  "site_ports_move_other_switch": {"text": "One of {$target} and {$name} is switched off. Switch both on, or both off, first, so no moved port stops or starts forwarding.", "scope": "violations"}
 }

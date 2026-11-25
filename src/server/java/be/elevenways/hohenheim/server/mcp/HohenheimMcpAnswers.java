@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
+import be.elevenways.hohenheim.server.cms.SitePortMoves;
+import be.elevenways.hohenheim.site.SitePortsMoved;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.TerminalText;
@@ -164,6 +166,12 @@ final class HohenheimMcpAnswers {
         SshPublicKey publicKey = connection == null ? null : GitConnectionWrites.publicKeyOf(connection);
         if (publicKey != null) response.line(GitConnectionWrites.PUBLIC_KEY + ": " + publicKey.fileLine());
         return response;
+    }
+
+    /** Which ports moved, from which stream (now in the trash) into which, by their codes. */
+    static @NonNull McpResponse portsMoved(@NonNull McpToolContext context, @Nullable SitePortsMoved moved) {
+        if (moved == null) return McpResponse.create().line("ports moved: unknown");
+        return McpResponse.create().line(context.access().text(SitePortMoves.said(moved)));
     }
 
     /** A zone's record lines; their names and values are what someone typed, so they come as untrusted text. */

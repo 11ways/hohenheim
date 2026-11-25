@@ -138,8 +138,8 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 1: where it forwards to, then its ports")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"ports\"")
             .doesNotContain("data-zf-step=\"https\"");
-        assertThat(wizard).as("step 1: the ports step asks the public port, the protocol and the access list")
-            .contains("name=\"listen_port\"").contains("name=\"protocol\"").contains("name=\"access_list_id\"")
+        assertThat(wizard).as("step 1: the ports step asks the public ports and the access list")
+            .contains("Public ports").doesNotContain("name=\"listen_port\"").contains("name=\"access_list_id\"")
             .contains("name=\"forward_host\"").doesNotContain("name=\"hostname\"");
         assertThat(wizard).as("step 1: its access-list help speaks of address rules only, as a stream applies them")
             .contains("only its address rules apply to a stream").doesNotContain("addresses, passwords, sign-in");
@@ -185,7 +185,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         //     list narrows by a ?q= expression; a bare word is no expression and would list every site.
         String list = adminGet("/admin/sites" + listQuery("name = \"r4a-ssh\"")).body();
         assertThat(list).as("step 3d: the list holds the stream").contains("r4a-ssh");
-        assertThat(list).as("step 3d: its port in the address cell").contains(publicPort + "/tcp");
+        assertThat(list).as("step 3d: its port in the address cell").contains(String.valueOf(publicPort));
         assertThat(list).as("step 3d: no missing address, no HTTPS state").doesNotContain("No address");
 
         // 4. A second stream on the same port is refused in the run, naming the holder; nothing is created.
@@ -202,8 +202,8 @@ class StreamJourneyTest extends HohenheimTestBase {
         edit(site, publicPort, "both", null);
         assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(HostModel.localHostId(), "", publicPort, "udp")))
             .as("step 5: the UDP port is claimed too").isNotNull();
-        assertThat(proxy.getStreamFailure(siteId)).as("step 5: the proxy opened both transports").isNull();
-        assertThat(proxy.getStreamUdpAddress(siteId)).as("step 5: and listens for datagrams").isNotNull();
+        assertThat(proxy.getStreamFailures(siteId)).as("step 5: the proxy opened both transports").isEmpty();
+        assertThat(proxy.getStreamUdpAddress(siteId, publicPort)).as("step 5: and listens for datagrams").isNotNull();
         assertThat(udpRoundTrip(publicPort, "pong")).as("step 5: THE ASSERTION, UDP forwards both ways")
             .isEqualTo("pong");
         assertThat(tcpRoundTrip(publicPort, "both")).as("step 5: and TCP still does").isEqualTo("both");
@@ -274,8 +274,8 @@ class StreamJourneyTest extends HohenheimTestBase {
         assertThat(again.status()).as("step 8: the freed port is claimed again (%s)", again.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         Row againSite = siteNamed("r4a-again");
-        assertThat(proxy.getStreamFailure(againSite.get(SiteModel.ID))).as("step 8: the proxy opened it again")
-            .isNull();
+        assertThat(proxy.getStreamFailures(againSite.get(SiteModel.ID))).as("step 8: the proxy opened it again")
+            .isEmpty();
         assertThat(udpRoundTrip(publicPort, "again")).as("step 8: and forwards").isEqualTo("again");
         OperationPipeline.invoke(OperationRequest.of(SiteWrites.DELETE, CmsPlacementSurface.ADMIN_ACTION)
             .caller(operator).subjects(List.of(againSite)));
@@ -304,9 +304,7 @@ class StreamJourneyTest extends HohenheimTestBase {
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(SiteModel.NAME.getName(), "r4a-" + name);
         form.put("forward_host", "127.0.0.1");
-        form.put("forward_port", tcpEcho.getLocalPort());
-        form.put("listen_port", publicPort);
-        form.put("protocol", protocol);
+        form.put("ports", StreamPortRows.of(publicPort, tcpEcho.getLocalPort() + "/" + protocol));
         if (accessList != null) {
             form.put(SiteModel.ACCESS_LIST_ID.getName(), accessList);
         }
@@ -316,10 +314,8 @@ class StreamJourneyTest extends HohenheimTestBase {
     /** The site form's edit of a stream, as the panel posts it: TCP and UDP forward to the echo servers' ports. */
     private static void edit(Row site, int publicPort, String protocol, Integer accessList) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("listen_port", publicPort);
-        settings.put("protocol", protocol);
         settings.put("forward_host", "127.0.0.1");
-        settings.put("forward_port", tcpEcho.getLocalPort());
+        settings.put("ports", StreamPortRows.of(publicPort, tcpEcho.getLocalPort() + "/" + protocol));
         settings.put("connect_timeout", 10);
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(SiteModel.NAME.getName(), site.get(SiteModel.NAME));

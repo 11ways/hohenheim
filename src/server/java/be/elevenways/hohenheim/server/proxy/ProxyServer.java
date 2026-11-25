@@ -102,7 +102,7 @@ public class ProxyServer {
     private volatile long httpNextRestartAttemptAt;
     private volatile int httpsRestartAttempts;
     private volatile long streamNextRetryAt;
-    // The stream sites whose listener-down alert went out for the current outage; the supervisor thread's only.
+    // The stream ports whose listener-down alert went out for the current outage; the supervisor thread's only.
     private final Set<Integer> streamDownAlerted = new HashSet<>();
     private volatile long httpsNextRestartAttemptAt;
     private volatile boolean httpDownAlertSent;
@@ -235,14 +235,14 @@ public class ProxyServer {
         streams.reconcile();
     }
 
-    /** @return the public TCP address a stream site listens on, null when it listens on none */
-    public @Nullable InetSocketAddress getStreamTcpAddress(int siteId) {
-        return streams.tcpAddress(siteId);
+    /** @return the public TCP address a stream site's public port listens on, null when it listens on none for it */
+    public @Nullable InetSocketAddress getStreamTcpAddress(int siteId, int port) {
+        return streams.tcpAddress(siteId, port);
     }
 
-    /** @return the public UDP address a stream site listens on, null when it listens on none */
-    public @Nullable InetSocketAddress getStreamUdpAddress(int siteId) {
-        return streams.udpAddress(siteId);
+    /** @return the public UDP address a stream site's public port listens on, null when it listens on none for it */
+    public @Nullable InetSocketAddress getStreamUdpAddress(int siteId, int port) {
+        return streams.udpAddress(siteId, port);
     }
 
     /** @return the stream ports this proxy could not open, each in the operator's words */
@@ -250,9 +250,9 @@ public class ProxyServer {
         return streams.failures();
     }
 
-    /** @return why a stream site's port is not open, null when it is or the site is no stream */
-    public @Nullable StreamBindFailure getStreamFailure(int siteId) {
-        return streams.failureOf(siteId);
+    /** @return why some of a stream site's ports are not open, empty when all are or the site is no stream */
+    public @NonNull List<StreamBindFailure> getStreamFailures(int siteId) {
+        return streams.failuresOf(siteId);
     }
 
     /** Whether force-SSL routes can currently be answered with a redirect instead of a 503. */
@@ -603,9 +603,9 @@ public class ProxyServer {
         }
         Set<Integer> failing = new HashSet<>();
         for (StreamBindFailure failure : failed) {
-            failing.add(failure.siteId());
-            if (failure.attempts() >= 2 && streamDownAlerted.add(failure.siteId())) {
-                Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "stream#" + failure.siteId(),
+            failing.add(failure.port());
+            if (failure.attempts() >= 2 && streamDownAlerted.add(failure.port())) {
+                Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "stream#" + failure.port(),
                     HohenheimMicrocopy.ALERT.of("stream_down_subject").withArg("name", failure.name())
                         .withArg("port", String.valueOf(failure.port())),
                     HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", failure.words()));

@@ -119,19 +119,21 @@ class StreamClientAddressJourneyTest extends HohenheimTestBase {
         OperationRun live = PutOnlineJourneyTest.ended(PutOnlineJourneyTest.runOf(OperationPipeline.invoke(
                 OperationRequest.of(PutOnline.PUT_STREAM_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
                     .caller(TenantConduits.operator()).form(Map.of(SiteModel.NAME.getName(), "r4p-mail",
-                        "forward_host", "127.0.0.1", "forward_port", upstream.getLocalPort(),
-                        "listen_port", publicPort, "protocol", "tcp")))),
+                        "forward_host", "127.0.0.1", "ports", StreamPortRows.of(publicPort,
+                            upstream.getLocalPort() + "/tcp"))))),
             TenantConduits.operator(), "r4p-mail");
         assertThat(live.status()).as("step 1: the stream is online (%s)", live.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         Row site = Objects.requireNonNull(Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("r4p-mail")).first(), "the stream exists");
         int siteId = site.get(SiteModel.ID);
-        assertThat(storedSettings(siteId)).as("step 1: no header asked").doesNotContainEntry("proxy_protocol_v2", true);
+        assertThat(storedSettings(siteId).get("ports")).as("step 1: no header asked")
+            .isEqualTo(Map.of(String.valueOf(publicPort), upstream.getLocalPort() + "/tcp"));
 
         // 2. The public port is bound on the wildcard; step 3 proves it takes both families (Java binds 0.0.0.0 as the
         //    dual-stack :: on an IPv6 host, see StreamRelays).
-        InetSocketAddress bound = Objects.requireNonNull(proxy.getStreamTcpAddress(siteId), "the TCP port is bound");
+        InetSocketAddress bound = Objects.requireNonNull(proxy.getStreamTcpAddress(siteId, publicPort),
+            "the TCP port is bound");
         assertThat(bound.getAddress().isAnyLocalAddress()).as("step 2: every address").isTrue();
 
         // 3. Off: an IPv4 and an IPv6 client both reach the upstream, which gets no header and sees the proxy.
@@ -172,13 +174,14 @@ class StreamClientAddressJourneyTest extends HohenheimTestBase {
             assertThat(seen.line()).isEqualTo("EHLO six.example.test");
         }
 
-        // 6. A stream forwarding UDP, alone or beside TCP, refuses the header on its field, in words; nothing changes.
+        // 6. A port forwarding UDP, alone or beside TCP, refuses the header on the ports, in words; nothing changes.
         for (String protocol : List.of("udp", "both")) {
             Throwable refused = catchThrowable(() -> edit(site, publicPort, protocol, true));
             assertThat(refused).as("step 6: %s with the header is refused", protocol).isInstanceOf(Violations.class);
             Violation first = ((Violations) refused).all().getFirst();
-            assertThat(first.path()).as("step 6: on the setting").endsWith("proxy_protocol_v2");
-            assertThat(first.message().key()).as("step 6: saying why").isEqualTo("stream_proxy_protocol_tcp_only");
+            assertThat(first.path()).as("step 6: on the ports").endsWith("ports");
+            assertThat(first.message().key()).as("step 6: saying why")
+                .isEqualTo("stream_port_proxy_protocol_tcp_only");
         }
         assertThat(roundTrip(ipv4, publicPort, "EHLO kept.example.test").family())
             .as("step 6: the stored stream still sends it").isEqualTo(TCP4);
@@ -204,15 +207,13 @@ class StreamClientAddressJourneyTest extends HohenheimTestBase {
         return settings == null ? Map.of() : settings;
     }
 
-    /** The site form's edit of the stream, as the panel posts it. */
+    /** The site form's edit of the stream, as the panel posts it: its one port, spelled as the ports table holds it. */
     private static void edit(Row site, int publicPort, String protocol, boolean proxyProtocol) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("listen_port", publicPort);
-        settings.put("protocol", protocol);
         settings.put("forward_host", "127.0.0.1");
-        settings.put("forward_port", upstream.getLocalPort());
+        settings.put("ports", StreamPortRows.of(publicPort, upstream.getLocalPort() + "/" + protocol
+            + (proxyProtocol ? " proxy-v2" : "")));
         settings.put("connect_timeout", 10);
-        settings.put("proxy_protocol_v2", proxyProtocol);
         Map<String, Object> form = new LinkedHashMap<>();
         form.put(SiteModel.NAME.getName(), site.get(SiteModel.NAME));
         form.put(SiteModel.UPSTREAM_KIND.getName(), KIND);

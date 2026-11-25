@@ -1700,6 +1700,95 @@ class HohenheimMcpTest extends HohenheimHttpTestBase {
         }
     }
 
+    /**
+     * A mail server's ports by tools alone, as an administrator's key: one stream made with three ports to one address,
+     * read port by port, a fourth added, one changed, one removed, a port another stream holds refused by name, and a
+     * second stream's two ports moved into it, the emptied stream in the trash.
+     */
+    @Test
+    void anAdministratorForwardsAMailServerAsOneStreamByToolsAlone() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        ProxyServer adopted = ServerMain.getProxyServer() == null ? new ProxyServer() : null;
+        if (adopted != null) ServerMain.adoptProxyServer(adopted);
+        try {
+            McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
+                "Test Admin");
+            List<Integer> port = new ArrayList<>();
+            for (int i = 0; i < 6; i++) port.add(FreePorts.tcpAndUdp());
+            String mailName = PREFIX + "mail-" + letters();
+
+            // 1. One stream with three ports, typed entries; a create without its ports says what it needs.
+            assertThat(admin.call("site_stream_set", Map.of("name", mailName, "forward_host", "127.0.0.1")).text())
+                .as("step 1: a create without its ports").contains("give name and forward_host and ports");
+            McpHttpSession.Answer made = admin.call("site_stream_set", Map.of("name", mailName, "forward_host",
+                "127.0.0.1", "ports", List.of(
+                    Map.of("listen_port", port.get(0), "forward_port", 2525, "proxy_protocol_v2", true),
+                    Map.of("listen_port", port.get(1), "forward_port", 4465),
+                    Map.of("listen_port", port.get(2), "forward_port", 4587, "protocol", "tcp"))));
+            assertThat(made.error()).as("step 1: " + made.text()).isFalse();
+            String mail = found(Pattern.compile("S\\d+"), made.text(), "step 1: the stream's code");
+            int mailId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(SiteModel.MODEL_ID, mail)));
+            assertThat(siteSettings(mailId).get("ports")).as("step 1: three ports, one site")
+                .isEqualTo(Map.of(String.valueOf(port.get(0)), "2525/tcp proxy-v2",
+                    String.valueOf(port.get(1)), "4465/tcp", String.valueOf(port.get(2)), "4587/tcp"));
+
+            // 2. read shows each port.
+            String read = admin.call("read", Map.of("ids", List.of(mail))).text();
+            assertThat(read).as("step 2: every port read").contains(String.valueOf(port.get(0))).contains("2525/tcp")
+                .contains(String.valueOf(port.get(1))).contains(String.valueOf(port.get(2)));
+
+            // 3. A fourth added, one changed, one removed: entries merge by their public port.
+            McpHttpSession.Answer changed = admin.call("site_stream_set", Map.of("code", mail, "ports", List.of(
+                Map.of("listen_port", port.get(3), "forward_port", 4993),
+                Map.of("listen_port", port.get(1), "forward_port", 4466),
+                Map.of("listen_port", port.get(2), "remove", true))));
+            assertThat(changed.error()).as("step 3: " + changed.text()).isFalse();
+            assertThat(siteSettings(mailId).get("ports")).as("step 3: THE ASSERTION, merged by public port")
+                .isEqualTo(Map.of(String.valueOf(port.get(0)), "2525/tcp proxy-v2",
+                    String.valueOf(port.get(1)), "4466/tcp", String.valueOf(port.get(3)), "4993/tcp"));
+            assertThat(admin.call("site_stream_set", Map.of("code", mail, "ports", List.of(Map.of("listen_port",
+                port.get(3), "forward_port", 53, "protocol", "udp", "proxy_protocol_v2", true)))).error())
+                .as("step 3: a PROXY v2 header over UDP is refused").isTrue();
+
+            // 4. A port this stream holds, asked by another, is refused naming the stream and the port.
+            McpHttpSession.Answer clash = admin.call("site_stream_set", Map.of("name", PREFIX + "clash-" + letters(),
+                "forward_host", "127.0.0.1", "ports", List.of(Map.of("listen_port", port.get(0), "forward_port",
+                    25))));
+            assertThat(clash.error()).as("step 4: refused").isTrue();
+            assertThat(clash.text()).as("step 4: THE ASSERTION, naming who holds which port").contains(mailName)
+                .contains(String.valueOf(port.get(0)));
+
+            // 5. A second stream of two ports moved into the first; the emptied one goes to the trash.
+            McpHttpSession.Answer second = admin.call("site_stream_set", Map.of("name", PREFIX + "submission-"
+                + letters(), "forward_host", "127.0.0.1", "ports", List.of(
+                    Map.of("listen_port", port.get(4), "forward_port", 4588),
+                    Map.of("listen_port", port.get(5), "forward_port", 4589))));
+            assertThat(second.error()).as("step 5: " + second.text()).isFalse();
+            String submission = found(Pattern.compile("S\\d+"), second.text(), "step 5: the second's code");
+            int submissionId = Integer.parseInt(Objects.requireNonNull(RecordCodes.keyOfCode(SiteModel.MODEL_ID,
+                submission)));
+            McpHttpSession.Answer moved = admin.call("site_ports_move", Map.of("code", submission, "into", mail));
+            assertThat(moved.error()).as("step 5: " + moved.text()).isFalse();
+            assertThat(moved.text()).as("step 5: the answer names the ports moved and both streams").contains(mail)
+                .contains(submission).contains(port.get(4) + ", " + port.get(5)).contains("trash");
+            assertThat(RawValues.map(siteSettings(mailId).get("ports")).keySet())
+                .as("step 5: THE ASSERTION, one stream holds every port").containsExactlyInAnyOrder(
+                    String.valueOf(port.get(0)), String.valueOf(port.get(1)), String.valueOf(port.get(3)),
+                    String.valueOf(port.get(4)), String.valueOf(port.get(5)));
+            assertThat(Models.get(SiteModel.class).find().withTrashed().where(SiteModel.ID.eq(submissionId)).first()
+                .get(SiteModel.DELETED_AT)).as("step 5: the second in the trash").isNotNull();
+            assertThat(admin.call("site_ports_move", Map.of("code", mail, "into", mail)).error())
+                .as("step 5: a stream never takes its own ports").isTrue();
+            assertThat(admin.call("describe", Map.of("code", mail)).text()).as("step 5: describe offers the move")
+                .contains("site_stream_set code=" + mail).contains("site_ports_move code=" + mail);
+
+            assertThat(admin.call("delete", Map.of("code", mail)).error()).as("step 6: the stream trashed").isFalse();
+        } finally {
+            if (adopted != null) ServerMain.adoptProxyServer(null);
+        }
+    }
+
     /** @return the first match of the pattern in an answer, asserted present */
     private static String found(Pattern pattern, String text, String step) {
         Matcher matcher = pattern.matcher(text);

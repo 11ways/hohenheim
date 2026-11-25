@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.site.SiteTls;
@@ -28,6 +29,7 @@ import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -483,7 +485,7 @@ public final class SiteParts {
         return Models.get(SiteDomainModel.class).findBySiteId(site.get(SiteModel.ID));
     }
 
-    /** The list's address cell: a site's hostnames, or the ports a site reached on its own ports forwards. */
+    /** The list's address cell: a site's hostnames, or every public port a site reached on its own ports forwards. */
     static @NonNull SiteHostnamesCell addressCellOf(@NonNull Row site) {
         return addressCellOf(site, reachOf(site).asksAddress() ? domainsOf(site) : List.of());
     }
@@ -492,9 +494,9 @@ public final class SiteParts {
     static @NonNull SiteHostnamesCell addressCellOf(@NonNull Row site, @NonNull List<Row> domains) {
         return switch (reachOf(site)) {
             case PORTS -> {
-                List<String> ports = portsOf(site);
-                yield ports.isEmpty() ? new SiteHostnamesCell(null, 0)
-                    : new SiteHostnamesCell(ports.getFirst(), ports.size() - 1);
+                // One row names every port, never "25 +4": a mail server's ports are the app's address.
+                List<StreamPort> ports = StreamUpstreamKind.portsOf(RawValues.map(site.get(SiteModel.SETTINGS)));
+                yield new SiteHostnamesCell(ports.isEmpty() ? null : StreamUpstreamKind.labels(ports), 0);
             }
             case WEBSITE, NONE -> hostnamesCellOf(domains);
         };

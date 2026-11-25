@@ -34,6 +34,7 @@ import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.hohenheim.server.cms.SiteKindWrites;
+import be.elevenways.hohenheim.server.cms.SitePortMoves;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -220,8 +221,13 @@ public final class HohenheimTools extends McpToolCollection {
                 List.of(GitProviderModel.NAME.getName(), GitConnectionWrites.KIND), words("git_connection_thing"))
             .route(GitConnectionWrites.CHANGE, HohenheimMcpAnswers::changed)
             .build();
+        // Its own tool, never an argument of site_stream_set: a set tool never trashes the site it is given.
+        McpHostTool movePorts = McpCodeTool.builder("site_ports_move", words("mcp_tool_site_ports_move"), destroys())
+            .code(words("mcp_code_site_ports_move"))
+            .route(SitePortMoves.MOVE, HohenheimMcpAnswers::portsMoved)
+            .build();
         List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, restore, power, backUp,
-            exec, variables, test, recordList, recordSet, zoneSet, address, order, renew, gitConnection));
+            exec, variables, test, recordList, recordSet, zoneSet, address, order, renew, gitConnection, movePorts));
         for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
             tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
                 .code(words("mcp_code_set"))

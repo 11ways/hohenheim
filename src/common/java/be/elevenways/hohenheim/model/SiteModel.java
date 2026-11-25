@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.SinglePortStreamSettings;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -194,8 +195,10 @@ public class SiteModel extends Model {
     // Sites are the proxy's central config records: keep full snapshots so
     // admins can diff and restore them from the CMS history tab.
     // The Spamservice reporting key is a credential, never a value a revision keeps or a restore puts back.
+    // A revision stored before a data migration reshaped the settings reads through that migration's own conversion.
     public static final RevisionableBehaviour REVISIONABLE =
-        SCHEMA.addBehaviour(RevisionableBehaviour.create(50).except(SECURITY_REPORT_TOKEN));
+        SCHEMA.addBehaviour(RevisionableBehaviour.create(50).except(SECURITY_REPORT_TOKEN)
+            .readingSnapshotsThrough(SinglePortStreamSettings::revisionFields));
 
     static {
         // Every site save is ONE write transaction by DECLARATION: the enable scan

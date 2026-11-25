@@ -177,16 +177,16 @@ public final class CmsSupport {
     }
 
     /**
-     * A placed record operation that asks input under a titled form and answers the id of the record it made, which
-     * the panel then opens; the caller adds what differs (sheet, row inlining, prefill).
+     * A placed record operation that asks input under a titled form and answers the record it made or now holds,
+     * which the panel then opens; the caller adds what differs (sheet, row inlining, prefill).
      *
-     * @param landing the URL of the made record, from the panel slug and its id
+     * @param landing the URL of that record, from the panel slug and the operation's result
      * @param verb    the form's title and its submit button
      */
-    static PanelAction.@NonNull OperationBuilder<Row, Integer> opensWhatItMade(
-            @NonNull Operation<?, ?, Integer> operation, @NonNull BiFunction<String, Integer, String> landing,
+    static <R> PanelAction.@NonNull OperationBuilder<Row, R> opensWhatItMade(
+            @NonNull Operation<?, ?, R> operation, @NonNull BiFunction<String, R, String> landing,
             @NonNull Microcopy verb, @NonNull Microcopy body) {
-        return PanelAction.<Row, Integer>places(operation, ActionPlacement.ROW,
+        return PanelAction.<Row, R>places(operation, ActionPlacement.ROW,
                 (request, made) -> CmsActionResult.redirect(new Uri(landing.apply(request.request().panelSlug(),
                     Objects.requireNonNull(made, "the operation answers the record it made")))))
             .inlineOnRecord(false)

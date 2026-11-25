@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.RawValues;
-import be.elevenways.hohenheim.ports.StreamProtocol;
+import be.elevenways.hohenheim.ports.StreamPort;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.proxy.StreamBindFailure;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.zenit.server.operation.OperationRuns;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -285,13 +286,13 @@ final class AppHealth {
         }
         switch (SiteParts.reachOf(site)) {
             case PORTS -> {
-                // A stream is reached on a public port of its own, never at an address: forwarding is its health.
-                Integer port = RawValues.parsedInt(RawValues.map(site.get(SiteModel.SETTINGS)).get("listen_port"));
+                // A stream is reached on public ports of its own, never at an address: forwarding is its health.
+                List<StreamPort> ports = StreamUpstreamKind.portsOf(RawValues.map(site.get(SiteModel.SETTINGS)));
                 return forwarding(site)
                     ? Verdict.serving(RecordHealth.ok(HohenheimMicrocopy.APP_HEALTH.of("stream_forwarding")
-                        .withArg("port", port)))
+                        .withArg("ports", StreamUpstreamKind.labels(ports)).withArg("count", ports.size())))
                     : Verdict.notServing(RecordHealth.broken(Headline.NOT_FORWARDING.copy())
-                        .detail(notForwardingDetail(site, port))
+                        .detail(notForwardingDetail(site, ports))
                         .fixedBy(SiteActions.CHANGE_CONFIGURATION));
             }
             case WEBSITE, NONE -> {
@@ -379,28 +380,35 @@ final class AppHealth {
     }
 
     /**
-     * Whether this process's proxy listens on every transport of a stream site's public port; false where the port
-     * could not be bound, or no proxy runs here.
+     * Whether this process's proxy listens on every transport of every public port of a stream site; false where one
+     * could not be bound, the site lists none, or no proxy runs here.
      */
     static boolean forwarding(@NonNull Row site) {
         ProxyServer proxy = ServerMain.getProxyServer();
-        StreamProtocol protocol = StreamProtocol.ofToken(RawValues.map(site.get(SiteModel.SETTINGS))
-            .getOrDefault(StreamProtocol.SETTING, StreamProtocol.TCP.token()));
-        Integer siteId = site.get(SiteModel.ID);
-        if (proxy == null || protocol == null || siteId == null) {
+        List<StreamPort> ports = StreamUpstreamKind.portsOf(RawValues.map(site.get(SiteModel.SETTINGS)));
+        if (proxy == null || ports.isEmpty()) {
             return false;
         }
-        return (!protocol.forwardsTcp() || proxy.getStreamTcpAddress(siteId) != null)
-            && (!protocol.forwardsUdp() || proxy.getStreamUdpAddress(siteId) != null);
+        int siteId = Objects.requireNonNull(site.get(SiteModel.ID));
+        for (StreamPort port : ports) {
+            if ((port.protocol().forwardsTcp() && proxy.getStreamTcpAddress(siteId, port.listenPort()) == null)
+                    || (port.protocol().forwardsUdp()
+                        && proxy.getStreamUdpAddress(siteId, port.listenPort()) == null)) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    /** @return why a stream site does not forward: the proxy's own bind refusal when it has one */
-    private static @NonNull Microcopy notForwardingDetail(@NonNull Row site, @Nullable Integer port) {
+    /** @return why a stream site does not forward: the proxy's own bind refusal of its first failing port, if any */
+    private static @NonNull Microcopy notForwardingDetail(@NonNull Row site, @NonNull List<StreamPort> ports) {
         ProxyServer proxy = ServerMain.getProxyServer();
         Integer siteId = site.get(SiteModel.ID);
-        StreamBindFailure failure = proxy == null || siteId == null ? null : proxy.getStreamFailure(siteId);
-        return failure != null ? failure.words()
-            : HohenheimMicrocopy.APP_HEALTH.of("not_forwarding_detail").withArg("port", port);
+        List<StreamBindFailure> failures = proxy == null || siteId == null ? List.of()
+            : proxy.getStreamFailures(siteId);
+        return !failures.isEmpty() ? failures.getFirst().words()
+            : HohenheimMicrocopy.APP_HEALTH.of("not_forwarding_detail")
+                .withArg("ports", StreamUpstreamKind.labels(ports)).withArg("count", ports.size());
     }
 
     /**
