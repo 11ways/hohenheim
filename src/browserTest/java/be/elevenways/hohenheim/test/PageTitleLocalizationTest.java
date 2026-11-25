@@ -47,7 +47,7 @@ class PageTitleLocalizationTest {
                 HohenheimMicrocopy.DNS_ZONE_FILE, HohenheimMicrocopy.DNS_ZONE_RECORDS, HohenheimMicrocopy.DEV_SESSIONS,
                 HohenheimMicrocopy.SITE_DATABASES, HohenheimMicrocopy.DATABASE_RESTORE,
                 HohenheimMicrocopy.SPAMSERVICE_SAMPLE, HohenheimMicrocopy.INSTANCE_DEPLOYMENTS,
-                HohenheimMicrocopy.INSTANCE_VOLUME, HohenheimMicrocopy.SITE_DOMAINS)) {
+                HohenheimMicrocopy.INSTANCE_VOLUME, HohenheimMicrocopy.SITE_DOMAINS, HohenheimMicrocopy.ACCESS_LOG)) {
             for (String tag : List.of("en", "nl")) {
                 String resolved = scope.of("page_title")
                     .withArg("name", "acme-one")

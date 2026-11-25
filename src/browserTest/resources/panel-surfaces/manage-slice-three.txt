@@ -24,10 +24,11 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab dev-sessions at=4 landing=false view=false
-tab revisions at=5 landing=false view=false
-tab history at=6 landing=false view=false
-tab access at=7 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab dev-sessions at=5 landing=false view=false
+tab revisions at=6 landing=false view=false
+tab history at=7 landing=false view=false
+tab access at=8 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -330,9 +331,10 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab revisions at=4 landing=false view=false
-tab history at=5 landing=false view=false
-tab access at=6 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab revisions at=5 landing=false view=false
+tab history at=6 landing=false view=false
+tab access at=7 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -1218,9 +1220,10 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab revisions at=4 landing=false view=false
-tab history at=5 landing=false view=false
-tab access at=6 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab revisions at=5 landing=false view=false
+tab history at=6 landing=false view=false
+tab access at=7 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -1339,10 +1342,11 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab dev-sessions at=4 landing=false view=false
-tab revisions at=5 landing=false view=false
-tab history at=6 landing=false view=false
-tab access at=7 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab dev-sessions at=5 landing=false view=false
+tab revisions at=6 landing=false view=false
+tab history at=7 landing=false view=false
+tab access at=8 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -1422,9 +1426,10 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab revisions at=4 landing=false view=false
-tab history at=5 landing=false view=false
-tab access at=6 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab revisions at=5 landing=false view=false
+tab history at=6 landing=false view=false
+tab access at=7 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -1541,10 +1546,11 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab dev-sessions at=4 landing=false view=false
-tab revisions at=5 landing=false view=false
-tab history at=6 landing=false view=false
-tab access at=7 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab dev-sessions at=5 landing=false view=false
+tab revisions at=6 landing=false view=false
+tab history at=7 landing=false view=false
+tab access at=8 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
@@ -1870,7 +1876,8 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab access at=4 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab access at=5 landing=false view=false
 
 case manage.sites.tenant-empty manage sites tenant-empty v2
 admission - verdict=zenit:forbidden
@@ -1924,7 +1931,8 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab access at=4 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab access at=5 landing=false view=false
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20description at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -1995,7 +2003,8 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab access at=4 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab access at=5 landing=false view=false
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20description at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -2010,7 +2019,8 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab access at=4 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab access at=5 landing=false view=false
 
 case manage.sites.tenant-one.sel manage sites tenant-one v2
 admission - verdict=admitted
@@ -2021,7 +2031,8 @@ tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
 tab redirects at=3 landing=false view=false
-tab access at=4 landing=false view=false
+tab access-log at=4 landing=false view=false
+tab access at=5 landing=false view=false
 
 case manage.domains.tenant-one.prefill manage domains tenant-one v2
 admission - verdict=admitted

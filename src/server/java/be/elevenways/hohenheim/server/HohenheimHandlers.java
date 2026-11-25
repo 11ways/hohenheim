@@ -71,6 +71,7 @@ public final class HohenheimHandlers {
         HostMediaHandlers.init();
         InstanceDeploymentsPage.registerPart();
         HostMediaTab.registerPart();
+        SiteAccessLogPage.registerPart();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();

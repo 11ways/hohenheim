@@ -112,6 +112,7 @@ public final class HohenheimSlugs {
     /** The record tabs, each local to the record it sits on. */
     public static final class Tab {
 
+        public static final String ACCESS_LOG = "access-log";
         public static final String ANALYSIS = "analysis";
         public static final String BACKUPS = "backups";
         public static final String BUILD_HOOKS = "build-hooks";

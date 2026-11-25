@@ -258,6 +258,9 @@ public class SiteDispatcher implements HttpHandler {
 
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
+        // The access log's time taken counts from here, so the gates before the upstream are part of it.
+        AccessLog.start(exchange);
+
 
         // Pin the client-facing scheme while the trust-boundary headers are still pristine:
         // this pipeline strips X-Hohenheim-Key and rewrites X-Forwarded-Proto further down.
@@ -555,7 +558,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Access logging ---
-        accessLog.logAccess(exchange, hostname, clientIp);
+        accessLog.logAccess(exchange, hostname, clientIp, entry.siteId);
 
         dispatchToRoute(entry, exchange);
     }

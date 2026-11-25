@@ -285,8 +285,13 @@ public final class SiteOperationHandlers {
     }
 
     static <I> @NonNull Authorizer<Row, I> reachesSite() {
-        return (site, input, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
-            site.get(SiteModel.ID), HohenheimCapabilities.MANAGE) ? null : concealed(site);
+        return (site, input, access) -> reaches(site, access) ? null : concealed(site);
+    }
+
+    /** @return whether the reader manages the site: who switches it, and who reads its access log */
+    static boolean reaches(@NonNull Row site, @NonNull AccessContext access) {
+        return HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, site.get(SiteModel.ID),
+            HohenheimCapabilities.MANAGE);
     }
 
     private static <I> @NonNull Authorizer<Row, I> administers() {

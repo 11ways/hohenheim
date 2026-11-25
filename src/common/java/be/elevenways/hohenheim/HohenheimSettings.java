@@ -562,6 +562,17 @@ public class HohenheimSettings {
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Domain-miss log file path (the fail2ban jail's logpath)")
             .build();
+
+        /**
+         * Days of the access log and the hostname-miss log kept: each rotates at the office day's change, and a day
+         * older than this is deleted; 0 or less keeps every day.
+         */
+        public static final SettingDefinition<Integer> KEEP_DAYS = GROUP.buildSetting("keep_days", Integer.class)
+            .defaultValue(90)
+            .suffix("d")
+            .description("Days of the access log and the hostname-miss log kept; a day older than this is deleted, "
+                + "0 or less keeps every day")
+            .build();
     }
 
     // --- Storage ---

@@ -1,0 +1,14 @@
+{#- Access log tab on a site: the record head around one live part (hh-access-log), its filters, the lines and the
+    download; a new line of the site redraws the lines alone while the reader follows them. -#}
+{% declare title: String %}
+{% declare head: RecordHeadState = null %}
+{% declare filters: AccessLogFilters %}
+{% declare part: Live<AccessLogView> %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <hh-access-log part={% part{:} %} filters={% filters %}></hh-access-log>
+</section>
+{% /block %}

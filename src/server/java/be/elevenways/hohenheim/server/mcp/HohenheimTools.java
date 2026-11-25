@@ -92,6 +92,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimMoveUndoTaskTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimSetupTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimSpamNotificationTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimTrafficTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */

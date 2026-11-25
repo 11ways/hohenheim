@@ -1,0 +1,185 @@
+{% tag HhAccessLog {
+    /* A site's Access log tab (SiteAccessLogPage): the filter row, the switch that follows new lines, the download
+       of the filtered lines, then one page of lines in nine columns, newest first, with what the read could say of
+       the rest. The lines are the live part (AccessLogView): while following, each new line of the site re-reads
+       this part alone, the filters standing as the reader set them. The filters are a GET form, so the tab's address
+       always says what it shows. */
+    public required part: Live<AccessLogView>
+    public required filters: AccessLogFilters
+    private computed view: AccessLogView = part{:}.value
+    private following: Boolean = false
+    private watch: LiveWatchHandle = null
+
+    style {
+        display: block;
+
+        .hh-access-log-filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: var(--pl-space-sm) var(--pl-space-md);
+        }
+
+        .hh-access-log-path {
+            inline-size: 16em;
+        }
+
+        .hh-access-log-visitor {
+            inline-size: 14em;
+        }
+
+        .hh-access-log-tools {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: var(--pl-space-sm) var(--pl-space-md);
+            margin-block: var(--pl-space-md);
+        }
+
+        .hh-access-log-muted {
+            color: var(--pl-color-text-muted);
+        }
+
+        .hh-access-log-mono {
+            font-family: var(--pl-font-family-mono);
+        }
+
+        .hh-access-log-cut {
+            display: inline-block;
+            max-inline-size: 14em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+
+        .hh-access-log-number {
+            text-align: end;
+            white-space: nowrap;
+        }
+
+        .hh-access-log-foot {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--pl-space-sm) var(--pl-space-md);
+            margin-block: var(--pl-space-md);
+        }
+    }
+
+    @mount
+    function start() {
+        following = filters.following
+        if following {
+            watch = Live.follow(this, &part)
+        }
+    }
+
+    /* The switch: on follows the site's new lines, off ends the follow and leaves the page as it stands. */
+    @watch(following, skipInitial: true)
+    function followingChanged() {
+        if following {
+            watch = Live.follow(this, &part)
+        } else {
+            Live.stop(watch)
+            watch = null
+        }
+    }
+
+    function apply(edit: DominoEvent) {
+        CmsFilterForm.apply("hh-access-log-filters", edit)
+    }
+
+    template {
+        <form method="get" action={% filters.listUrl %} id="hh-access-log-filters" class="hh-access-log-filters"
+              data-hawkeye-navigation="replace" data-hh-access-log-filters>
+            <pl-select name="status" value={% filters.status %} clearable
+                       placeholder={% t("access_log_status_all", scope: "access_log") %}
+                       ariaLabel={% t("access_log_status_label", scope: "access_log") %}
+                       event:change={% (e) => apply(e) %}>
+                {% each filters.statuses as choice %}
+                <pl-select-item value={% choice.value %} label={% choice.label %}></pl-select-item>
+                {% /each %}
+            </pl-select>
+            <pl-input class="hh-access-log-path" name="path" value={% filters.path %}
+                      placeholder={% t("access_log_path_placeholder", scope: "access_log") %}
+                      ariaLabel={% t("access_log_path_placeholder", scope: "access_log") %}
+                      event:input(debounce: 300)={% (e) => apply(e) %}></pl-input>
+            {#- Picking a range reads every line until its two ends are set: the ends stand once the tab is on it. -#}
+            <pl-select name="when" value={% filters.when %}
+                       ariaLabel={% t("access_log_when_label", scope: "access_log") %}
+                       event:change={% (e) => apply(e) %}>
+                {% each filters.times as choice %}
+                <pl-select-item value={% choice.value %} label={% choice.label %}></pl-select-item>
+                {% /each %}
+            </pl-select>
+            {% if filters.when == "range" %}
+            <pl-input type="datetime-local" name="from" value={% filters.from %}
+                      ariaLabel={% t("access_log_from_label", scope: "access_log") %}
+                      event:change={% (e) => apply(e) %}></pl-input>
+            <pl-input type="datetime-local" name="to" value={% filters.to %}
+                      ariaLabel={% t("access_log_to_label", scope: "access_log") %}
+                      event:change={% (e) => apply(e) %}></pl-input>
+            {% /if %}
+            <pl-input class="hh-access-log-visitor" name="visitor" value={% filters.visitor %}
+                      placeholder={% t("access_log_visitor_placeholder", scope: "access_log") %}
+                      ariaLabel={% t("access_log_visitor_placeholder", scope: "access_log") %}
+                      event:input(debounce: 300)={% (e) => apply(e) %}></pl-input>
+        </form>
+
+        <div class="hh-access-log-tools">
+            <span class="hh-access-log-muted" id="hh-access-log-follow">{{ t("access_log_follow", scope: "access_log") }}</span>
+            <pl-switch bind:checked={% following %} data-hh-access-log-follow
+                       ariaLabel={% t("access_log_follow", scope: "access_log") %}></pl-switch>
+            <pl-button href={% filters.downloadUrl %} variant="outline" download data-hh-access-log-download>{{ t("access_log_download", scope: "access_log") }}</pl-button>
+        </div>
+
+        {% if view{:}.lines %}
+        <pl-table textSize="small" data-hh-access-log-lines>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("access_log_column_time", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_visitor", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_method", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_path", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_status", scope: "access_log") }}</pl-table-head>
+                <pl-table-head class="hh-access-log-number">{{ t("access_log_column_size", scope: "access_log") }}</pl-table-head>
+                <pl-table-head class="hh-access-log-number">{{ t("access_log_column_took", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_referrer", scope: "access_log") }}</pl-table-head>
+                <pl-table-head>{{ t("access_log_column_browser", scope: "access_log") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each view{:}.lines as line key line.key %}
+                <pl-table-row data-hh-access-log-line={% line{:}.status %}>
+                    <pl-table-cell nowrap>{{ line{:}.time }}</pl-table-cell>
+                    <pl-table-cell><span class="hh-access-log-mono hh-access-log-cut" title={% line{:}.visitor %}>{{ line{:}.visitor }}</span></pl-table-cell>
+                    <pl-table-cell>{{ line{:}.method }}</pl-table-cell>
+                    <pl-table-cell breakAnywhere><span class="hh-access-log-mono">{{ line{:}.path }}</span></pl-table-cell>
+                    <pl-table-cell>{% if line{:}.variant != null %}<pl-badge variant={% line{:}.variant %}>{{ line{:}.status }}</pl-badge>{% else %}{{ line{:}.status }}{% /if %}</pl-table-cell>
+                    <pl-table-cell class="hh-access-log-number">{{ line{:}.size }}</pl-table-cell>
+                    <pl-table-cell class="hh-access-log-number">{% if line{:}.took != null %}{{ line{:}.took }}{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
+                    <pl-table-cell>{% if line{:}.referrer != "" %}<span class="hh-access-log-cut" title={% line{:}.referrer %}>{{ line{:}.referrer }}</span>{% else %}<span class="hh-access-log-muted">-</span>{% /if %}</pl-table-cell>
+                    <pl-table-cell><span class="hh-access-log-cut" title={% line{:}.userAgent %}>{{ line{:}.browser }}</span></pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% else %}
+        <pl-empty-state icon="list-ul" data-hh-access-log-empty>
+            <pl-empty-state-title>{{ view{:}.summary }}</pl-empty-state-title>
+        </pl-empty-state>
+        {% /if %}
+
+        <div class="hh-access-log-foot">
+            {% if view{:}.lines %}<span class="hh-access-log-muted" data-hh-access-log-summary>{{ view{:}.summary }}</span>{% /if %}
+            {% if view{:}.pager != null %}
+            <pl-pager pager={% view{:}.pager %} variant="steps" label={% t("pagination", scope: "cms") %}></pl-pager>
+            {% /if %}
+        </div>
+        {% if view{:}.stopped != null %}
+        <p class="hh-access-log-muted" data-hh-access-log-stopped>{{ view{:}.stopped }}</p>
+        {% /if %}
+        <p class="hh-access-log-muted" data-hh-access-log-keeping>{{ filters.keeping }}</p>
+    }
+} %}
