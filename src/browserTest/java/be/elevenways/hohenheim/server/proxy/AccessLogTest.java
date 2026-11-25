@@ -4,7 +4,8 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.ProxyAttention;
-import be.elevenways.hohenheim.site.SiteAccessLogOperations.StatusClass;
+import be.elevenways.hohenheim.site.SiteAccessLogOperations;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -97,12 +98,12 @@ class AccessLogTest {
     }
 
     @Test
-    void everyStatusClassIsWordedInBothLanguages() {
+    void everyStatusChoiceIsWordedInBothLanguages() {
         ShippedCatalogs catalogs = new ShippedCatalogs();
-        for (StatusClass each : StatusClass.values()) {
+        for (EnumField.EnumValue each : SiteAccessLogOperations.STATUS.getValues().values()) {
             for (String tag : List.of("en", "nl")) {
-                String words = each.label().resolve(LocaleChain.ofTags(tag), catalogs);
-                assertThat(words).as(each + " in " + tag).doesNotContain("access_log_status").contains("xx");
+                String words = each.getLabel().resolve(LocaleChain.ofTags(tag), catalogs);
+                assertThat(words).as(each.getKey() + " in " + tag).doesNotContain("status_").isNotBlank();
             }
         }
     }
@@ -416,7 +417,8 @@ class AccessLogTest {
             .as("step 2: a page starting deep inside a compressed day").containsExactly("/old");
 
         // Step 3: status class, path text, a visitor exactly and by its network.
-        assertThat(paths(AccessLogReader.read(live, query(7, sevenHosts, null, null, StatusClass.FAILED::admits,
+        assertThat(paths(AccessLogReader.read(live, query(7, sevenHosts, null, null,
+            SiteAccessLogOperations.statusesOf(SiteAccessLogOperations.FAILED),
             null, null, 0, 10)))).as("step 3: 4xx and 5xx").containsExactly("/b", "/legacy");
         assertThat(paths(AccessLogReader.read(live, query(7, sevenHosts, null, null, code -> code == 301, null, null,
             0, 10)))).as("step 3: one code").containsExactly("/c");

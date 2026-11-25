@@ -405,9 +405,10 @@ public class SiteDispatcher implements HttpHandler {
             }
         }
 
-        // --- Traffic: counted from here, under the site the name and path chose, so every answer after it (a
-        //     wrong-path 404, an HTTPS or a site's redirect, a sign-in or access-list refusal, the upstream's own) is
-        //     counted once; the answers before it belong to no site and are not (ProxyTraffic). ---
+        // --- Whose answer this is, decided once at the route's choice: the access log line and the traffic count
+        //     both take it here, so every answer after it (a wrong-path 404, an HTTPS or a site's redirect, a sign-in,
+        //     access-list or protected-path refusal, the upstream's own) is logged and counted alike; the answers
+        //     before it belong to no site and are neither (ProxyTraffic). ---
         // --- A hostname no site serves: the operator's unknown-host answer ---
         boolean unknownHost = false;
         if (entry == null) {
@@ -415,18 +416,19 @@ public class SiteDispatcher implements HttpHandler {
             if (knownBy != null) {
                 // The hostname IS configured, no path matched: a real 404 of the site serving the name,
                 // never the unknown-host answer.
-                ProxyTraffic.record(exchange, HohenheimTraffic.sourceOf(knownBy.siteId), hostname, clientIp);
+                answersFor(exchange, knownBy.siteId, hostname, clientIp);
                 ErrorPages.send404(exchange, hostname);
                 return;
             }
-            ProxyTraffic.record(exchange, HohenheimTraffic.UNSERVED, hostname, clientIp);
+            // Whichever answer the operator chose, even one of their sites, it is the answer to a name nobody serves.
+            answersFor(exchange, AccessLog.NO_SITE, hostname, clientIp);
             entry = unknownHosts.answer(exchange, generation, hostname, path.canonical());
             if (entry == null) {
                 return;
             }
             unknownHost = true;
         } else {
-            ProxyTraffic.record(exchange, HohenheimTraffic.sourceOf(entry.siteId), hostname, clientIp);
+            answersFor(exchange, entry.siteId, hostname, clientIp);
         }
 
         // --- Force SSL: redirect while HTTPS termination is up, REFUSE while it is not. ---
@@ -496,7 +498,7 @@ public class SiteDispatcher implements HttpHandler {
 
     /**
      * The request pipeline after the auth gate: access list, path matching, header injection,
-     * HSTS, access logging, upstream dispatch. Runs on a worker thread when a gate is present.
+     * HSTS, upstream dispatch. Runs on a worker thread when a gate is present.
      */
     private void continueAfterAuth(RouteEntry entry, HttpServerExchange exchange,
                                    String hostname, String clientIp) {
@@ -566,10 +568,18 @@ public class SiteDispatcher implements HttpHandler {
             exchange.getResponseHeaders().put(STRICT_TRANSPORT_SECURITY, hstsValue);
         }
 
-        // --- Access logging ---
-        accessLog.logAccess(exchange, hostname, clientIp, entry.siteId);
-
         dispatchToRoute(entry, exchange);
+    }
+
+    /**
+     * Gives the exchange's access log line and its traffic count the one owner the route's choice named, so the log
+     * and the totals cover the same answers under the same site.
+     *
+     * @param siteId the site the answer belongs to, {@link AccessLog#NO_SITE} for a name nobody serves
+     */
+    private void answersFor(HttpServerExchange exchange, int siteId, String hostname, String clientIp) {
+        accessLog.logAccess(exchange, hostname, clientIp, siteId);
+        ProxyTraffic.record(exchange, HohenheimTraffic.sourceOf(siteId), hostname, clientIp);
     }
 
     /** Apply a non-null gate decision: redirect the browser, or deny with a status + body. */

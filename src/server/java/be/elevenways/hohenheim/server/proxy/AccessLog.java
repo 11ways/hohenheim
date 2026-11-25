@@ -28,10 +28,11 @@ import java.util.regex.Pattern;
  * AIDEV-NOTE: the line is the original's, so parsers written for the Node Hohenheim keep working:
  * {@code host: ip - - [dd/MMM/yyyy:HH:mm:ss Z] "METHOD path PROTO" status size "referer" "ua"}, byte for byte up to
  * the user agent's closing quote. Two fields follow it, {@code time_ms=41 site=12}: the milliseconds from the request
- * reaching the proxy to its response sent, and the id of the site whose route answered, which is how
- * AccessLogReader reads one site's lines whatever addresses it had. A parser matching up to the user agent ignores
- * them; one anchored at the line's end after the agent must allow them. The rewrite had moved the vhost into the
- * referer slot and dropped the Referer.
+ * reaching the proxy to its response sent, and the id of the site the answer belongs to (0 for a name no site serves,
+ * even when the operator's unknown-host answer is one of their sites), as SiteDispatcher.answersFor decides it for
+ * the traffic count too; that is how AccessLogReader reads one site's lines whatever addresses it had. A parser
+ * matching up to the user agent ignores them; one anchored at the line's end after the agent must allow them. The
+ * rewrite had moved the vhost into the referer slot and dropped the Referer.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -50,6 +51,9 @@ public final class AccessLog {
 
     /** The name of the line's last field, the id of the site that answered. */
     static final String SITE_FIELD = "site";
+
+    /** The site field of an answer to a name no site serves. */
+    public static final int NO_SITE = 0;
 
     /** The site field at a line's end. */
     private static final Pattern SITE_AT_END = Pattern.compile(" " + SITE_FIELD + "=\\d+$");
@@ -98,8 +102,9 @@ public final class AccessLog {
                 long millis = TimeUnit.NANOSECONDS.toMillis(tookNanos(ex));
                 FILE.appendTo(HohenheimSettings.Logging.ACCESS_PATH, line(ex, hostname, clientIp, path)
                     + fields(millis, siteId));
-                // One hub lookup when nobody follows the site's log; coalesced per window when someone does.
-                LiveServer.INVALIDATIONS.changed(TOPIC, ModelChanges.Keys.of(siteId));
+                // One hub lookup when nobody follows the site's log; coalesced per window when someone does. An answer
+                // to a name no site serves has no tab to follow it.
+                if (siteId != NO_SITE) LiveServer.INVALIDATIONS.changed(TOPIC, ModelChanges.Keys.of(siteId));
             } catch (Exception ignored) {
                 // Don't let logging break request handling
             }

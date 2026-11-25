@@ -101,9 +101,9 @@ public final class HohenheimTraffic {
         }
     }
 
-    /** @return the source key of a site's traffic, or null for a route that belongs to no site */
-    public static @Nullable String sourceOf(int siteId) {
-        return siteId > 0 ? String.valueOf(siteId) : null;
+    /** @return the source key of a site's traffic, {@link #UNSERVED} for a name no site serves (AccessLog.NO_SITE) */
+    public static @NonNull String sourceOf(int siteId) {
+        return siteId > 0 ? String.valueOf(siteId) : UNSERVED;
     }
 
     /** @return the source key of a DNS zone's queries */

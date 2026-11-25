@@ -45,10 +45,12 @@ final class HohenheimTrafficTools {
             .subject("site", HohenheimTools.words("mcp_code_access_log_site"))
             .route(SiteAccessLogOperations.READ, HohenheimTrafficTools::lines)
             .build();
+        // A call naming no site reads every site at once, an administrator's read.
         McpHostTool traffic = McpCodeTool.builder("traffic_read", HohenheimTools.words("mcp_tool_traffic_read")
                     .withArg("rows", TrafficReads.TOP_ROWS), McpHostTool.Annotations.ofReadOnly())
             .subject("site", HohenheimTools.words("mcp_code_traffic_site"))
             .route(TrafficReads.READ_SITE, HohenheimTrafficTools::siteTraffic)
+            .routeWithoutRecord(TrafficReads.READ_SERVER, HohenheimTrafficTools::siteTraffic)
             .build();
         McpHostTool zoneQueries = McpCodeTool.builder("dns_zone_queries_read",
                 HohenheimTools.words("mcp_tool_dns_zone_queries_read").withArg("rows", TrafficReads.TOP_ROWS),
@@ -78,7 +80,7 @@ final class HohenheimTrafficTools {
         return response;
     }
 
-    /** A site's counted traffic, in a site's words. */
+    /** A site's counted traffic, or every site's at once, in a site's words. */
     static @NonNull McpResponse siteTraffic(@NonNull McpToolContext context, TrafficReads.@Nullable Read read) {
         return counted(read, "requests", "visitors");
     }

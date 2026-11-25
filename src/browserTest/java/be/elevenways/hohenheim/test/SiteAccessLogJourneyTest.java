@@ -76,6 +76,7 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             // 1. The tab draws the site's lines newest first in the board's nine columns, the refused one badged, the
             //    browser named from its user agent with its version, a scanner by its own name, the time taken in
             //    milliseconds; the other site's line is not there.
+            page.setViewportSize(1280, 800);
             navigateToApp(tab(HohenheimSlugs.ADMIN, fixture.siteA));
             waitForHydration();
             awaitRows("step 1: the site's three lines", 3);
@@ -103,8 +104,8 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-access-log-tab.png"))
                 .setFullPage(true));
 
-            // 1b. The long path stands on one line in the free width, cut by an ellipsis, whole in its title and its
-            //     text: its row is as tall as a short path's.
+            // 1b. The long path stands on one line in the free width, well over 200 px beside the panel's rail at
+            //     1280 px, cut by an ellipsis, whole in its title and its text: its row is as tall as a short path's.
             String longPath = LINE + ":has([title='" + LONG_PATH + "'])";
             assertThat(page.locator(longPath + " [data-hh-access-log-path]").textContent().trim())
                 .as("step 1b: the whole path in the document").isEqualTo(LONG_PATH);
@@ -114,6 +115,8 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             assertThat(page.locator(longPath).boundingBox().height).as("step 1b: one line tall")
                 .isCloseTo(page.locator(LINE + ":has([title='/ok'])").boundingBox().height,
                     offset(1.0));
+            assertThat(page.locator(longPath + " [data-hh-access-log-path]").boundingBox().width)
+                .as("step 1b: the path has room").isGreaterThan(220.0);
 
             // 2. Following is on: a new request of the site appears without a navigation.
             String opened = page.url();

@@ -7,19 +7,18 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Counts each completed proxied request into the proxy's traffic store, once its route is chosen.
  *
- * AIDEV-NOTE: one hit per exchange: the first source that records it wins, so a name nobody serves that the unknown-host
- * answer hands to a site is counted once, as unserved. Recorded where SiteDispatcher has chosen the route, so every
- * answer after that point is counted: a wrong-path 404 of a known name (under the site serving the name), an HTTPS or
- * a site's own redirect, a sign-in, access-list or protected-path refusal, and the upstream's answer. The answers
- * before it belong to no site and are not counted: a refused front-proxy key, a malformed path, an ACME challenge, a
- * banned visitor, a git or build hook and a proxy loop. Recording never blocks and never fails a request: the
- * store's queue drops and counts a hit it has no room for. The response time is AccessLog's one reading of the
- * exchange's stopwatch, the access log's {@code time_ms}.
+ * AIDEV-NOTE: one hit per exchange, under the source SiteDispatcher.answersFor decides at the route's choice, the
+ * decision the access log line takes too: a name nobody serves is counted as unserved, even when the unknown-host
+ * answer hands it to one of the operator's sites. Every answer after that point is counted: a wrong-path 404 of a
+ * known name (under the site serving the name), an HTTPS or a site's own redirect, a sign-in, access-list or
+ * protected-path refusal, and the upstream's answer. The answers before it belong to no site and are not counted: a
+ * refused front-proxy key, a malformed path, an ACME challenge, a banned visitor, a git or build hook and a proxy
+ * loop. Recording never blocks and never fails a request: the store's queue drops and counts a hit it has no room
+ * for. The response time is AccessLog's one reading of the exchange's stopwatch, the access log's {@code time_ms}.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -31,10 +30,10 @@ final class ProxyTraffic {
     private ProxyTraffic() {
     }
 
-    /** Counts the exchange under the source once it completes; a null source (a route of no site) is not counted. */
-    static void record(@NonNull HttpServerExchange exchange, @Nullable String source, @NonNull String hostname,
+    /** Counts the exchange under the source once it completes; an exchange already counted is not counted again. */
+    static void record(@NonNull HttpServerExchange exchange, @NonNull String source, @NonNull String hostname,
                        @NonNull String clientIp) {
-        if (source == null || exchange.getAttachment(RECORDED) != null) {
+        if (exchange.getAttachment(RECORDED) != null) {
             return;
         }
         try {

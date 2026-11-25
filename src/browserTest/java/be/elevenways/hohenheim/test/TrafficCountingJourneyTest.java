@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
+import be.elevenways.hohenheim.server.proxy.AccessLog;
+import be.elevenways.hohenheim.server.proxy.AccessLogLine;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.site.UnknownHostAnswer;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.common.data.DataTable;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.traffic.common.StatusClass;
 import be.elevenways.zenit.traffic.common.TrafficGranularity;
 import be.elevenways.zenit.traffic.common.TrafficHit;
 import be.elevenways.zenit.traffic.common.TrafficTable;
@@ -55,18 +58,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Hohenheim's traffic counting through the real proxy and DNS server, read back through the real MCP endpoint: every
  * answer a site gives is counted once under it (a page, a wrong-path 404 of its name, its redirect, an access-list
- * refusal) and a name nobody serves once as unserved, with the access log's own time; the count continues over a
- * restart of the stores; a full queue, a failing disk and stopped stores never slow a request and the dashboard says
- * what they cost; a zone's questions are counted once each and a zone transfer not at all; traffic_read and
- * dns_zone_queries_read read them, refusing a wrong argument by its name and a customer what he does not manage.
+ * refusal) and a name nobody serves once as unserved, with the access log's own time, and the access log writes the
+ * same answers under the same site; the count continues over a restart of the stores; a full queue, a failing disk
+ * and stopped stores never slow a request and the dashboard says what they cost; a zone's questions are counted once
+ * each and a zone transfer not at all; traffic_read and dns_zone_queries_read read them, every site at once for an
+ * administrator, refusing a wrong argument by its name and a customer what he does not manage.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -80,7 +82,7 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
 
     private static final String FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
-    private static final Pattern TIME_MS = Pattern.compile(" time_ms=(\\d+) site=(\\d+)$");
+    private static final int UNSERVED = AccessLog.NO_SITE;
 
     @Test
     void everyAnswerOfASiteIsCountedOnceAndReadByTool() throws Exception {
@@ -127,9 +129,18 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
                 .as("step 1: the refusal, under the guarded site").isEqualTo("4xx 1");
             assertThat(unservedAsks(nobody, began)).as("step 1: the name nobody serves, once").isEqualTo(1);
 
+            // 1b. The access log writes the same answers under the same sites, each with the time it took: the answers
+            //     given before the upstream too, and the name nobody serves under no site.
+            assertThat(loggedClasses(log, served, 3)).as("step 1b: the site's three answers")
+                .containsExactly("2xx", "3xx", "4xx");
+            assertThat(loggedClasses(log, pathed, 1)).as("step 1b: the wrong path of a known name")
+                .containsExactly("4xx");
+            assertThat(loggedClasses(log, guarded, 1)).as("step 1b: the refusal").containsExactly("4xx");
+            assertThat(loggedClasses(log, UNSERVED, 1)).as("step 1b: the name nobody serves").containsExactly("4xx");
+
             // 2. The time counted is the access log's own: the line's time_ms and the site's one request agree.
             TrafficTotals timedTotals = counted(HohenheimTraffic.sourceOf(timed), 1, began);
-            long logged = loggedMillis(log, timed);
+            long logged = Objects.requireNonNull(logged(log, timed, 1).getFirst().millis());
             // time_ms is the reading cut to whole milliseconds; the median is within the summary's relative error.
             assertThat(Objects.requireNonNull(timedTotals.medianMillis())).as("step 2: one stopwatch, two readers")
                 .isBetween(logged * 0.95, (logged + 1) * 1.05);
@@ -162,6 +173,10 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
                 .as("step 4: the browsers").contains("Firefox");
             assertThat(admin.call("traffic_read", Map.of("site", servedCode, "top", "visitors")).text())
                 .as("step 4: the visitors in full").contains("127.0.0.1");
+            McpHttpSession.Answer everySite = admin.call("traffic_read", Map.of());
+            assertThat(everySite.error()).as("step 4: " + everySite.text()).isFalse();
+            assertThat(everySite.text()).as("step 4: every site at once, the name nobody serves among them")
+                .contains("requests: 8;");
 
             // 5. A wrong call is refused by the argument it names.
             McpHttpSession.Answer year = admin.call("traffic_read", Map.of("site", servedCode, "period", "year"));
@@ -183,6 +198,9 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             McpHttpSession.Answer foreign = own.call("traffic_read", Map.of("site", guardedCode));
             assertThat(foreign.error()).as("step 6: " + foreign.text()).isTrue();
             assertThat(foreign.text()).as("step 6: nothing of it").doesNotContain("requests:");
+            McpHttpSession.Answer every = own.call("traffic_read", Map.of());
+            assertThat(every.error()).as("step 6: every site is an administrator's read: " + every.text()).isTrue();
+            assertThat(every.text()).as("step 6: nothing of it").doesNotContain("requests:");
         } finally {
             while (!cleanUp.isEmpty()) cleanUp.pop().run();
         }
@@ -200,7 +218,7 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             ProxyServer proxy = ProxyTestSupport.startProxy();
             cleanUp.push(proxy::stop);
             int port = ProxyTestSupport.httpPort(proxy);
-            String source = Objects.requireNonNull(HohenheimTraffic.sourceOf(steady));
+            String source = HohenheimTraffic.sourceOf(steady);
             promptly(port, hostOf(steady), "step 1: the first request");
             counted(source, 1, began);
 
@@ -460,17 +478,27 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
         return String.join(", ", said);
     }
 
-    /** @return the milliseconds the access log wrote for the site's one line */
-    private static long loggedMillis(Path log, int siteId) {
-        return Poll.value("the access log holds the site's line", WAIT, () -> {
+    /** @return the status classes of the site's lines in the access log, sorted, once it holds this many */
+    private static List<String> loggedClasses(Path log, int siteId, int lines) {
+        return logged(log, siteId, lines).stream().map(line -> StatusClass.of(line.status()).storageKey()).sorted()
+            .toList();
+    }
+
+    /**
+     * @param siteId the site, {@link #UNSERVED} for a name nobody serves
+     * @return the site's lines in the access log that carry their time taken, once it holds this many
+     */
+    private static List<AccessLogLine> logged(Path log, int siteId, int lines) {
+        return Poll.value("the access log holds " + lines + " lines of site " + siteId, WAIT, () -> {
             try {
-                for (String line : Files.exists(log) ? Files.readAllLines(log) : List.<String>of()) {
-                    Matcher time = TIME_MS.matcher(line);
-                    if (time.find() && time.group(2).equals(String.valueOf(siteId))) {
-                        return Long.parseLong(time.group(1));
+                List<AccessLogLine> found = new ArrayList<>();
+                for (String raw : Files.exists(log) ? Files.readAllLines(log) : List.<String>of()) {
+                    AccessLogLine line = AccessLogLine.parse(raw);
+                    if (line != null && Integer.valueOf(siteId).equals(line.siteId()) && line.millis() != null) {
+                        found.add(line);
                     }
                 }
-                return null;
+                return found.size() >= lines ? found : null;
             } catch (Exception unreadable) {
                 return null;
             }

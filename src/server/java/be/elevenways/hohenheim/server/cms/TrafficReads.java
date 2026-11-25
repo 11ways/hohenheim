@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -41,14 +42,14 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * The reads of counted traffic: a site's requests over a span ending at a moment, and a DNS zone's questions, each
- * with the span before for comparison, one line per step and optionally one top table.
+ * The reads of counted traffic: a site's requests over a span ending at a moment, every site's at once, and a DNS
+ * zone's questions, each with the span before for comparison, one line per step and optionally one top table.
  *
  * AIDEV-NOTE: who may read is the record's rule, as for the access log: a site's traffic (visitor addresses in full,
  * the owner's ruling of 2026-11-25) to whoever manages the site (SiteOperationHandlers.reachesSite), a zone's to an
  * administrator only, since a zone is never granted to anyone else (HohenheimGrantPolicy) and its questions name every
- * customer's names. The read of every site at once, for administrators, waits for a tool that takes an optional
- * record: McpCodeTool routes a call naming no record only to a create or by choices.
+ * customer's names. Every site's at once, the names no site serves among them, is an administrator's read too: it
+ * names no record, so traffic_read takes it when a call names no site (McpCodeTool.Builder.routeWithoutRecord).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -149,9 +150,21 @@ public final class TrafficReads {
             .one(SiteOperations.SITE)
             // Who may read is the server-attached authorizer: the site's manage reach, the access log's rule.
             .gate(OperationGate.open())
-            .input(OperationInput.of(FormSpec.builder().add(PERIOD).add(UNTIL).add(SITE_TOP).build(),
-                ReadInput.class, values -> new ReadInput(values.get(PERIOD), values.get(UNTIL),
-                    values.get(SITE_TOP))))
+            .input(input(SITE_TOP))
+            .result(Read.class)
+            .facts(OperationFact.READ_ONLY)
+            .register();
+
+    /** Reads every site's requests at once over a span, the names no site serves among them. */
+    public static final Operation<Void, ReadInput, Read> READ_SERVER =
+        Operation.declare(HohenheimIds.id("read_server_traffic"))
+            .happened(OperationSentences.of("read_server_traffic"))
+            .label(HohenheimMicrocopy.HOHENHEIM.of("read_server_traffic_label"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("read_server_traffic_description"))
+            .icon(Icon.of("chart-line"))
+            .noSubject()
+            .gate(HohenheimSources.OPERATOR)
+            .input(input(SITE_TOP))
             .result(Read.class)
             .facts(OperationFact.READ_ONLY)
             .register();
@@ -166,9 +179,7 @@ public final class TrafficReads {
             .one(DnsOperations.ZONE)
             // Who may read is the server-attached authorizer: an administrator.
             .gate(OperationGate.open())
-            .input(OperationInput.of(FormSpec.builder().add(PERIOD).add(UNTIL).add(ZONE_TOP).build(),
-                ReadInput.class, values -> new ReadInput(values.get(PERIOD), values.get(UNTIL),
-                    values.get(ZONE_TOP))))
+            .input(input(ZONE_TOP))
             .result(Read.class)
             .facts(OperationFact.READ_ONLY)
             .register();
@@ -178,22 +189,32 @@ public final class TrafficReads {
             .applies(SiteParts::servesHttp)
             .authorize(SiteOperationHandlers.reachesSite())
             .handle(call -> read(HohenheimTraffic.Counted.WEB,
-                Objects.requireNonNull(HohenheimTraffic.sourceOf(call.subject().get(SiteModel.ID)), "a stored site"),
+                Set.of(HohenheimTraffic.sourceOf(call.subject().get(SiteModel.ID))),
+                Objects.requireNonNull(call.input(), "a read has its input"), false));
+        OperationHandlers.attach(READ_SERVER)
+            .handle(call -> read(HohenheimTraffic.Counted.WEB, Set.of(),
                 Objects.requireNonNull(call.input(), "a read has its input"), false));
         OperationHandlers.attach(READ_ZONE)
             .authorize(DnsOperationHandlers.admin())
             .handle(call -> read(HohenheimTraffic.Counted.DNS,
-                HohenheimTraffic.zoneSource(call.subject().get(DnsZoneModel.ID)),
+                Set.of(HohenheimTraffic.zoneSource(call.subject().get(DnsZoneModel.ID))),
                 Objects.requireNonNull(call.input(), "a read has its input"), true));
     }
 
     private TrafficReads() {
     }
 
+    /** @return a read's input: the span and its end, and one of these top tables */
+    private static @NonNull OperationInput<ReadInput> input(@NonNull EnumField top) {
+        return OperationInput.of(FormSpec.builder().add(PERIOD).add(UNTIL).add(top).build(), ReadInput.class,
+            values -> new ReadInput(values.get(PERIOD), values.get(UNTIL), values.get(top)));
+    }
+
     /**
+     * @param sources the sources read, empty for every one
      * @throws DomainRefusal SERVICE_UNAVAILABLE while counting is stopped (the process is ending)
      */
-    private static @NonNull Read read(HohenheimTraffic.@NonNull Counted counted, @NonNull String source,
+    private static @NonNull Read read(HohenheimTraffic.@NonNull Counted counted, @NonNull Set<String> sources,
                                       @NonNull ReadInput input, boolean zone) {
         TrafficStore store = HohenheimTraffic.store(counted);
         if (store == null) {
@@ -202,7 +223,7 @@ public final class TrafficReads {
         TrafficWindow window = input.period() == null ? TrafficWindow.DAY
             : Objects.requireNonNull(StorageKeyed.findOrNull(Arrays.asList(TrafficWindow.values()), input.period()),
                 "the period field offers only the windows");
-        TrafficQuery query = TrafficQuery.ending(Set.of(source), window,
+        TrafficQuery query = TrafficQuery.ending(sources, window,
             input.until() != null ? input.until() : Now.instant(), OfficeZone.office());
         TrafficReader reader = store.reader();
         Top top = Top.forToken(input.top(), zone);

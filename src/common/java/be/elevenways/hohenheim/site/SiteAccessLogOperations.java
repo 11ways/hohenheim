@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.activity.OperationSentences;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -14,14 +13,18 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.StorageKeyed;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.traffic.common.StatusClass;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntPredicate;
 
 /**
  * The read of a site's access log: its lines over a time range, filtered by status, path and visitor, newest first,
@@ -36,50 +39,11 @@ import java.util.List;
  */
 public final class SiteAccessLogOperations {
 
-    /** The status classes a read narrows to; the one vocabulary of the tab's status filter and the tool's. */
-    public enum StatusClass {
-        SUCCESS("2xx", 200, 299),
-        REDIRECT("3xx", 300, 399),
-        CLIENT_ERROR("4xx", 400, 499),
-        SERVER_ERROR("5xx", 500, 599),
-        FAILED("4xx_5xx", 400, 599);
-
-        private final String token;
-        private final int lowest;
-        private final int highest;
-
-        StatusClass(String token, int lowest, int highest) {
-            this.token = token;
-            this.lowest = lowest;
-            this.highest = highest;
-        }
-
-        /** @return the value the filter and the tool spell */
-        public @NonNull String token() {
-            return this.token;
-        }
-
-        /** @return the class's words in the reader's language */
-        public @NonNull Microcopy label() {
-            return HohenheimMicrocopy.ACCESS_LOG.of("access_log_status_" + this.token);
-        }
-
-        /** @return whether a line answered with this status belongs to the class */
-        public boolean admits(int status) {
-            return status >= this.lowest && status <= this.highest;
-        }
-
-        /** @return the class a token spells, null for none (fail closed: an unknown token narrows to nothing) */
-        public static @Nullable StatusClass forToken(@Nullable String token) {
-            for (StatusClass each : values()) {
-                if (each.token.equals(token)) return each;
-            }
-            return null;
-        }
-    }
-
-    /** Which status class to read. */
+    /** Which status class to read: one of the traffic totals' classes, or {@link #FAILED}. */
     public static final EnumField STATUS = statusField();
+
+    /** The status filter's value for every refused and failed answer: the failed classes' keys joined, "4xx_5xx". */
+    public static final String FAILED = failedToken();
 
     /** One exact status code to read. */
     public static final IntegerField STATUS_CODE = IntegerField.builder("status_code")
@@ -166,12 +130,43 @@ public final class SiteAccessLogOperations {
     private SiteAccessLogOperations() {
     }
 
-    /** @return the status field carrying every class, so no list of them is spelled twice */
+    /** @return whether an answer of the class was refused or failed, the lines {@link #FAILED} reads */
+    public static boolean failed(@NonNull StatusClass statusClass) {
+        return switch (statusClass) {
+            case CLIENT_ERROR, SERVER_ERROR -> true;
+            case INFORMATIONAL, SUCCESS, REDIRECTION, OTHER -> false;
+        };
+    }
+
+    /**
+     * @param token a value of {@link #STATUS}
+     * @return the statuses the value reads; an unknown value reads none (fail closed)
+     */
+    public static @NonNull IntPredicate statusesOf(@NonNull String token) {
+        if (FAILED.equals(token)) {
+            return status -> failed(StatusClass.of(status));
+        }
+        StatusClass named = StorageKeyed.findOrNull(List.of(StatusClass.values()), token);
+        return named == null ? status -> false : status -> StatusClass.of(status) == named;
+    }
+
+    /** @return the status field carrying every class and then {@link #FAILED}, so no list of them is spelled twice */
     private static @NonNull EnumField statusField() {
         EnumField.Builder builder = EnumField.builder("status").help(HohenheimMicrocopy.HELP.of("access_log_status"));
         for (StatusClass each : StatusClass.values()) {
-            builder.value(each.token(), value -> value.displayName(each.token()).label(each.label()));
+            builder.value(each.storageKey(), value -> value.displayName(each.storageKey()).label(each.label()));
         }
+        String failed = failedToken();
+        builder.value(failed, value -> value.displayName(failed)
+            .label(HohenheimMicrocopy.ACCESS_LOG.of("access_log_status_" + failed)));
         return builder.build();
+    }
+
+    private static @NonNull String failedToken() {
+        List<String> keys = new ArrayList<>();
+        for (StatusClass each : StatusClass.values()) {
+            if (failed(each)) keys.add(each.storageKey());
+        }
+        return String.join("_", keys);
     }
 }

@@ -14,12 +14,11 @@ import be.elevenways.hohenheim.server.proxy.AccessLogReader;
 import be.elevenways.hohenheim.site.AccessLogFilters;
 import be.elevenways.hohenheim.site.AccessLogView;
 import be.elevenways.hohenheim.site.SiteAccessLogOperations;
-import be.elevenways.hohenheim.site.SiteAccessLogOperations.StatusClass;
 import be.elevenways.plumage.component.Pager;
+import be.elevenways.protoblast.common.http.UserAgent;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.server.session.UserAgentSummary;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -32,6 +31,7 @@ import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.live.LiveRead;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -47,6 +47,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.live.LiveReads;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.traffic.common.StatusClass;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -260,8 +261,8 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
     private static @NonNull AccessLogFilters filterRow(@NonNull String panel, int siteId,
                                                       @NonNull Map<String, String> filters, int page) {
         List<AccessLogFilters.Choice> statuses = new ArrayList<>();
-        for (StatusClass each : StatusClass.values()) {
-            statuses.add(new AccessLogFilters.Choice(each.token(), each.label()));
+        for (EnumField.EnumValue each : SiteAccessLogOperations.STATUS.getValues().values()) {
+            statuses.add(new AccessLogFilters.Choice(each.getKey(), each.getLabel()));
         }
         List<AccessLogFilters.Choice> times = new ArrayList<>();
         for (When each : When.values()) {
@@ -328,17 +329,20 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
     /** One line in the tab's nine columns. */
     private static AccessLogView.@NonNull Line line(int position, @NonNull AccessLogLine line, boolean oneDay) {
         int status = line.status();
-        BadgeVariant variant = StatusClass.SERVER_ERROR.admits(status) ? BadgeVariant.DESTRUCTIVE
-            : StatusClass.CLIENT_ERROR.admits(status) ? BadgeVariant.WARNING : null;
-        UserAgentSummary agent = UserAgentSummary.of(line.userAgent());
-        String product = agent.product();
+        BadgeVariant variant = switch (StatusClass.of(status)) {
+            case SERVER_ERROR -> BadgeVariant.DESTRUCTIVE;
+            case CLIENT_ERROR -> BadgeVariant.WARNING;
+            case INFORMATIONAL, SUCCESS, REDIRECTION, OTHER -> null;
+        };
+        UserAgent agent = UserAgent.of(line.userAgent());
+        String product = agent.productWithVersion();
         Microcopy browser;
-        if (product != null && agent.os() != null) {
+        if (product != null && agent.platform() != null) {
             browser = HohenheimMicrocopy.ACCESS_LOG.of("access_log_browser").withArg("browser", product)
-                .withArg("os", agent.os());
+                .withArg("os", agent.platform());
         } else {
             browser = Microcopy.literal(Objects.requireNonNullElse(product != null ? product
-                : agent.os() != null ? agent.os() : line.userAgent(), "-"));
+                : agent.platform() != null ? agent.platform() : line.userAgent(), "-"));
         }
         return new AccessLogView.Line(String.valueOf(position),
             HohenheimMicrocopy.ACCESS_LOG.of(oneDay ? "access_log_time" : "access_log_date_time")
@@ -427,9 +431,8 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
 
     /** @return which statuses to read: one code, one class, or all; an unknown class reads none (fail closed) */
     private static @NonNull IntPredicate statuses(@Nullable String status, @Nullable Integer statusCode) {
-        StatusClass named = StatusClass.forToken(status);
         IntPredicate byClass = status == null || status.isEmpty() ? code -> true
-            : named == null ? code -> false : named::admits;
+            : SiteAccessLogOperations.statusesOf(status);
         return statusCode == null ? byClass : byClass.and(code -> code == statusCode);
     }
 
