@@ -17,7 +17,8 @@ import java.util.List;
 
 /**
  * Deactivates expired ban rows (nftables already kernel-expired their
- * elements) and re-resolves never_ban hostname entries as an hourly safety net;
+ * elements), resyncs the kernel sets when a firewall call failed since the last
+ * resync, and re-resolves never_ban hostname entries as an hourly safety net;
  * setting changes also refresh asynchronously. DNS never runs on a request/ban path.
  */
 public class SecuritySweep extends ScheduledTask {
@@ -63,6 +64,10 @@ public class SecuritySweep extends ScheduledTask {
         int expired = BanService.INSTANCE.deactivateExpired();
         if (expired > 0) {
             Blast.log("TASK: SecuritySweep deactivated", expired, "expired bans");
+        }
+        // A stored ban the firewall refused (or a lift it missed) reaches the kernel here at the latest.
+        if (BanService.INSTANCE.reconcileKernel()) {
+            Blast.log("TASK: SecuritySweep resynced the firewall's ban sets after a failed firewall call");
         }
     }
 }

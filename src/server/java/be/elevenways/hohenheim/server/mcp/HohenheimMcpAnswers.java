@@ -5,13 +5,16 @@ import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
 import be.elevenways.hohenheim.server.cms.SitePortMoves;
+import be.elevenways.hohenheim.server.cms.SiteRegistrationTokens;
 import be.elevenways.hohenheim.site.SitePortsMoved;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.TerminalText;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
@@ -156,16 +159,32 @@ final class HohenheimMcpAnswers {
      * repository as a read-only deploy key.
      */
     static @NonNull McpResponse connectionMade(@NonNull McpToolContext context, @Nullable Integer key) {
-        McpResponse response = McpResponse.create();
-        if (key == null) return response;
-        String code = RecordCodes.codes(GitProviderModel.MODEL_ID, List.of(String.valueOf(key)), context.access())
-            .get(String.valueOf(key));
-        response.line(Objects.requireNonNullElse(code, "?") + " (" + AssistantNoun.of(GitProviderModel.MODEL_ID)
-            + ")");
-        Row connection = Models.get(GitProviderModel.class).findById(key);
+        McpResponse response = made(context, GitProviderModel.MODEL_ID, key);
+        Row connection = key == null ? null : Models.get(GitProviderModel.class).findById(key);
         SshPublicKey publicKey = connection == null ? null : GitConnectionWrites.publicKeyOf(connection);
         if (publicKey != null) response.line(GitConnectionWrites.PUBLIC_KEY + ": " + publicKey.fileLine());
         return response;
+    }
+
+    /**
+     * A new dev namespace's code, and, when Hohenheim made its registration token, who is shown it once, where and
+     * until when; never the token.
+     */
+    static @NonNull McpResponse devNamespaceMade(@NonNull McpToolContext context, @Nullable Integer key) {
+        McpResponse response = made(context, SiteModel.MODEL_ID, key);
+        Microcopy token = key == null ? null : SiteRegistrationTokens.waitingFor(context.access(), key);
+        if (token != null) response.line(context.access().text(token));
+        return response;
+    }
+
+    /** @return an answer naming a new record by its code and kind ({@code GC3 (git connection)}); empty for none */
+    private static @NonNull McpResponse made(@NonNull McpToolContext context, @NonNull Identifier model,
+                                             @Nullable Integer key) {
+        McpResponse response = McpResponse.create();
+        if (key == null) return response;
+        String code = RecordCodes.codes(model, List.of(String.valueOf(key)), context.access())
+            .get(String.valueOf(key));
+        return response.line(Objects.requireNonNullElse(code, "?") + " (" + AssistantNoun.of(model) + ")");
     }
 
     /** Which ports moved, from which stream (now in the trash) into which, by their codes. */

@@ -61,7 +61,7 @@ import java.util.Set;
  * model's tenant and generated-row guards), so a value, a name or a right refused in the panel is refused here in the
  * same words; only the diff of a name and type's rows and the single serial bump are this class's. A made dynamic DNS
  * token is never answered: it is parked for the caller's account and shown once on the zone's Records tab
- * (DnsTokenDisclosures). A secondary zone's records are kept on its owning peer, which no call of this server carries
+ * (TokenDisclosures). A secondary zone's records are kept on its owning peer, which no call of this server carries
  * a change to: a set is refused naming that peer, a read answers the owner's records, or the local copy when the owner
  * cannot be asked.
  *
@@ -325,7 +325,7 @@ public final class DnsRecordSets {
      * token is shown only to that account, so it would be shown to nobody.
      */
     private static void requireTokenShownTo(@NonNull SetInput input, @NonNull AccessContext caller) {
-        if (DnsTokenDisclosures.accountOf(caller)) return;
+        if (TokenDisclosures.accountOf(caller)) return;
         for (Object given : input.records()) {
             if (((Map<?, ?>) given).get(VALUES) instanceof List<?> values) {
                 for (Object value : values) {
@@ -366,12 +366,12 @@ public final class DnsRecordSets {
     /** @return one line per token made, saying who sees it once, where and until when; never the token itself */
     private static @NonNull List<String> parkTokens(@NonNull AccessContext caller, int zoneId,
                                                     @NonNull List<String> tokens, @NonNull List<String> made) {
-        Instant until = Objects.requireNonNull(DnsTokenDisclosures.park(caller, zoneId, String.join("\n", tokens)),
-            "an account stands behind a caller asking a token");
+        Instant until = Objects.requireNonNull(TokenDisclosures.DYNDNS.park(caller, zoneId,
+            String.join("\n", tokens)), "an account stands behind a caller asking a token");
         List<String> lines = new ArrayList<>();
         for (String each : made) {
             lines.add(caller.text(HohenheimMicrocopy.DNS_RECORD.of("dyndns_parked").withArg("record", each)
-                .withArg("account", DnsTokenDisclosures.shownTo(caller)).withArg("until", until)
+                .withArg("account", TokenDisclosures.shownTo(caller)).withArg("until", until)
                 .withArg("url", DnsRecordParts.dyndnsUpdateUrl())));
         }
         return lines;

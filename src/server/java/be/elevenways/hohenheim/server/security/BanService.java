@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,6 +106,12 @@ public final class BanService {
     private final ArrayDeque<Long> completedAutoBans = new ArrayDeque<>();
     private long budgetSuppressed;
     private boolean budgetWarned;
+
+    /**
+     * Whether a firewall call failed since the last full resync, so the kernel sets may lack a stored ban or hold a
+     * lifted one; guarded by this object's monitor, where every mutation runs.
+     */
+    private boolean kernelBehind;
 
     /** The production shape: the real clock, operator alerts and the background ban writer. */
     BanService(@NonNull NftService nft) {
@@ -429,13 +436,7 @@ public final class BanService {
                                                @Nullable String eventType,
                                                @NonNull BanScope scope,
                                                @Nullable Duration ttl) {
-        String trimmed = ip.trim();
-        String problem = protectionProblem(trimmed);
-        if (problem != null) {
-            throw new IllegalArgumentException(problem);
-        }
-        // Non-null: protectionProblem already refused unnormalizable values.
-        String normalized = normalizeBanTarget(trimmed);
+        String normalized = bannableTarget(ip);
 
         BanModel bans = Models.get(BanModel.class);
         Row existing = findActiveBan(bans, normalized, scope);
@@ -446,11 +447,45 @@ public final class BanService {
         return createBanNormalized(bans, normalized, reason, source, eventType, scope, ttl, false);
     }
 
+    /**
+     * @return the key a ban of the address stores: v4 as given, v6 as its /64
+     * @throws IllegalArgumentException when the IP is unparseable or protected
+     */
+    private static @NonNull String bannableTarget(@NonNull String ip) {
+        String trimmed = ip.trim();
+        String problem = protectionProblem(trimmed);
+        if (problem != null) {
+            throw new IllegalArgumentException(problem);
+        }
+        // Non-null: protectionProblem already refused unnormalizable values.
+        return Objects.requireNonNull(normalizeBanTarget(trimmed));
+    }
+
     private @NonNull Row createBanNormalized(@NonNull BanModel bans, @NonNull String normalized,
                                              @Nullable String reason, @NonNull String source,
                                              @Nullable String eventType, @NonNull BanScope scope,
                                              @Nullable Duration ttl,
                                              boolean rollbackOnNftFailure) {
+        Row row = savedBan(bans, normalized, reason, source, eventType, scope, ttl);
+        boolean nftApplied = nft.addBan(scope, normalized, ttlSeconds(ttl));
+        if (!nftApplied && rollbackOnNftFailure) {
+            if (!bans.delete(row)) {
+                throw new IllegalStateException("Could not roll back ban after nftables failure");
+            }
+            refreshCache();
+            throw new IllegalStateException("nftables rejected the automatic ban");
+        }
+        this.kernelBehind |= !nftApplied;
+        refreshCache();
+        Blast.log("BANS: banned", normalized, "(" + source + "/" + scope.token() + ")",
+            ttl != null ? "for " + ttl : "permanently");
+        return row;
+    }
+
+    /** @return the new active ban row, saved; the kernel is not told */
+    private static @NonNull Row savedBan(@NonNull BanModel bans, @NonNull String normalized, @Nullable String reason,
+                                         @NonNull String source, @Nullable String eventType, @NonNull BanScope scope,
+                                         @Nullable Duration ttl) {
         Instant now = Now.instant();
         Row row = bans.createEmptyRow();
         row.set(BanModel.IP, normalized);
@@ -461,33 +496,75 @@ public final class BanService {
         row.set(BanModel.EXPIRES_AT, ttl != null ? now.plus(ttl) : null);
         row.set(BanModel.ACTIVE, true);
         bans.save(row);
-
-        boolean nftApplied = nft.addBan(scope, normalized, ttl != null ? ttl.toSeconds() : null);
-        if (!nftApplied && rollbackOnNftFailure) {
-            if (!bans.delete(row)) {
-                throw new IllegalStateException("Could not roll back ban after nftables failure");
-            }
-            refreshCache();
-            throw new IllegalStateException("nftables rejected the automatic ban");
-        }
-        refreshCache();
-        Blast.log("BANS: banned", normalized, "(" + source + "/" + scope.token() + ")",
-            ttl != null ? "for " + ttl : "permanently");
         return row;
+    }
+
+    private static @Nullable Long ttlSeconds(@Nullable Duration ttl) {
+        return ttl != null ? ttl.toSeconds() : null;
+    }
+
+    /**
+     * Bans an address in a scope anew (null ttl = permanent): every ban of it in force there is lifted and the new one
+     * written in ONE transaction, so the stored bans never pass through a moment without one; the kernel element is
+     * replaced after the commit.
+     *
+     * AIDEV-NOTE: the kernel keeps an element's first timeout when it is added again, so a replaced ban's element is
+     * deleted and added. A firewall refusing either leaves the kernel behind the table until {@link #reconcileKernel}
+     * (the security sweep) resyncs it; the proxy's own refusal reads the table and holds meanwhile.
+     *
+     * @param liftedBy who the replaced bans are lifted by
+     * @throws IllegalArgumentException when the IP is unparseable or protected
+     */
+    public synchronized @NonNull Row banAgain(@NonNull String ip, @Nullable String reason, @NonNull String source,
+                                              @NonNull BanScope scope, @Nullable Duration ttl,
+                                              @Nullable String liftedBy) {
+        String normalized = bannableTarget(ip);
+        BanModel bans = Models.get(BanModel.class);
+        Datasource datasource = bans.getResolvedDatasource();
+        Row[] made = new Row[1];
+        datasource.withTransaction(transaction -> {
+            List<Row> replaced = activeBans(bans, normalized, scope);
+            for (Row ban : replaced) {
+                stampLifted(bans, ban, liftedBy);
+            }
+            made[0] = savedBan(bans, normalized, reason, source, null, scope, ttl);
+            // After the commit: the kernel never drops what a rolled-back write would have kept.
+            datasource.afterCommit(() -> replaceElement(scope, normalized, ttl, !replaced.isEmpty()));
+        });
+        refreshCache();
+        Blast.log("BANS: banned", normalized, "again (" + source + "/" + scope.token() + ")",
+            ttl != null ? "for " + ttl : "permanently");
+        return made[0];
+    }
+
+    /** Programs the kernel for a ban written anew, deleting the element of the bans it replaced first. */
+    private synchronized void replaceElement(@NonNull BanScope scope, @NonNull String normalized,
+                                             @Nullable Duration ttl, boolean replaced) {
+        boolean removed = !replaced || nft.removeBan(scope, normalized);
+        boolean added = nft.addBan(scope, normalized, ttlSeconds(ttl));
+        this.kernelBehind |= !(removed && added);
     }
 
     /** The active, unexpired row banning this key in this scope (a pre-scope row is WEB). */
     private static @Nullable Row findActiveBan(@NonNull BanModel bans, @NonNull String normalized,
                                                @NonNull BanScope scope) {
+        List<Row> active = activeBans(bans, normalized, scope);
+        return active.isEmpty() ? null : active.getFirst();
+    }
+
+    /** @return every active, unexpired row banning this key in this scope (a pre-scope row is WEB) */
+    private static @NonNull List<Row> activeBans(@NonNull BanModel bans, @NonNull String normalized,
+                                                 @NonNull BanScope scope) {
+        List<Row> active = new ArrayList<>();
         for (Row row : bans.find()
                 .where(BanModel.IP.eq(normalized))
                 .where(BanModel.ACTIVE.eq(true))
                 .all()) {
             if (BanModel.blockedNow(row, Now.instant()) && BanScope.fromToken(row.get(BanModel.SCOPE)) == scope) {
-                return row;
+                active.add(row);
             }
         }
-        return null;
+        return active;
     }
 
     /**
@@ -501,22 +578,26 @@ public final class BanService {
      */
     public synchronized void lift(@NonNull Row ban, @Nullable String liftedBy) {
         BanModel bans = Models.get(BanModel.class);
-        Integer id = ban.get(BanModel.ID);
-        if (id == null) {
+        if (ban.get(BanModel.ID) == null) {
             return;
         }
-        bans.find().where(BanModel.ID.eq(id))
-            .assign(BanModel.ACTIVE, false)
-            .assign(BanModel.LIFTED_AT, Now.instant())
-            .assign(BanModel.LIFTED_BY, truncate(liftedBy, 200))
-            .updateAll();
+        stampLifted(bans, ban, liftedBy);
 
         String ip = ban.get(BanModel.IP);
         BanScope scope = scopeOf(ban);
         if (ip != null && scope != null && findActiveBan(bans, ip, scope) == null) {
-            nft.removeBan(scope, ip);
+            this.kernelBehind |= !nft.removeBan(scope, ip);
         }
         refreshCache();
+    }
+
+    /** Stamps the lift columns on the stored ban by its id; the kernel is not told. */
+    private static void stampLifted(@NonNull BanModel bans, @NonNull Row ban, @Nullable String liftedBy) {
+        bans.find().where(BanModel.ID.eq(Objects.requireNonNull(ban.get(BanModel.ID), "a stored ban")))
+            .assign(BanModel.ACTIVE, false)
+            .assign(BanModel.LIFTED_AT, Now.instant())
+            .assign(BanModel.LIFTED_BY, truncate(liftedBy, 200))
+            .updateAll();
     }
 
     /** All active, unexpired ban rows. */
@@ -583,7 +664,21 @@ public final class BanService {
             Long ttl = expires != null ? Math.max(1, Duration.between(now, expires).toSeconds()) : null;
             active.add(new NftService.ActiveBan(scope, ip, ttl));
         }
-        nft.resync(active);
+        this.kernelBehind = !nft.resync(active);
+    }
+
+    /**
+     * Resyncs the kernel sets when a firewall call failed since the last resync, so they end holding every stored ban
+     * and no lifted one. Called by the security sweep.
+     *
+     * @return whether it resynced
+     */
+    public synchronized boolean reconcileKernel() {
+        if (!this.kernelBehind) {
+            return false;
+        }
+        resyncNftables();
+        return true;
     }
 
     /**

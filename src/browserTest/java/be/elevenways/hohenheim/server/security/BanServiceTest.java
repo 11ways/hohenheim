@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -123,6 +124,54 @@ class BanServiceTest {
         assertThat(reloaded.get(BanModel.LIFTED_BY)).isEqualTo("Test Admin");
         assertThat(nftCommands).contains(
             "delete element inet " + NftService.table() + " banned_v4 { 198.51.100.40 }");
+    }
+
+    @Test
+    void banningAgainNeverLeavesTheAddressUnbannedWhenTheFirewallFails() {
+        AtomicBoolean refuseAdds = new AtomicBoolean();
+        nftCommands.clear();
+        NftService nft = new NftService((args, stdin) -> {
+            String command = String.join(" ", args);
+            nftCommands.add(command);
+            return refuseAdds.get() && command.startsWith("add element")
+                ? new NftRunner.Result(1, "", "injected failure") : new NftRunner.Result(0, "", "");
+        }, () -> true);
+        BanService service = new BanService(nft, Now::millis, (event, subject, message) -> { });
+        String ip = "198.51.100.45";
+        String element = NftService.table() + " banned_v4 { " + ip;
+
+        // 1. Banned for an hour: the kernel holds the address.
+        Row first = service.createBan(ip, "first", BanModel.SOURCE_MANUAL, null, Duration.ofHours(1));
+        assertThat(nftCommands).as("step 1: in the kernel")
+            .contains("add element inet " + element + " timeout 3600s }");
+
+        // 2. Banned again for good while the firewall refuses the new element, its old one already deleted.
+        refuseAdds.set(true);
+        nftCommands.clear();
+        Row again = service.banAgain(ip, "again", BanModel.SOURCE_MANUAL, BanScope.WEB, null, "Test Admin");
+        assertThat(nftCommands).as("step 2: the old element deleted, the new one refused")
+            .containsExactly("delete element inet " + element + " }", "add element inet " + element + " }");
+        List<Row> blocking = service.blockingNow(ip);
+        assertThat(blocking).as("step 2: one stored ban blocks it").hasSize(1);
+        assertThat(blocking.getFirst().get(BanModel.ID)).as("step 2: the new one").isEqualTo(again.get(BanModel.ID));
+        assertThat(again.get(BanModel.EXPIRES_AT)).as("step 2: no end").isNull();
+        Row lifted = Models.get(BanModel.class).findById(first.get(BanModel.ID));
+        assertThat(lifted.get(BanModel.ACTIVE)).as("step 2: the first one lifted").isFalse();
+        assertThat(lifted.get(BanModel.LIFTED_BY)).as("step 2: by who banned again").isEqualTo("Test Admin");
+        assertThat(service.isBanned(ip)).as("step 2: the proxy refuses it meanwhile").isTrue();
+
+        // 3. The security sweep's reconcile puts it back in the kernel once the firewall answers.
+        refuseAdds.set(false);
+        nftCommands.clear();
+        assertThat(service.reconcileKernel()).as("step 3: the kernel was behind").isTrue();
+        assertThat(nftCommands).as("step 3: resynced").contains("flush set inet " + NftService.table()
+            + " banned_v4", "add element inet " + element + " }");
+
+        // 4. A kernel in step is left alone.
+        nftCommands.clear();
+        assertThat(service.reconcileKernel()).as("step 4: nothing behind").isFalse();
+        assertThat(nftCommands).as("step 4: no firewall call").isEmpty();
+        service.lift(again, "Test Admin");
     }
 
     @Test

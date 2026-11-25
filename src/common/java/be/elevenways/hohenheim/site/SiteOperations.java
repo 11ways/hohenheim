@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -114,6 +115,24 @@ public final class SiteOperations {
     /** The clone's input. */
     public record CloneInput(@Nullable String name) {
     }
+
+    /**
+     * Gives a dev namespace a new registration token, shown once to the account that asked on the site's Dev sessions
+     * tab; a dev machine still presenting the old one is refused from then on.
+     */
+    public static final Operation<Row, Void, Microcopy> REGENERATE_REGISTRATION_TOKEN =
+        Operation.declare(HohenheimIds.id("regenerate_registration_token"))
+            .happened(OperationSentences.of("regenerate_registration_token"))
+            .label(HohenheimMicrocopy.SITE.of("regenerate_registration_token"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("regenerate_registration_token_description"))
+            .icon(Icon.of("key"))
+            .one(SITE)
+            // The token is the operator's setting: only installation administration changes it.
+            .gate(HohenheimSources.OPERATOR)
+            .facts(OperationFact.DESTRUCTIVE)
+            .result(Microcopy.class)
+            .command(COMMAND)
+            .register();
 
     /**
      * Rolls a Docker-backed site back to its application's retained release, through the forward health gate.

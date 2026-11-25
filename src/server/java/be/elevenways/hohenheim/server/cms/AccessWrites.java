@@ -186,7 +186,8 @@ public final class AccessWrites {
                 .help(HohenheimMicrocopy.HELP.of("ban_set_remove")).build()))
             .build()))
         .result(Microcopy.class)
-        // The firewall is programmed as the ban is written, as the Lift button's own command runs.
+        // The firewall is programmed after the ban's own transaction commits (BanService.banAgain), and a lift as the
+        // Lift button's own command runs.
         .command(CREATES.execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
@@ -502,8 +503,9 @@ public final class AccessWrites {
     }
 
     /**
-     * Bans the address as the Bans page's form does, after lifting what blocks it now so its end is the one asked,
-     * or lifts every ban of it in force, web and SSH alike, as the Lift button does.
+     * Bans the address anew as the Bans page's form bans it, its web bans in force lifted in the same step so its end
+     * is the one asked and it is never unbanned between the two (BanService.banAgain), or lifts every ban of it in
+     * force, web and SSH alike, as the Lift button does.
      *
      * @return when the ban ends, or what was lifted, in the reader's words
      * @throws Violations for an address no ban may block, or a reason given with remove
@@ -511,22 +513,21 @@ public final class AccessWrites {
     private static @NonNull Microcopy banSet(OperationInput.@NonNull Values input, @NonNull AccessContext caller) {
         String ip = Objects.toString(Texts.trimmedOrNull(input.get(BanModel.IP.getName())), "");
         String who = caller.principal().displayName();
-        List<Row> blocking = BanService.INSTANCE.blockingNow(ip);
         if (Boolean.TRUE.equals(input.get(REMOVE))) {
             Object reason = input.get(BanModel.REASON.getName());
             if (reason != null) {
                 throw Violations.ofField(BanModel.REASON.getName(), reason,
                     HohenheimMicrocopy.VIOLATIONS.of("ban_set_remove_reason"));
             }
+            List<Row> blocking = BanService.INSTANCE.blockingNow(ip);
             for (Row ban : blocking) BanService.INSTANCE.lift(ban, who);
             return HohenheimMicrocopy.HOHENHEIM.of(blocking.isEmpty() ? "ban_set_nothing" : "ban_set_lifted")
                 .withArg("ip", ip);
         }
-        // Refused before anything is lifted, so a refused ban leaves the address as it was.
+        // Refused before anything is written, so a refused ban leaves the address as it was.
         BanParts.requireBannable(ip);
-        for (Row ban : blocking) BanService.INSTANCE.lift(ban, who);
-        Row ban = BanParts.banManually(ip, input.get(BanModel.REASON.getName()),
-            input.get(BanParts.DURATION.getName()));
+        Row ban = BanParts.banAgain(ip, input.get(BanModel.REASON.getName()), input.get(BanParts.DURATION.getName()),
+            who);
         Instant ends = ban.get(BanModel.EXPIRES_AT);
         String banned = Objects.toString(ban.get(BanModel.IP), ip);
         return ends == null ? HohenheimMicrocopy.HOHENHEIM.of("ban_set_for_good").withArg("ip", banned)

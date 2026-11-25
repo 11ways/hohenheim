@@ -4201,7 +4201,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The secret dev machines present when they register; changing it locks out every machine still using the old one. Left blank, Hohenheim makes one.",
+      "text": "The secret dev machines present when they register; changing it locks out every machine still using the old one. Left blank, Hohenheim makes one, shown once to you on the site's Dev sessions tab.",
       "scope": "help"
     }
   ],
@@ -20644,7 +20644,7 @@
   "change_site_dev_namespace": {"text": "Change a dev namespace", "scope": "hohenheim"},
   "change_site_dev_namespace_description": {"text": "Changes the settings sent of a dev namespace through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
   "site_thing_site_dev_namespace": {"text": "a dev namespace", "scope": "hohenheim"},
-  "mcp_tool_site_dev_namespace_set": {"text": "Creates or changes a dev namespace: a wildcard address such as *.dev.example.com where dev machines register over the dev tunnel, each taking one label. hostname gets no certificate: order a wildcard one with certificate_order. Give registration_token yourself: one Hohenheim makes when it is left out is kept but shown nowhere yet. Non-administrators change only name, enabled and description. A site of another kind given as code is refused unless change_kind is true. Answers the site's code, or on a change the settings written.", "scope": "hohenheim"},
+  "mcp_tool_site_dev_namespace_set": {"text": "Creates or changes a dev namespace: a wildcard address such as *.dev.example.com where dev machines register over the dev tunnel, each taking one label. hostname gets no certificate: order a wildcard one with certificate_order. A registration_token left out on create is made by Hohenheim and shown once to the account that made this call (the key's owner), on the site's Dev sessions tab in the panel, for 24 hours; regenerate_registration_token replaces a lost one the same way. Non-administrators change only name, enabled and description. A site of another kind given as code is refused unless change_kind is true. Answers the site's code and, when a token was made, who sees it where and until when; a change answers the settings written.", "scope": "hohenheim"},
   "site_sign_in_provider": {"text": "The sign-in provider (SP3) every visitor must pass before reaching the site.", "scope": "help"},
   "create_protected_path": {"text": "Protect a path", "scope": "hohenheim"},
   "create_protected_path_description": {"text": "Protects a path of a site with a list picked or made from the people, networks or provider given, as the site's own Protect a path does.", "scope": "hohenheim"},
@@ -20708,7 +20708,7 @@
   "mcp_code_sign_in_provider_set": {"text": "The sign-in provider's code; leave out to create one.", "scope": "hohenheim"},
   "set_ban": [{"text": "Ban or lift an address", "scope": "hohenheim"}, {"text": "{$actor} set a ban", "scope": "hohenheim", "target": "happened"}],
   "set_ban_description": {"text": "Bans an address from web traffic for a while or for good, or lifts every ban of it in force, as the Bans page does.", "scope": "hohenheim"},
-  "mcp_tool_ban_set": {"text": "Bans an IP address from all sites' web traffic, for a while or for good, or lifts a ban; enforced in the firewall and the proxy at once. Only Hohenheim itself makes SSH bans, after SSH attacks. An IPv6 address bans its whole /64. Loopback, private and link-local addresses, this installation's own and those on the never-ban list cannot be banned. remove lifts every ban of the address in force, web and SSH alike; lifted bans stay in the list. Banning it again resets its end to duration. Administrators only. Answers when the ban ends, or that it was lifted.", "scope": "hohenheim"},
+  "mcp_tool_ban_set": {"text": "Bans an IP address from all sites' web traffic, for a while or for good, or lifts a ban; enforced in the firewall and the proxy at once. Only Hohenheim itself makes SSH bans, after SSH attacks. An IPv6 address bans its whole /64. Loopback, private and link-local addresses, this installation's own and those on the never-ban list cannot be banned. remove lifts every ban of the address in force, web and SSH alike; lifted bans stay in the list. Banning it again resets its end to duration in one step that never leaves it unbanned; an SSH ban of it stays. Administrators only. Answers when the ban ends, or that it was lifted.", "scope": "hohenheim"},
   "ban_set_ip": {"text": "The literal IP address to ban, or whose bans to lift; no hostname.", "scope": "help"},
   "ban_set_reason": {"text": "Why it is banned, as the list shows it; up to 255 characters.", "scope": "help"},
   "ban_set_duration": {"text": "How long the ban lasts; permanent holds until lifted.", "scope": "help"},
@@ -20717,5 +20717,13 @@
   "ban_set_until": {"text": "{$ip} is banned until {$until :datetime}.", "scope": "hohenheim"},
   "ban_set_for_good": {"text": "{$ip} is banned for good, until the ban is lifted.", "scope": "hohenheim"},
   "ban_set_lifted": {"text": "Every ban of {$ip} is lifted: it reaches every app again.", "scope": "hohenheim"},
-  "ban_set_nothing": {"text": "Nothing bans {$ip} now.", "scope": "hohenheim"}
+  "ban_set_nothing": {"text": "Nothing bans {$ip} now.", "scope": "hohenheim"},
+  "regenerate_registration_token": [{"text": "Make a new registration token", "scope": "site"}, {"text": "{$actor} made a new registration token for {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "regenerate_registration_token_description": {"text": "Gives a dev namespace a new registration token, shown once to the account that asked on the site's Dev sessions tab; a dev machine still presenting the old one is refused from then on.", "scope": "hohenheim"},
+  "regenerate_registration_token_confirm": {"text": "Every dev machine still presenting the current token is refused from now on. The new token is shown to you once, on the Dev sessions tab.", "scope": "site"},
+  "registration_token_made": {"text": "The registration token was made; it is shown once to {$account} on this site's Dev sessions tab in the panel, until {$until :datetime}.", "scope": "site"},
+  "registration_token_disclosure_title": {"text": "Registration token", "scope": "site"},
+  "registration_token_disclosure_warning": {"text": "Copy it now: it is shown only this once. A dev machine presents it when it registers over the dev tunnel.", "scope": "site"},
+  "registration_token_no_account": {"text": "A registration token Hohenheim makes is shown once to the account making the call, and no account stands behind this one: give registration_token yourself", "scope": "violations"},
+  "site_regenerate_registration_token": {"text": "Set true to replace the registration token with a new one Hohenheim makes, shown once as a made one is; every dev machine still using the old one is refused. Give nothing else with it.", "scope": "hohenheim"}
 }

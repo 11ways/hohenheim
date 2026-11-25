@@ -134,12 +134,14 @@ public class NftService {
             elementLiteral(ip, ttlSeconds)));
     }
 
-    /** Remove a banned IP element (a missing element only logs). */
-    public synchronized void removeBan(@NonNull BanScope scope, @NonNull String ip) {
+    /** Remove a banned IP element.
+     * @return true when disabled or the kernel dropped the element; false for a missing one too
+     */
+    public synchronized boolean removeBan(@NonNull BanScope scope, @NonNull String ip) {
         if (!isEnabled()) {
-            return;
+            return true;
         }
-        run(List.of("delete", "element", "inet", table(), setFor(scope, ip), "{ " + ip + " }"));
+        return run(List.of("delete", "element", "inet", table(), setFor(scope, ip), "{ " + ip + " }"));
     }
 
     /** One active ban for {@link #resync}: scope, ip and remaining ttl (null = permanent). */
@@ -149,18 +151,22 @@ public class NftService {
      * Full resync (used at boot): flush all four sets and re-add every active DB
      * ban into the set its scope names, so the database stays the source of truth
      * over kernel state.
+     *
+     * @return true when disabled or the kernel took every command
      */
-    public synchronized void resync(@NonNull List<ActiveBan> active) {
+    public synchronized boolean resync(@NonNull List<ActiveBan> active) {
         if (!isEnabled()) {
-            return;
+            return true;
         }
+        boolean applied = true;
         for (String set : List.of(SET_V4, SET_V6, SET_SSH_V4, SET_SSH_V6)) {
-            run(List.of("flush", "set", "inet", table(), set));
+            applied &= run(List.of("flush", "set", "inet", table(), set));
         }
         for (ActiveBan ban : active) {
-            run(List.of("add", "element", "inet", table(), setFor(ban.scope(), ban.ip()),
+            applied &= run(List.of("add", "element", "inet", table(), setFor(ban.scope(), ban.ip()),
                 elementLiteral(ban.ip(), ban.ttlSeconds())));
         }
+        return applied;
     }
 
     /** The set a ban belongs in: its scope picks the rule pair, its family the address type. */

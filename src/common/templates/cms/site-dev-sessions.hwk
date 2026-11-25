@@ -1,13 +1,18 @@
-{#- Dev sessions tab on a dev-namespace site: the live tunnel registrations. -#}
+{#- Dev sessions tab on a dev-namespace site: the live tunnel registrations, and once a token made for the viewer. -#}
 {% declare title: String %}
 {% declare siteName: String %}
 {% declare sessions: List %}
 {% declare head: RecordHeadState = null %}
+{#- A registration token Hohenheim made for this viewer's account, shown once; empty when none waits. -#}
+{% declare disclosedToken: String = "" %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    {% if disclosedToken %}
+    <pl-one-time-secret heading={% t("registration_token_disclosure_title", scope: "site") %} warning={% t("registration_token_disclosure_warning", scope: "site") %} value={% disclosedToken %}></pl-one-time-secret>
+    {% /if %}
 
     {% if sessions %}
     <pl-table>

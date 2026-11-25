@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.FieldRedaction;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
@@ -48,8 +49,8 @@ import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.Authorizer;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.RecordReadLines;
 import be.elevenways.zenit.server.operation.RecordCodes;
-import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -122,7 +123,8 @@ public final class SiteOperationHandlers {
         OperationHandlers.attach(SiteWrites.CREATE)
             .authorize((none, input, access) -> HohenheimAccess.isAdmin(access) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "creating a site is installation administration"))
-            .handle(call -> createSite(Objects.requireNonNull(call.input(), "a create has its input")));
+            .handle(call -> createSite(Objects.requireNonNull(call.input(), "a create has its input"),
+                Objects.requireNonNull(call.access(), "a create has its caller")));
         OperationHandlers.attach(SiteWrites.UPDATE)
             .applies(SiteOperationHandlers::live)
             .authorize(reachesSite())
@@ -153,6 +155,12 @@ public final class SiteOperationHandlers {
             .handle(call -> restoreRevision(call.subject(), Objects.requireNonNull(Objects.requireNonNull(
                 call.input(), "a revision restore has its input").revision(), "a required revision"),
                 Objects.requireNonNull(call.access(), "a restore has its caller")));
+        // A dev namespace's lost registration token replaced by a new one, shown once to the operator who asked.
+        OperationHandlers.attach(SiteOperations.REGENERATE_REGISTRATION_TOKEN)
+            .applies(site -> live(site) && SiteKindWrites.DEV_NAMESPACE.holds(site))
+            .handle(call -> SiteRegistrationTokens.regenerate(call.subject(),
+                Objects.requireNonNull(call.access(), "a new token has its caller")));
+        RecordReadLines.register(SiteModel.MODEL_ID, SiteRegistrationTokens.class, SiteRegistrationTokens::readLines);
     }
 
     private SiteOperationHandlers() {
@@ -360,6 +368,22 @@ public final class SiteOperationHandlers {
         return reasons;
     }
 
+    /** @return a copy of the settings without the secret settings the kind declares; null for none */
+    private static @Nullable Map<String, Object> withoutSecrets(@Nullable String kind,
+                                                               @Nullable Map<String, Object> settings) {
+        if (settings == null) {
+            return null;
+        }
+        Map<String, Object> kept = new LinkedHashMap<>(settings);
+        UpstreamKindHandler handler = kind == null ? null : UpstreamKindHandlers.getHandler(kind);
+        if (handler != null) {
+            for (Field<?, ?> field : handler.getSchema().getFields().values()) {
+                if (FieldRedaction.hidesWholeValue(field)) kept.remove(field.getName());
+            }
+        }
+        return kept;
+    }
+
     /**
      * Clone a site and its domains under the name the operator gave; the copy starts disabled and carries NO bearer
      * credentials of its own.
@@ -385,8 +409,10 @@ public final class SiteOperationHandlers {
         clone.set(SiteModel.NAME, name);
         clone.set(SiteModel.SLUG, SlugText.slugify(name));
         clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
-        Map<String, Object> storedSettings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
-        clone.set(SiteModel.SETTINGS, storedSettings != null ? new LinkedHashMap<>(storedSettings) : null);
+        // NO bearer credentials: a secret setting of the kind (a dev namespace's registration token) is the original's
+        // alone, so two sites never answer to one secret.
+        clone.set(SiteModel.SETTINGS, withoutSecrets(site.get(SiteModel.UPSTREAM_KIND),
+            RawValues.mapOrNull(site.get(SiteModel.SETTINGS))));
         clone.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         clone.set(SiteModel.ENABLED, false);
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
@@ -433,10 +459,12 @@ public final class SiteOperationHandlers {
      * (SiteDomainRouteInvariant), so this create is refused by exactly the refusal a hand-made domain gets, pathed on
      * "hostname", and the envelope rolls the site back with it. Do NOT copy any part of that check up here.
      *
+     * @param caller who creates it, shown once a registration token Hohenheim makes for it
      * @return the new site's id
-     * @throws Violations on the name when it is blank, form-level when its slug is already a site's
+     * @throws Violations on the name when it is blank, form-level when its slug is already a site's, on the
+     *     registration token when one would be made and no account stands behind the caller
      */
-    static @NonNull Integer createSite(SiteWrites.@NonNull CreateInput input) {
+    static @NonNull Integer createSite(SiteWrites.@NonNull CreateInput input, @NonNull AccessContext caller) {
         String name = requiredName(input.name());
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
@@ -447,7 +475,10 @@ public final class SiteOperationHandlers {
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.UPSTREAM_KIND, input.upstream_kind());
         site.set(SiteModel.INSTANCE_ID, input.instance_id());
-        site.set(SiteModel.SETTINGS, settingsOf(input.upstream_kind(), input.settings(), null));
+        Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), null);
+        String minted = SiteRegistrationTokens.mintInto(input.upstream_kind(), settings);
+        SiteRegistrationTokens.requireShownTo(minted, caller);
+        site.set(SiteModel.SETTINGS, settings);
         if (input.trusted_upstream() != null) {
             site.set(SiteModel.TRUSTED_UPSTREAM, input.trusted_upstream());
         }
@@ -471,6 +502,7 @@ public final class SiteOperationHandlers {
         if (hostname != null) {
             createFirstDomain(siteId, hostname);
         }
+        SiteRegistrationTokens.saved(caller, siteId, null, settings, minted);
         return siteId;
     }
 
@@ -516,6 +548,7 @@ public final class SiteOperationHandlers {
         Row site = call.subject();
         requireReviewedRevision(site, call.expectedVersion());
         SiteWrites.EditInput input = Objects.requireNonNull(call.input(), "an edit has its input");
+        AccessContext caller = Objects.requireNonNull(call.access(), "an edit has its caller");
         Set<String> written = call.patched();
         String storedKind = site.get(SiteModel.UPSTREAM_KIND);
         Map<String, Object> storedSettings = RawValues.map(site.get(SiteModel.SETTINGS));
@@ -530,8 +563,12 @@ public final class SiteOperationHandlers {
         }
         // The settings are read under their kind, so a new kind re-reads them even when they were not posted. A save
         // keeping the kind keeps the stored keys the kind does not declare, which its sub-form cannot post.
-        if (writes(written, SiteModel.SETTINGS) || writes(written, SiteModel.UPSTREAM_KIND)) {
+        boolean settingsWritten = writes(written, SiteModel.SETTINGS) || writes(written, SiteModel.UPSTREAM_KIND);
+        String minted = null;
+        if (settingsWritten) {
             Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), site);
+            minted = SiteRegistrationTokens.mintInto(input.upstream_kind(), settings);
+            SiteRegistrationTokens.requireShownTo(minted, caller);
             UpstreamKindHandler kept = Objects.equals(input.upstream_kind(), storedKind)
                 ? UpstreamKindHandlers.getHandler(storedKind) : null;
             site.set(SiteModel.SETTINGS, kept == null ? settings
@@ -553,6 +590,10 @@ public final class SiteOperationHandlers {
             site.set(SiteModel.ACCESS_LIST_ID, input.access_list_id());
         }
         Models.get(SiteModel.class).saveWrittenRefusingGone(site);
+        if (settingsWritten) {
+            SiteRegistrationTokens.saved(caller, Objects.requireNonNull(site.get(SiteModel.ID), "a stored site"),
+                storedSettings, RawValues.mapOrNull(site.get(SiteModel.SETTINGS)), minted);
+        }
         return null;
     }
 
@@ -613,7 +654,8 @@ public final class SiteOperationHandlers {
 
     /**
      * The settings a write stores: a sealed secret read back as its text, a blank secret leaf kept as stored, and a
-     * dev-namespace site given a registration token when it has none.
+     * dev-namespace site's map made even when nothing was posted, for its registration token
+     * ({@link SiteRegistrationTokens#mintInto}).
      *
      * AIDEV-NOTE: the restore reads the STORED row (null on a create), so a blank token on an edit keeps the minted
      * one instead of minting a second; only an absent token is minted, exactly as the row lane did.
@@ -640,13 +682,7 @@ public final class SiteOperationHandlers {
         if (!DevNamespaceUpstreamKind.ID.toString().equals(kind)) {
             return posted == null ? null : settings;
         }
-        if (settings == null) {
-            settings = new LinkedHashMap<>();
-        }
-        if (Texts.trimmedOrNull(settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY)) == null) {
-            settings.put(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY, "zdev_" + SecureTokens.randomToken(24));
-        }
-        return settings;
+        return settings != null ? settings : new LinkedHashMap<>();
     }
 
     /**

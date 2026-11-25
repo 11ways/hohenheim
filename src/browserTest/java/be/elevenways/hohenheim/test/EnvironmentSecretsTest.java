@@ -237,7 +237,8 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         return settings instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
-    private static String tokenOf(int siteId) {
+    /** @return the site's registration token as stored now, null for none */
+    static String tokenOf(int siteId) {
         Object token = settingsOf(siteId).get("registration_token");
         return token == null ? null : String.valueOf(token);
     }

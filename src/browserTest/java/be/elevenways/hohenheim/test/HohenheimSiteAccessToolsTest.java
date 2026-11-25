@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BanModel;
@@ -8,16 +9,20 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
+import be.elevenways.hohenheim.server.cms.SiteRegistrationTokens;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.net.http.HttpResponse;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -87,6 +92,52 @@ class HohenheimSiteAccessToolsTest extends HohenheimHttpTestBase {
             assertThat(admin.call("read", Map.of("codes", List.of(devCode))).text()).as("step 2: read back")
                 .contains(PREFIX + "dev2-" + tag).doesNotContain("zdev_" + tag);
             assertThat(admin.call("delete", Map.of("code", devCode)).error()).as("step 2: trashed").isFalse();
+
+            // 2b. A dev namespace made without a token: Hohenheim makes one, which neither the answer nor the read
+            //     carries; the creator's Dev sessions tab shows it once. A new one replaces it, by tool and by panel.
+            McpHttpSession.Answer minted = admin.call("site_dev_namespace_set", Map.of("name",
+                PREFIX + "devmade-" + tag));
+            assertThat(minted.error()).as("step 2b: " + minted.text()).isFalse();
+            String mintedCode = HohenheimAppPartToolsTest.codeIn(minted.text(), "S");
+            int mintedId = HohenheimAppPartToolsTest.keyOf(SiteModel.MODEL_ID, mintedCode);
+            cleanUp.push(() -> HardDeletes.byId(Models.get(SiteModel.class), mintedId));
+            String first = EnvironmentSecretsTest.tokenOf(mintedId);
+            assertThat(first).as("step 2b: a token made").startsWith("zdev_");
+            assertThat(minted.text()).as("step 2b: who sees it where, never the token").contains("Dev sessions")
+                .doesNotContain(first);
+            assertThat(admin.call("read", Map.of("codes", List.of(mintedCode))).text())
+                .as("step 2b: the read says where").contains("registration_token").contains("Dev sessions")
+                .doesNotContain(first);
+            String devTab = CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, mintedId,
+                HohenheimSlugs.Tab.DEV_SESSIONS).toUrl();
+            assertThat(rendered(adminGet(devTab).body())).as("step 2b: shown on the Dev sessions tab").contains(first);
+            assertThat(rendered(adminGet(devTab).body())).as("step 2b: and only once").doesNotContain(first);
+            assertThat(admin.call("site_dev_namespace_set", Map.of("code", mintedCode,
+                SiteRegistrationTokens.REGENERATE, true, "name", "x")).error()).as("step 2b: a new token alone")
+                .isTrue();
+            McpHttpSession.Answer renewed = admin.call("site_dev_namespace_set", Map.of("code", mintedCode,
+                SiteRegistrationTokens.REGENERATE, true));
+            assertThat(renewed.error()).as("step 2b: " + renewed.text()).isFalse();
+            String second = EnvironmentSecretsTest.tokenOf(mintedId);
+            assertThat(second).as("step 2b: a new token replaces it").startsWith("zdev_").isNotEqualTo(first);
+            assertThat(renewed.text()).as("step 2b: never in the answer").contains("Dev sessions")
+                .doesNotContain(second);
+            HttpResponse<String> clicked = adminPostForm(siteInvoke(SiteOperations.REGENERATE_REGISTRATION_TOKEN,
+                mintedId), confirmed(""));
+            assertThat(clicked.statusCode()).as("step 2b: the panel's own").isIn(302, 303);
+            assertThat(landingOf(clicked)).as("step 2b: onto the tab that shows it").isEqualTo(devTab);
+            String third = EnvironmentSecretsTest.tokenOf(mintedId);
+            assertThat(third).as("step 2b: and replaces it again").startsWith("zdev_").isNotEqualTo(second);
+            assertThat(rendered(adminGet(devTab).body())).as("step 2b: only the newest shown").contains(third)
+                .doesNotContain(second);
+            String copyName = PREFIX + "devcopy-" + tag;
+            assertThat(adminPostForm(siteInvoke(SiteOperations.CLONE, mintedId), confirmed("name=" + copyName))
+                .statusCode()).as("step 2b: copied").isIn(302, 303);
+            int copyId = Objects.requireNonNull(Models.get(SiteModel.class).find()
+                .where(SiteModel.NAME.eq(copyName)).first(), "the copy").get(SiteModel.ID);
+            cleanUp.push(() -> HardDeletes.byId(Models.get(SiteModel.class), copyId));
+            assertThat(EnvironmentSecretsTest.tokenOf(copyId)).as("step 2b: a copy never shares the token").isNull();
+            assertThat(admin.call("delete", Map.of("code", mintedCode)).error()).as("step 2b: trashed").isFalse();
 
             // 3. An access list: a create without a name refused by name; made, read, its satisfy changed.
             assertThat(admin.call("access_list_set", Map.of("satisfy", "all")).text())

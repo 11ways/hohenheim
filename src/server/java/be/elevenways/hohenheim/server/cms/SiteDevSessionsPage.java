@@ -24,10 +24,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * Dev sessions tab on a dev-namespace site: the live tunnel registrations
- * currently claiming subdomains.
+ * Dev sessions tab on a dev-namespace site: the live tunnel registrations currently claiming subdomains, and once a
+ * registration token Hohenheim made for the viewer.
  */
 public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
 
@@ -67,6 +68,8 @@ public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("sessions", sessions);
         vars.put("head", recordHead(conduit));
+        // A registration token Hohenheim made for this viewer's account, shown here once (SiteRegistrationTokens).
+        vars.put("disclosedToken", Objects.toString(SiteRegistrationTokens.claim(request.access(), siteId), ""));
 
         return new RenderTemplateResult(HohenheimTemplateIds.SITE_DEV_SESSIONS, vars);
     }

@@ -266,8 +266,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("head", recordHead(conduit));
-        // Tokens an assistant's dns_record_set made for this viewer's account, shown here once (DnsTokenDisclosures).
-        vars.put("disclosedTokens", Objects.toString(DnsTokenDisclosures.claim(accessContext, zoneId), ""));
+        // Tokens an assistant's dns_record_set made for this viewer's account, shown here once (TokenDisclosures).
+        vars.put("disclosedTokens", Objects.toString(TokenDisclosures.DYNDNS.claim(accessContext, zoneId), ""));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by the record entry's quick-create presets, which read THIS route.
         vars.put("quickAdd", QuickAddState.of(panel, resource, accessContext, PageAddress.of(conduit), refreshUrl,

@@ -4201,7 +4201,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Het geheim dat dev-machines aanbieden bij het registreren; wie het wijzigt, sluit elke machine buiten die het oude nog gebruikt. Leeg gelaten maakt Hohenheim er een.",
+      "text": "Het geheim dat dev-machines aanbieden bij het registreren; wie het wijzigt, sluit elke machine buiten die het oude nog gebruikt. Leeg gelaten maakt Hohenheim er een, die u eenmaal te zien krijgt op het tabblad Dev-sessies van de site.",
       "scope": "help"
     }
   ],
@@ -20644,7 +20644,7 @@
   "change_site_dev_namespace": {"text": "Een dev-naamruimte wijzigen", "scope": "hohenheim"},
   "change_site_dev_namespace_description": {"text": "Wijzigt de verzonden instellingen van een dev-naamruimte via het eigen opslaan van het paneel; elke andere instelling blijft zoals ze is.", "scope": "hohenheim"},
   "site_thing_site_dev_namespace": {"text": "een dev-naamruimte", "scope": "hohenheim"},
-  "mcp_tool_site_dev_namespace_set": {"text": "Maakt of wijzigt een dev-naamruimte: een jokeradres zoals *.dev.example.com waar dev-machines zich via de dev-tunnel aanmelden, elk met een eigen label. hostname krijgt geen certificaat: bestel een jokercertificaat met certificate_order. Geef registration_token zelf mee: een token dat Hohenheim maakt wanneer het ontbreekt, wordt bewaard maar nog nergens getoond. Wie geen beheerder is, wijzigt alleen name, enabled en description. Een site van een ander soort als code wordt geweigerd, tenzij change_kind true is. Antwoordt de code van de site, of bij een wijziging de geschreven instellingen.", "scope": "hohenheim"},
+  "mcp_tool_site_dev_namespace_set": {"text": "Maakt of wijzigt een dev-naamruimte: een jokeradres zoals *.dev.example.com waar dev-machines zich via de dev-tunnel aanmelden, elk met een eigen label. hostname krijgt geen certificaat: bestel een jokercertificaat met certificate_order. Ontbreekt registration_token bij het aanmaken, dan maakt Hohenheim er een; het wordt eenmaal getoond aan het account dat deze oproep doet (de eigenaar van de sleutel), op het tabblad Dev-sessies van de site in het paneel, gedurende 24 uur; regenerate_registration_token vervangt een verloren token op dezelfde manier. Wie geen beheerder is, wijzigt alleen name, enabled en description. Een site van een ander soort als code wordt geweigerd, tenzij change_kind true is. Antwoordt de code van de site en, wanneer een token werd gemaakt, wie het waar en tot wanneer ziet; een wijziging antwoordt de geschreven instellingen.", "scope": "hohenheim"},
   "site_sign_in_provider": {"text": "De inlogaanbieder (SP3) waar elke bezoeker langs moet voor hij de site bereikt.", "scope": "help"},
   "create_protected_path": {"text": "Een pad beschermen", "scope": "hohenheim"},
   "create_protected_path_description": {"text": "Beschermt een pad van een site met een lijst die gekozen wordt of gemaakt uit de gegeven personen, netwerken of aanbieder, zoals Een pad beschermen op de site dat doet.", "scope": "hohenheim"},
@@ -20708,7 +20708,7 @@
   "mcp_code_sign_in_provider_set": {"text": "De code van de inlogaanbieder; laat weg om er een te maken.", "scope": "hohenheim"},
   "set_ban": [{"text": "Een adres blokkeren of vrijgeven", "scope": "hohenheim"}, {"text": "{$actor} zette een blokkering", "scope": "hohenheim", "target": "happened"}],
   "set_ban_description": {"text": "Blokkeert een adres een tijd of voorgoed voor webverkeer, of heft elke geldende blokkering ervan op, zoals de pagina Blokkeringen dat doet.", "scope": "hohenheim"},
-  "mcp_tool_ban_set": {"text": "Blokkeert een IP-adres voor het webverkeer van alle sites, een tijd of voorgoed, of heft een blokkering op; meteen afgedwongen in de firewall en de proxy. Alleen Hohenheim zelf maakt SSH-blokkeringen, na SSH-aanvallen. Een IPv6-adres blokkeert zijn hele /64. Loopback-, privé- en link-local-adressen, de eigen adressen van deze installatie en die op de nooit-blokkeren-lijst kunnen niet geblokkeerd worden. remove heft elke geldende blokkering van het adres op, web en SSH; opgeheven blokkeringen blijven in de lijst. Opnieuw blokkeren zet het einde op duration. Alleen voor beheerders. Antwoordt wanneer de blokkering eindigt, of dat ze opgeheven is.", "scope": "hohenheim"},
+  "mcp_tool_ban_set": {"text": "Blokkeert een IP-adres voor het webverkeer van alle sites, een tijd of voorgoed, of heft een blokkering op; meteen afgedwongen in de firewall en de proxy. Alleen Hohenheim zelf maakt SSH-blokkeringen, na SSH-aanvallen. Een IPv6-adres blokkeert zijn hele /64. Loopback-, privé- en link-local-adressen, de eigen adressen van deze installatie en die op de nooit-blokkeren-lijst kunnen niet geblokkeerd worden. remove heft elke geldende blokkering van het adres op, web en SSH; opgeheven blokkeringen blijven in de lijst. Opnieuw blokkeren zet het einde op duration in een en dezelfde stap, zonder dat het adres tussendoor vrij is; een SSH-blokkering ervan blijft. Alleen voor beheerders. Antwoordt wanneer de blokkering eindigt, of dat ze opgeheven is.", "scope": "hohenheim"},
   "ban_set_ip": {"text": "Het letterlijke IP-adres om te blokkeren, of waarvan de blokkeringen opgeheven worden; geen hostnaam.", "scope": "help"},
   "ban_set_reason": {"text": "Waarom het geblokkeerd is, zoals de lijst het toont; tot 255 tekens.", "scope": "help"},
   "ban_set_duration": {"text": "Hoe lang de blokkering duurt; permanent geldt tot ze opgeheven wordt.", "scope": "help"},
@@ -20717,5 +20717,13 @@
   "ban_set_until": {"text": "{$ip} is geblokkeerd tot {$until :datetime}.", "scope": "hohenheim"},
   "ban_set_for_good": {"text": "{$ip} is voorgoed geblokkeerd, tot de blokkering opgeheven wordt.", "scope": "hohenheim"},
   "ban_set_lifted": {"text": "Elke blokkering van {$ip} is opgeheven: het bereikt weer elke app.", "scope": "hohenheim"},
-  "ban_set_nothing": {"text": "Niets blokkeert {$ip} nu.", "scope": "hohenheim"}
+  "ban_set_nothing": {"text": "Niets blokkeert {$ip} nu.", "scope": "hohenheim"},
+  "regenerate_registration_token": [{"text": "Nieuw registratietoken maken", "scope": "site"}, {"text": "{$actor} maakte een nieuw registratietoken voor {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "regenerate_registration_token_description": {"text": "Geeft een dev-naamruimte een nieuw registratietoken, eenmaal getoond aan het account dat erom vroeg op het tabblad Dev-sessies van de site; een dev-machine die het oude nog aanbiedt, wordt vanaf dan geweigerd.", "scope": "hohenheim"},
+  "regenerate_registration_token_confirm": {"text": "Elke dev-machine die het huidige token nog aanbiedt, wordt vanaf nu geweigerd. Het nieuwe token krijgt u eenmaal te zien, op het tabblad Dev-sessies.", "scope": "site"},
+  "registration_token_made": {"text": "Het registratietoken werd gemaakt; het wordt eenmaal getoond aan {$account} op het tabblad Dev-sessies van deze site in het paneel, tot {$until :datetime}.", "scope": "site"},
+  "registration_token_disclosure_title": {"text": "Registratietoken", "scope": "site"},
+  "registration_token_disclosure_warning": {"text": "Kopieer het nu: het wordt alleen deze keer getoond. Een dev-machine biedt het aan wanneer ze zich via de dev-tunnel registreert.", "scope": "site"},
+  "registration_token_no_account": {"text": "Een registratietoken dat Hohenheim maakt, wordt eenmaal getoond aan het account dat de oproep doet, en achter deze staat geen account: geef registration_token zelf mee", "scope": "violations"},
+  "site_regenerate_registration_token": {"text": "Zet op true om het registratietoken te vervangen door een nieuw dat Hohenheim maakt, eenmaal getoond zoals een gemaakt token; elke dev-machine die het oude nog gebruikt, wordt geweigerd. Geef er niets anders bij.", "scope": "hohenheim"}
 }

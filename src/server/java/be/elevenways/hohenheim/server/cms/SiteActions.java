@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -71,7 +72,8 @@ final class SiteActions {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
             disableAction(), cloneAction(), movePortsAction(),
             rollbackAction(), deployFromRepositoryAction(), protectPathAction(), fixHttpsAction(),
-            stopForcingHttpsAction(), addAddressAction(), fixProtectionAction(), changeConfigurationAction());
+            stopForcingHttpsAction(), addAddressAction(), fixProtectionAction(), changeConfigurationAction(),
+            regenerateRegistrationTokenAction());
     }
 
     /**
@@ -143,6 +145,22 @@ final class SiteActions {
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("stop_forcing_https"),
                 HohenheimMicrocopy.SITE.of("stop_forcing_https_confirm"), ActionStyle.PRIMARY))
+            .build();
+    }
+
+    /**
+     * A dev namespace's new registration token, for one that was lost; it lands on the Dev sessions tab, which shows
+     * the new token once. Confirmed first: every dev machine still presenting the old one is refused from then on.
+     */
+    private static @NonNull PanelAction<Row> regenerateRegistrationTokenAction() {
+        return PanelAction.<Row, Microcopy>places(SiteOperations.REGENERATE_REGISTRATION_TOKEN, ActionPlacement.ROW,
+                (request, said) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+                    HohenheimSlugs.SITES, request.subject().get(SiteModel.ID), HohenheimSlugs.Tab.DEV_SESSIONS)
+                    .toUrl())))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("regenerate_registration_token"),
+                HohenheimMicrocopy.SITE.of("regenerate_registration_token_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
 

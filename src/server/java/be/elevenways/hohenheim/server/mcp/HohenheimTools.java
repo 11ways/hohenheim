@@ -42,6 +42,7 @@ import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.hohenheim.server.cms.SiteKindWrites;
 import be.elevenways.hohenheim.server.cms.SitePortMoves;
 import be.elevenways.hohenheim.server.cms.SiteRedirectParts;
+import be.elevenways.hohenheim.server.cms.SiteRegistrationTokens;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -264,13 +265,23 @@ public final class HohenheimTools extends McpToolCollection {
                 .build());
         }
         for (KindSettingsWrites.Kind kind : SiteKindWrites.all()) {
-            tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
-                .code(words("mcp_code_site"))
-                .creates(kind.create(), null, kind.needs(), kind.thing())
-                .route(kind.change(), HohenheimMcpAnswers::changed)
+            // A dev namespace's token is shown once in the panel, never here: its create says where, and a lost one is
+            // replaced by a route of its own, which every change names by the flag.
+            boolean namespace = kind == SiteKindWrites.DEV_NAMESPACE;
+            String[] changing = namespace ? new String[] {SiteRegistrationTokens.REGENERATE, "false"} : new String[0];
+            McpCodeTool.Builder site = McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
+                .code(words("mcp_code_site"));
+            if (namespace) site.flag(SiteRegistrationTokens.REGENERATE, words("site_regenerate_registration_token"));
+            site.creates(kind.create(), namespace ? HohenheimMcpAnswers::devNamespaceMade : null, kind.needs(),
+                    kind.thing())
+                .route(kind.change(), HohenheimMcpAnswers::changed, changing)
                 // describe code=S20 names its own kind's tool only; a call still turns another kind (change_kind).
-                .describedFor(kind::holds)
-                .build());
+                .describedFor(kind::holds);
+            if (namespace) {
+                site.route(SiteOperations.REGENERATE_REGISTRATION_TOKEN, HohenheimMcpAnswers::said,
+                    SiteRegistrationTokens.REGENERATE, "true").describedFor(kind::holds);
+            }
+            tools.add(site.build());
         }
         return tools;
     }

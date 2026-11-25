@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -390,15 +391,31 @@ public final class BanParts {
     }
 
     /**
-     * Bans an address by hand, web traffic only, for one of {@link #DURATION}'s choices, as the panel's form and
-     * ban_set both do; {@link #requireBannable} asked first.
+     * Bans an address by hand, web traffic only, for one of {@link #DURATION}'s choices, as the panel's form does;
+     * {@link #requireBannable} asked first.
      *
      * @param duration a choice's key, the 24h default for null
      * @return the ban, or the one already blocking the address (BanService keeps it unchanged)
      */
     static @NonNull Row banManually(@NonNull String ip, @Nullable Object reason, @Nullable Object duration) {
-        String said = reason instanceof String text && !text.isBlank() ? text.trim() : null;
-        return BanService.INSTANCE.createBan(ip, said, BanModel.SOURCE_MANUAL, null, ttlOf(duration));
+        return BanService.INSTANCE.createBan(ip, reasonOf(reason), BanModel.SOURCE_MANUAL, null, ttlOf(duration));
+    }
+
+    /**
+     * Bans an address by hand anew, as ban_set does: the web bans of it in force lifted and the new one written in one
+     * step that never leaves it unbanned; {@link #requireBannable} asked first.
+     *
+     * @param duration a choice's key, the 24h default for null
+     * @param by       who the replaced bans are lifted by
+     */
+    static @NonNull Row banAgain(@NonNull String ip, @Nullable Object reason, @Nullable Object duration,
+                                 @Nullable String by) {
+        return BanService.INSTANCE.banAgain(ip, reasonOf(reason), BanModel.SOURCE_MANUAL, BanScope.WEB,
+            ttlOf(duration), by);
+    }
+
+    private static @Nullable String reasonOf(@Nullable Object reason) {
+        return reason instanceof String text && !text.isBlank() ? text.trim() : null;
     }
 
     private static @Nullable Duration ttlOf(@Nullable Object duration) {
