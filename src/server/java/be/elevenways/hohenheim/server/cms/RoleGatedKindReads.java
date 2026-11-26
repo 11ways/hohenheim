@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -59,6 +60,7 @@ public final class RoleGatedKindReads {
         operatorsRead(GameDomainModel.REF);
         operatorsRead(ReconcileFindingModel.REF);
         operatorsRead(ReleasedRouteClaimModel.REF);
+        operatorsRead(SiteAuthProviderModel.REF);
         operatorsRead(StackModel.REF);
         operatorsRead(StackServiceModel.REF);
         // A zone is read where its records are: a tenant reaches the zones holding his names (TenantScopes.DNS_ZONES).
