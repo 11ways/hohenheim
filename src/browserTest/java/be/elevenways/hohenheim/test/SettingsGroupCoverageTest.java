@@ -74,7 +74,9 @@ class SettingsGroupCoverageTest {
         // This server's name among the Hohenheims it is linked to (docs/cluster.md).
         "cluster",
         // The address blocks of the networks Hohenheim creates (2026-11-25).
-        "networks");
+        "networks",
+        // How long the proxy's and the DNS server's traffic totals are kept (4bc90ff59).
+        "traffic");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

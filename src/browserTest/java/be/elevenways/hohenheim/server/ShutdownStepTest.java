@@ -56,11 +56,13 @@ class ShutdownStepTest {
                 "build recovery", "database dump recovery", "release recovery", "shutdown registration", "spamservice",
                 "proxy listeners", "dns", "sftp server");
 
-        // 2. Stop: the ingress first, so no viewer subscribes to the stats streams after it; what it feeds next, then
-        //    the workers; the host leases last, while the datasource is still open.
+        // 2. Stop: the ingress first, so no viewer subscribes to the stats streams after it; what it counted is written
+        //    next (traffic totals, 4bc90ff59), then what it feeds, then the workers; the host leases last, while the
+        //    datasource is still open.
         assertThat(ServerMain.stopSteps()).extracting(HostStep::name)
             .as("step 2: the steps of the stop")
-            .containsExactly("proxy listeners", "dns listeners", "instance stats streams", "secondary zone replication",
-                "sftp server", "spamservice", "ssh auth watcher", "ban writer", "stack workers", "host leases");
+            .containsExactly("proxy listeners", "dns listeners", "traffic totals", "instance stats streams",
+                "secondary zone replication", "sftp server", "spamservice", "ssh auth watcher", "ban writer",
+                "stack workers", "host leases");
     }
 }

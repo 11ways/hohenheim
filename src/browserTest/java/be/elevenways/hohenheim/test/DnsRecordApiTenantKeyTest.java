@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * /manage tenant gate (hostname authority, a per-record edit grant), reads only what that owner may read, and never
  * tells it whether a zone or another owner's record exists.
  */
-class DnsRecordApiTenantKeyTest extends HohenheimTestBase {
+class DnsRecordApiTenantKeyTest extends HohenheimHttpTestBase {
 
     private static final String ZONE = "keyapi.test";
     private static final String HIDDEN_ZONE = "keyapi-hidden.test";

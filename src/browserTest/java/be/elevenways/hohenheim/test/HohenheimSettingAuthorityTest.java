@@ -31,9 +31,10 @@ class HohenheimSettingAuthorityTest extends SettingAuthorityTestSupport {
     protected @NonNull Collection<String> systemGrants() {
         List<String> grants = new ArrayList<>(List.of(HohenheimSources.ADMIN_SYSTEM.value(),
             HohenheimSources.ADMIN_ACCESS.value()));
+        // zenit-ai's settings ship with the assistant tools Hohenheim serves, so its leaves are the system role's too.
         grants.addAll(FrozenSettingsLeaves.union(FrozenSettingsLeaves.ZENIT, FrozenSettingsLeaves.AUTH,
             FrozenSettingsLeaves.CMS, FrozenSettingsLeaves.COMMS, FrozenSettingsLeaves.MEDIA,
-            FrozenSettingsLeaves.MICROCOPY));
+            FrozenSettingsLeaves.MICROCOPY, FrozenSettingsLeaves.AI));
         return grants;
     }
 
