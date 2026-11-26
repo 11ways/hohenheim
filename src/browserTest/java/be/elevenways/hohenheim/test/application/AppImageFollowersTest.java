@@ -258,9 +258,11 @@ class AppImageFollowersTest {
                 follower(name, three);
             }
 
-            // 1. Without a container: one read.
-            assertThat(trips(() -> AppImageFollowers.converge(lone)))
-                .as("step 1: an app nobody follows costs one read").isEqualTo(1);
+            // 1. Without a container: one read, counted warm as the framework's flat-count measure takes it (the
+            //    first read of a fresh fork fills what every later one reuses, a cost no app adds).
+            DatasourceProbe lonely = DatasourceProbe.on(datasource);
+            assertThat(lonely.warmedRoundTrips(() -> AppImageFollowers.converge(lone)))
+                .as("step 1: an app nobody follows costs one read: %s", lonely.executedStatements()).isEqualTo(1);
 
             // 2. One container or three: the same statements for the step line and the overview's version check,
             //    each counted warm as the framework's flat-count measure takes it: the first read of a fresh app
@@ -533,14 +535,6 @@ class AppImageFollowersTest {
         assertThat(ReleaseEngine.awaitDrainsIdle(Duration.ofSeconds(30))).as("the drains settled").isTrue();
         assertThat(HandlerSupport.awaitBackgroundIdle(Duration.ofSeconds(30))).as("the background work settled")
             .isTrue();
-    }
-
-    /** @return the database round trips {@code work} makes */
-    private static int trips(Runnable work) {
-        DatasourceProbe probe = DatasourceProbe.on(datasource);
-        probe.reset();
-        work.run();
-        return probe.roundTrips();
     }
 
     /** Moves the clock a second on, so a release created next is later than every start before it. */
