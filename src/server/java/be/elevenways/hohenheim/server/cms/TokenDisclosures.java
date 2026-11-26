@@ -38,6 +38,9 @@ final class TokenDisclosures {
     /** The URLs a tool made of an app's build hooks, on the app's Build hooks tab, beside unread ones. */
     static final TokenDisclosures BUILD_HOOKS = new TokenDisclosures("hohenheim.build_hooks");
 
+    /** The keys a tool made for a spam client, on the client's Keys tab, beside unread ones; keyed by its id. */
+    static final TokenDisclosures SPAM_KEYS = new TokenDisclosures("hohenheim.spamservice_keys");
+
     private final @NonNull String place;
 
     private TokenDisclosures(@NonNull String place) {
@@ -60,7 +63,7 @@ final class TokenDisclosures {
      *
      * @return until when they wait, null when no account or table can hold them
      */
-    @Nullable Instant park(@NonNull AccessContext caller, int recordId, @NonNull String tokens) {
+    @Nullable Instant park(@NonNull AccessContext caller, @NonNull Object recordId, @NonNull String tokens) {
         AccountDisclosures parked = parked();
         if (parked == null) return null;
         Secret earlier = parked.claim(caller, this.scope(recordId));
@@ -74,7 +77,7 @@ final class TokenDisclosures {
      *
      * @return until when it waits, null when no account or table can hold it
      */
-    @Nullable Instant replace(@NonNull AccessContext caller, int recordId, @NonNull String token) {
+    @Nullable Instant replace(@NonNull AccessContext caller, @NonNull Object recordId, @NonNull String token) {
         AccountDisclosures parked = parked();
         if (parked == null) return null;
         parked.drop(this.scope(recordId));
@@ -82,7 +85,7 @@ final class TokenDisclosures {
     }
 
     /** @return the tokens parked for the viewer's account on the record, once; null for none */
-    @Nullable String claim(@NonNull AccessContext viewer, int recordId) {
+    @Nullable String claim(@NonNull AccessContext viewer, @NonNull Object recordId) {
         AccountDisclosures parked = parked();
         Secret tokens = parked == null ? null : parked.claim(viewer, this.scope(recordId));
         return tokens == null ? null : tokens.reveal();
@@ -109,7 +112,7 @@ final class TokenDisclosures {
     }
 
     /** Drops what every account had parked on the record: its token stopped working, or the record went. */
-    void drop(int recordId) {
+    void drop(@NonNull Object recordId) {
         AccountDisclosures parked = parked();
         if (parked != null) parked.drop(this.scope(recordId));
     }
@@ -119,8 +122,8 @@ final class TokenDisclosures {
         return store == null ? null : AccountDisclosures.of(CredentialDisclosures.WINDOW, store);
     }
 
-    /** Per record, so another record's tab never shows a token under the wrong name. */
-    private @NonNull String scope(int recordId) {
+    /** Per record, by its key (a row's number, a remote record's id), so another record's tab never shows a token. */
+    private @NonNull String scope(@NonNull Object recordId) {
         return this.place + "|" + recordId;
     }
 }

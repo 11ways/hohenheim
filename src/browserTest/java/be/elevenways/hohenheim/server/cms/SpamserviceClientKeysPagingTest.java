@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A client's keys are reachable however many it has, and a malformed client scope in the URL is
- * absence, never a 500.
+ * A client's keys are reachable however many it has, each by one read of its own, and a malformed client scope in the
+ * URL is absence, never a 500.
  */
 class SpamserviceClientKeysPagingTest {
 
@@ -51,21 +51,24 @@ class SpamserviceClientKeysPagingTest {
         SpamserviceClient client = this.serveKeys(clientId, keyIds, requests);
         PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
 
-        // 1. The 201st key lives on the service's SECOND page. It used to be listed and then
-        //    404 on edit/enable/revoke, because loading looked at the first 200 only.
+        // 1. The 201st key lives on the service's SECOND page. It used to be listed and then 404 on edit/enable/revoke,
+        //    because loading looked at the first 200 only; then it walked the pages. Now the key is read by itself.
         String last = keyIds.get(REMOTE_PAGE);
+        int before = requests.get();
         ManagedClientKey loaded = keys.reads().load().apply(clientId + "~" + last, AccessContext.anonymous());
         assertThat(loaded).as("step 1: a key beyond the first remote page loads").isNotNull();
         assertThat(loaded.id()).as("step 1: and it is the key asked for").isEqualTo(last);
+        assertThat(requests.get() - before).as("step 1: by one read, never a page walk").isEqualTo(1);
 
-        // 2. A key the client does not hold walks the pages and answers null -- a bounded
-        //    walk, stopping at the total the service reported.
-        int before = requests.get();
+        // 2. A key the service does not hold is absent after that one read (its 404), and so is a key addressed
+        //    under a client it does not belong to.
+        before = requests.get();
         ManagedClientKey missing = keys.reads().load().apply(clientId + "~" + UUID.randomUUID(),
             AccessContext.anonymous());
         assertThat(missing).as("step 2: an unknown key is absent").isNull();
-        assertThat(requests.get() - before).as("step 2: the walk stops at the reported total")
-            .isEqualTo(2);
+        assertThat(requests.get() - before).as("step 2: after one read").isEqualTo(1);
+        assertThat(keys.reads().load().apply(UUID.randomUUID() + "~" + last, AccessContext.anonymous()))
+            .as("step 2: a key under another client's address is absent").isNull();
 
         // 3. A malformed parent on the create link is no prefill, not an exception.
         assertThat(SpamserviceClientKeysResource.createDefaults("not-a-uuid"))
@@ -92,12 +95,22 @@ class SpamserviceClientKeysPagingTest {
         assertThat(page.total()).as("step 6: the total counts every key").isEqualTo(REMOTE_PAGE + 1L);
     }
 
-    /** Serves {@code keyIds} for {@code clientId} in pages of the requested size. */
+    /** Serves {@code keyIds} for {@code clientId} in pages of the requested size, and each key by itself. */
     private SpamserviceClient serveKeys(String clientId, List<String> keyIds, AtomicInteger requests)
             throws IOException {
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/", exchange -> {
             requests.incrementAndGet();
+            String path = exchange.getRequestURI().getPath();
+            if (path.startsWith("/v1/manage/keys/")) {
+                int index = keyIds.indexOf(path.substring("/v1/manage/keys/".length()));
+                if (index < 0) {
+                    respond(exchange, 404, "{\"error\":{\"code\":\"key_not_found\",\"message\":\"No such key\"}}");
+                } else {
+                    respond(exchange, 200, key(clientId, keyIds.get(index), index));
+                }
+                return;
+            }
             Map<String, String> query = query(exchange);
             int page = Integer.parseInt(query.getOrDefault("page", "1"));
             int size = Integer.parseInt(query.getOrDefault("page_size", "25"));
@@ -107,11 +120,9 @@ class SpamserviceClientKeysPagingTest {
                 if (items.length() > 0) {
                     items.append(',');
                 }
-                items.append("{\"id\":\"").append(keyIds.get(i)).append("\",\"client_id\":\"")
-                    .append(clientId).append("\",\"name\":\"key-").append(i)
-                    .append("\",\"active\":true,\"last_used\":null,\"created_at\":null}");
+                items.append(key(clientId, keyIds.get(i), i));
             }
-            respond(exchange, "{\"items\":[" + items + "],\"page\":" + page + ",\"page_size\":" + size
+            respond(exchange, 200, "{\"items\":[" + items + "],\"page\":" + page + ",\"page_size\":" + size
                 + ",\"total\":" + keyIds.size() + "}");
         });
         this.server.start();
@@ -133,10 +144,16 @@ class SpamserviceClientKeysPagingTest {
         return values;
     }
 
-    private static void respond(HttpExchange exchange, String body) throws IOException {
+    /** @return one key as the management API answers it, its code numbered after its place */
+    private static String key(String clientId, String keyId, int index) {
+        return "{\"id\":\"" + keyId + "\",\"code\":\"SPK" + (index + 1) + "\",\"client_id\":\"" + clientId
+            + "\",\"name\":\"key-" + index + "\",\"active\":true,\"last_used\":null,\"created_at\":null}";
+    }
+
+    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
         exchange.close();
     }

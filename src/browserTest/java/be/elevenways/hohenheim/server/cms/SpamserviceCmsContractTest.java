@@ -279,116 +279,33 @@ class SpamserviceCmsContractTest {
         return PartsWrites.guarded(resource, entries).over(() -> resource.formValues(existing));
     }
 
-    @Test
-    void clientUpdatesUseRevisionGuardedPutWithoutProvisioningMetadata() throws Exception {
-        AtomicReference<String> method = new AtomicReference<>();
-        AtomicReference<String> body = new AtomicReference<>();
-        String clientId = UUID.randomUUID().toString();
-        SpamserviceClient client = client(exchange -> {
-            method.set(exchange.getRequestMethod());
-            body.set(readBody(exchange));
-            return "{\"id\":\"" + clientId + "\",\"name\":\"Renamed\",\"enabled\":true,"
-                + "\"trusted\":true,\"provisioner\":false,\"manager\":false,\"external_id\":\"owned\","
-                + "\"provisioned_by_client_id\":null,\"allowed_languages\":\"eng\",\"spam_threshold\":55,"
-                + "\"notes\":\"note\",\"created_at\":null,\"updated_at\":null,\"revision\":\"r2\"}";
-        });
-        ManagedClient existing = new ManagedClient(clientId, "Original", true, true, false, false,
-            "owned", null, "eng", 50, null, null, null, "r1");
-        PanelResource<ManagedClient> resource = SpamserviceClientsResource.create(() -> client);
-
-        resource.writes().storeUpdate().update(existing, submitted(resource, existing, Map.of(
-            "name", "Renamed", "enabled", true, "trusted", true, "provisioner", false,
-            "manager", false, "allowed_languages", "eng", "spam_threshold", 55, "notes", "note")),
-            AccessContext.anonymous());
-
-        assertThat(method.get()).isEqualTo("PUT");
-        assertThat(body.get()).contains("\"revision\":\"r1\"")
-            .doesNotContain("external_id").doesNotContain("provisioned_by_client_id");
-    }
-
     /**
-     * Steps 1-3: a one-entry write never blanks the rest of a remote record.
+     * A one-entry write of a spam word never blanks the rest of the remote word.
      *
-     * AIDEV-NOTE: these three resources rebuild a FULL remote DTO from the coerced map, and
-     * the inline cell lane hands updateRow a map holding EXACTLY ONE entry -- so a rename
-     * used to PUT a disabled client with no language whitelist and a reset threshold to the
-     * live spam filter. The fix fills every field the write does not carry from the STORED
-     * record rather than assuming the remote API treats absence as unchanged; its source is
-     * outside this workspace and promises no such thing. The one place absence IS a
-     * documented "leave alone" is updateKey's nullable arguments, which the enable/revoke
-     * row actions already rely on.
+     * AIDEV-NOTE: the word resource rebuilds a FULL remote DTO from the coerced map, and the inline cell lane hands
+     * updateRow a map holding EXACTLY ONE entry -- so a correction of the word used to PUT a zero score and leet=false
+     * to the live spam filter. The fix fills every field the write does not carry from the STORED record rather than
+     * assuming the remote API treats absence as unchanged. A client's and a key's change are operations now, proven
+     * by SpamserviceRemoteWritesTest.
      */
     @Test
-    void aOneEntryWriteKeepsEveryRemoteFieldItDoesNotCarry() throws Exception {
+    void aOneEntryWordWriteKeepsEveryRemoteFieldItDoesNotCarry() throws Exception {
         AtomicReference<String> body = new AtomicReference<>();
-        String clientId = UUID.randomUUID().toString();
         String wordId = UUID.randomUUID().toString();
-        String keyId = UUID.randomUUID().toString();
         SpamserviceClient client = client(exchange -> {
             body.set(readBody(exchange));
-            return "{\"id\":\"" + clientId + "\",\"name\":\"Renamed\",\"enabled\":true,"
-                + "\"trusted\":true,\"provisioner\":true,\"manager\":false,\"external_id\":\"owned\","
-                + "\"provisioned_by_client_id\":null,\"allowed_languages\":\"eng,nld\","
-                + "\"spam_threshold\":80,\"notes\":\"keep this note\",\"created_at\":null,"
-                + "\"updated_at\":null,\"revision\":\"r2\"}";
+            return "{}";
         });
 
-        // 1. A trusted, provisioning client with a language whitelist and a raised
-        //    threshold -- every one of them a setting a blank PUT would silently drop.
-        ManagedClient existing = new ManagedClient(clientId, "Original", true, true, true, false,
-            "owned", null, "eng,nld", 80, "keep this note", null, null, "r1");
-        PanelResource<ManagedClient> clients = SpamserviceClientsResource.create(() -> client);
-        clients.writes().storeUpdate().update(existing, submitted(clients, existing, Map.of("name", "Renamed")),
-            AccessContext.anonymous());
-
-        assertThat(body.get()).as("step 1: the rename is the only field that moved")
-            .contains("\"name\":\"Renamed\"").contains("\"enabled\":true")
-            .contains("\"trusted\":true").contains("\"provisioner\":true")
-            .contains("eng,nld").contains("\"spam_threshold\":80").contains("keep this note");
-
-        // 2. Same for a spam word: score, language and leet survive a correction of the
-        //    word itself.
+        // 1. A spam word: score, language and leet survive a correction of the word itself.
         PanelResource<SpamWordEntry> words = SpamserviceWordsResource.create(() -> client);
         SpamWordEntry word = new SpamWordEntry(wordId, "viagraa", 70, "eng", true, null, null);
         words.writes().storeUpdate().update(word, submitted(words, word, Map.of("word", "viagra")),
             AccessContext.anonymous());
 
-        assertThat(body.get()).as("step 2: the word's score, language and leet flag survive")
+        assertThat(body.get()).as("step 1: the word's score, language and leet flag survive")
             .contains("\"word\":\"viagra\"").contains("\"score\":70")
             .contains("eng").contains("\"leet\":true");
-
-        // 3. And a key write that carries no name must not rename the key to "null".
-        PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
-        ManagedClientKey key = new ManagedClientKey(keyId, clientId, "primary", true, null, null);
-        keys.writes().storeUpdate().update(key, submitted(keys, key, Map.of("active", false)),
-            AccessContext.anonymous());
-
-        assertThat(body.get()).as("step 3: an absent name is sent as absent, never as \"null\"")
-            .doesNotContain("\"name\":\"null\"");
-
-        // 4. The SAME shape one file over, which the fix above did not reach: a client whose
-        //    stored name is null, edited by a write that carries no name. The fallback is the
-        //    null itself, and String.valueOf over it is the four characters "null" -- PUT to
-        //    the live filter as the client's new name.
-        ManagedClient unnamed = new ManagedClient(clientId, null, true, false, false, false, "owned", null, "eng",
-            50, null, null, null, "r1");
-        clients.writes().storeUpdate().update(unnamed, submitted(clients, unnamed, Map.of("enabled", true)),
-            AccessContext.anonymous());
-
-        assertThat(body.get())
-            .as("step 4: a client with no stored name is never renamed to the text \"null\"")
-            .doesNotContain("\"name\":\"null\"");
-
-        // 5. And the same for a name the write DOES carry as null, which is what a blank
-        //    submitted entry coerces to -- getOrDefault answers null for a present key.
-        Map<String, Object> blankName = new java.util.HashMap<>();
-        blankName.put("name", null);
-        clients.writes().storeUpdate().update(existing, submitted(clients, existing, blankName),
-            AccessContext.anonymous());
-
-        assertThat(body.get())
-            .as("step 5: a submitted blank name is not the text \"null\" either")
-            .doesNotContain("\"name\":\"null\"");
     }
 
     @Test
@@ -480,10 +397,10 @@ class SpamserviceCmsContractTest {
         SpamserviceClient client = client(exchange -> {
             lastPath.set(exchange.getRequestURI().getPath());
             if (lastPath.get().endsWith("/keys")) {
-                return "{\"id\":\"" + keyId + "\",\"client_id\":\"" + clientId
+                return "{\"id\":\"" + keyId + "\",\"code\":\"SPK1\",\"client_id\":\"" + clientId
                     + "\",\"name\":\"primary\",\"key\":\"spam_once\",\"generated\":true}";
             }
-            return "{\"id\":\"" + sampleId + "\",\"client_id\":\"" + clientId
+            return "{\"id\":\"" + sampleId + "\",\"code\":\"SPS1\",\"client_id\":\"" + clientId
                 + "\",\"ip\":\"203.0.113.9\",\"spam\":true,\"score\":70,\"confirmed\":true,"
                 + "\"flags\":\"\",\"languages\":\"eng\",\"created_at\":\"2026-07-23T00:00:00Z\","
                 + "\"updated_at\":null,\"useragent\":null,\"heuristic_score\":70,\"threshold\":50,"
@@ -491,7 +408,7 @@ class SpamserviceCmsContractTest {
         });
 
         PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
-        var created = SpamserviceClientKeysResource.mint(() -> client, clientId, "primary", "");
+        var created = SpamserviceClientKeysResource.mint(client, clientId, "primary", "", true);
         assertThat(created.key()).isEqualTo(clientId + "~" + keyId);
         assertThat(created.secret().reveal()).as("the generated key is the create's one-time result")
             .isEqualTo("spam_once");

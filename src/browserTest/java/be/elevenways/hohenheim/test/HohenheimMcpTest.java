@@ -137,7 +137,6 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:route_notification_events",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
-        "hohenheim:spamservice_mark_ham", "hohenheim:spamservice_mark_spam", "hohenheim:spamservice_rescore",
         "hohenheim:stop_forcing_https",
         "hohenheim:update_game_domain", "hohenheim:update_site", "source hohenheim:access_list@admin",
         "source hohenheim:access_list@admin_picker", "source hohenheim:access_rule@admin",

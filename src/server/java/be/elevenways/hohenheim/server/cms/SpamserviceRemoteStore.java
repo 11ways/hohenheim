@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.PageResult;
 import be.elevenways.spamservice.client.SpamserviceApiException;
@@ -16,9 +17,12 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationCall;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -41,6 +46,12 @@ final class SpamserviceRemoteStore {
 
     /** The client of the managed runtime, null while it is not ready. */
     static final Supplier<SpamserviceClient> MANAGED = () -> SpamserviceManager.get().client();
+
+    /**
+     * The client an operation writes through, attached by a caller holding its own (a test); an operation the panel
+     * or a tool runs attaches none and writes through the managed runtime's.
+     */
+    static final IdentityKey<Supplier<SpamserviceClient>> CLIENTS = IdentityKey.create("spamservice_clients");
 
     /**
      * Whether the last remote page read of THIS request could not be answered, per entry.
@@ -99,9 +110,63 @@ final class SpamserviceRemoteStore {
         try {
             return call.get();
         } catch (SpamserviceApiException refused) {
-            throw Violations.ofForm(HohenheimMicrocopy.SPAMSERVICE.of("service_refused")
-                .withArg("reason", HohenheimViolations.reasonOf(refused)));
+            throw refusedBy(refused);
         }
+    }
+
+    /** @return the client the call writes through: the one it was attached, else the managed runtime's */
+    static @NonNull SpamserviceClient clientOf(@NonNull OperationCall<?, ?> call) {
+        Supplier<SpamserviceClient> attached = call.attachment(CLIENTS);
+        SpamserviceClient client = (attached != null ? attached : MANAGED).get();
+        if (client == null) {
+            throw unanswered();
+        }
+        return client;
+    }
+
+    /** @return the input entries a change wrote: those a patch sent, every one of a whole form's */
+    static @NonNull Set<String> sent(@NonNull OperationCall<?, ?> call, OperationInput.@NonNull Values input) {
+        return call.patched() != null ? call.patched() : input.coerced().keySet();
+    }
+
+    /**
+     * One record the management API reads by its id or by its code, as an operation's subject: null for a text that
+     * names none, refused in the spam tools' words while the service does not answer.
+     *
+     * AIDEV-NOTE: the spam service allocates and resolves its codes (SPC, SPK, SPS) itself and Hohenheim keeps no copy
+     * of them, so a code goes to the service as the caller typed it: a code naming nothing, or a record of another
+     * kind, is the service's 404 and reads here as no record, which a tool says as its usual not-found.
+     *
+     * @throws DomainRefusal OPERATION_UNAVAILABLE while no client of the service is installed
+     * @throws Violations    the service's own refusal of the read, in its words
+     */
+    static <T> @Nullable T found(@NonNull Supplier<SpamserviceClient> clients,
+                                 @NonNull Function<SpamserviceClient, T> read) {
+        SpamserviceClient client = clients.get();
+        if (client == null) {
+            throw unanswered();
+        }
+        try {
+            return read.apply(client);
+        } catch (SpamserviceApiException refused) {
+            if (refused.status() == 404) {
+                return null;
+            }
+            throw refusedBy(refused);
+        }
+    }
+
+    /** @return the service's refusal of a call as the operation's, in the service's own words */
+    private static @NonNull Violations refusedBy(@NonNull SpamserviceApiException refused) {
+        return Violations.ofForm(HohenheimMicrocopy.SPAMSERVICE.of("service_refused")
+            .withArg("reason", HohenheimViolations.reasonOf(refused)));
+    }
+
+    /** @return the refusal of a call while the service does not answer, in the words its lifecycle verbs use */
+    private static @NonNull DomainRefusal unanswered() {
+        Microcopy reason = SpamserviceOperations.connectedReason(SpamserviceManager.get());
+        return new DomainRefusal(ZenitRefusalReason.OPERATION_UNAVAILABLE, "the spam service does not answer",
+            reason != null ? reason : HohenheimMicrocopy.SPAMSERVICE.of("disconnected"));
     }
 
     /**

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.spamservice.client.SampleDetail;
 import be.elevenways.spamservice.client.SampleSummary;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -42,7 +43,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -57,11 +57,13 @@ public final class SpamserviceSamplesResource {
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     static final Identifier ID = HohenheimIds.id("spamservice_sample");
-    static final SubjectType<SampleSummary> SAMPLE = SubjectType.of(ID, SampleSummary.class, SampleSummary::id);
 
-    /** Why the sample operations are kept from assistants. */
-    private static final String OUTSIDE_RECORD = "a sample lives in the spam service, not in a record with a code;"
-        + " its tool comes once samples have codes";
+    /**
+     * A sample, keyed by its id in the panel; a tool names it by the code the spam service gave it (SPS381), which the
+     * service resolves ({@link SpamserviceRemoteStore#found}).
+     */
+    static final SubjectType<SampleSummary> SAMPLE = SubjectType.of(ID, SampleSummary.class, SampleSummary::id)
+        .namedByAnyCode();
 
     private static final UuidField CLIENT_ID = UuidField.builder("client_id")
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("client")).build();
@@ -89,9 +91,9 @@ public final class SpamserviceSamplesResource {
             HohenheimIds.id("spamservice_mark_spam"))
         .happened(OperationSentences.of("spamservice_mark_spam"))
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_spam"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("spamservice_mark_spam_description"))
         .icon(Icon.of("triangle-exclamation"))
         .one(SAMPLE)
-        .notForAssistants(OUTSIDE_RECORD)
         .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
@@ -100,9 +102,9 @@ public final class SpamserviceSamplesResource {
             HohenheimIds.id("spamservice_mark_ham"))
         .happened(OperationSentences.of("spamservice_mark_ham"))
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_ham"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("spamservice_mark_ham_description"))
         .icon(Icon.of("check"))
         .one(SAMPLE)
-        .notForAssistants(OUTSIDE_RECORD)
         .gate(HohenheimSources.OPERATOR)
         .command(COMMAND)
         .register();
@@ -112,9 +114,9 @@ public final class SpamserviceSamplesResource {
             HohenheimIds.id("spamservice_rescore"))
         .happened(OperationSentences.of("spamservice_rescore"))
         .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescore"))
+        .description(HohenheimMicrocopy.HOHENHEIM.of("spamservice_rescore_description"))
         .icon(Icon.of("rotate"))
         .one(SAMPLE)
-        .notForAssistants(OUTSIDE_RECORD)
         .gate(HohenheimSources.OPERATOR)
         .result(String.class)
         .command(COMMAND)
@@ -122,14 +124,19 @@ public final class SpamserviceSamplesResource {
 
     static {
         OperationHandlers.loader(SAMPLE, key -> load(SpamserviceRemoteStore.MANAGED, key));
-        OperationHandlers.attach(MARK_SPAM).handle(call -> markSpam(SpamserviceRemoteStore.MANAGED, call.subject()));
+        OperationHandlers.attach(MARK_SPAM).handle(call -> markSpam(() -> SpamserviceRemoteStore.clientOf(call),
+            call.subject()));
         OperationHandlers.attach(MARK_HAM).handle(call -> {
-            SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED).markHam(call.subject().id());
+            SpamserviceClient client = SpamserviceRemoteStore.clientOf(call);
+            SpamserviceRemoteStore.answered(() -> client.markHam(call.subject().id()));
             return null;
         });
-        OperationHandlers.attach(RESCORE).handle(call -> String.valueOf(
-            SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED).rescore(call.subject().id())
-                .summary().score()));
+        // A confirmed sample, or one that keeps no words, is refused by the service in its own words.
+        OperationHandlers.attach(RESCORE).handle(call -> {
+            SpamserviceClient client = SpamserviceRemoteStore.clientOf(call);
+            return String.valueOf(SpamserviceRemoteStore.answered(() -> client.rescore(call.subject().id()))
+                .summary().score());
+        });
     }
 
     private SpamserviceSamplesResource() {
@@ -208,13 +215,17 @@ public final class SpamserviceSamplesResource {
 
     /** The mark-spam operation's remote call: the management API's strict verdict endpoint. */
     static @Nullable Void markSpam(@NonNull Supplier<SpamserviceClient> clients, @NonNull SampleSummary sample) {
-        SpamserviceRemoteStore.require(clients).markSpam(sample.id());
+        SpamserviceClient client = SpamserviceRemoteStore.require(clients);
+        SpamserviceRemoteStore.answered(() -> client.markSpam(sample.id()));
         return null;
     }
 
+    /** @return the sample a panel id or a tool's code or id names, by one read of it; null for none */
     private static @Nullable SampleSummary load(@NonNull Supplier<SpamserviceClient> clients, @NonNull String key) {
-        UUID id = SpamserviceRemoteStore.uuidOrNull(key);
-        return id == null ? null : SpamserviceRemoteStore.require(clients).sample(id.toString()).summary();
+        String named = key.trim();
+        SampleDetail detail = named.isEmpty() ? null
+            : SpamserviceRemoteStore.found(clients, client -> client.sample(named));
+        return detail == null ? null : detail.summary();
     }
 
     private static @NonNull Map<String, Object> values(@NonNull SampleSummary row) {

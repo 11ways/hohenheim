@@ -62,7 +62,7 @@ class SpamserviceKeyCreateTest extends HohenheimHttpTestBase {
             .caller(TestAccessContexts.allAllowed())
             .form(Map.of("client_id", clientId, "name", "primary"))
             .invocation(invocation)
-            .attachment(SpamserviceClientKeysResource.CLIENTS, () -> client)).value();
+            .attachment(SpamserviceRemoteStore.CLIENTS, () -> client)).value();
     }
 
     /** A management API answering every key create with one generated key, counting the creates. */
@@ -70,7 +70,7 @@ class SpamserviceKeyCreateTest extends HohenheimHttpTestBase {
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/", exchange -> {
             creates.incrementAndGet();
-            byte[] bytes = ("{\"id\":\"" + keyId + "\",\"client_id\":\"" + clientId
+            byte[] bytes = ("{\"id\":\"" + keyId + "\",\"code\":\"SPK1\",\"client_id\":\"" + clientId
                 + "\",\"name\":\"primary\",\"key\":\"spam_once\",\"generated\":true}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, bytes.length);

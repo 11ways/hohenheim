@@ -78,7 +78,7 @@ class SpamserviceRequestStateTest {
     private SpamserviceClient serveOneKey(String clientId, String keyId) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/", exchange -> respond(exchange,
-            "{\"items\":[{\"id\":\"" + keyId + "\",\"client_id\":\"" + clientId
+            "{\"items\":[{\"id\":\"" + keyId + "\",\"code\":\"SPK1\",\"client_id\":\"" + clientId
                 + "\",\"name\":\"primary\",\"active\":true,\"last_used\":null,\"created_at\":null}],"
                 + "\"page\":1,\"page_size\":25,\"total\":1}"));
         this.server.start();

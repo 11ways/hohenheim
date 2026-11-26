@@ -34,7 +34,9 @@ import java.util.Objects;
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/spamservice-remote.txt}) is today's behaviour, captured from the
  * legacy Resource family before the move; a failing comparison is a changed admin surface, never a file to refresh.
  * The test JVM runs no Spamservice, so every list is the disconnected one: the record surfaces need a live service
- * and are pinned by SpamserviceCmsContractTest's wire assertions instead.
+ * and are pinned by SpamserviceCmsContractTest's wire assertions instead. Two stored lines were edited by hand since: a
+ * key's active column and control are named enabled (2026-11-26), the input its change and spam_key_set share; their
+ * label is as it was.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
