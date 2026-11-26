@@ -24,7 +24,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -256,10 +255,10 @@ class DatabaseServiceTest {
                 .as("step 2: the engine container exists at the daemon")
                 .isNotNull();
 
-            // 3. A provision that CANNOT succeed (an image nobody can pull) ends FAILED,
-            //    with the daemon's own words on the record -- never "provisioning". The image
-            //    is named by the record's own password, so the daemon's refusal quotes it: the
-            //    stored reason keeps the placeholder where the password was.
+            // 3. A provision that CANNOT succeed (an image nobody can pull) ends FAILED, with WHY on the record in
+            //    the deploy's own words (DeployFailure's "deploy_failed_image"), never "provisioning" and never the
+            //    daemon's text. The image is named by the record's own password, so the daemon's refusal quoted it:
+            //    the stored reason never holds it.
             String doomedPassword = "hunter2doomedpw";
             service.createAsync(doomed, ManagedDatabase.Engine.POSTGRES,
                 "hohenheim-test/" + doomedPassword + ":never", "appuser", doomedPassword, "appdb", true);
@@ -270,8 +269,10 @@ class DatabaseServiceTest {
             assertThat(failed.failureReason())
                 .as("step 3: the record carries WHY")
                 .isNotBlank()
-                .as("step 3: with the password it quoted redacted")
-                .contains(KnownValueRedactor.PLACEHOLDER)
+                .as("step 3: in the deploy's words for an image that cannot be had")
+                .contains("could not be found or pulled")
+                .as("step 3: never the daemon's text, so never the password it quoted")
+                .doesNotContain("pull access denied")
                 .doesNotContain(doomedPassword);
 
             // 4. And the failure finds the operator: the attention list names the
