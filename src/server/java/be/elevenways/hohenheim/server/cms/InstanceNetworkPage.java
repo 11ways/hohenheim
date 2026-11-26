@@ -12,6 +12,7 @@ import be.elevenways.plumage.chart.ChartPoint;
 import be.elevenways.plumage.chart.ChartSeries;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
 import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -34,9 +35,6 @@ import be.elevenways.zenit.traffic.common.TrafficMeasure;
 import be.elevenways.zenit.traffic.common.TrafficWindow;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -49,7 +47,8 @@ import java.util.Objects;
  * through the read an assistant's {@code app_network_read} makes (AppNetworkReads).
  *
  * AIDEV-NOTE: the chart plots megabytes, named in its lead: pl-chart words money and hours but no size yet, and one
- * fixed unit keeps a span's steps comparable. A step's label is the reader's own time or date of its start.
+ * fixed unit keeps a span's steps comparable. A step and a span are named as the traffic screens name them
+ * (TrafficReads.stepLabel, TrafficReads.periodLabel).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -93,10 +92,11 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
         List<AppNetworkView.Span> spans = new ArrayList<>();
         for (TrafficWindow window : TrafficWindow.values()) {
             spans.add(new AppNetworkView.Span(window.storageKey(),
-                spanLabel(window),
+                TrafficReads.periodLabel(window),
                 "?" + PERIOD.getName() + "=" + window.storageKey(), window == chosen));
         }
         TrafficGranularity step = read.query().granularity();
+        Reader reader = OfficeZone.reader(AccessContext.of(conduit));
         List<ChartSeries> chart = new ArrayList<>();
         for (DataSeries series : read.steps().series()) {
             TrafficMeasure measure = Objects.requireNonNull(StorageKeyed.findOrNull(
@@ -104,7 +104,7 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
             List<ChartPoint> points = new ArrayList<>(series.buckets().size());
             for (DataBucket bucket : series.buckets()) {
                 Double value = bucket.value();
-                points.add(new ChartPoint(stepLabel(conduit, step, bucket.key()),
+                points.add(new ChartPoint(TrafficReads.stepLabel(reader, step, bucket.key()),
                     value == null ? null : value / CHART_UNIT.factor()));
             }
             chart.add(new ChartSeries(series.key(), measure.label(), points));
@@ -129,15 +129,6 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
         return HohenheimMicrocopy.APP_NETWORK.of("app_network_size").withArg("bytes", bytes);
     }
 
-    private static @NonNull Microcopy spanLabel(@NonNull TrafficWindow window) {
-        return HohenheimMicrocopy.APP_NETWORK.of(switch (window) {
-            case HOUR -> "app_network_span_hour";
-            case DAY -> "app_network_span_day";
-            case WEEK -> "app_network_span_week";
-            case MONTH -> "app_network_span_month";
-        });
-    }
-
     /** @return how the chart counts at its step, its unit still to be named */
     private static @NonNull Microcopy chartLead(@NonNull TrafficGranularity step) {
         return HohenheimMicrocopy.APP_NETWORK.of(switch (step) {
@@ -145,26 +136,5 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
             case HOUR -> "app_network_chart_lead_hour";
             case DAY -> "app_network_chart_lead_day";
         });
-    }
-
-    /**
-     * A step's start as the reader reads it: the time of a minute, the date and time of an hour, the date of a day.
-     *
-     * AIDEV-NOTE: a chart names its points by their label, so every label of a span differs: a day's span holds its
-     * first hour twice (the hour it starts inside and the same hour of the next day), so an hour names its date too.
-     */
-    private static @NonNull String stepLabel(@NonNull Conduit conduit, @NonNull TrafficGranularity step,
-                                             @NonNull String key) {
-        Microcopy label = switch (step) {
-            case MINUTE -> HohenheimMicrocopy.APP_NETWORK.of("app_network_step_time").withArg("at", startOf(key));
-            case HOUR -> HohenheimMicrocopy.APP_NETWORK.of("app_network_step_hour").withArg("at", startOf(key));
-            case DAY -> HohenheimMicrocopy.APP_NETWORK.of("app_network_step_day").withArg("day", LocalDate.parse(key));
-        };
-        return label.asString(conduit);
-    }
-
-    /** @return the start of a minute or an hour, whose key is its local date and time on the store's office clock */
-    private static @NonNull Instant startOf(@NonNull String key) {
-        return LocalDateTime.parse(key).atZone(OfficeZone.office()).toInstant();
     }
 }

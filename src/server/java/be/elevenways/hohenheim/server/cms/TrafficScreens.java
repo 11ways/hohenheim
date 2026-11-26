@@ -9,9 +9,7 @@ import be.elevenways.plumage.chart.ChartSeries;
 import be.elevenways.plumage.chart.ChartType;
 import be.elevenways.plumage.component.NavTab;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.i18n.wording.DateStyle;
 import be.elevenways.protoblast.common.i18n.wording.Reader;
-import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.value.Percent;
@@ -44,7 +42,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -331,7 +328,7 @@ final class TrafficScreens {
             List<ChartPoint> points = new ArrayList<>(each.buckets().size());
             for (DataBucket bucket : each.buckets()) {
                 Double value = bucket.value();
-                points.add(new ChartPoint(stepName(bucket, step, reader),
+                points.add(new ChartPoint(TrafficReads.stepLabel(reader, step, bucket.key()),
                     value == null ? null : (double) Math.round(value)));
             }
             String key = each.key() != null ? each.key() : "";
@@ -355,15 +352,6 @@ final class TrafficScreens {
             case CLIENT_ERROR -> BadgeVariant.WARNING;
             case SERVER_ERROR -> BadgeVariant.DESTRUCTIVE;
             case INFORMATIONAL, OTHER -> BadgeVariant.SECONDARY;
-        };
-    }
-
-    /** @return a step as the reader names it: a minute or an hour by its time, a day by its weekday and date */
-    private static @NonNull String stepName(@NonNull DataBucket bucket, @NonNull TrafficGranularity step,
-                                            @NonNull Reader reader) {
-        return switch (step) {
-            case MINUTE, HOUR -> bucket.label();
-            case DAY -> Wording.date(reader, LocalDate.parse(bucket.key()), DateStyle.WEEKDAY_NUMERIC);
         };
     }
 

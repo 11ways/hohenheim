@@ -21311,10 +21311,6 @@
   "mcp_tool_app_network_read": {"text": "Reads what an app received and sent over a period ending at until, counted from its own network counters, visitors and other services together: the totals against the period before, each step's bytes received and sent (a minute for an hour, an hour for a day, a day for a week or a month), then each of its sites with the requests it answered and the bytes it sent visitors through the proxy. The counters are read every 5 minutes while the app runs. Where its connections go is not recorded. Only someone who manages the app may read it.", "scope": "hohenheim"},
   "mcp_code_app_network_read": {"text": "The app (AP12) whose network use to read.", "scope": "hohenheim"},
   "app_network_spans": {"text": "Span", "scope": "app_network"},
-  "app_network_span_hour": {"text": "Hour", "scope": "app_network"},
-  "app_network_span_day": {"text": "Day", "scope": "app_network"},
-  "app_network_span_week": {"text": "Week", "scope": "app_network"},
-  "app_network_span_month": {"text": "Month", "scope": "app_network"},
   "app_network_range": {"text": "{$from :datetime} to {$until :datetime}", "scope": "app_network"},
   "app_network_received": {"text": "Received", "scope": "app_network"},
   "app_network_sent": {"text": "Sent", "scope": "app_network"},
@@ -21333,8 +21329,5 @@
   "app_network_column_sent": {"text": "Sent to visitors", "scope": "app_network"},
   "app_network_no_sites": {"text": "No site points at this app", "scope": "app_network"},
   "app_network_requests": {"text": "{$count :number}", "scope": "app_network"},
-  "app_network_size": {"text": "{$bytes :bytes}", "scope": "app_network"},
-  "app_network_step_time": {"text": "{$at :time}", "scope": "app_network"},
-  "app_network_step_hour": {"text": "{$at :datetime style=short}", "scope": "app_network"},
-  "app_network_step_day": {"text": "{$day :date style=day-month}", "scope": "app_network"}
+  "app_network_size": {"text": "{$bytes :bytes}", "scope": "app_network"}
 }

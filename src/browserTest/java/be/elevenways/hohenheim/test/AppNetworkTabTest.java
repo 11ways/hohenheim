@@ -14,6 +14,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.traffic.common.TrafficHit;
 import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -59,8 +61,9 @@ class AppNetworkTabTest extends HohenheimTestBase {
                 Now.instant(), HohenheimTraffic.sourceOf(siteId), "network.test", "/", "GET", 200, 2_048, 10, 1_000,
                 "127.0.0.1", null, null));
 
-            // 1. The tab draws the day per hour: the figures in sizes, received and sent as two lines, the site with
-            //    the request it brought and what it sent visitors.
+            // 1. The tab draws the day per hour: the figures in sizes, received and sent as two lines, each hour named
+            //    apart (the day's first hour and the same hour a day later too), the site with the request it brought
+            //    and what it sent visitors.
             page.setViewportSize(1280, 900);
             navigateToApp(tab(HohenheimSlugs.ADMIN, app));
             waitForHydration();
@@ -73,17 +76,28 @@ class AppNetworkTabTest extends HohenheimTestBase {
                 .as("step 1: the legend names them").contains("Received").contains("Sent");
             assertThat(page.locator("[data-hh-app-network-chart] pl-card-description").textContent())
                 .as("step 1: how the chart counts").contains("Per hour, in MB");
+            assertThat(TrafficScreensJourneyTest.pointNames(page, "[data-hh-app-network-chart]"))
+                .as("step 1: every hour named apart").hasSizeGreaterThan(23).doesNotHaveDuplicates();
             String row = page.locator("[data-hh-app-network-site='" + siteId + "']").textContent();
             assertThat(row).as("step 1: the site's line").contains("Network tab " + tag).contains("2 KB");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/app-network-tab.png"))
                 .setFullPage(true));
 
-            // 2. The span switch reads the hour, per minute.
+            // 2. The span switch reads the hour, per minute, and the week, per day, each day by its day before its
+            //    month.
             page.locator("[data-hh-app-network-span='hour']").click();
             page.waitForCondition(() -> page.url().contains("period=hour"));
             page.waitForCondition(() -> page.locator("[data-hh-app-network-chart] pl-card-description").textContent()
                 .contains("Per minute"));
             assertThat(figure("received")).as("step 2: the hour holds it too").contains("3 MB");
+            page.locator("[data-hh-app-network-span='week']").click();
+            page.waitForCondition(() -> page.url().contains("period=week"));
+            page.waitForCondition(() -> page.locator("[data-hh-app-network-chart] pl-card-description").textContent()
+                .contains("Per day"));
+            List<String> days = TrafficScreensJourneyTest.pointNames(page, "[data-hh-app-network-chart]");
+            assertThat(days).as("step 2: every day named apart").hasSizeGreaterThan(6).doesNotHaveDuplicates();
+            assertThat(days.getLast()).as("step 2: today, its day first")
+                .matches("0?" + Now.instant().atZone(OfficeZone.office()).getDayOfMonth() + "\\D.*");
 
             // 3. An app nothing was counted for says what will appear and when, and that no site points at it.
             navigateToApp(tab(HohenheimSlugs.ADMIN, quiet));

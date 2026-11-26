@@ -12,6 +12,9 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.DateStyle;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastCollection;
@@ -37,6 +40,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.traffic.common.StatusClass;
+import be.elevenways.zenit.traffic.common.TrafficGranularity;
 import be.elevenways.zenit.traffic.common.TrafficMeasure;
 import be.elevenways.zenit.traffic.common.TrafficTable;
 import be.elevenways.zenit.traffic.common.TrafficWindow;
@@ -49,6 +53,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -432,6 +438,24 @@ public final class TrafficReads {
             case DAY -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_day");
             case WEEK -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_week");
             case MONTH -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_month");
+        };
+    }
+
+    /**
+     * A step's start as a chart names it: a minute by its time, an hour by its day and time, a day by its date.
+     *
+     * AIDEV-NOTE: a chart names its points by their label, so every label of a span differs: a day's span holds its
+     * first hour twice (the hour it starts inside and the same hour of the next day), so an hour names its day too.
+     * The keys are written on the office clock, the clock an OfficeZone.reader reads, so no key is shifted.
+     *
+     * @param key the step's key: its local date and time on the office clock, its local date for a day
+     */
+    public static @NonNull String stepLabel(@NonNull Reader reader, @NonNull TrafficGranularity step,
+                                            @NonNull String key) {
+        return switch (step) {
+            case MINUTE -> Wording.time(reader, LocalDateTime.parse(key).toLocalTime());
+            case HOUR -> Wording.wall(reader, LocalDateTime.parse(key), DateStyle.SHORT);
+            case DAY -> Wording.date(reader, LocalDate.parse(key), DateStyle.DAY_MONTH);
         };
     }
 

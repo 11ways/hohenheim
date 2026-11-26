@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
@@ -67,8 +68,9 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
             fixture.request(fixture.siteB, "/other-site");
             TrafficCountingJourneyTest.counted(HohenheimTraffic.sourceOf(fixture.siteA), 3, began);
 
-            // 1. The tab draws the site's day: its figures, the requests per hour by status, its tables, each row a
-            //    name a person reads; never the other site's path.
+            // 1. The tab draws the site's day: its figures, the requests per hour by status, each hour named apart
+            //    (the day's first hour and the same hour a day later too), its tables, each row a name a person
+            //    reads; never the other site's path.
             page.setViewportSize(1280, 800);
             navigateToApp(tab(HohenheimSlugs.ADMIN, fixture.siteA, ""));
             waitForHydration();
@@ -76,6 +78,8 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
                 .contains("3");
             assertThat(page.locator("[data-hh-traffic-chart='steps'] pl-chart").count()).as("step 1: the chart")
                 .isEqualTo(1);
+            assertThat(pointNames(page, "[data-hh-traffic-chart='steps']")).as("step 1: every hour named apart")
+                .hasSizeGreaterThan(23).doesNotHaveDuplicates();
             String pages = page.locator("[data-hh-traffic-table='pages']").textContent();
             assertThat(pages).as("step 1: the top pages, an id counted as :id").contains("/ok")
                 .contains("/items/:id/view").doesNotContain("/other-site");
@@ -267,6 +271,20 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
     /** @return a site's Traffic tab on a panel, with this query */
     private static String tab(String panel, int siteId, String query) {
         return CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, HohenheimSlugs.Tab.TRAFFIC).toUrl() + query;
+    }
+
+    /** @return the names of the points of the series a chart lists first, as its screen reader table lists them */
+    static List<String> pointNames(Page page, String chart) {
+        List<String> rows = page.locator(chart + " pl-chart .sr-table th").allTextContents();
+        assertThat(rows).as("the chart lists its points").isNotEmpty();
+        String first = rows.getFirst().trim();
+        String series = first.substring(0, first.indexOf(" - ") + 3);
+        List<String> names = new ArrayList<>();
+        for (String row : rows) {
+            String trimmed = row.trim();
+            if (trimmed.startsWith(series)) names.add(trimmed.substring(series.length()));
+        }
+        return names;
     }
 
     /** @return the files the web store opened while the work ran */
