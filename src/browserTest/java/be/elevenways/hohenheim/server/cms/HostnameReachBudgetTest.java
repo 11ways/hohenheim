@@ -60,8 +60,8 @@ class HostnameReachBudgetTest extends HohenheimTestBase {
             assertThat(first.waitingResolutions()).as("step 2: one resolution for the name, not one per reader")
                 .isEqualTo(1);
 
-            // 3. The Addresses page with four unanswered names renders within one page budget, not a wait per row,
-            //    and says which names are still being checked.
+            // 3. The Addresses page with four unanswered names renders and says which names are still being checked;
+            //    how long its rows waited is judged at step 5, against the same page read from the cache.
             Row site = site("reach-" + suffix);
             for (String name : names) {
                 domain(site, name);
@@ -72,9 +72,6 @@ class HostnameReachBudgetTest extends HohenheimTestBase {
             assertThat(page.statusCode()).as("step 3: the Addresses list renders").isEqualTo(200);
             assertThat(page.body()).as("step 3: unanswered names read as checking")
                 .contains("data-state=\"checking\"");
-            assertThat(pageMs).as("step 3: the rows shared one budget; a wait per row would take %d ms",
-                    names.length * HostnameReach.LOOKUP_WAIT_MS)
-                .isLessThan(DomainParts.REACH_RENDER_BUDGET_MS + HostnameReach.LOOKUP_WAIT_MS);
 
             // 4. Once the resolver answers, the lookups that kept running land in the cache: the next reader gets the
             //    answer without waiting.
@@ -89,6 +86,19 @@ class HostnameReachBudgetTest extends HohenheimTestBase {
             }
             assertThat(HostnameReach.recent(names[3], 0).verdict()).as("step 4: from the cache, without waiting")
                 .isEqualTo(HostnameReach.Verdict.POINTS_HERE);
+
+            // 5. The rows shared one budget: the unanswered page took at most one page budget and one lookup's bound
+            //    longer than the same page answered from the cache, so a render slowed by a loaded machine is no
+            //    wait; a wait per row would add about the rows times the bound.
+            started = System.nanoTime();
+            HttpResponse<String> cached = adminGet("/admin/domains?q=" + suffix);
+            long cachedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+            assertThat(cached.body()).as("step 5: the cached page checks nothing")
+                .doesNotContain("data-state=\"checking\"");
+            assertThat(pageMs - cachedMs)
+                .as("step 5: the rows shared one budget; a wait per row would take %d ms",
+                    names.length * HostnameReach.LOOKUP_WAIT_MS)
+                .isLessThan(DomainParts.REACH_RENDER_BUDGET_MS + HostnameReach.LOOKUP_WAIT_MS);
         } finally {
             local = servers.findById(HostModel.localHostId());
             local.set(HostModel.PUBLIC_IPV4, declared);
