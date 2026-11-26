@@ -129,7 +129,8 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
                 .as("step 1c: the widest IPv4 address fits its column on one line").isTrue();
 
             // 1c. A visitor's address shows whole on one line of its column, the referrer only the host the visitor
-            //     came from, and the "Time taken" head stands on one line as the others do.
+            //     came from, a common referrer host and a common browser with its version and platform read whole,
+            //     and the "Time taken" head stands on two lines as the board draws it.
             assertThat(page.locator(LINE + " [data-hh-access-log-visitor]").allTextContents().stream()
                 .map(String::trim).toList()).as("step 1c: the whole address").containsOnly("127.0.0.1");
             assertThat((Integer) page.locator(LINE + " [data-hh-access-log-visitor] span").first()
@@ -137,11 +138,16 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             assertThat(page.locator(LINE + " [data-hh-access-log-referrer]").allTextContents().stream()
                 .map(String::trim).toList()).as("step 1c: the referrer's host").contains("from.example")
                 .noneMatch(referrer -> referrer.contains("/"));
+            String uncut = "span => span.scrollWidth <= span.clientWidth";
+            assertThat((Boolean) page.locator(LINE + ":has([title='/ok']) [data-hh-access-log-referrer] span")
+                .evaluate(uncut)).as("step 1c: the referrer's host reads whole").isTrue();
+            assertThat((Boolean) page.locator(LINE + ":has([title='/ok']) [data-hh-access-log-browser] span")
+                .evaluate(uncut)).as("step 1c: Firefox 133, Linux reads whole").isTrue();
             // The lines its words stand on: the distinct tops of the rectangles its contents draw.
             assertThat((Integer) page.locator("[data-hh-access-log-took-head]").evaluate("head => { const words ="
                 + " document.createRange(); words.selectNodeContents(head); return new Set([...words.getClientRects()]"
                 + ".filter(box => box.width > 0).map(box => Math.round(box.top))).size; }"))
-                .as("step 1c: Time taken on one line").isEqualTo(1);
+                .as("step 1c: Time taken on two lines").isEqualTo(2);
 
             // 2. Following is on: a new request of the site appears without a navigation.
             String opened = page.url();
