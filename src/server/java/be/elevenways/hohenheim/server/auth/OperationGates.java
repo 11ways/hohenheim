@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -139,6 +140,22 @@ final class OperationGates {
         AccessContext ctx = TenantWrites.acting();
         if (ctx == null || !ctx.isAccount() || !HohenheimAccess.isAdmin(ctx)) {
             throw Violations.ofForm(instanceNotPermitted());
+        }
+    }
+
+    /**
+     * THE service gate of a site's own files: a tenant-originated caller must manage the site, while operator and
+     * declared system work passes, as {@link #requireOperationCapability} does for an app.
+     *
+     * @throws Violations {@code site_files_not_permitted}, the same for a site the caller cannot see
+     */
+    static void requireSiteManage(int siteId) {
+        if (!TenantWrites.isTenantOriginated()) {
+            return;
+        }
+        AccessContext ctx = TenantWrites.acting();
+        if (ctx == null || !ctx.isAccount() || !HohenheimAccess.canManageSite(ctx, siteId)) {
+            throw Violations.ofForm(HohenheimRefusalReason.SITE_FILES_NOT_PERMITTED.message());
         }
     }
 

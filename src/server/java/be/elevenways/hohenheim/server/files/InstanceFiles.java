@@ -141,9 +141,9 @@ public final class InstanceFiles {
 
     // -- read lane ------------------------------------------------------------
 
-    /** The declared volume roots of an instance, the only places this service will look. */
-    public @NonNull List<String> volumeRoots(int instanceId) {
-        return open(instanceId, READ).roots();
+    /** The browse roots of a tree, the only places this service will look: an app's volumes, a site's "/". */
+    public @NonNull List<String> volumeRoots(@NonNull FileRoot root) {
+        return open(root, READ).roots();
     }
 
     /**
@@ -151,8 +151,8 @@ public final class InstanceFiles {
      *
      * @throws Violations naming the refusal; never a partial or empty-on-failure listing
      */
-    public @NonNull Listing list(int instanceId, @Nullable String requestedPath) {
-        Opened opened = open(instanceId, READ);
+    public @NonNull Listing list(@NonNull FileRoot root, @Nullable String requestedPath) {
+        Opened opened = open(root, READ);
         if (opened.roots().isEmpty()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_no_volumes"));
         }
@@ -167,7 +167,7 @@ public final class InstanceFiles {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_directory"));
         }
 
-        Set<String> managed = managedPaths(instanceId);
+        Set<String> managed = managedPaths(root);
         List<Entry> entries = new ArrayList<>();
         try {
             for (InstanceFileSupport.Entry entry : opened.files().listDirectory(opened.handle(),
@@ -193,8 +193,8 @@ public final class InstanceFiles {
      *         aborts mid-read and NOTHING is returned, so a truncated read can never be
      *         mistaken for the file
      */
-    public byte @NonNull [] read(int instanceId, @NonNull String requestedPath) {
-        Opened opened = open(instanceId, READ);
+    public byte @NonNull [] read(@NonNull FileRoot root, @NonNull String requestedPath) {
+        Opened opened = open(root, READ);
         InstanceFilePath target = opened.parse(requestedPath);
         long cap = maxFileBytes();
         requireReadableFile(opened.walk(target), cap);
@@ -230,15 +230,15 @@ public final class InstanceFiles {
      * @throws Violations {@code files_path_refused} for a path outside the volumes or
      *         through a symlinked or non-directory ancestor
      */
-    public @Nullable Entry stat(int instanceId, @NonNull String requestedPath) {
-        Opened opened = open(instanceId, READ);
+    public @Nullable Entry stat(@NonNull FileRoot root, @NonNull String requestedPath) {
+        Opened opened = open(root, READ);
         InstanceFilePath target = opened.parse(requestedPath);
         InstanceFileSupport.Entry leaf = opened.lookup(target);
         if (leaf == null) {
             return null;
         }
         return new Entry(target.name(), target.absolute(), leaf.kind().name(), leaf.size(),
-            leaf.modified(), leaf.mode(), managedPaths(instanceId).contains(target.absolute()));
+            leaf.modified(), leaf.mode(), managedPaths(root).contains(target.absolute()));
     }
 
     /**
@@ -248,8 +248,8 @@ public final class InstanceFiles {
      * @return the bytes written to {@code out}
      * @throws Violations {@code files_too_large} with nothing usable left in {@code out}
      */
-    public long readTo(int instanceId, @NonNull String requestedPath, @NonNull Path out, long maxBytes) {
-        Opened opened = open(instanceId, READ);
+    public long readTo(@NonNull FileRoot root, @NonNull String requestedPath, @NonNull Path out, long maxBytes) {
+        Opened opened = open(root, READ);
         InstanceFilePath target = opened.parse(requestedPath);
         requireReadableFile(opened.walk(target), maxBytes);
         try {
@@ -262,18 +262,21 @@ public final class InstanceFiles {
     // -- write lane -----------------------------------------------------------
 
     /** Create or replace one file. */
-    public void write(int instanceId, @NonNull String requestedPath, byte @NonNull [] content) {
-        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
+    public void write(@NonNull FileRoot root, @NonNull String requestedPath, byte @NonNull [] content) {
+        root.require(WRITE);
         long cap = maxFileBytes();
         if (content.length > cap) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large").withArg("bytes", cap));
         }
-        FileTarget target = fileTarget(instanceId, requestedPath, true);
+        FileTarget target = fileTarget(resolveOpened(root), root, requestedPath, true);
         try {
+            target.opened().admit(root, target.path(), content.length);
             target.opened().files().writeFile(target.opened().handle(), target.path().absolute(), content,
                 target.mode(), target.opened().ownerLabels());
         } catch (IOException e) {
             throw failure(e);
+        } finally {
+            changed(root);
         }
     }
 
@@ -283,11 +286,11 @@ public final class InstanceFiles {
      * @param replace  false when only a new file may be created: an existing one refuses
      * @param maxBytes the caller's cap on the file
      */
-    public void writeFrom(int instanceId, @NonNull String requestedPath, @NonNull Path source,
+    public void writeFrom(@NonNull FileRoot root, @NonNull String requestedPath, @NonNull Path source,
                           boolean replace, long maxBytes) {
-        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
+        root.require(WRITE);
         requireWithin(source, maxBytes);
-        writeFrom(resolveOpened(instanceId), instanceId, requestedPath, source, replace);
+        writeFrom(resolveOpened(root), root, requestedPath, source, replace);
     }
 
     /**
@@ -307,7 +310,7 @@ public final class InstanceFiles {
         requireWithin(source, maxBytes);
         InstanceFilePath target = putPath(instanceId, volumeRoot, relativePath);
         if (ApplicationReleases.workloadIdOf(instanceId) != null) {
-            putInto(resolveOpened(instanceId), instanceId, target, source);
+            putInto(resolveOpened(FileRoot.app(instanceId)), instanceId, target, source);
             return;
         }
         try (VolumeHelper helper = VolumeHelper.open(instanceId)) {
@@ -340,7 +343,7 @@ public final class InstanceFiles {
     private void putInto(@NonNull Opened opened, int instanceId, @NonNull InstanceFilePath target,
                          @NonNull Path source) {
         requireUnder(opened.roots(), target.volumeRoot(), target.absolute());
-        writeFrom(opened, instanceId, target.absolute(), source, true);
+        writeFrom(opened, FileRoot.app(instanceId), target.absolute(), source, true);
     }
 
     /**
@@ -356,14 +359,17 @@ public final class InstanceFiles {
         return parsed;
     }
 
-    private void writeFrom(@NonNull Opened opened, int instanceId, @NonNull String requestedPath,
+    private void writeFrom(@NonNull Opened opened, @NonNull FileRoot root, @NonNull String requestedPath,
                            @NonNull Path source, boolean replace) {
-        FileTarget target = fileTarget(opened, instanceId, requestedPath, replace);
+        FileTarget target = fileTarget(opened, root, requestedPath, replace);
         try {
+            opened.admit(root, target.path(), Files.size(source));
             opened.files().writeFileFrom(opened.handle(), target.path().absolute(), source,
                 target.mode(), opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
+        } finally {
+            changed(root);
         }
     }
 
@@ -384,11 +390,11 @@ public final class InstanceFiles {
      * @param mode permission bits only, as octal ({@code 0644}); setuid, setgid and sticky
      *             refuse, so no transport can mint a setuid binary in a workload
      */
-    public void setMode(int instanceId, @NonNull String requestedPath, @NonNull String mode) {
+    public void setMode(@NonNull FileRoot root, @NonNull String requestedPath, @NonNull String mode) {
         if (!PermissionBits.TEXT.matcher(mode).matches()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_mode_refused"));
         }
-        ExistingTarget target = attributeTarget(instanceId, requestedPath);
+        ExistingTarget target = attributeTarget(root, requestedPath);
         try {
             target.opened().files().setMode(target.opened().handle(), target.path().absolute(), mode,
                 target.opened().ownerLabels());
@@ -398,8 +404,8 @@ public final class InstanceFiles {
     }
 
     /** Set one file's or directory's modification time. */
-    public void setModified(int instanceId, @NonNull String requestedPath, long epochSeconds) {
-        ExistingTarget target = attributeTarget(instanceId, requestedPath);
+    public void setModified(@NonNull FileRoot root, @NonNull String requestedPath, long epochSeconds) {
+        ExistingTarget target = attributeTarget(root, requestedPath);
         try {
             target.opened().files().setModified(target.opened().handle(), target.path().absolute(),
                 epochSeconds, target.opened().ownerLabels());
@@ -409,12 +415,12 @@ public final class InstanceFiles {
     }
 
     /** Create one directory; an existing path is a refusal, never a silent success. */
-    public void makeDirectory(int instanceId, @NonNull String requestedPath) {
-        Opened opened = open(instanceId, WRITE);
+    public void makeDirectory(@NonNull FileRoot root, @NonNull String requestedPath) {
+        Opened opened = open(root, WRITE);
         InstanceFilePath target = opened.parse(requestedPath);
         // A directory where a declared config file is staged would make the next deploy's
         // staging fail (or land INSIDE it): the managed boundary covers mkdir too.
-        requireNotManaged(instanceId, target);
+        requireNotManaged(root, target);
         if (opened.walk(target) != null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_exists"));
         }
@@ -426,12 +432,12 @@ public final class InstanceFiles {
     }
 
     /** Rename inside the instance's volumes; both ends are contained independently. */
-    public void rename(int instanceId, @NonNull String fromPath, @NonNull String toPath) {
-        Opened opened = open(instanceId, WRITE);
+    public void rename(@NonNull FileRoot root, @NonNull String fromPath, @NonNull String toPath) {
+        Opened opened = open(root, WRITE);
         InstanceFilePath from = opened.parse(fromPath);
         InstanceFilePath to = opened.parse(toPath);
-        requireNotManaged(instanceId, from);
-        requireNotManaged(instanceId, to);
+        requireNotManaged(root, from);
+        requireNotManaged(root, to);
         if (from.isVolumeRoot() || to.isVolumeRoot()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_volume_root"));
         }
@@ -446,18 +452,22 @@ public final class InstanceFiles {
                 opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
+        } finally {
+            changed(root);
         }
     }
 
     /** Delete a file, a symlink, or a directory tree; never the volume root itself. */
-    public void delete(int instanceId, @NonNull String requestedPath) {
-        ExistingTarget target = existingTarget(instanceId, requestedPath);
+    public void delete(@NonNull FileRoot root, @NonNull String requestedPath) {
+        ExistingTarget target = existingTarget(root, requestedPath);
         Opened opened = target.opened();
         try {
             opened.files().delete(opened.handle(), target.path().absolute(),
                 target.leaf().kind() == FilesystemNodeKind.DIRECTORY, opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
+        } finally {
+            changed(root);
         }
     }
 
@@ -472,7 +482,7 @@ public final class InstanceFiles {
                           @NonNull Map<String, String> ownerLabels, @NonNull List<String> roots) {
 
         @NonNull InstanceFilePath parse(@NonNull String path) {
-            return InstanceFilePath.parse(this.roots, path);
+            return InstanceFilePath.parseUnder(this.roots, path);
         }
 
         /** @throws Violations {@code files_unsupported} when the driver cannot browse */
@@ -491,7 +501,7 @@ public final class InstanceFiles {
         InstanceFileSupport.@Nullable Entry walk(@NonNull InstanceFilePath target) {
             InstanceFileSupport files = files();
             if (!containedParents(files, handle(), target, this.roots)) {
-                throw InstanceFilePath.refused(this.roots);
+                throw InstanceFilePath.refusedUnder(this.roots);
             }
             return statOrNull(files, handle(), target.absolute());
         }
@@ -510,6 +520,21 @@ public final class InstanceFiles {
             }
             return statOrNull(files, handle(), target.absolute());
         }
+
+        /**
+         * Refuses a write of {@code bytes} at the target that would take a site's files past their limit; an app's
+         * volumes are bounded by their host's own quota.
+         */
+        void admit(@NonNull FileRoot root, @NonNull InstanceFilePath target, long bytes) throws IOException {
+            switch (root) {
+                case FileRoot.App app -> {
+                }
+                case FileRoot.Site site -> {
+                    StoredFileTree tree = (StoredFileTree) files();
+                    SiteFiles.requireRoom(tree, site.siteId(), bytes, tree.objectAt(target.absolute()));
+                }
+            }
+        }
     }
 
     /** Where a whole-file write lands: the contained target and the mode it keeps. */
@@ -521,14 +546,10 @@ public final class InstanceFiles {
      *
      * @param replace false when an existing file refuses
      */
-    private @NonNull FileTarget fileTarget(int instanceId, @NonNull String requestedPath, boolean replace) {
-        return fileTarget(resolveOpened(instanceId), instanceId, requestedPath, replace);
-    }
-
-    private @NonNull FileTarget fileTarget(@NonNull Opened opened, int instanceId, @NonNull String requestedPath,
-                                           boolean replace) {
+    private @NonNull FileTarget fileTarget(@NonNull Opened opened, @NonNull FileRoot root,
+                                           @NonNull String requestedPath, boolean replace) {
         InstanceFilePath target = opened.parse(requestedPath);
-        requireNotManaged(instanceId, target);
+        requireNotManaged(root, target);
         InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
             return new FileTarget(opened, target, "0644");
@@ -546,10 +567,10 @@ public final class InstanceFiles {
     private record ExistingTarget(@NonNull Opened opened, @NonNull InstanceFilePath path,
                                   InstanceFileSupport.@NonNull Entry leaf) {}
 
-    private @NonNull ExistingTarget existingTarget(int instanceId, @NonNull String requestedPath) {
-        Opened opened = open(instanceId, WRITE);
+    private @NonNull ExistingTarget existingTarget(@NonNull FileRoot root, @NonNull String requestedPath) {
+        Opened opened = open(root, WRITE);
         InstanceFilePath target = opened.parse(requestedPath);
-        requireNotManaged(instanceId, target);
+        requireNotManaged(root, target);
         if (target.isVolumeRoot()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_volume_root"));
         }
@@ -561,8 +582,8 @@ public final class InstanceFiles {
     }
 
     /** {@link #existingTarget}, never a link: the entry whose attributes change. */
-    private @NonNull ExistingTarget attributeTarget(int instanceId, @NonNull String requestedPath) {
-        ExistingTarget target = existingTarget(instanceId, requestedPath);
+    private @NonNull ExistingTarget attributeTarget(@NonNull FileRoot root, @NonNull String requestedPath) {
+        ExistingTarget target = existingTarget(root, requestedPath);
         FilesystemNodeKind kind = target.leaf().kind();
         if (kind != FilesystemNodeKind.FILE && kind != FilesystemNodeKind.DIRECTORY) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_link_refused"));
@@ -570,10 +591,10 @@ public final class InstanceFiles {
         return target;
     }
 
-    /** Ask {@code capability} on the SERVICE, then resolve the instance and its browse roots. */
-    private @NonNull Opened open(int instanceId, @NonNull String capability) {
-        HohenheimAccess.requireOperationCapability(instanceId, capability);
-        return resolveOpened(instanceId);
+    /** Ask {@code capability} on the SERVICE, then resolve the tree and its browse roots. */
+    private @NonNull Opened open(@NonNull FileRoot root, @NonNull String capability) {
+        root.require(capability);
+        return resolveOpened(root);
     }
 
     /**
@@ -589,14 +610,32 @@ public final class InstanceFiles {
      * the first left every WORKSPACE with an empty root set, which is the one kind whose
      * whole point is browsing its own files.
      *
-     * @throws Violations {@code app_not_serving} for an application nothing serves
+     * AIDEV-NOTE: a site's files are its stored tree ({@link SiteFiles}), one root "/" with no owner labels: no
+     * container holds them, so nothing but this service writes there.
+     *
+     * @throws Violations {@code app_not_serving} for an application nothing serves, {@code site_files_off} for a site
+     *                    that serves no files of its own
      */
-    private @NonNull Opened resolveOpened(int instanceId) {
-        InstanceService.Resolved resolved = this.instances.resolve(ApplicationReleases.requireWorkloadIdOf(instanceId));
-        List<String> mounted = new ArrayList<>(resolved.spec().volumes().values());
-        mounted.addAll(resolved.spec().binds().values());
-        return new Opened(resolved.runtime() instanceof InstanceFileSupport files ? files : null,
-            resolved.spec().handle(), resolved.spec().ownerLabels(), sortedRoots(mounted));
+    private @NonNull Opened resolveOpened(@NonNull FileRoot root) {
+        return switch (root) {
+            case FileRoot.App app -> {
+                InstanceService.Resolved resolved = this.instances.resolve(
+                    ApplicationReleases.requireWorkloadIdOf(app.instanceId()));
+                List<String> mounted = new ArrayList<>(resolved.spec().volumes().values());
+                mounted.addAll(resolved.spec().binds().values());
+                yield new Opened(resolved.runtime() instanceof InstanceFileSupport files ? files : null,
+                    resolved.spec().handle(), resolved.spec().ownerLabels(), sortedRoots(mounted));
+            }
+            case FileRoot.Site site -> new Opened(SiteFiles.treeOf(site.siteId()), SiteFiles.prefixOf(site.siteId()),
+                Map.of(), List.of(InstanceFilePath.TREE_ROOT));
+        };
+    }
+
+    /** Forgets what a site's files were counted at, after a change to them. */
+    private static void changed(@NonNull FileRoot root) {
+        if (root instanceof FileRoot.Site site) {
+            SiteFiles.forget(site.siteId());
+        }
     }
 
     // -- containment ----------------------------------------------------------
@@ -623,7 +662,7 @@ public final class InstanceFiles {
                 return false;
             }
             if (entry.kind() != FilesystemNodeKind.DIRECTORY) {
-                throw InstanceFilePath.refused(roots);
+                throw InstanceFilePath.refusedUnder(roots);
             }
         }
         return true;
@@ -650,9 +689,13 @@ public final class InstanceFiles {
      * next start -- the exact "a step does less than it claims" shape. They are surfaced
      * read-only and edited through the Provisioning tab instead.
      */
-    private static @NonNull Set<String> managedPaths(int instanceId) {
+    private static @NonNull Set<String> managedPaths(@NonNull FileRoot root) {
         Set<String> paths = new LinkedHashSet<>();
-        for (Row file : Models.get(InstanceFileModel.class).findByInstanceId(instanceId)) {
+        if (!(root instanceof FileRoot.App app)) {
+            // A site's stored files carry no declared configuration file.
+            return paths;
+        }
+        for (Row file : Models.get(InstanceFileModel.class).findByInstanceId(app.instanceId())) {
             String path = file.get(InstanceFileModel.CONTAINER_PATH);
             if (path != null && !path.isEmpty()) {
                 paths.add(path);
@@ -669,8 +712,8 @@ public final class InstanceFiles {
      * "that file is managed" would be untrue about a directory. Comparing on a trailing
      * {@code /} keeps {@code /data/app} from claiming {@code /data/app.conf}.
      */
-    private static void requireNotManaged(int instanceId, @NonNull InstanceFilePath target) {
-        Set<String> managed = managedPaths(instanceId);
+    private static void requireNotManaged(@NonNull FileRoot root, @NonNull InstanceFilePath target) {
+        Set<String> managed = managedPaths(root);
         if (managed.contains(target.absolute())) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_managed_config"));
         }
@@ -693,8 +736,8 @@ public final class InstanceFiles {
     }
 
     /** UTF-8 text convenience for the editor surfaces. */
-    public @NonNull String readText(int instanceId, @NonNull String path) {
-        return new String(this.read(instanceId, path), StandardCharsets.UTF_8);
+    public @NonNull String readText(@NonNull FileRoot root, @NonNull String path) {
+        return new String(this.read(root, path), StandardCharsets.UTF_8);
     }
 
     private static int maxEntries() {
@@ -717,6 +760,12 @@ public final class InstanceFiles {
     private static @NonNull Violations failure(@NonNull IOException error) {
         if (error instanceof DockerInstanceRuntime.WorkloadNotBrowsableException) {
             return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_workload_not_browsable"));
+        }
+        if (error instanceof StoredFileTree.InvalidName) {
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_tree_path_refused"));
+        }
+        if (error instanceof FileNotFoundException) {
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
         Blast.log("FILES: the operation failed:", HohenheimViolations.reasonOf(error));
         return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed"));

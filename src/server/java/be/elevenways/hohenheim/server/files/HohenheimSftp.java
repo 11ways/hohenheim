@@ -109,16 +109,16 @@ public final class HohenheimSftp {
     }
 
     /**
-     * The open SFTP sessions on one app the viewer may see: their own, and every one for an operator.
+     * The open SFTP sessions on one mount (an app's id, a site's code) the viewer may see: their own, and every one
+     * for an operator.
      *
      * @return oldest first; empty while SFTP is off or stopped
      */
-    public static @NonNull List<SftpSessionInfo> openOn(@NonNull AccessContext access, int instanceId) {
+    public static @NonNull List<SftpSessionInfo> openOn(@NonNull AccessContext access, @NonNull String mount) {
         SftpServer server = server();
         if (server == null) {
             return List.of();
         }
-        String mount = String.valueOf(instanceId);
         PrincipalRef viewer = access.principal().reference();
         boolean operator = HohenheimAccess.isAdmin(access);
         List<SftpSessionInfo> shown = new ArrayList<>();
@@ -131,13 +131,13 @@ public final class HohenheimSftp {
     }
 
     /**
-     * Ends one session the viewer may see on this app ({@link #openOn}); its connection closes at once.
+     * Ends one session the viewer may see on this mount ({@link #openOn}); its connection closes at once.
      *
      * @throws Violations when no such session is open there for this viewer
      */
-    public static void end(@NonNull AccessContext access, int instanceId, @NonNull String sessionId) {
+    public static void end(@NonNull AccessContext access, @NonNull String mount, @NonNull String sessionId) {
         SftpServer server = server();
-        boolean seen = openOn(access, instanceId).stream().anyMatch(session -> session.id().equals(sessionId));
+        boolean seen = openOn(access, mount).stream().anyMatch(session -> session.id().equals(sessionId));
         if (!seen || server == null || !server.sessions().end(sessionId)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("sftp_session_gone"));
         }

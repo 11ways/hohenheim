@@ -1340,6 +1340,28 @@ public class HohenheimEndpoints {
         .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
         .build();
 
+    // --- A site's own files, HTML lane (the site's Files tab posts here; the same file manager as an app's) ---
+
+    /** Download one of a site's own files; bounded by hohenheim.files.max_file_kb like an app's. */
+    public static final Endpoint<Object> SITE_FILE_DOWNLOAD = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("site_file_download"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("download").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_READ_LIMIT)
+        .build();
+
+    /** Every mutating file action of a site's Files tab (save, upload, mkdir, rename, delete). */
+    public static final Endpoint<Object> SITE_FILE_ACTION = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("site_file_action"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("action").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
+        .build();
+
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
     //     channel other Hohenheim instances use to edit zones this instance owns, and the
     //     record API of any key whose owner may author records) ---

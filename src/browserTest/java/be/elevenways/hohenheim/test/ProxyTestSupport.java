@@ -11,9 +11,11 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.File;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetAddress;
@@ -153,6 +155,55 @@ public final class ProxyTestSupport {
                 // whatever was read so far is the observable response.
             }
             return response.toString();
+        }
+    }
+
+    /** A response's status line and header lines, and how many body bytes followed them. */
+    public record Counted(String head, long bodyBytes) {}
+
+    /**
+     * Raw HTTP/1.1 GET whose body is counted through one small buffer and never kept, for a download too large to hold.
+     *
+     * @param extraHeaderLines additional request header lines, without CRLF
+     */
+    public static Counted rawDownload(int port, String host, String path, String... extraHeaderLines)
+            throws Exception {
+        try (Socket socket = new Socket(InetAddress.getByName("127.0.0.1"), port)) {
+            socket.setSoTimeout(30_000);
+            StringBuilder request = new StringBuilder()
+                .append("GET ").append(path).append(" HTTP/1.1\r\n")
+                .append("Host: ").append(host).append("\r\n");
+            for (String line : extraHeaderLines) {
+                request.append(line).append("\r\n");
+            }
+            request.append("Connection: close\r\n\r\n");
+            socket.getOutputStream().write(request.toString().getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+
+            InputStream in = new BufferedInputStream(socket.getInputStream(), 64 * 1024);
+            StringBuilder head = new StringBuilder();
+            int previous = -1;
+            int current;
+            int newlines = 0;
+            while ((current = in.read()) >= 0) {
+                head.append((char) current);
+                if (current == '\n') {
+                    newlines = previous == '\r' || previous == '\n' ? newlines + 1 : 1;
+                    if (newlines == 2) {
+                        break;
+                    }
+                } else if (current != '\r') {
+                    newlines = 0;
+                }
+                previous = current;
+            }
+            byte[] buffer = new byte[64 * 1024];
+            long body = 0;
+            int read;
+            while ((read = in.read(buffer)) >= 0) {
+                body += read;
+            }
+            return new Counted(head.toString(), body);
         }
     }
 

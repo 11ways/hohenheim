@@ -21,8 +21,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * One instance's files as an SFTP tree, for one request: every verb is the file manager's own ({@link InstanceFiles}
- * reads, {@link FileVerbs} changes), so the same {@code files.read}/{@code files.write} checks, path containment and
+ * One tree's files as an SFTP tree, for one request (an app's volumes, a site's stored files): every verb is the file
+ * manager's own ({@link InstanceFiles} reads, {@link FileVerbs} changes), so the same checks, path containment and
  * activity verbs apply as on the Files tab.
  *
  * AIDEV-NOTE: an SFTP path IS the container path (/data/world/level.dat), so the activity rows and refusals name the
@@ -30,8 +30,9 @@ import java.util.function.Supplier;
  * virtual: they list the next step towards each root and nothing else, and every change there is refused by
  * {@link InstanceFilePath}'s one refusal, because they lie outside every volume.
  *
- * AIDEV-NOTE: the service's capability refusal ({@code instance_not_permitted}) reaches the client as
- * PERMISSION_DENIED in its own words; every other refusal is a worded failure.
+ * AIDEV-NOTE: the service's capability refusals ({@code instance_not_permitted}, {@code site_files_not_permitted})
+ * reach the client as PERMISSION_DENIED in their own words; every other refusal is a worded failure. A site's tree
+ * has the one root "/", so no directory of it is virtual.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -41,13 +42,14 @@ final class InstanceSftpMount implements SftpMount {
     /** The modes the virtual directories above the volume roots report. */
     private static final String VIRTUAL_MODE = "0755";
 
-    private final int instanceId;
+    private final @NonNull FileRoot root;
     private final InstanceFiles files;
     private final FileVerbs verbs;
     private final long maxFileBytes;
 
-    InstanceSftpMount(int instanceId, @NonNull InstanceFiles files, @NonNull FileVerbs verbs, long maxFileBytes) {
-        this.instanceId = instanceId;
+    InstanceSftpMount(@NonNull FileRoot root, @NonNull InstanceFiles files, @NonNull FileVerbs verbs,
+                      long maxFileBytes) {
+        this.root = root;
         this.files = files;
         this.verbs = verbs;
         this.maxFileBytes = maxFileBytes;
@@ -65,7 +67,7 @@ final class InstanceSftpMount implements SftpMount {
                 return entries;
             }
             List<SftpEntry> entries = new ArrayList<>();
-            for (InstanceFiles.Entry entry : this.files.list(this.instanceId, path).entries()) {
+            for (InstanceFiles.Entry entry : this.files.list(this.root, path).entries()) {
                 entries.add(entryOf(entry));
             }
             return entries;
@@ -78,20 +80,20 @@ final class InstanceSftpMount implements SftpMount {
             if (this.virtualChildren(path) != null) {
                 return virtualEntry(PosixPaths.nameOf(path));
             }
-            InstanceFiles.Entry entry = this.files.stat(this.instanceId, path);
+            InstanceFiles.Entry entry = this.files.stat(this.root, path);
             return entry == null ? null : entryOf(entry);
         });
     }
 
     @Override
     public long readTo(@NonNull String path, @NonNull Path spool, long maxBytes) {
-        return refusing(() -> this.files.readTo(this.instanceId, path, spool, maxBytes));
+        return refusing(() -> this.files.readTo(this.root, path, spool, maxBytes));
     }
 
     @Override
     public void writeFrom(@NonNull String path, @NonNull Path spool, boolean replace) {
         refusing(() -> {
-            this.verbs.uploadFrom(this.instanceId, path, spool, replace, this.maxFileBytes);
+            this.verbs.uploadFrom(this.root, path, spool, replace, this.maxFileBytes);
             return null;
         });
     }
@@ -99,7 +101,7 @@ final class InstanceSftpMount implements SftpMount {
     @Override
     public void makeDirectory(@NonNull String path) {
         refusing(() -> {
-            this.verbs.makeDirectory(this.instanceId, path);
+            this.verbs.makeDirectory(this.root, path);
             return null;
         });
     }
@@ -107,7 +109,7 @@ final class InstanceSftpMount implements SftpMount {
     @Override
     public void rename(@NonNull String from, @NonNull String to) {
         refusing(() -> {
-            this.verbs.rename(this.instanceId, from, to);
+            this.verbs.rename(this.root, from, to);
             return null;
         });
     }
@@ -115,7 +117,7 @@ final class InstanceSftpMount implements SftpMount {
     @Override
     public void delete(@NonNull String path) {
         refusing(() -> {
-            this.verbs.delete(this.instanceId, path);
+            this.verbs.delete(this.root, path);
             return null;
         });
     }
@@ -123,7 +125,7 @@ final class InstanceSftpMount implements SftpMount {
     @Override
     public void setMode(@NonNull String path, @NonNull String octal) {
         refusing(() -> {
-            this.files.setMode(this.instanceId, path, octal);
+            this.files.setMode(this.root, path, octal);
             return null;
         });
     }
@@ -131,7 +133,7 @@ final class InstanceSftpMount implements SftpMount {
     @Override
     public void setModified(@NonNull String path, long epochSeconds) {
         refusing(() -> {
-            this.files.setModified(this.instanceId, path, epochSeconds);
+            this.files.setModified(this.root, path, epochSeconds);
             return null;
         });
     }
@@ -142,7 +144,7 @@ final class InstanceSftpMount implements SftpMount {
      * @return null when {@code path} is no virtual directory (inside a volume, or outside every root's way)
      */
     private @Nullable List<String> virtualChildren(@NonNull String path) {
-        List<String> roots = this.files.volumeRoots(this.instanceId);
+        List<String> roots = this.files.volumeRoots(this.root);
         String prefix = "/".equals(path) ? "/" : path + "/";
         Set<String> children = new LinkedHashSet<>();
         for (String root : roots) {
@@ -182,7 +184,9 @@ final class InstanceSftpMount implements SftpMount {
             return call.get();
         } catch (Violations refused) {
             for (Violation violation : refused) {
-                if (HohenheimRefusalReason.INSTANCE_NOT_PERMITTED.code().equals(violation.message().key())) {
+                String key = violation.message().key();
+                if (HohenheimRefusalReason.INSTANCE_NOT_PERMITTED.code().equals(key)
+                        || HohenheimRefusalReason.SITE_FILES_NOT_PERMITTED.code().equals(key)) {
                     throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED,
                         "The file manager refused the capability this SFTP request needs", violation.message());
                 }

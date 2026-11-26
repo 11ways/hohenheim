@@ -536,9 +536,12 @@ public enum HohenheimActivityAction implements ActivityAction {
             case APPROVED, UNAPPROVED -> List.of(InstanceTemplateModel.MODEL_ID);
             case QUARANTINE_LIFTED -> List.of(ReleasedRouteClaimModel.MODEL_ID);
             case HTTPS_FORCED -> List.of(SiteDomainModel.MODEL_ID);
+            // A site's own stored files record the same verbs as an app's volumes (FileVerbs).
+            case FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE ->
+                List.of(InstanceModel.MODEL_ID, SiteModel.MODEL_ID);
             case CONSOLE_COMMAND, DEVICE_ATTACHED, DEVICE_RESIZED, DEVICE_DETACHED, TEMPLATE_CAPTURED, VOLUME_DECLARED,
                  VOLUME_REDECLARED, APP_UPDATED, APP_UPDATE_FAILED, PREVIEW_TRIGGERED, RESTORED_SNAPSHOT, EXEC,
-                 EXEC_ENDED, MIGRATED, FILES_SAVE, FILES_UPLOAD, FILES_MKDIR, FILES_RENAME, FILES_DELETE, FILES_WRITE,
+                 EXEC_ENDED, MIGRATED,
                  DELETED_DATA, SETTLED_INTERRUPTED, RECONCILED, RESTARTED_UNANSWERED, FOLLOWED_APP, APP_FOLLOW_REFUSED,
                  BACKUP, BACKUP_FAILED, SNAPSHOT,
                  SHELL_OPEN, SHELL_CLOSE, WORKLOAD_EXITED, WORKLOAD_CRASH_LOOPED, WORKLOAD_START_FAILED,

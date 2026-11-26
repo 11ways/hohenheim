@@ -1775,6 +1775,28 @@ public class HohenheimSettings {
                 + "directory with more refuses to list rather than returning a truncated "
                 + "listing that reads like a complete one")
             .build();
+
+        /**
+         * AIDEV-NOTE: host-only, like every path of the host's own disk; the mount follows it at its next use
+         * ({@code Storages.mountLocalFollowing}), moving no file, so a change starts an empty folder there.
+         */
+        public static final SettingDefinition<String> SITE_FILES_DIRECTORY = GROUP
+            .buildSetting("site_files_directory", String.class)
+            .hostOnly()
+            .defaultValue("data/site-files")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
+            .description("The folder on this host keeping the files of every site that serves its own files and names "
+                + "no other storage. A relative path starts from the folder Hohenheim was started in")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_SITE_FILES_MB = GROUP
+            .buildSetting("max_site_files_mb", Integer.class)
+            .hostOnly()
+            .defaultValue(4096)
+            .byteSize(ByteUnit.MEGABYTE)
+            .description("The most one site's own files may hold together. An upload that would pass it is refused "
+                + "whole; the files already kept stay")
+            .build();
     }
 
     // --- SFTP to app files ---

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.files.FileRoot;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.test.docker.FakeContainerFiles;
 import be.elevenways.hohenheim.test.docker.TestTars;
@@ -90,11 +91,11 @@ class InstanceFilesContainmentTest {
             InstanceFiles files = new InstanceFiles();
 
             // 1. The volume lists, directories first, the symlinks AS symlinks.
-            InstanceFiles.Listing listing = files.list(id, "/data");
+            InstanceFiles.Listing listing = files.list(FileRoot.app(id), "/data");
             assertThat(listing.entries().stream().map(InstanceFiles.Entry::name).toList())
                 .as("step 1: the listing is the volume's immediate children")
                 .containsExactly("sub", "escape", "etcdir", "hello.txt");
-            assertThat(files.readText(id, "/data/hello.txt"))
+            assertThat(files.readText(FileRoot.app(id), "/data/hello.txt"))
                 .as("step 1: a regular file reads").isEqualTo("hello\n");
 
             // 2. A symlinked COMPONENT is refused by the walk -- and the daemon's own lstat of
@@ -102,14 +103,14 @@ class InstanceFilesContainmentTest {
             assertThat(daemonSaysRegularFile(daemon, handle, "/data/etcdir/passwd"))
                 .as("step 2: counterfactual -- the daemon reports the escaped leaf as a file")
                 .isTrue();
-            assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/etcdir/passwd"))))
+            assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/etcdir/passwd"))))
                 .as("step 2: the component walk refuses the symlinked directory")
                 .isEqualTo("files_path_refused");
-            assertThat(keyOf(catchThrowable(() -> files.write(id, "/data/etcdir/passwd",
+            assertThat(keyOf(catchThrowable(() -> files.write(FileRoot.app(id), "/data/etcdir/passwd",
                     "x".getBytes(StandardCharsets.UTF_8)))))
                 .as("step 2: and the write lane walks the same components")
                 .isEqualTo("files_path_refused");
-            assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/escape"))))
+            assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/escape"))))
                 .as("step 2: a symlink LEAF is never followed").isEqualTo("files_not_a_file");
 
             // 3. The race the walk cannot close: the leaf is a file when stat-ed and a LINK
@@ -117,7 +118,7 @@ class InstanceFilesContainmentTest {
             //    byte of what it names comes back.
             daemon.answerArchive("/data/hello.txt",
                 new TestTars().symlink("hello.txt", "/etc/shadow").build());
-            Throwable raced = catchThrowable(() -> files.read(id, "/data/hello.txt"));
+            Throwable raced = catchThrowable(() -> files.read(FileRoot.app(id), "/data/hello.txt"));
             assertThat(keyOf(raced)).as("step 3: a link swapped in after the walk is refused")
                 .isEqualTo("files_failed");
             assertThat(raced.getMessage()).as("step 3: nothing of the target leaks")
@@ -126,11 +127,11 @@ class InstanceFilesContainmentTest {
             // 4. Size caps, BEFORE the daemon is asked: an over-cap write sends nothing, and
             //    a file the stat says is over the cap is not transferred at all.
             int before = daemon.calls().size();
-            assertThat(keyOf(catchThrowable(() -> files.write(id, "/data/big.bin",
+            assertThat(keyOf(catchThrowable(() -> files.write(FileRoot.app(id), "/data/big.bin",
                     new byte[MAX_FILE_KB * 1024 + 1]))))
                 .as("step 4: an over-cap write is refused").isEqualTo("files_too_large");
             daemon.file("/data/huge.bin", new byte[MAX_FILE_KB * 1024 * 4]);
-            assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/huge.bin"))))
+            assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/huge.bin"))))
                 .as("step 4: an over-cap read is refused").isEqualTo("files_too_large");
             assertThat(daemon.calls()).as("step 4: neither reached a mutating daemon call")
                 .hasSize(before);
@@ -144,29 +145,29 @@ class InstanceFilesContainmentTest {
             managed.set(InstanceFileModel.MODE, "0644");
             Models.get(InstanceFileModel.class).save(managed);
             before = daemon.calls().size();
-            assertThat(keyOf(catchThrowable(() -> files.write(id, "/data/conf/app.conf",
+            assertThat(keyOf(catchThrowable(() -> files.write(FileRoot.app(id), "/data/conf/app.conf",
                     "edit".getBytes(StandardCharsets.UTF_8)))))
                 .as("step 5: the managed file refuses a write").isEqualTo("files_managed_config");
-            assertThat(keyOf(catchThrowable(() -> files.delete(id, "/data/conf"))))
+            assertThat(keyOf(catchThrowable(() -> files.delete(FileRoot.app(id), "/data/conf"))))
                 .as("step 5: deleting its DIRECTORY would delete it too -- refused")
                 .isEqualTo("files_managed_ancestor");
-            assertThat(keyOf(catchThrowable(() -> files.rename(id, "/data/conf", "/data/moved"))))
+            assertThat(keyOf(catchThrowable(() -> files.rename(FileRoot.app(id), "/data/conf", "/data/moved"))))
                 .as("step 5: renaming the directory would move it -- refused")
                 .isEqualTo("files_managed_ancestor");
-            assertThat(keyOf(catchThrowable(() -> files.makeDirectory(id, "/data/conf/app.conf"))))
+            assertThat(keyOf(catchThrowable(() -> files.makeDirectory(FileRoot.app(id), "/data/conf/app.conf"))))
                 .as("step 5: mkdir at the managed path is refused").isEqualTo("files_managed_config");
             assertThat(daemon.calls()).as("step 5: no refused verb touched the container")
                 .hasSize(before);
             assertThat(daemon.text("/data/conf/app.conf")).as("step 5: the file is intact")
                 .isEqualTo("managed");
-            files.write(id, "/data/conf/app.conf.bak", "sibling".getBytes(StandardCharsets.UTF_8));
+            files.write(FileRoot.app(id), "/data/conf/app.conf.bak", "sibling".getBytes(StandardCharsets.UTF_8));
             assertThat(daemon.text("/data/conf/app.conf.bak"))
                 .as("step 5: a SIBLING whose name merely starts the same is not managed")
                 .isEqualTo("sibling");
 
             // 6. A dash-leading name is a file like any other, owned like its directory by the daemon's extraction
             //    itself: no chown follows the write that could reach what the entry points at (515867d2a).
-            files.write(id, "/data/-rf", "dash".getBytes(StandardCharsets.UTF_8));
+            files.write(FileRoot.app(id), "/data/-rf", "dash".getBytes(StandardCharsets.UTF_8));
             assertThat(daemon.text("/data/-rf")).as("step 6: the dash-named file landed")
                 .isEqualTo("dash");
             assertThat(daemon.ownerOf("/data/-rf")).as("step 6: owned like its directory")
@@ -183,10 +184,10 @@ class InstanceFilesContainmentTest {
             for (String verb : List.of("rename", "delete", "mkdir", "write")) {
                 Throwable refused = catchThrowable(() -> {
                     switch (verb) {
-                        case "rename" -> files.rename(id, "/data/hello.txt", "/data/moved.txt");
-                        case "delete" -> files.delete(id, "/data/hello.txt");
-                        case "mkdir" -> files.makeDirectory(id, "/data/new");
-                        default -> files.write(id, "/data/hello.txt",
+                        case "rename" -> files.rename(FileRoot.app(id), "/data/hello.txt", "/data/moved.txt");
+                        case "delete" -> files.delete(FileRoot.app(id), "/data/hello.txt");
+                        case "mkdir" -> files.makeDirectory(FileRoot.app(id), "/data/new");
+                        default -> files.write(FileRoot.app(id), "/data/hello.txt",
                             "hijack".getBytes(StandardCharsets.UTF_8));
                     }
                 });

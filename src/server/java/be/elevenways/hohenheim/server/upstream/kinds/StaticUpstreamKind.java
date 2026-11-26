@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.StaticFileHandler;
@@ -23,6 +25,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -34,6 +37,28 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("static");
     public static final Schema SETTINGS_SCHEMA = new Schema();
+
+    /**
+     * Whether the site serves its OWN files, kept in the storage it names under its own folder of keys, instead of a
+     * folder of the host ({@link #ROOT_PATH}). Who manages the site puts them there (SFTP, the Files tab, the tools).
+     *
+     * AIDEV-NOTE: a settings key, not a column: the setting lives in the kind's own schema like every other, so no
+     * migration carries it. The served place is derived from the site's id ({@code SiteFiles.prefixOf}), never typed,
+     * so it names no host path and a site managed by a non-administrator needs no trusted upstream for it.
+     */
+    public static final BooleanField OWN_FILES = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("own_files").defaultValue(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("own_files"))
+            .help(HohenheimMicrocopy.HELP.of("own_files")).build());
+
+    /**
+     * The storage mount a site's own files live in; blank is the installation's own site-files folder. An
+     * administrator's choice (TenantWrites freezes the settings a delegate may not author).
+     */
+    public static final StringField STORAGE = SETTINGS_SCHEMA.addField(
+        StringField.builder("storage")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage"))
+            .help(HohenheimMicrocopy.HELP.of("site_storage")).build());
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
         PathField.builder("root_path").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
@@ -95,9 +120,12 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-    /** The served directory. */
+    /** The served directory, or that the site serves its own files. */
     @Override
     public String upstreamSummary(Map<String, Object> settings) {
+        if (RawValues.isOn(settings, OWN_FILES)) {
+            return SiteFiles.storageNameOf(settings);
+        }
         Object root = settings.get(ROOT_PATH.getName());
         return root != null && !String.valueOf(root).isBlank() ? String.valueOf(root) : null;
     }
@@ -109,6 +137,20 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         boolean autoindex = RawValues.isOn(settings, AUTOINDEX);
         boolean indexes = RawValues.isOn(settings, INDEXES);
         boolean showHidden = RawValues.isOn(settings, SHOW_HIDDEN_FILES);
+        String notFound = (String) settings.get(NOT_FOUND_PAGE.getName());
+        Integer siteId = site.get(SiteModel.ID);
+
+        // A site's own files are a place derived from its id in a storage Hohenheim mounts: no host path anyone
+        // typed, so no trust is asked, whoever manages the site.
+        if (RawValues.isOn(settings, OWN_FILES) && siteId != null) {
+            try {
+                return StaticFileHandler.stored(SiteFiles.servedTree(siteId, settings),
+                    HohenheimSettings.positiveOrDefault(HohenheimSettings.Files.MAX_ENTRIES), fallbackFile, notFound,
+                    autoindex, indexes, showHidden);
+            } catch (Violations unmounted) {
+                return new FaultedSiteHandler(siteId, HohenheimMicrocopy.SITE_FAULT.of("site_files_storage"));
+            }
+        }
 
         if (rootPathStr == null || rootPathStr.isEmpty()) {
             // Empty 200 like Node ecstatic with no root: the site exists but serves nothing.
@@ -124,12 +166,10 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         // settings included). Fail closed until the operator owns the site again, or marks
         // its upstream trusted (TenantUpstreams.publicOnly).
         if (TenantUpstreams.publicOnly(site)) {
-            Integer siteId = site.get(SiteModel.ID);
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
                 HohenheimMicrocopy.SITE_FAULT.of("tenant_host_files"));
         }
 
-        return new StaticFileHandler(Path.of(rootPathStr), fallbackFile,
-            (String) settings.get(NOT_FOUND_PAGE.getName()), autoindex, indexes, showHidden);
+        return new StaticFileHandler(Path.of(rootPathStr), fallbackFile, notFound, autoindex, indexes, showHidden);
     }
 }

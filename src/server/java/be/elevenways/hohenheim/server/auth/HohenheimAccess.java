@@ -336,6 +336,16 @@ public final class HohenheimAccess {
     }
 
     /**
+     * THE service gate of a site's own files.
+     *
+     * @throws Violations {@code site_files_not_permitted}
+     * @see OperationGates#requireSiteManage
+     */
+    public static void requireSiteManage(int siteId) {
+        OperationGates.requireSiteManage(siteId);
+    }
+
+    /**
      * THE destroy decision as a render asks it: the dead Delete's reason, or null when it can run.
      *
      * @see OperationGates#destroyUnavailableReason

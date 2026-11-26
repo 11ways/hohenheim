@@ -100,6 +100,10 @@ public enum HohenheimRefusalReason implements DomainRefusal.Explained {
     BACKUP_RESTORE_REFUSED("backup_restore_refused", DomainRefusal.Recovery.NEVER,
         "The restore was refused"),
 
+    /** The caller manages no such site; the same answer as for a site it cannot see. */
+    SITE_FILES_NOT_PERMITTED("site_files_not_permitted", DomainRefusal.Recovery.NEVER,
+        "You are not allowed to reach this site's files"),
+
     /**
      * The requester already holds a certificate from its own signing request for exactly these names, from another
      * key: a new key for them is that certificate's rotation, never a second certificate renewed beside it. The

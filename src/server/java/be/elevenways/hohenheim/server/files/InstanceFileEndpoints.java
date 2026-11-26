@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
@@ -22,6 +23,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RequestBodyTooLargeException;
 import be.elevenways.zenit.common.routing.RouteLocation;
 import be.elevenways.zenit.common.routing.ReturnPath;
@@ -32,6 +35,7 @@ import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.operation.RecordCodes;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -43,6 +47,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.IntFunction;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -77,46 +83,67 @@ public final class InstanceFileEndpoints {
     // -- HTML lane ------------------------------------------------------------
 
     private static void initHtmlLane() {
-        HohenheimEndpoints.INSTANCE_FILE_DOWNLOAD.setHandler(conduit -> {
-            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
+        htmlLane(HohenheimEndpoints.INSTANCE_FILE_DOWNLOAD, HohenheimEndpoints.INSTANCE_FILE_ACTION,
+            HohenheimEndpoints.INSTANCE_ID, FileRoot::app);
+        htmlLane(HohenheimEndpoints.SITE_FILE_DOWNLOAD, HohenheimEndpoints.SITE_FILE_ACTION,
+            HohenheimEndpoints.SITE_ID, FileRoot::site);
+    }
+
+    /** One Files tab's download and action routes, over the record its id parameter names. */
+    private static void htmlLane(@NonNull Endpoint<Object> download, @NonNull Endpoint<Object> action,
+                                 @NonNull ParameterDefinition<Integer> id,
+                                 @NonNull IntFunction<? extends FileRoot> rootOf) {
+        download.setHandler(conduit -> {
+            Integer recordId = conduit.getParameter(id);
             String path = conduit.getQueryParam("path");
-            if (instanceId == null || path == null || path.isEmpty()) {
+            if (recordId == null || path == null || path.isEmpty()) {
                 conduit.notFound();
                 return null;
             }
+            FileRoot root = rootOf.apply(recordId);
             byte[] content;
             try {
-                content = new InstanceFiles().read(instanceId, path);
+                content = new InstanceFiles().read(root, path);
             } catch (Violations refused) {
-                return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId, parentOf(path), refused));
+                return HandlerSupport.redirectUntyped(filesUrl(conduit, root, parentOf(path), refused));
             }
             HandlerSupport.download(conduit, "application/octet-stream", PosixPaths.nameOf(path), content);
             return null;
         });
 
-        HohenheimEndpoints.INSTANCE_FILE_ACTION.setHandler(conduit -> {
-            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-            if (instanceId == null) {
+        action.setHandler(conduit -> {
+            Integer recordId = conduit.getParameter(id);
+            if (recordId == null) {
                 conduit.notFound();
                 return null;
             }
+            FileRoot root = rootOf.apply(recordId);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            String action = string(form, "action");
+            String verb = string(form, "action");
             String path = string(form, "path");
             String back = string(form, "directory");
             try {
-                if (END_SFTP_SESSION.equals(action)) {
-                    HohenheimSftp.end(AccessContext.of(conduit), instanceId, string(form, "session"));
+                if (END_SFTP_SESSION.equals(verb)) {
+                    HohenheimSftp.end(AccessContext.of(conduit), sftpMountOf(root), string(form, "session"));
                 } else {
-                    perform(instanceId, action, form, path);
+                    perform(root, verb, form, path);
                 }
             } catch (Violations refused) {
-                return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
+                return HandlerSupport.redirectUntyped(filesUrl(conduit, root,
                     back.isEmpty() ? parentOf(path) : back, refused));
             }
-            return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
+            return HandlerSupport.redirectUntyped(filesUrl(conduit, root,
                 back.isEmpty() ? parentOf(path) : back, null));
         });
+    }
+
+    /** @return the SFTP mount name a root's sessions sign in to: an app's id, a site's code */
+    private static @NonNull String sftpMountOf(@NonNull FileRoot root) {
+        return switch (root) {
+            case FileRoot.App app -> String.valueOf(app.instanceId());
+            case FileRoot.Site site -> Objects.requireNonNullElse(
+                RecordCodes.codeUnjudged(SiteModel.MODEL_ID, String.valueOf(site.siteId())), "");
+        };
     }
 
     // -- API lane -------------------------------------------------------------
@@ -130,7 +157,7 @@ public final class InstanceFileEndpoints {
             int instanceId = instance.get(InstanceModel.ID);
             try {
                 InstanceFiles.Listing listing = new InstanceFiles()
-                    .list(instanceId, conduit.getQueryParam("path"));
+                    .list(FileRoot.app(instanceId), conduit.getQueryParam("path"));
                 List<Map<String, Object>> entries = new ArrayList<>();
                 for (InstanceFiles.Entry entry : listing.entries()) {
                     Map<String, Object> projection = new LinkedHashMap<>();
@@ -159,10 +186,10 @@ public final class InstanceFileEndpoints {
             String path = conduit.getQueryParam("path");
             try {
                 if (path == null || path.isEmpty()) {
-                    throw InstanceFilePath.refused(new InstanceFiles().volumeRoots(instanceId));
+                    throw InstanceFilePath.refused(new InstanceFiles().volumeRoots(FileRoot.app(instanceId)));
                 }
                 HandlerSupport.download(conduit, "application/octet-stream", PosixPaths.nameOf(path),
-                    new InstanceFiles().read(instanceId, path));
+                    new InstanceFiles().read(FileRoot.app(instanceId), path));
                 return null;
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -178,7 +205,7 @@ public final class InstanceFileEndpoints {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String path = string(form, "path");
             try {
-                new FileVerbs().write(instanceId, path, contentOf(form));
+                new FileVerbs().write(FileRoot.app(instanceId), path, contentOf(form));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
@@ -195,7 +222,7 @@ public final class InstanceFileEndpoints {
             String action = string(form, "action");
             String path = string(form, "path");
             try {
-                perform(instanceId, action, form, path);
+                perform(FileRoot.app(instanceId), action, form, path);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
@@ -278,15 +305,15 @@ public final class InstanceFileEndpoints {
      *
      * @throws Violations {@code files_unknown_action} for anything not named here
      */
-    private static void perform(int instanceId, @NonNull String action, @NonNull Map<String, Object> form,
+    private static void perform(@NonNull FileRoot root, @NonNull String action, @NonNull Map<String, Object> form,
                                 @NonNull String path) {
         FileVerbs verbs = new FileVerbs();
         switch (action) {
-            case "save" -> verbs.save(instanceId, path, contentOf(form));
-            case "upload" -> verbs.upload(instanceId, path, uploadOf(form));
-            case "mkdir" -> verbs.makeDirectory(instanceId, path);
-            case "rename" -> verbs.rename(instanceId, path, string(form, "target"));
-            case "delete" -> verbs.delete(instanceId, path);
+            case "save" -> verbs.save(root, path, contentOf(form));
+            case "upload" -> verbs.upload(root, path, uploadOf(form));
+            case "mkdir" -> verbs.makeDirectory(root, path);
+            case "rename" -> verbs.rename(root, path, string(form, "target"));
+            case "delete" -> verbs.delete(root, path);
             default -> throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_unknown_action"));
         }
     }
@@ -382,15 +409,17 @@ public final class InstanceFileEndpoints {
      * twice, and which one a reader honoured was up to the reader. The refusal does NOT
      * ride the URL: it is a notification, so it rides the session flash.
      */
-    private static @NonNull String filesUrl(@NonNull Conduit conduit, int instanceId,
+    private static @NonNull String filesUrl(@NonNull Conduit conduit, @NonNull FileRoot root,
                                             @NonNull String directory,
                                             @Nullable Violations refused) {
         if (refused != null) {
             HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
         }
         String base = ReturnPath.pathOr(ReturnTarget.readPath(conduit),
-            CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
-                HohenheimSlugs.Tab.FILES).toUrl());
+            CmsRoutes.subpage(HohenheimSlugs.ADMIN, switch (root) {
+                case FileRoot.App app -> HohenheimSlugs.INSTANCES;
+                case FileRoot.Site site -> HohenheimSlugs.SITES;
+            }, root.recordId(), HohenheimSlugs.Tab.FILES).toUrl());
         return RouteLocation.with(base, HohenheimParams.FILES_PATH,
             directory.isEmpty() ? null : directory);
     }

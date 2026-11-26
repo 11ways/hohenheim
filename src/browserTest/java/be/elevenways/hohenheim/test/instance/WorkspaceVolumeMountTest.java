@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.files.FileRoot;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.model.DeployTrigger;
@@ -129,7 +130,7 @@ class WorkspaceVolumeMountTest {
             // 4. And the Files tab follows with nothing wired at its call site: its roots
             //    are the spec's mounts, so the new volume is browsable the moment it is
             //    mounted.
-            assertThat(new InstanceFiles(service).volumeRoots(id))
+            assertThat(new InstanceFiles(service).volumeRoots(FileRoot.app(id)))
                 .as("step 4: both mounts are file-browser roots")
                 .contains("/data", WorkspaceKind.HOME_PATH);
 

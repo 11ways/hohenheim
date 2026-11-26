@@ -25,7 +25,6 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -34,6 +33,8 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.hohenheim.test.SftpTestClient;
+import be.elevenways.hohenheim.test.SftpTestClient.Connection;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -47,11 +48,7 @@ import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.security.SecurityEvent;
 import be.elevenways.zenit.server.security.SecurityEventSink;
 import be.elevenways.zenit.server.security.SecurityEvents;
-import org.apache.sshd.client.SshClient;
-import org.apache.sshd.client.session.ClientSession;
-import org.apache.sshd.common.keyprovider.KeyIdentityProvider;
 import org.apache.sshd.sftp.client.SftpClient;
-import org.apache.sshd.sftp.client.SftpClientFactory;
 import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
 import org.junit.jupiter.api.AfterAll;
@@ -60,14 +57,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,6 +72,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static be.elevenways.hohenheim.test.SftpTestClient.names;
+import static be.elevenways.hohenheim.test.SftpTestClient.readBytes;
+import static be.elevenways.hohenheim.test.SftpTestClient.readText;
+import static be.elevenways.hohenheim.test.SftpTestClient.refusal;
+import static be.elevenways.hohenheim.test.SftpTestClient.writeBytes;
 
 /**
  * Hohenheim's SFTP lane end to end: MINA's own SFTP client against the server the boot stage starts, over a real
@@ -96,7 +95,6 @@ class SftpJourneyTest {
     static final ServedApp APP = HohenheimServedApp.app();
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final Duration WAIT = Duration.ofSeconds(20);
     private static final String LOOPBACK = "127.0.0.1";
 
     /** The browser lane's cap during this class: the upload below is larger, to prove SFTP spools past it. */
@@ -160,10 +158,7 @@ class SftpJourneyTest {
         List<SecurityEvent> events = new CopyOnWriteArrayList<>();
         SecurityEventSink sink = events::add;
         SecurityEvents.addSink(sink);
-        SshClient client = SshClient.setUpDefaultClient();
-        client.setKeyIdentityProvider(KeyIdentityProvider.EMPTY_KEYS_PROVIDER);
-        client.setServerKeyVerifier((session, address, key) -> true);
-        client.start();
+        SftpTestClient client = SftpTestClient.start();
         try {
             Db.run(datasource, () -> {
                 try {
@@ -173,14 +168,14 @@ class SftpJourneyTest {
                 }
             });
         } finally {
-            client.stop();
+            client.close();
             SecurityEvents.removeSink(sink);
             HohenheimSftp.stop();
             cleanup(docker, handleRef.get(), volumeRef.get());
         }
     }
 
-    private static void journey(DockerClient docker, SshClient client, List<SecurityEvent> events,
+    private static void journey(DockerClient docker, SftpTestClient client, List<SecurityEvent> events,
                                 AtomicReference<String> handleRef, AtomicReference<String> volumeRef)
         throws IOException {
         HostFixtures.admitLocal();
@@ -221,7 +216,7 @@ class SftpJourneyTest {
 
         // 2. A wrong password is refused, reported as a failed SSH password on lane sftp, and scored.
         int scoreBefore = HohenheimSecurity.scorer().scoreOf(LOOPBACK);
-        assertThat(catchThrowable(() -> signIn(client, port, "sftp-writer@live.test." + id, "znit_wrong_password")))
+        assertThat(catchThrowable(() -> client.signIn(port, "sftp-writer@live.test." + id, "znit_wrong_password")))
             .as("step 2: a wrong password is refused").isNotNull();
         assertThat(events).as("step 2: it is reported as a failed password on the sftp lane")
             .anySatisfy(event -> {
@@ -232,27 +227,28 @@ class SftpJourneyTest {
             .as("step 2: and the threat scorer counted it against the address").isGreaterThan(scoreBefore);
 
         // 3. A valid password without a grant on the instance reads like the wrong one, as does an unknown id.
-        assertThat(catchThrowable(() -> signIn(client, port, "sftp-stranger@live.test." + id, strangerPassword)))
+        assertThat(catchThrowable(() -> client.signIn(port, "sftp-stranger@live.test." + id, strangerPassword)))
             .as("step 3: an account without files.read on the instance cannot sign in").isNotNull();
-        assertThat(catchThrowable(() -> signIn(client, port, "sftp-reader@live.test." + (id + 987_654),
+        assertThat(catchThrowable(() -> client.signIn(port, "sftp-reader@live.test." + (id + 987_654),
             readerPassword))).as("step 3: an unknown instance id reads the same").isNotNull();
         RateLimitMiddleware.limiter().clear();
 
         // 4. files.read: the tree leads to the volume, lists and reads; a write is refused and lands nothing.
-        try (Connection read = signIn(client, port, InstanceSftpRealm.username("sftp-reader@live.test", id),
+        try (Connection read = client.signIn(port,
+                InstanceSftpRealm.username("sftp-reader@live.test", String.valueOf(id)),
             readerPassword)) {
-            assertThat(names(read.sftp, "/")).as("step 4: the root leads to the volume").containsExactly("data");
-            assertThat(names(read.sftp, "/data")).as("step 4: the volume lists its entries")
+            assertThat(names(read.sftp(), "/")).as("step 4: the root leads to the volume").containsExactly("data");
+            assertThat(names(read.sftp(), "/data")).as("step 4: the volume lists its entries")
                 .contains("hello.txt", "etcdir");
-            assertThat(readText(read.sftp, "/data/hello.txt")).as("step 4: a file reads whole")
+            assertThat(readText(read.sftp(), "/data/hello.txt")).as("step 4: a file reads whole")
                 .isEqualTo("hello\n");
-            SftpException refused = sftpRefusal(catchThrowable(
-                () -> writeBytes(read.sftp, "/data/sneaky.txt", "nope".getBytes(StandardCharsets.UTF_8))));
+            SftpException refused = refusal(catchThrowable(
+                () -> writeBytes(read.sftp(), "/data/sneaky.txt", "nope".getBytes(StandardCharsets.UTF_8))));
             assertThat(refused.getStatus()).as("step 4: a read grant cannot upload")
                 .isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
             assertThat(refused.getMessage()).as("step 4: in the file manager's own words")
                 .contains("You are not allowed to perform this action on this app");
-            assertThat(sftpRefusal(catchThrowable(() -> read.sftp.mkdir("/data/by-reader"))).getStatus())
+            assertThat(refusal(catchThrowable(() -> read.sftp().mkdir("/data/by-reader"))).getStatus())
                 .as("step 4: nor create a directory").isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
             assertThat(inContainer(docker, handle, "ls /data"))
                 .as("step 4: nothing the reader attempted landed").doesNotContain("sneaky", "by-reader");
@@ -265,11 +261,12 @@ class SftpJourneyTest {
             .contains(HohenheimAccess.FILES_ALL.value());
         assertThat(InstanceSftpRealm.passwordScopes(holder(reader), false))
             .as("step 4b: a tenant's never does").doesNotContain(HohenheimAccess.FILES_ALL.value());
-        try (Connection operating = signIn(client, port, InstanceSftpRealm.username("sftp-operator@live.test", id),
+        try (Connection operating = client.signIn(port,
+                InstanceSftpRealm.username("sftp-operator@live.test", String.valueOf(id)),
             operatorPassword)) {
-            assertThat(names(operating.sftp, "/data")).as("step 4b: the operator lists the app's volume")
+            assertThat(names(operating.sftp(), "/data")).as("step 4b: the operator lists the app's volume")
                 .contains("hello.txt");
-            assertThat(readText(operating.sftp, "/data/hello.txt")).as("step 4b: and reads its files")
+            assertThat(readText(operating.sftp(), "/data/hello.txt")).as("step 4b: and reads its files")
                 .isEqualTo("hello\n");
         }
 
@@ -278,25 +275,26 @@ class SftpJourneyTest {
         for (int i = 0; i < big.length; i++) {
             big[i] = (byte) (i * 31 + 7);
         }
-        try (Connection write = signIn(client, port, InstanceSftpRealm.username("sftp-writer@live.test", id),
+        try (Connection write = client.signIn(port,
+                InstanceSftpRealm.username("sftp-writer@live.test", String.valueOf(id)),
             writerPassword)) {
-            writeBytes(write.sftp, "/data/big.bin", big);
+            writeBytes(write.sftp(), "/data/big.bin", big);
             assertThat(inContainer(docker, handle, "wc -c < /data/big.bin").trim())
                 .as("step 5: the container holds the whole upload, larger than the browser lane's cap")
                 .isEqualTo(String.valueOf(big.length));
-            assertThat(readBytes(write.sftp, "/data/big.bin")).as("step 5: and it downloads byte for byte")
+            assertThat(readBytes(write.sftp(), "/data/big.bin")).as("step 5: and it downloads byte for byte")
                 .isEqualTo(big);
 
             // 6. mkdir, rename, a mode change, delete and rmdir, each observed in the container.
-            write.sftp.mkdir("/data/made");
-            write.sftp.rename("/data/big.bin", "/data/made/big.bin");
+            write.sftp().mkdir("/data/made");
+            write.sftp().rename("/data/big.bin", "/data/made/big.bin");
             assertThat(inContainer(docker, handle, "ls /data/made")).as("step 6: the rename moved the file")
                 .isEqualTo("big.bin\n");
-            write.sftp.setStat("/data/hello.txt", new SftpClient.Attributes().perms(0600));
+            write.sftp().setStat("/data/hello.txt", new SftpClient.Attributes().perms(0600));
             assertThat(inContainer(docker, handle, "stat -c %a /data/hello.txt").trim())
                 .as("step 6: a mode change lands").isEqualTo("600");
-            write.sftp.remove("/data/made/big.bin");
-            write.sftp.rmdir("/data/made");
+            write.sftp().remove("/data/made/big.bin");
+            write.sftp().rmdir("/data/made");
             assertThat(inContainer(docker, handle, "test -e /data/made && echo yes || echo no"))
                 .as("step 6: delete and rmdir removed both").isEqualTo("no\n");
 
@@ -315,14 +313,14 @@ class SftpJourneyTest {
                 .allSatisfy(recorded -> assertThat(recorded.actor()).isEqualTo(writer.toString()));
 
             // 8. No path leaves the volume: a symlinked component, an outside path and a climb are all refused.
-            SftpException throughLink = sftpRefusal(catchThrowable(() -> readText(write.sftp, "/data/etcdir/passwd")));
+            SftpException throughLink = refusal(catchThrowable(() -> readText(write.sftp(), "/data/etcdir/passwd")));
             assertThat(throughLink.getMessage()).as("step 8: a symlinked component is refused")
                 .contains("That path is not inside the app's volumes, which are mounted at");
-            assertThat(catchThrowable(() -> readText(write.sftp, "/etc/passwd")))
+            assertThat(catchThrowable(() -> readText(write.sftp(), "/etc/passwd")))
                 .as("step 8: a path outside every volume is refused").isNotNull();
-            assertThat(catchThrowable(() -> readText(write.sftp, "/data/../etc/passwd")))
+            assertThat(catchThrowable(() -> readText(write.sftp(), "/data/../etc/passwd")))
                 .as("step 8: a climb out of the volume is refused").isNotNull();
-            assertThat(catchThrowable(() -> writeBytes(write.sftp, "/escaped.txt",
+            assertThat(catchThrowable(() -> writeBytes(write.sftp(), "/escaped.txt",
                 "x".getBytes(StandardCharsets.UTF_8)))).as("step 8: so is a write above the volume").isNotNull();
             assertThat(inContainer(docker, handle, "test -e /escaped.txt && echo yes || echo no"))
                 .as("step 8: and nothing landed outside it").isEqualTo("no\n");
@@ -332,7 +330,7 @@ class SftpJourneyTest {
                 HohenheimCapabilities.FILES_READ);
             RecordGrants.revoke(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, id,
                 HohenheimCapabilities.FILES_WRITE);
-            SftpException revoked = sftpRefusal(catchThrowable(() -> names(write.sftp, "/data")));
+            SftpException revoked = refusal(catchThrowable(() -> names(write.sftp(), "/data")));
             assertThat(revoked.getStatus()).as("step 9: the next request after the revocation is refused")
                 .isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
         }
@@ -340,17 +338,19 @@ class SftpJourneyTest {
         // 9b. The Files tab lists a viewer's own open session and no one else's; End closes it at once.
         AccessContext readerAccess = AccessContext.detached(new UserPrincipal(reader, "user-" + reader));
         AccessContext writerAccess = AccessContext.detached(new UserPrincipal(writer, "user-" + writer));
-        try (Connection read = signIn(client, port, InstanceSftpRealm.username("sftp-reader@live.test", id),
+        try (Connection read = client.signIn(port,
+                InstanceSftpRealm.username("sftp-reader@live.test", String.valueOf(id)),
             readerPassword)) {
-            List<SftpSessionInfo> own = HohenheimSftp.openOn(readerAccess, id);
+            List<SftpSessionInfo> own = HohenheimSftp.openOn(readerAccess, String.valueOf(id));
             assertThat(own).as("step 9b: the reader's session is listed for the reader").hasSize(1);
             assertThat(own.get(0).attribution()).as("step 9b: named by who signed in")
                 .contains("sftp-reader@live.test");
-            assertThat(HohenheimSftp.openOn(writerAccess, id)).as("step 9b: never for another person").isEmpty();
-            assertThat(catchThrowable(() -> HohenheimSftp.end(writerAccess, id, own.get(0).id())))
+            assertThat(HohenheimSftp.openOn(writerAccess, String.valueOf(id)))
+                .as("step 9b: never for another person").isEmpty();
+            assertThat(catchThrowable(() -> HohenheimSftp.end(writerAccess, String.valueOf(id), own.get(0).id())))
                 .as("step 9b: nor can another person end it").isInstanceOf(Violations.class);
-            HohenheimSftp.end(readerAccess, id, own.get(0).id());
-            assertThat(catchThrowable(() -> names(read.sftp, "/data")))
+            HohenheimSftp.end(readerAccess, String.valueOf(id), own.get(0).id());
+            assertThat(catchThrowable(() -> names(read.sftp(), "/data")))
                 .as("step 9b: once ended, the connection answers nothing more").isNotNull();
         }
 
@@ -414,51 +414,6 @@ class SftpJourneyTest {
         return AccessContext.detached(new UserPrincipal(userId, "user-" + userId));
     }
 
-    private static Connection signIn(SshClient client, int port, String username, String password) throws IOException {
-        ClientSession session = client.connect(username, LOOPBACK, port).verify(WAIT).getSession();
-        try {
-            session.addPasswordIdentity(password);
-            session.auth().verify(WAIT);
-            return new Connection(session, SftpClientFactory.instance().createSftpClient(session));
-        } catch (IOException | RuntimeException failure) {
-            session.close(true);
-            throw failure;
-        }
-    }
-
-    /** @return the SFTP status a client call failed with; a listing reports it wrapped in an unchecked exception */
-    private static SftpException sftpRefusal(Throwable thrown) {
-        SftpException refusal = thrown == null ? null : AsyncFailures.first(thrown, SftpException.class);
-        assertThat(refusal).as("the call failed with an SFTP status").isNotNull();
-        return refusal;
-    }
-
-    private static List<String> names(SftpClient sftp, String path) throws IOException {
-        List<String> names = new ArrayList<>();
-        for (SftpClient.DirEntry entry : sftp.readDir(path)) {
-            if (!".".equals(entry.getFilename()) && !"..".equals(entry.getFilename())) {
-                names.add(entry.getFilename());
-            }
-        }
-        return names;
-    }
-
-    private static String readText(SftpClient sftp, String path) throws IOException {
-        return new String(readBytes(sftp, path), StandardCharsets.UTF_8);
-    }
-
-    private static byte[] readBytes(SftpClient sftp, String path) throws IOException {
-        try (InputStream in = sftp.read(path)) {
-            return in.readAllBytes();
-        }
-    }
-
-    private static void writeBytes(SftpClient sftp, String path, byte[] content) throws IOException {
-        try (OutputStream out = sftp.write(path)) {
-            out.write(content);
-        }
-    }
-
     /** Run a command INSIDE the container and return its stdout; the assertion oracle. */
     private static String inContainer(DockerClient docker, String handle, String script) {
         try {
@@ -488,19 +443,6 @@ class SftpJourneyTest {
             } catch (IOException ignored) {
                 // already gone
             }
-        }
-    }
-
-    /** One signed-in client connection with its SFTP channel. */
-    private record Connection(ClientSession session, SftpClient sftp) implements AutoCloseable {
-        @Override
-        public void close() throws IOException {
-            try {
-                this.sftp.close();
-            } catch (IOException ended) {
-                // The server already ended the session.
-            }
-            this.session.close(true);
         }
     }
 }

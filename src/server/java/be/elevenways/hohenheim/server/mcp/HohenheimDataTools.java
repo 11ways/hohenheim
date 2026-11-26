@@ -74,27 +74,33 @@ final class HohenheimDataTools {
             .code(HohenheimTools.words("mcp_code_snapshot_restore"))
             .route(InstanceSnapshotOperations.RESTORE, null)
             .build();
-        McpHostTool fileRead = McpCodeTool.builder("app_file_read", HohenheimTools.words("mcp_tool_app_file_read"),
+        // An app's code (AP12) reaches its volumes, a site's (S27) its own stored files: one verb set, two subjects.
+        McpHostTool fileRead = McpCodeTool.builder("file_read", HohenheimTools.words("mcp_tool_file_read"),
                 McpHostTool.Annotations.ofReadOnly())
-            .code(HohenheimTools.words("mcp_code_app_file_read"))
+            .code(HohenheimTools.words("mcp_code_file_read"))
             .route(InstanceFileOperations.READ, HohenheimDataTools::fileRead)
+            .route(InstanceFileOperations.READ_SITE, HohenheimDataTools::fileRead)
             .build();
-        McpHostTool fileWrite = McpCodeTool.builder("app_file_write", HohenheimTools.words("mcp_tool_app_file_write"),
+        McpHostTool fileWrite = McpCodeTool.builder("file_write", HohenheimTools.words("mcp_tool_file_write"),
                 HohenheimTools.writes())
-            .code(HohenheimTools.words("mcp_code_app_file_write"))
+            .code(HohenheimTools.words("mcp_code_file_write"))
             .flag(FOLDER, HohenheimTools.words("mcp_folder"))
             .route(InstanceFileOperations.WRITE, HohenheimDataTools::fileDone, FOLDER, "false")
             .route(InstanceFileOperations.MAKE_FOLDER, HohenheimDataTools::fileDone, FOLDER, "true")
+            .route(InstanceFileOperations.WRITE_SITE, HohenheimDataTools::fileDone, FOLDER, "false")
+            .route(InstanceFileOperations.MAKE_SITE_FOLDER, HohenheimDataTools::fileDone, FOLDER, "true")
             .build();
-        McpHostTool fileDelete = McpCodeTool.builder("app_file_delete",
-                HohenheimTools.words("mcp_tool_app_file_delete"), HohenheimTools.destroys())
-            .code(HohenheimTools.words("mcp_code_app_file_delete"))
+        McpHostTool fileDelete = McpCodeTool.builder("file_delete",
+                HohenheimTools.words("mcp_tool_file_delete"), HohenheimTools.destroys())
+            .code(HohenheimTools.words("mcp_code_file_delete"))
             .route(InstanceFileOperations.DELETE, HohenheimDataTools::fileDone)
+            .route(InstanceFileOperations.DELETE_SITE, HohenheimDataTools::fileDone)
             .build();
-        McpHostTool fileMove = McpCodeTool.builder("app_file_move", HohenheimTools.words("mcp_tool_app_file_move"),
+        McpHostTool fileMove = McpCodeTool.builder("file_move", HohenheimTools.words("mcp_tool_file_move"),
                 HohenheimTools.writes())
-            .code(HohenheimTools.words("mcp_code_app_file_move"))
+            .code(HohenheimTools.words("mcp_code_file_move"))
             .route(InstanceFileOperations.MOVE, HohenheimDataTools::fileDone)
+            .route(InstanceFileOperations.MOVE_SITE, HohenheimDataTools::fileDone)
             .build();
         McpHostTool move = McpCodeTool.builder("app_move", HohenheimTools.words("mcp_tool_app_move"),
                 HohenheimTools.writes())

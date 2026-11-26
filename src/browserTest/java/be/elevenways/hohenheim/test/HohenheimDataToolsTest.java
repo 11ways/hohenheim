@@ -197,12 +197,12 @@ class HohenheimDataToolsTest extends HohenheimHttpTestBase {
             // 8. The file tools name the app's file calls; a folder takes no content (refused before any file is
             //    touched), and this stopped app without volumes has nothing to read.
             assertThat(admin.call("describe", Map.of("code", appCode)).text()).as("step 8: describe names them")
-                .contains("app_file_read code=" + appCode).contains("app_file_write code=" + appCode);
-            McpHttpSession.Answer folderText = admin.call("app_file_write",
+                .contains("file_read code=" + appCode).contains("file_write code=" + appCode);
+            McpHttpSession.Answer folderText = admin.call("file_write",
                 Map.of("code", appCode, "path", "/data/notes", "folder", true, "content", "text"));
             assertThat(folderText.error()).as("step 8: a folder takes no content: " + folderText.text()).isTrue();
             assertThat(folderText.text()).as("step 8: the refusal names it").contains("content");
-            assertThat(admin.call("app_file_read", Map.of("code", appCode)).error())
+            assertThat(admin.call("file_read", Map.of("code", appCode)).error())
                 .as("step 8: no volume to read").isTrue();
 
             // 9. The backup target is deleted by its code.

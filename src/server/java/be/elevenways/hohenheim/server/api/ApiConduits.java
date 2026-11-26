@@ -154,7 +154,7 @@ public final class ApiConduits {
                      DATABASE_DUMP_UNUSABLE, DATABASE_DUMP_SOURCE_GONE, DATABASE_BUSY, DATABASE_DUMP_WHOLE_SERVER,
                      DATABASE_STAGING_UNSAFE, DATABASE_RESTORE_FAILED, BACKUP_SOURCE_GONE,
                      BACKUP_RESTORE_TEMPLATE_REQUIRED, BACKUP_RESTORE_HOST_REFUSED, BACKUP_RESTORE_IN_PLACE_UNSUPPORTED,
-                     BACKUP_VOLUMES_CHANGED, BACKUP_RESTORE_REFUSED ->
+                     BACKUP_VOLUMES_CHANGED, BACKUP_RESTORE_REFUSED, SITE_FILES_NOT_PERMITTED ->
                     refusal(conduit, Violations.ofForm(refusal.shown()));
                 // No pre-existing wire: core's edge answers its own status and names the certificate it is about.
                 case CERTIFICATE_NAMES_HELD -> throw refusal;

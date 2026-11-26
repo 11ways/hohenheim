@@ -199,7 +199,7 @@ public final class SiteParts {
             .archive(ResourceArchive.of(SiteWrites.RESTORE, SiteWrites.RESTORE_MANY, SiteWrites.PURGE,
                 SiteWrites.PURGE_MANY, ResourceAuthority.<Row>builder().delete(HohenheimPanel.ACCESS, null).build()))
             .actions(SiteActions.operator())
-            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
+            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, InstanceFilesPage.onSites(),
                     protectedPaths(ProtectedPathParts.admin()), redirects(SiteRedirectParts.admin()),
                     new SiteTrafficPage(), new SiteAccessLogPage(), new SiteDevSessionsPage()))
                 .withHistory().historyInStrip().withContributions())
@@ -221,7 +221,7 @@ public final class SiteParts {
         // operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage holder can
         // delegate from /manage).
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
-                ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
+                ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, InstanceFilesPage.onSites(),
                     protectedPaths(ProtectedPathParts.manage()), redirects(SiteRedirectParts.manage()),
                     new SiteTrafficPage(), new SiteAccessLogPage())).withContributions())
             .standsUnder(HohenheimSlugs.APPS)

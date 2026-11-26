@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.files.FileRoot;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -207,7 +208,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             release.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
             Models.get(InstanceModel.class).save(release);
         });
-        assertThat(new InstanceFiles().volumeRoots(applicationId))
+        assertThat(new InstanceFiles().volumeRoots(FileRoot.app(applicationId)))
             .as("step 2: the application's file roots are its serving release's mounts")
             .containsExactly("/data");
         HttpResponse<String> served = httpGet(page, sessionToken);

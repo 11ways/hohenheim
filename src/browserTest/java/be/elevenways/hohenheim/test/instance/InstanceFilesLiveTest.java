@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.files.FileRoot;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
@@ -121,7 +122,7 @@ class InstanceFilesLiveTest {
                 InstanceFiles files = new InstanceFiles();
 
                 // 1. The volume root browses, and it is the ONLY declared root.
-                InstanceFiles.Listing roots = files.list(id, null);
+                InstanceFiles.Listing roots = files.list(FileRoot.app(id), null);
                 assertThat(roots.volumeRoots())
                     .as("step 1: the instance's own volume is the only browse root")
                     .containsExactly("/data");
@@ -132,7 +133,7 @@ class InstanceFilesLiveTest {
                 // 2. Seed real content INSIDE the container, then prove the listing sees
                 //    exactly it -- kinds, sizes and the symlink AS a symlink.
                 seed(docker, handle);
-                InstanceFiles.Listing listing = files.list(id, "/data");
+                InstanceFiles.Listing listing = files.list(FileRoot.app(id), "/data");
                 assertThat(listing.entries().stream().map(InstanceFiles.Entry::name).toList())
                     .as("step 2: the listing is the immediate children, directories first")
                     .containsExactly("sub", "escape", "etcdir", "hello.txt");
@@ -147,7 +148,7 @@ class InstanceFilesLiveTest {
                 // 2b. A directory of many entries lists in one pass, each parsed as before, a name with spaces whole.
                 inContainer(docker, handle, "mkdir -p /data/many && cd /data/many && for i in $(seq 1 300); do"
                     + " : > \"f$i\"; done && printf 'abc' > 'with two spaces'");
-                InstanceFiles.Listing many = files.list(id, "/data/many");
+                InstanceFiles.Listing many = files.list(FileRoot.app(id), "/data/many");
                 assertThat(many.entries()).as("step 2b: every entry of a large directory is listed").hasSize(301);
                 assertThat(sizeOf(many, "with two spaces")).as("step 2b: a spaced name parses whole, with its size")
                     .isEqualTo(3);
@@ -156,33 +157,33 @@ class InstanceFilesLiveTest {
 
                 // 3. Read: the bytes are the file's, asserted against what the container
                 //    itself reports -- never against what we just wrote.
-                assertThat(files.readText(id, "/data/hello.txt"))
+                assertThat(files.readText(FileRoot.app(id), "/data/hello.txt"))
                     .as("step 3: read returns the file's real bytes")
                     .isEqualTo("hello\n");
 
                 // 4. Write, then read the file back FROM INSIDE the container: an API that
                 //    reported success while writing nothing is the defect shape this
                 //    codebase hunts by name.
-                files.write(id, "/data/hello.txt", "rewritten\n".getBytes(StandardCharsets.UTF_8));
+                files.write(FileRoot.app(id), "/data/hello.txt", "rewritten\n".getBytes(StandardCharsets.UTF_8));
                 assertThat(inContainer(docker, handle, "cat /data/hello.txt"))
                     .as("step 4: the container itself sees the new content")
                     .isEqualTo("rewritten\n");
 
                 // 5. Create: a new file in a new directory, both observed in-container.
-                files.makeDirectory(id, "/data/made");
-                files.write(id, "/data/made/new.txt", "fresh".getBytes(StandardCharsets.UTF_8));
+                files.makeDirectory(FileRoot.app(id), "/data/made");
+                files.write(FileRoot.app(id), "/data/made/new.txt", "fresh".getBytes(StandardCharsets.UTF_8));
                 assertThat(inContainer(docker, handle, "cat /data/made/new.txt"))
                     .as("step 5: mkdir + write land where they claimed to")
                     .isEqualTo("fresh");
-                assertThat(catchThrowable(() -> files.makeDirectory(id, "/data/made")))
+                assertThat(catchThrowable(() -> files.makeDirectory(FileRoot.app(id), "/data/made")))
                     .as("step 5: mkdir over an existing path REFUSES, never silently succeeds")
                     .isInstanceOf(Violations.class);
 
                 // 6. Rename and delete, each verified at the container.
-                files.rename(id, "/data/made/new.txt", "/data/made/renamed.txt");
+                files.rename(FileRoot.app(id), "/data/made/new.txt", "/data/made/renamed.txt");
                 assertThat(inContainer(docker, handle, "cat /data/made/renamed.txt"))
                     .as("step 6: rename moved the bytes").isEqualTo("fresh");
-                files.delete(id, "/data/made");
+                files.delete(FileRoot.app(id), "/data/made");
                 assertThat(inContainer(docker, handle, "test -e /data/made && echo yes || echo no"))
                     .as("step 6: delete removed the tree").isEqualTo("no\n");
 
@@ -198,14 +199,14 @@ class InstanceFilesLiveTest {
                     .contains("root:x:0:0");
                 for (String traversal : List.of("/data/../etc/passwd", "/etc/passwd",
                         "/data/../../etc/passwd", "/data/..")) {
-                    Throwable refused = catchThrowable(() -> files.read(id, traversal));
+                    Throwable refused = catchThrowable(() -> files.read(FileRoot.app(id), traversal));
                     assertThat(keyOf(refused))
                         .as("counterfactual 1: the file manager refuses '" + traversal + "'")
                         .isEqualTo("files_path_refused");
                 }
                 // And the read that WOULD have escaped returned nothing at all: assert on
                 // the payload, never on a status code.
-                assertThat(catchThrowable(() -> files.read(id, "/data/../etc/passwd")))
+                assertThat(catchThrowable(() -> files.read(FileRoot.app(id), "/data/../etc/passwd")))
                     .as("counterfactual 1: nothing outside the volume is ever returned")
                     .isInstanceOf(Violations.class);
 
@@ -224,14 +225,14 @@ class InstanceFilesLiveTest {
                     .as("counterfactual 2: and the LEAF stat shows no symlink at all -- "
                         + "a leaf-only check could not possibly catch this")
                     .isFalse();
-                assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/etcdir/passwd"))))
+                assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/etcdir/passwd"))))
                     .as("counterfactual 2: the component walk refuses the symlinked directory")
                     .isEqualTo("files_path_refused");
-                assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/escape"))))
+                assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/escape"))))
                     .as("counterfactual 2: and a symlink LEAF is never followed either")
                     .isEqualTo("files_not_a_file");
                 assertThat(keyOf(catchThrowable(() ->
-                        files.write(id, "/data/etcdir/passwd", "x".getBytes(StandardCharsets.UTF_8)))))
+                        files.write(FileRoot.app(id), "/data/etcdir/passwd", "x".getBytes(StandardCharsets.UTF_8)))))
                     .as("counterfactual 2: the WRITE lane walks the same components")
                     .isEqualTo("files_path_refused");
                 assertThat(inContainer(docker, handle, "cat /etc/passwd | head -1"))
@@ -251,12 +252,12 @@ class InstanceFilesLiveTest {
                 assertThat(overSize)
                     .as("counterfactual 4: an over-cap transfer THROWS instead of truncating")
                     .isInstanceOf(IOException.class);
-                assertThat(keyOf(catchThrowable(() -> files.read(id, "/data/big.bin"))))
+                assertThat(keyOf(catchThrowable(() -> files.read(FileRoot.app(id), "/data/big.bin"))))
                     .as("counterfactual 4: and the service refuses it by name")
                     .isEqualTo("files_too_large");
                 byte[] oversized = new byte[(int) InstanceFiles.maxFileBytes() + 1];
                 assertThat(keyOf(catchThrowable(() ->
-                        files.write(id, "/data/oversized.bin", oversized))))
+                        files.write(FileRoot.app(id), "/data/oversized.bin", oversized))))
                     .as("counterfactual 4: an over-cap upload is refused")
                     .isEqualTo("files_too_large");
                 assertThat(inContainer(docker, handle,
@@ -273,7 +274,7 @@ class InstanceFilesLiveTest {
                 managed.set(InstanceFileModel.MODE, "0644");
                 Models.get(InstanceFileModel.class).save(managed);
                 assertThat(keyOf(catchThrowable(() ->
-                        files.write(id, "/data/hello.txt", "x".getBytes(StandardCharsets.UTF_8)))))
+                        files.write(FileRoot.app(id), "/data/hello.txt", "x".getBytes(StandardCharsets.UTF_8)))))
                     .as("step 7: a declared config file refuses a file-manager write BY NAME")
                     .isEqualTo("files_managed_config");
                 assertThat(inContainer(docker, handle, "cat /data/hello.txt"))
@@ -308,7 +309,7 @@ class InstanceFilesLiveTest {
 
         // 1. The read-capable tenant reads.
         TenantConduits.as(principal(reader), () ->
-            assertThat(files.readText(instanceId, "/data/hello.txt"))
+            assertThat(files.readText(FileRoot.app(instanceId), "/data/hello.txt"))
                 .as("counterfactual 3: files.read alone is enough to READ")
                 .isEqualTo("rewritten\n"));
 
@@ -318,12 +319,12 @@ class InstanceFilesLiveTest {
             TenantConduits.as(principal(reader), () -> {
                 Throwable refused = catchThrowable(() -> {
                     switch (verb) {
-                        case "write" -> files.write(instanceId, "/data/hello.txt",
+                        case "write" -> files.write(FileRoot.app(instanceId), "/data/hello.txt",
                             "hijacked".getBytes(StandardCharsets.UTF_8));
-                        case "mkdir" -> files.makeDirectory(instanceId, "/data/by-reader");
-                        case "rename" -> files.rename(instanceId, "/data/hello.txt",
+                        case "mkdir" -> files.makeDirectory(FileRoot.app(instanceId), "/data/by-reader");
+                        case "rename" -> files.rename(FileRoot.app(instanceId), "/data/hello.txt",
                             "/data/moved.txt");
-                        default -> files.delete(instanceId, "/data/hello.txt");
+                        default -> files.delete(FileRoot.app(instanceId), "/data/hello.txt");
                     }
                 });
                 assertThat(keyOf(refused))
@@ -331,15 +332,15 @@ class InstanceFilesLiveTest {
                     .isEqualTo("instance_not_permitted");
             });
         }
-        assertThat(files.readText(instanceId, "/data/hello.txt"))
+        assertThat(files.readText(FileRoot.app(instanceId), "/data/hello.txt"))
             .as("counterfactual 3: nothing the reader attempted changed a single byte")
             .isEqualTo("rewritten\n");
 
         // 3. The write-capable tenant writes -- so the refusals above are about the
         //    CAPABILITY and not about the tenant lane being broken for everyone.
         TenantConduits.as(principal(writer), () ->
-            files.write(instanceId, "/data/hello.txt", "by-writer".getBytes(StandardCharsets.UTF_8)));
-        assertThat(files.readText(instanceId, "/data/hello.txt"))
+            files.write(FileRoot.app(instanceId), "/data/hello.txt", "by-writer".getBytes(StandardCharsets.UTF_8)));
+        assertThat(files.readText(FileRoot.app(instanceId), "/data/hello.txt"))
             .as("counterfactual 3: files.write DOES write (the negative is not vacuous)")
             .isEqualTo("by-writer");
 
@@ -349,8 +350,8 @@ class InstanceFilesLiveTest {
         assertThat(Models.get(InstanceModel.class).findById(missingId))
             .as("counterfactual 5: the control id really is absent").isNull();
         TenantConduits.as(principal(stranger), () -> {
-            String forReal = keyOf(catchThrowable(() -> files.list(instanceId, "/data")));
-            String forMissing = keyOf(catchThrowable(() -> files.list(missingId, "/data")));
+            String forReal = keyOf(catchThrowable(() -> files.list(FileRoot.app(instanceId), "/data")));
+            String forMissing = keyOf(catchThrowable(() -> files.list(FileRoot.app(missingId), "/data")));
             assertThat(forReal)
                 .as("counterfactual 5: another tenant's instance refuses by capability")
                 .isEqualTo("instance_not_permitted");

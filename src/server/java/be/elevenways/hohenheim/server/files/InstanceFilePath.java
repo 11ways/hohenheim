@@ -42,6 +42,9 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
     /** Longest accepted absolute path (Linux PATH_MAX is 4096). */
     public static final int MAX_LENGTH = 1024;
 
+    /** The one root of a whole tree of files: a site's stored files, where nothing lies above it. */
+    public static final String TREE_ROOT = "/";
+
     /**
      * The one refusal of a path no volume holds, whatever made it so, naming where the app's volumes are mounted: the
      * same words for every cause, so the refusal reveals nothing about what is where.
@@ -49,7 +52,17 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
      * @param volumeRoots the container paths the app's volumes mount at
      */
     public static @NonNull Violations refused(@NonNull Collection<String> volumeRoots) {
-        Set<String> roots = rootsOf(volumeRoots);
+        return refusedUnder(rootsOf(volumeRoots));
+    }
+
+    /**
+     * {@link #refused} for browse roots already normalized ({@link #parseUnder}); a whole tree's refusal names no
+     * volume, since it has none.
+     */
+    public static @NonNull Violations refusedUnder(@NonNull Collection<String> roots) {
+        if (roots.contains(TREE_ROOT)) {
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_tree_path_refused"));
+        }
         return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused")
             .withArg("count", roots.size()).withArg("volumes", String.join(", ", roots)));
     }
@@ -64,20 +77,31 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
      */
     public static @NonNull InstanceFilePath parse(@NonNull Collection<String> volumeRoots,
                                                   @NonNull String submitted) {
+        return parseUnder(rootsOf(volumeRoots), submitted);
+    }
+
+    /**
+     * {@link #parse} against browse roots that are already normalized: a container's {@link #rootsOf}, or a tree whose
+     * one root is {@link #TREE_ROOT} (a site's stored files, where "/" is the site's own top and no image lies above).
+     *
+     * @throws Violations {@code files_path_refused} as {@link #parse} does
+     */
+    public static @NonNull InstanceFilePath parseUnder(@NonNull Collection<String> browseRoots,
+                                                       @NonNull String submitted) {
         if (submitted.isEmpty() || submitted.length() > MAX_LENGTH || submitted.charAt(0) != '/') {
-            throw refused(volumeRoots);
+            throw refusedUnder(browseRoots);
         }
         // Control characters (NUL included) never appear in a path we author, and a NUL
         // is how a C-level consumer downstream can be made to see a shorter string.
         for (int i = 0; i < submitted.length(); i++) {
             if (submitted.charAt(i) < 0x20 || submitted.charAt(i) == 0x7F) {
-                throw refused(volumeRoots);
+                throw refusedUnder(browseRoots);
             }
         }
 
         List<String> segments = segmentsOf(submitted);
         if (segments == null) {
-            throw refused(volumeRoots);
+            throw refusedUnder(browseRoots);
         }
         // Canonical-spelling test: the path REBUILT from its accepted segments must be
         // the submitted string byte for byte, so "//a", "/a/", "/a/./b" and "/a/../b"
@@ -86,16 +110,16 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
         for (String segment : segments) {
             rebuilt.append('/').append(segment);
         }
-        if (!rebuilt.toString().equals(submitted)) {
-            throw refused(volumeRoots);
+        if (!(segments.isEmpty() ? "/" : rebuilt.toString()).equals(submitted)) {
+            throw refusedUnder(browseRoots);
         }
 
-        String root = rootFor(volumeRoots, submitted);
+        String root = rootFor(browseRoots, submitted);
         if (root == null) {
-            throw refused(volumeRoots);
+            throw refusedUnder(browseRoots);
         }
         if (segments.size() - Objects.requireNonNull(segmentsOf(root)).size() > MAX_DEPTH) {
-            throw refused(volumeRoots);
+            throw refusedUnder(browseRoots);
         }
         return new InstanceFilePath(root, submitted);
     }
@@ -119,10 +143,10 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
         return roots;
     }
 
-    /** @return the accepted root covering {@code path}, or null when none does */
-    private static String rootFor(@NonNull Collection<String> volumeRoots, @NonNull String path) {
-        for (String root : rootsOf(volumeRoots)) {
-            if (path.equals(root) || path.startsWith(root + "/")) {
+    /** @return the root covering {@code path}, or null when none does */
+    private static String rootFor(@NonNull Collection<String> roots, @NonNull String path) {
+        for (String root : roots) {
+            if (path.equals(root) || path.startsWith(TREE_ROOT.equals(root) ? root : root + "/")) {
                 return root;
             }
         }
