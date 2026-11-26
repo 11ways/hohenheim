@@ -323,7 +323,7 @@ class InstanceAttentionTest {
         Db.run(datasource, () -> {
             DatasourceProbe probe = DatasourceProbe.on(datasource);
             Map<Integer, String> ownerOf = new LinkedHashMap<>();
-            List<Integer> roundTrips = new ArrayList<>();
+            List<DatasourceProbe.Statements> reads = new ArrayList<>();
             int made = 0;
             for (int round : List.of(1, 3)) {
                 // 1. Each owner holds one generated row whose destroy was given up on: a release of an application,
@@ -359,10 +359,8 @@ class InstanceAttentionTest {
                 }
 
                 // 2. One collection: every held row names its owner's Delete and links that owner.
-                probe.reset();
                 List<AttentionItem> items = new ArrayList<>();
                 InstanceAttention.unfinishedDestroys(items);
-                roundTrips.add(probe.roundTrips());
                 assertThat(items).as("step 2: one item per held row, round of %s", round).hasSize(ownerOf.size());
                 for (AttentionItem item : items) {
                     assertThat(item.action().key()).as("step 2: the owner's Delete retries it")
@@ -372,11 +370,13 @@ class InstanceAttentionTest {
                         .map(Map.Entry::getValue).findFirst().orElseThrow();
                     assertThat(targetUrl(item)).as("step 2: it links the owner").contains(owner);
                 }
+                // Counted warm, as the framework's flat-count measure takes it: the writes above emptied what a read
+                // caches, a cost no row adds.
+                reads.add(probe.statementsOf(() -> InstanceAttention.unfinishedDestroys(new ArrayList<>())));
             }
 
-            // 3. Three times the owners, the same round trips.
-            assertThat(roundTrips.get(1)).as("step 3: flat as owners grow, %s", roundTrips)
-                .isEqualTo(roundTrips.get(0));
+            // 3. Three times the owners, the same statements; the measure names both sets when they differ.
+            reads.get(0).requireFlat(reads.get(1), "step 3: flat as owners grow");
         });
     }
 
