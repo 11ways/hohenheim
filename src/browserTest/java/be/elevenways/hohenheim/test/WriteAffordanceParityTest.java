@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.zenit.cms.server.panel.ChildCreates;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.zenit.forms.common.choose.InlineCreateFieldState;
@@ -80,6 +81,7 @@ import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -663,20 +665,31 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      * the hook's argument only, never a conduit parameter.
      */
     private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
-        return domainResource(panel).form().createDefaults(createAccess(ctx, parent),
-            Objects.requireNonNull(PanelRegistry.getBySlug(panel)));
+        return under(parent, () -> domainResource(panel).form().createDefaults(createAccess(ctx),
+            Objects.requireNonNull(PanelRegistry.getBySlug(panel))));
     }
 
     /** How a domain create form on {@code panel} under {@code parent} draws force_ssl, the ACME exclusion and HSTS. */
     private static List<FieldAccess.Decision> switchAccess(AccessContext ctx, String panel, Integer parent) {
         Map<String, FieldAccess> access = PartsForms.fieldAccessByPath(domainResource(panel));
-        AccessContext create = createAccess(ctx, parent);
-        List<FieldAccess.Decision> decisions = new ArrayList<>();
-        for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
-                SiteDomainModel.HSTS_ENABLED)) {
-            decisions.add(access.getOrDefault(field.getInputName(), FieldAccess.ALWAYS_EDITABLE).decide(create, null));
-        }
-        return decisions;
+        AccessContext create = createAccess(ctx);
+        return under(parent, () -> {
+            List<FieldAccess.Decision> decisions = new ArrayList<>();
+            for (var field : List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
+                    SiteDomainModel.HSTS_ENABLED)) {
+                decisions.add(access.getOrDefault(field.getInputName(), FieldAccess.ALWAYS_EDITABLE)
+                    .decide(create, null));
+            }
+            return decisions;
+        });
+    }
+
+    /**
+     * Runs a read of a create under {@code parent} as a create made in code names it (ChildCreates.supplyUnder): a
+     * conduit no endpoint answers carries no query to name it by (zenit-cms 026afd752); under none when null.
+     */
+    private static <T> T under(Integer parent, Supplier<T> read) {
+        return parent == null ? read.get() : ChildCreates.supplyUnder(String.valueOf(parent), read);
     }
 
     /** The Addresses list's quick-add bar on /admin, as the list renders it under {@code site}'s preset. */
@@ -715,14 +728,11 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         return HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
     }
 
-    /** The caller on a domain create request, under {@code parent} when given. */
-    private static AccessContext createAccess(AccessContext ctx, Integer parent) {
+    /** The caller on a domain create request. */
+    private static AccessContext createAccess(AccessContext ctx) {
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
             .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
-        if (parent != null) {
-            conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
-        }
         return AccessContext.of(conduit);
     }
 
