@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
+import be.elevenways.hohenheim.dns.DnsZoneHandOverResponse;
+import be.elevenways.hohenheim.dns.DnsZoneStateResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.util.Json;
@@ -30,9 +32,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * HTTP client for a peer Hohenheim's DNS-records API: the edit-forwarding
@@ -79,16 +83,16 @@ public final class DnsPeerApi {
 
         /** @return whether the request left this server: true for any HTTP answer and for one sent unanswered */
         public boolean sent() { return sent; }
-    }
-
-    /**
-     * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
 
         /** @return whether the peer does not know the route asked: an older Hohenheim */
         public boolean older() { return status == 404 || status == 405; }
 
         /** @return whether the request never left this server, so nothing happened there */
         public boolean unreached() { return status == 0 && !sent; }
+    }
+
+    /**
+     * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
      * zone_id, no generated_* -- those are the server's, not a caller's). {@code managed_by}
      * is handled apart: it is settable on CREATE only, and only to a value
      * {@link DnsRecordModel#MANAGED_BY_VALUES} declares.
@@ -120,6 +124,11 @@ public final class DnsPeerApi {
     public static final String SET_RECORDS = "records";
     public static final String SET_SERVER = "server";
     public static final String SET_PERSON = "person";
+
+    /** The hand-over route's fields: the transfer key naming the caller, the serial it took over, the one it serves. */
+    public static final String HAND_OVER_KEY = "key_name";
+    public static final String HAND_OVER_FROM = "from_serial";
+    public static final String HAND_OVER_SERIAL = "serial";
 
     /** The whole exchange, DNS, connect, request and answer together. */
     private static final Duration DEADLINE = Duration.ofSeconds(15);
@@ -319,14 +328,94 @@ public final class DnsPeerApi {
         return response;
     }
 
+    /**
+     * Reads a zone's whole editable state from the peer keeping it: every record row as stored, its settings, its
+     * serial, whether it is signed, and the peers it links as secondaries.
+     *
+     * @throws PeerApiException with status 404 from a peer that does not know this route (an older Hohenheim) or the
+     *         zone, 409 never: a secondary answers its role and no records
+     */
+    public @NonNull DnsZoneStateResponse zoneState(@NonNull String origin) {
+        DnsZoneStateResponse response = parseQuietly(request(HttpMethod.GET, HohenheimEndpoints.API_DNS_ZONE_STATE
+            .toUrl(Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), null), DnsZoneStateResponse.class);
+        if (response == null || response.role() == null || response.records() == null
+                || response.secondaries() == null) {
+            throw new PeerApiException("Unexpected response from peer", null, null, 0, true);
+        }
+        return response;
+    }
+
+    /**
+     * Asks the peer keeping a zone to turn it into a copy pulling from this instance, which it knows by the transfer
+     * key the two share; it first pulls the zone from here and checks it is its own at {@code serial}.
+     *
+     * @param fromSerial the serial its state answered, which must still be its own
+     * @param server     the name this server announces to peers, for the peer's history
+     * @throws PeerApiException when the peer refuses (409, its reason as the message), cannot be reached or does not
+     *         answer; only a later state read tells whether a request sent and unanswered took effect
+     */
+    public @NonNull DnsZoneHandOverResponse handOver(@NonNull String origin, @NonNull String keyName, int fromSerial,
+                                                     int serial, @NonNull String server) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put(HAND_OVER_KEY, keyName);
+        fields.put(HAND_OVER_FROM, String.valueOf(fromSerial));
+        fields.put(HAND_OVER_SERIAL, String.valueOf(serial));
+        fields.put(SET_SERVER, server);
+        DnsZoneHandOverResponse response = parseQuietly(request(HttpMethod.POST,
+            HohenheimEndpoints.API_DNS_ZONE_HAND_OVER.toUrl(Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), fields),
+            DnsZoneHandOverResponse.class);
+        if (response == null || !"ok".equals(response.status())) {
+            throw new PeerApiException("Unexpected response from peer", null, null, 0, true);
+        }
+        return response;
+    }
+
+    /**
+     * Sends a dynamic DNS update on to the peer, its token as the HTTP Basic password, as a router sends it.
+     *
+     * @param address the client's own address, which the peer would otherwise read off this server's connection
+     * @return the peer's dyndns2 answer line
+     */
+    public @NonNull String forwardDynamicUpdate(@NonNull String token, @Nullable String hostname,
+                                                @NonNull String address) {
+        StringBuilder query = new StringBuilder("?myip=").append(URLEncoder.encode(address, StandardCharsets.UTF_8));
+        if (hostname != null && !hostname.isBlank()) {
+            query.append("&hostname=").append(URLEncoder.encode(hostname.trim(), StandardCharsets.UTF_8));
+        }
+        String basic = Base64.getEncoder().encodeToString(("hohenheim:" + token).getBytes(StandardCharsets.UTF_8));
+        return Objects.requireNonNullElse(request(HttpMethod.GET, HohenheimEndpoints.DYNDNS_UPDATE.toUrl() + query,
+            null, "Basic " + basic), "").trim();
+    }
+
+    /** @return one record row as the peer wire carries it: flat, the type's extras beside the value */
+    public static @NonNull DnsRecordDto recordDto(@NonNull Row record) {
+        return new DnsRecordDto(
+            record.get(DnsRecordModel.ID),
+            record.get(DnsRecordModel.NAME),
+            record.get(DnsRecordModel.TYPE),
+            record.get(DnsRecordModel.TTL),
+            record.get(DnsRecordModel.VALUE),
+            DnsRecordModel.priorityOf(record),
+            DnsRecordModel.weightOf(record),
+            DnsRecordModel.portOf(record),
+            Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
+            record.get(DnsRecordModel.MANAGED_BY));
+    }
+
     private @Nullable String request(@NonNull HttpMethod method, @NonNull String path,
                                      @Nullable Map<String, String> formFields) {
+        return this.request(method, path, formFields, "Bearer " + this.apiKey);
+    }
+
+    /** @param authorization the Authorization header the request carries, this client's key or another credential */
+    private @Nullable String request(@NonNull HttpMethod method, @NonNull String path,
+                                     @Nullable Map<String, String> formFields, @NonNull String authorization) {
         FetchRequest request = HttpMethod.GET.equals(method)
             ? FetchRequest.get(this.baseUrl + path)
             : new FetchRequest(method, this.baseUrl + path, Map.of(),
                 encodeForm(formFields).getBytes(StandardCharsets.UTF_8))
                 .withHeader("Content-Type", "application/x-www-form-urlencoded");
-        FetchOutcome outcome = this.fetcher.fetch(request.withHeader("Authorization", "Bearer " + this.apiKey));
+        FetchOutcome outcome = this.fetcher.fetch(request.withHeader("Authorization", authorization));
         FetchOutcome.Fetched response = switch (outcome) {
             case FetchOutcome.Fetched fetched -> fetched;
             case FetchOutcome.Refused refused -> throw new PeerApiException(refusalOf(refused), null, null, 0,

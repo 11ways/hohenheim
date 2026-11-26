@@ -24,6 +24,7 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -112,7 +113,12 @@ public final class DnsZoneParts {
                 .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.DNS_ZONES,
                     row.get(DnsZoneModel.ID), HohenheimSlugs.Tab.RECORDS)).build(),
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.CHECK_HEALTH, ActionPlacement.ROW,
-                    (request, answer) -> answer).build()))
+                    (request, answer) -> answer).build(),
+                PanelAction.<Row, CmsActionResult>places(DnsOperations.TAKE_OVER, ActionPlacement.ROW,
+                        (request, answer) -> answer)
+                    .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DNS_ZONE.of("take_over_zone"),
+                        HohenheimMicrocopy.DNS_ZONE.of("take_over_confirm"), ActionStyle.DEFAULT))
+                    .build()))
             .tabs(ResourceTabs.<Row>of(List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(),
                 secondariesTab())).withHistory().withContributions())
             .relatedPages(parts.relatedPages().toArray(RelatedPage[]::new)).build();

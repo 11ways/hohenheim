@@ -88,6 +88,19 @@ public final class DnsOperations {
         .icon(Icon.of("key")).one(PEER).verb(HohenheimVerbs.NEGOTIATE_KEY).gate(OperationGate.open())
         .result(CmsActionResult.class)
         .command(CmsCommands.EXTERNAL).register();
+    /**
+     * Moves a secondary zone's records here from the Hohenheim keeping them, which becomes its secondary
+     * (DnsZoneMoves): the zone page's action and an assistant's dns_zone_take_over alike.
+     */
+    public static final Operation<Row, Void, CmsActionResult> TAKE_OVER =
+            Operation.declare(HohenheimIds.id("take_over_dns_zone"))
+        .happened(OperationSentences.of("take_over_dns_zone"))
+        .label(HohenheimMicrocopy.DNS_ZONE.of("take_over_zone"))
+        .description(HohenheimMicrocopy.DNS_ZONE.of("take_over_hint"))
+        .icon(Icon.of("right-left")).one(ZONE).gate(OperationGate.open())
+        .result(CmsActionResult.class)
+        // The owner is asked over HTTP between the move's own transactions.
+        .command(CmsCommands.EXTERNAL).register();
 
     /** The most zone-file text one import takes, in characters. */
     public static final int ZONE_TEXT_MAX = 1_048_576;

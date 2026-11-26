@@ -292,9 +292,10 @@ column record_count at=7 shown=true hidden=false sortable=false filterable=false
 filter origin at=0 kind=TEXT facet=false param=filter.origin
 filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
 link hohenheim:dns_peer at=0 lead=false target=/{panel}/dns-peers
-row zenit:edit at=0 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:dns_records at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/page/records
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_zone,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db13-surfaces-replica.test,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:take_over_dns_zone at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:take_over_zone%252Cscope%3Ddns_zone,body:take_over_confirm%252Cscope%3Ddns_zone,confirm:take_over_zone%252Cscope%3Ddns_zone,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.take_over_dns_zone?ids%3D{record}
+row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:dns_records at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/page/records
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_zone,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db13-surfaces-replica.test,input:false target=/{panel}/{entry}/{record}/delete
 tab records at=0 landing=false view=false
 tab zonefile at=1 landing=false view=false
 tab history at=2 landing=false view=false

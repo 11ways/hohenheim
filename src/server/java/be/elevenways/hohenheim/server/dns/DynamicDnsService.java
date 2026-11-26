@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -73,6 +74,17 @@ public final class DynamicDnsService {
                 case DNSERR -> "dnserr";
                 case NOTPRIMARY -> "!yours";
             };
+        }
+
+        /** @return the result a dyndns2 answer line says, null for a line that is none of them */
+        public static @Nullable UpdateResult parse(@Nullable String wire) {
+            String[] parts = wire == null ? new String[0] : wire.trim().split("\\s+", 2);
+            for (Status status : Status.values()) {
+                if (parts.length > 0 && new UpdateResult(status, "").wire().trim().equals(parts[0])) {
+                    return new UpdateResult(status, parts.length > 1 ? parts[1] : null);
+                }
+            }
+            return null;
         }
     }
 
@@ -175,7 +187,8 @@ public final class DynamicDnsService {
                                         @Nullable String myip, @Nullable String callerIp) {
         Row record = authenticate(presentedToken);
         if (record == null) {
-            return new UpdateResult(Status.BADAUTH, null);
+            UpdateResult forwarded = forward(presentedToken, hostname, myip, callerIp);
+            return forwarded != null ? forwarded : new UpdateResult(Status.BADAUTH, null);
         }
 
         DnsRecordModel model = Models.get(DnsRecordModel.class);
@@ -224,6 +237,52 @@ public final class DynamicDnsService {
         this.store.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
         Blast.log("DNS: dyndns update", fqdn, type, "->", newIp);
         return new UpdateResult(Status.GOOD, newIp);
+    }
+
+    /**
+     * Sends an update whose token no record here holds on to the Hohenheim keeping the records of the zone this server
+     * only copies that covers the hostname: after a zone moved away, the clients still calling here keep working
+     * without being told.
+     *
+     * AIDEV-NOTE: only a token of the right shape travels, only with a hostname (dyndns2 clients send one), and only
+     * to the one owner of the most specific secondary zone covering it that this server holds an API key of: an
+     * unknown token costs at most one call, and the route's own rate limit bounds those. The client's own address goes
+     * as myip, or the owner would read this server's.
+     *
+     * @return the owner's answer, dnserr when it could not be asked, null when nothing was sent
+     */
+    private static @Nullable UpdateResult forward(@Nullable String token, @Nullable String hostname,
+                                                  @Nullable String myip, @Nullable String callerIp) {
+        String address = myip != null && !myip.isBlank() ? myip.trim() : callerIp;
+        if (token == null || !token.startsWith(TOKEN_MARKER) || token.length() < 16 || hostname == null
+                || hostname.isBlank() || address == null || address.isBlank()) {
+            return null;
+        }
+        String name = DnsNames.canonicalName(hostname);
+        Row covering = null;
+        for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            if (origin != null && DnsNames.zoneContains(origin, name) && (covering == null
+                    || origin.length() > String.valueOf((Object) covering.get(DnsZoneModel.ORIGIN)).length())) {
+                covering = zone;
+            }
+        }
+        Row owner = covering == null ? null
+            : Models.get(DnsPeerModel.class).findById(covering.get(DnsZoneModel.PRIMARY_PEER_ID));
+        DnsPeerApi api = DnsPeerApi.forPeer(owner);
+        if (owner == null || api == null) {
+            return null;
+        }
+        try {
+            UpdateResult answered = UpdateResult.parse(api.forwardDynamicUpdate(token, hostname, address));
+            Blast.log("DNS: dyndns update for", name, "forwarded to", owner.get(DnsPeerModel.NAME), "->",
+                answered == null ? "an answer that is none" : answered.wire());
+            return answered != null ? answered : new UpdateResult(Status.DNSERR, null);
+        } catch (DnsPeerApi.PeerApiException failed) {
+            Blast.log("DNS: could not forward a dyndns update to", owner.get(DnsPeerModel.NAME), "-",
+                failed.getMessage());
+            return new UpdateResult(Status.DNSERR, null);
+        }
     }
 
     /** @return the dynamic record the token unlocks, or null when it does not verify */

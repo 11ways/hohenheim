@@ -11,6 +11,8 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
+import be.elevenways.hohenheim.server.dns.DnsZoneMoves;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -65,6 +67,9 @@ final class DnsOperationHandlers {
         OperationHandlers.attach(DnsOperations.IMPORT_ZONE).authorize(admin())
             .handle(call -> importZone(call.subject(), Objects.requireNonNull(call.input()),
                 Objects.requireNonNull(call.access(), "an import has its caller")));
+        OperationHandlers.attach(DnsOperations.TAKE_OVER).authorize(admin())
+            .applies(row -> DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row)))
+            .handle(call -> takeOver(call.subject()));
     }
 
     private DnsOperationHandlers() {}
@@ -107,6 +112,22 @@ final class DnsOperationHandlers {
             ? HohenheimMicrocopy.DNS_ZONE.of("import_done").withArg("count", result.imported())
             : HohenheimMicrocopy.DNS_ZONE.of("import_done_notes").withArg("count", result.imported())
                 .withArg("notes", notes));
+    }
+
+    /**
+     * Moves a secondary zone's records here from the Hohenheim keeping them (DnsZoneMoves.takeOver).
+     *
+     * @return the toast saying where the records are kept now; a warning naming what is left to check
+     */
+    private static @NonNull CmsActionResult takeOver(@NonNull Row zone) {
+        DnsZoneMoves.Moved moved = DnsZoneMoves.takeOver(zone);
+        String key = !moved.confirmed() ? "take_over_unconfirmed"
+            : moved.unlinked().isEmpty() ? "take_over_done" : "take_over_done_unlinked";
+        Microcopy said = HohenheimMicrocopy.DNS_ZONE.of(key).withArg("zone", moved.zone())
+            .withArg("peer", moved.owner()).withArg("records", moved.records())
+            .withArg("serial", String.valueOf(moved.serial())).withArg("unlinked", String.join(", ", moved.unlinked()));
+        return "take_over_done".equals(key) ? CmsActionResult.successToast(said)
+            : new CmsActionResult.Toast(said, FlashLevel.WARNING);
     }
     private static boolean address(Row row) { return DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE)); }
 

@@ -119,6 +119,12 @@ public enum HohenheimActivityAction implements ActivityAction {
     HTTPS_FORCED("https_forced"),
     /** A zone's records set through the peer API by the server holding its copy, for the person named there. */
     RECORDS_FORWARDED("records_forwarded"),
+    /** A zone taken over from the server keeping its records, now kept here; that server is a secondary of it. */
+    TAKEN_OVER("taken_over"),
+    /** A zone handed over to the server holding its copy: this one is now a secondary of that server. */
+    HANDED_OVER("handed_over"),
+    /** A take-over undone because the server keeping the records did not take the copy: a secondary here again. */
+    TAKE_OVER_UNDONE("take_over_undone"),
 
     // What stamped a workload ERROR, each recorded beside the status by InstanceOperationGuard.stampError; its
     // sentence is the dashboard's crash detail, so the item says what happened instead of guessing a crash.
@@ -451,6 +457,7 @@ public enum HohenheimActivityAction implements ActivityAction {
                 FactShape.optionalKey(NATIVE_SNAPSHOT_KEY, CoreTypes.TEXT));
             case DRAINED -> FactShape.of(FactShape.key(MOVED_KEY, CoreTypes.INTEGER),
                 FactShape.key(REFUSED_KEY, CoreTypes.INTEGER), FactShape.key(COMPLETE_KEY, CoreTypes.BOOLEAN));
+            case TAKEN_OVER, HANDED_OVER, TAKE_OVER_UNDONE -> FactShape.of(FactShape.key(SERVER_KEY, CoreTypes.TEXT));
             case RECORDS_FORWARDED -> FactShape.of(FactShape.key(SERVER_KEY, CoreTypes.TEXT),
                 FactShape.optionalKey(PERSON_KEY, CoreTypes.TEXT));
             case MIGRATED -> FactShape.of(FactShape.key(FROM_KEY, CoreTypes.TEXT),
@@ -509,7 +516,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     public @NonNull List<Identifier> subjects() {
         return switch (this) {
             case IMPORTED -> List.of(DnsZoneModel.MODEL_ID, InstanceTemplateModel.MODEL_ID);
-            case RECORDS_FORWARDED -> List.of(DnsZoneModel.MODEL_ID);
+            case RECORDS_FORWARDED, TAKEN_OVER, HANDED_OVER, TAKE_OVER_UNDONE -> List.of(DnsZoneModel.MODEL_ID);
             case REQUESTED, REISSUED, RENEWAL_FAILED -> List.of(CertificateModel.MODEL_ID);
             case MEDIA_UPLOADED, MEDIA_DELETED, MEDIA_FETCHED, REMOVED_ORPHAN, REAPED_CONTROLLER_OBJECTS, DRAINED,
                  QUARANTINED, HOST_KEY_PINNED, HOST_KEY_VERIFIED, HOST_KEY_REPINNED, HOST_IDENTITY_ROTATED,

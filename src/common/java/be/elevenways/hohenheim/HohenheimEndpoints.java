@@ -1419,6 +1419,33 @@ public class HohenheimEndpoints {
         .build();
 
     /**
+     * A zone's whole editable state, read by the server holding its copy before it takes the zone over: every record
+     * row as stored (dynamic DNS digests, never tokens), its settings and the peers it links. Admin keys only.
+     */
+    public static final Endpoint<Object> API_DNS_ZONE_STATE = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_dns_zone_state"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("state").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .build();
+
+    /**
+     * A zone this instance owns handed over to the peer holding its copy, which has just taken it: this side pulls
+     * it from there, checks it, and becomes its copy. Admin keys only; csrfExempt as the record routes are.
+     */
+    public static final Endpoint<Object> API_DNS_ZONE_HAND_OVER = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_dns_zone_hand_over"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("hand-over").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .csrfExempt()
+        .build();
+
+    /**
      * Transfer-key negotiation: the caller minted a TSIG key for the two of us and
      * installs its half here. SYMMETRIC -- every instance both calls and exposes it.
      *

@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.cms.DnsRecordSets;
 import be.elevenways.hohenheim.server.cms.TenantScopes;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
+import be.elevenways.hohenheim.server.dns.DnsZoneMoves;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.Zenit;
@@ -69,7 +70,7 @@ final class DnsRecordApiHandlers {
     }
 
     /** The zone a route names, as the calling key reaches it. */
-    private record ApiZone(@NonNull AccessContext access, @NonNull Row zone) {
+    record ApiZone(@NonNull AccessContext access, @NonNull Row zone) {
 
         int id() {
             return this.zone.get(DnsZoneModel.ID);
@@ -100,7 +101,7 @@ final class DnsRecordApiHandlers {
             }
             List<DnsRecordDto> records = new ArrayList<>();
             for (Row record : query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).all()) {
-                records.add(recordDto(record));
+                records.add(DnsPeerApi.recordDto(record));
             }
             return new JsonResult<Object>(new DnsRecordListResponse(
                 zone.zone().get(DnsZoneModel.ORIGIN), zone.zone().get(DnsZoneModel.SERIAL), records));
@@ -205,6 +206,36 @@ final class DnsRecordApiHandlers {
                 return validationError(conduit, violations);
             }
         });
+
+        // A zone's whole state for the server holding its copy, and its hand-over to that server: the move.
+        HohenheimEndpoints.API_DNS_ZONE_STATE.setHandler(conduit -> {
+            ApiZone zone = reachedZone(conduit);
+            return zone == null ? null : new JsonResult<Object>(DnsZoneMoves.state(zone.zone()));
+        });
+        HohenheimEndpoints.API_DNS_ZONE_HAND_OVER.setHandler(conduit -> {
+            ApiZone zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String keyName = form.get(DnsPeerApi.HAND_OVER_KEY);
+            Integer from = RawValues.parsedInt(form.get(DnsPeerApi.HAND_OVER_FROM));
+            Integer serial = RawValues.parsedInt(form.get(DnsPeerApi.HAND_OVER_SERIAL));
+            String server = form.get(DnsPeerApi.SET_SERVER);
+            if (keyName == null || keyName.isBlank() || from == null || serial == null || server == null
+                    || server.isBlank()) {
+                conduit.setResponseStatus(422);
+                return new JsonResult<Object>(new DnsApiErrorResponse("validation"));
+            }
+            try {
+                return new JsonResult<Object>(DnsZoneMoves.handOver(zone.zone(), keyName.trim(), from, serial,
+                    server.trim()));
+            } catch (DnsZoneMoves.Refused refused) {
+                conduit.setResponseStatus(409);
+                return new JsonResult<Object>(new DnsValidationErrorResponse("hand_over_refused", null, null,
+                    refused.getMessage()));
+            }
+        });
     }
 
     /**
@@ -233,22 +264,6 @@ final class DnsRecordApiHandlers {
         return value;
     }
 
-    private static DnsRecordDto recordDto(Row record) {
-        // The peer wire stays FLAT (an external API contract); internally the
-        // extras live in the type-schema'd data column.
-        return new DnsRecordDto(
-            record.get(DnsRecordModel.ID),
-            record.get(DnsRecordModel.NAME),
-            record.get(DnsRecordModel.TYPE),
-            record.get(DnsRecordModel.TTL),
-            record.get(DnsRecordModel.VALUE),
-            DnsRecordModel.priorityOf(record),
-            DnsRecordModel.weightOf(record),
-            DnsRecordModel.portOf(record),
-            Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
-            record.get(DnsRecordModel.MANAGED_BY));
-    }
-
     /**
      * Key + zone resolution shared by every DNS api handler; null = response already written.
      *
@@ -256,6 +271,22 @@ final class DnsRecordApiHandlers {
      * same 404 as an unknown origin rather than a 409 naming it a replica.
      */
     private static @Nullable ApiZone apiPrimaryZone(@NonNull Conduit conduit) {
+        ApiZone zone = reachedZone(conduit);
+        if (zone == null) {
+            return null;
+        }
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone.zone()))) {
+            // Edits belong on the owning instance; a replica must never fork.
+            conduit.setResponseStatus(409);
+            new JsonResult<Object>(new DnsApiErrorResponse("not_primary"))
+                .finalizeConduit(conduit);
+            return null;
+        }
+        return zone;
+    }
+
+    /** @return the route's zone of either role as the calling key reaches it; null = the 404 is written */
+    private static @Nullable ApiZone reachedZone(@NonNull Conduit conduit) {
         AccessContext access = ApiConduits.requireKey(conduit);
         if (access == null) {
             return null;
@@ -265,13 +296,6 @@ final class DnsRecordApiHandlers {
         Row zone = origin != null ? Models.get(DnsZoneModel.class).findByOrigin(origin) : null;
         if (zone == null || !TenantScopes.reachesZone(access, zone)) {
             conduit.notFound();
-            return null;
-        }
-        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-            // Edits belong on the owning instance; a replica must never fork.
-            conduit.setResponseStatus(409);
-            new JsonResult<Object>(new DnsApiErrorResponse("not_primary"))
-                .finalizeConduit(conduit);
             return null;
         }
         return new ApiZone(access, zone);

@@ -245,6 +245,12 @@ public final class DnsZoneStore {
         }
     }
 
+    /** @return the copy a secondary zone serves, null when it serves none (never transferred, or expired) */
+    public @Nullable DnsZoneSnapshot secondarySnapshot(@NonNull String origin) {
+        this.currentView();
+        return this.secondaryByOrigin.get(origin);
+    }
+
     private void rebuildServing() {
         DnsZoneModel zoneModel = this.followsDatasource ? Models.get(DnsZoneModel.class) : null;
         rebuildServing(zoneModel != null && zoneModel.resolvesDatasource() ? zoneModel.getResolvedDatasource() : null);

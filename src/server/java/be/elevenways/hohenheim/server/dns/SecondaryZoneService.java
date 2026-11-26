@@ -48,6 +48,9 @@ public final class SecondaryZoneService {
     /** How long {@link #stop} waits for an interrupted transfer to end before it gives up on it. */
     private static final long STOP_TIMEOUT_MS = 10_000L;
 
+    /** How long one transfer of a whole zone may take. */
+    private static final Duration TRANSFER_TIMEOUT = Duration.ofSeconds(30);
+
     private final DnsZoneStore store;
     private final JobRunner jobs = JobRunner.create("dns-secondary");
     private final Map<Integer, ZoneState> state = new ConcurrentHashMap<>();
@@ -302,9 +305,9 @@ public final class SecondaryZoneService {
             return false;
         }
         int port = Objects.requireNonNullElse(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
-        TSIG tsig;
         try {
-            tsig = DnsTsig.forPeer(peer);
+            // Asked here so the zone says why; the pull itself signs with the same key.
+            DnsTsig.forPeer(peer);
         }
         catch (IllegalArgumentException badAlgorithm) {
             // Never fall back to an unsigned transfer for a peer that asked for a key.
@@ -339,10 +342,7 @@ public final class SecondaryZoneService {
                 }
             }
 
-            ZoneTransferIn xfr = ZoneTransferIn.newAXFR(origin, host.trim(), port, tsig);
-            xfr.setTimeout(Duration.ofSeconds(30));
-            xfr.run();
-            List<Record> records = xfr.getAXFR();
+            List<Record> records = pull(peer, originString, TRANSFER_TIMEOUT);
 
             DnsZoneSnapshot snapshot = DnsZoneStore.snapshotFromTransfer(zoneId, originString, records);
             store.putSecondarySnapshot(snapshot);
@@ -410,6 +410,25 @@ public final class SecondaryZoneService {
         zs.nextAttemptEpochMs = Now.millis() + 300_000L;
     }
 
+
+    /**
+     * Pulls the whole zone from the peer over AXFR, signed with the peer's transfer key.
+     *
+     * @throws IllegalArgumentException when the peer's key algorithm is not supported, never an unsigned pull then
+     * @throws Exception when the transfer fails or the peer has no transfer host
+     */
+    static @NonNull List<Record> pull(@NonNull Row peer, @NonNull String origin, @NonNull Duration timeout)
+            throws Exception {
+        String host = peer.get(DnsPeerModel.TRANSFER_HOST);
+        if (host == null || host.isBlank()) {
+            throw new IllegalStateException("peer has no transfer host");
+        }
+        ZoneTransferIn xfr = ZoneTransferIn.newAXFR(Name.fromString(origin + "."), host.trim(),
+            Objects.requireNonNullElse(peer.get(DnsPeerModel.TRANSFER_PORT), 53), DnsTsig.forPeer(peer));
+        xfr.setTimeout(timeout);
+        xfr.run();
+        return xfr.getAXFR();
+    }
     private static void scheduleRefresh(@NonNull Row zone, @NonNull ZoneState zs) {
         int refresh = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
         zs.nextAttemptEpochMs = Now.millis() + refresh * 1000L;
@@ -447,7 +466,7 @@ public final class SecondaryZoneService {
     }
 
     /** Master-file text of the transferred records (absolute names, so no $ORIGIN needed). */
-    private static @NonNull String serializeReplica(@NonNull List<Record> records) {
+    static @NonNull String serializeReplica(@NonNull List<Record> records) {
         StringBuilder text = new StringBuilder(records.size() * 48);
         for (Record record : records) {
             text.append(record.toString()).append('\n');
