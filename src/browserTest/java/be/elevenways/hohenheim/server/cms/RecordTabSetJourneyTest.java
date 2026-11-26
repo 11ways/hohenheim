@@ -91,13 +91,13 @@ class RecordTabSetJourneyTest extends HohenheimHttpTestBase {
                 .as("step 4: on the shell route the strip marks the Console tab active")
                 .isTrue();
             assertThat(shell).as("step 4: and the switch explains the shell")
-                .contains("A terminal inside the workload");
+                .contains("A terminal inside the app");
 
             // 5. The one-off command keeps its own route and form, under the same switch.
             String command = adminGet(record + "/page/exec").body();
             assertThat(command).as("step 5: the command mode renders with the switch")
                 .contains("data-console-mode=\"exec\"")
-                .contains("Runs one command inside the workload");
+                .contains("Runs one command inside the app");
 
             // 6. Backups holds the snapshots as a section, with the row's own record link; the old routes are retired.
             String backups = adminGet(record + "/page/backups").body();

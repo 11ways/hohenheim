@@ -95,11 +95,13 @@ class HostPostureAcknowledgementTest {
      * this fails.
      */
     private static final Map<String, String> WARNING_DIGESTS = Map.of(
-        "en", "b7bfede449daaeb17174de074be2216c1c146a55bb53e2ebdd54fc8d3742ebe4",
+        // Both re-pinned 2026-11-26, WORDING ONLY (515867d2a): "workload" became "app", the word users read for
+        // what a container escape reaches. The meaning is unchanged, so POSTURE_WARNING_VERSION stays where it is.
+        "en", "757f0ed46e1a9b1c44707bc29eb574789c8f516155c48b72e51660685fae0459",
         // Re-pinned 2026-08-27, SPELLING ONLY: the shouted numeral in the nl warning
         // gained the acute accents Dutch spells it with. The meaning is unchanged, so
         // POSTURE_WARNING_VERSION deliberately stays where it is.
-        "nl", "4e3ad200060fa7ac8e1530af935e6ec086369f084b7ca08a90c3bfe2da46906a");
+        "nl", "85cfc71f50492c1e4a609d84db9a27e50c52afcc7e68494b2a439e38dadbf212");
 
     private static SqlDatasource datasource;
 
