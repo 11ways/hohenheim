@@ -245,8 +245,8 @@ row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= c
 tab records at=0 landing=false view=false
 tab zonefile at=1 landing=false view=false
 tab secondaries at=2 landing=false view=false
-tab history at=3 landing=false view=false
-tab queries at=4 landing=false view=false
+tab queries at=3 landing=false view=false
+tab history at=4 landing=false view=false
 control CREATE%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT
@@ -299,8 +299,8 @@ row hohenheim:dns_records at=2 verb=link band=overflow style=DEFAULT disabled= c
 row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_zone,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db13-surfaces-replica.test,input:false target=/{panel}/{entry}/{record}/delete
 tab records at=0 landing=false view=false
 tab zonefile at=1 landing=false view=false
-tab history at=2 landing=false view=false
-tab queries at=3 landing=false view=false
+tab queries at=2 landing=false view=false
+tab history at=3 landing=false view=false
 control CREATE%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT

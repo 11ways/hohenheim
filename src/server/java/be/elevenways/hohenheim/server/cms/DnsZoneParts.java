@@ -120,7 +120,7 @@ public final class DnsZoneParts {
                         HohenheimMicrocopy.DNS_ZONE.of("take_over_confirm"), ActionStyle.DEFAULT))
                     .build()))
             .tabs(ResourceTabs.<Row>of(List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(),
-                secondariesTab())).withHistory().withContributions())
+                secondariesTab(), DnsZoneQueriesPage.TAB)).withHistory().withContributions())
             .relatedPages(parts.relatedPages().toArray(RelatedPage[]::new)).build();
     }
 

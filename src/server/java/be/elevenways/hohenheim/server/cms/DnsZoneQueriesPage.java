@@ -6,11 +6,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.PanelContributions;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -22,7 +20,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,22 +28,15 @@ import java.util.Map;
  * administrator.
  *
  * AIDEV-NOTE: the tab places {@code dns_zone_queries_read}'s own operation (TrafficReads.READ_ZONE), so only an
- * administrator reads it, as the tool. It is contributed to the zones' resource (PanelContributions, staged from this
- * class's load) rather than listed in DnsZoneParts, which another lane owns; a contributed tab stands after the
- * declared ones and before History, where the board draws it.
+ * administrator reads it, as the tool. DnsZoneParts lists it right after Secondaries, where the board draws it.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@BlastAutoLoad
 public final class DnsZoneQueriesPage implements RecordTab.Rendered<Row> {
 
     /** The one tab every zones' resource is given. */
     public static final DnsZoneQueriesPage TAB = new DnsZoneQueriesPage();
-
-    static {
-        PanelContributions.INSTANCE.stageRecordTabs(() -> Map.of(DnsZoneModel.MODEL_ID, List.of(TAB)));
-    }
 
     private DnsZoneQueriesPage() {
     }
