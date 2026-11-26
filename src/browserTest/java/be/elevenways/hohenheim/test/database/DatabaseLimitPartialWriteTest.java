@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -66,6 +68,9 @@ class DatabaseLimitPartialWriteTest extends HohenheimHttpTestBase {
 
     @AfterAll
     static void cleanUp() {
+        // Step 3's resize recreates the engine on the provisioning pool: its rows are swept only once the pool settled.
+        assertThat(DatabaseService.awaitProvisioningIdle(Duration.ofSeconds(60)))
+            .as("the provisioning pool settled before the sweep").isTrue();
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping(() -> {
             for (Row row : instances.find().where(InstanceModel.NAME.startsWith("db-" + PREFIX)).all()) {
