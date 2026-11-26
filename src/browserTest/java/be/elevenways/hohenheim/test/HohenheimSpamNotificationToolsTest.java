@@ -194,8 +194,9 @@ class HohenheimSpamNotificationToolsTest extends HohenheimHttpTestBase {
 
     /**
      * A failed delivery retried and a delivered one refused, both listed by their codes; the caller's own inbox items
-     * listed and read by theirs; each wrong call refused by the argument it names, and someone without the delivery
-     * log's right refused.
+     * listed, read and marked read by theirs, by the record they are about, and all at once, a resent request answering
+     * its first result; each wrong call refused by the argument it names, and someone without the delivery log's right
+     * refused, as is a mark of another person's item.
      */
     @Test
     void anAdministratorRetriesADeliveryAndReadsTheInboxByToolsAlone() throws Exception {
@@ -247,6 +248,56 @@ class HohenheimSpamNotificationToolsTest extends HohenheimHttpTestBase {
             assertThat(item.error()).as("step 3: " + item.text()).isFalse();
             assertThat(item.text()).as("step 3: its words").contains("mcp about " + tag);
 
+            // 3b. One item marked read by its code; the same request again answers the first result, a new one says
+            //     it was read already.
+            Row one = item(owner, "mcp one " + tag, null);
+            String oneCode = HohenheimMcpTest.code(NotificationInboxModel.MODEL_ID, one.get(NotificationInboxModel.ID),
+                operator);
+            String request = UUID.randomUUID().toString();
+            McpHttpSession.Answer marked = admin.call("notification_mark_read", Map.of("code", oneCode,
+                "request", request));
+            assertThat(marked.error()).as("step 3b: " + marked.text()).isFalse();
+            assertThat(marked.text()).as("step 3b: one item").contains("marked read: 1 item");
+            assertThat(admin.call("notification_mark_read", Map.of("code", oneCode, "request", request)).text())
+                .as("step 3b: the resent request answers the first result").contains("marked read: 1 item");
+            assertThat(admin.call("notification_mark_read", Map.of("code", oneCode)).text())
+                .as("step 3b: a new call finds it read").contains("marked read: none, it was read already");
+            assertThat(inbox.find().noCache().where(NotificationInboxModel.ID.eq(one.get(NotificationInboxModel.ID)))
+                .first().get(NotificationInboxModel.READ_AT)).as("step 3b: stored read").isNotNull();
+
+            // 3c. Every item about one record, by that record's code: the code says its kind.
+            item(owner, "mcp delivery " + tag, failed);
+            item(owner, "mcp delivery " + tag, failed);
+            McpHttpSession.Answer aboutRead = admin.call("notification_mark_read", Map.of("about", failedCode,
+                "request", UUID.randomUUID().toString()));
+            assertThat(aboutRead.error()).as("step 3c: " + aboutRead.text()).isFalse();
+            assertThat(aboutRead.text()).as("step 3c: both items about it").contains("marked read: 2 items");
+
+            // 3d. Both record arguments, or the kind the code already says, are refused by name; the kind is offered
+            //     nowhere.
+            McpHttpSession.Answer both = admin.call("notification_mark_read", Map.of("code", oneCode,
+                "about", failedCode));
+            assertThat(both.error()).as("step 3d: both").isTrue();
+            assertThat(both.text()).as("step 3d: in words").contains("Give only one of code, about.");
+            McpHttpSession.Answer kind = admin.call("notification_mark_read", Map.of("about", failedCode,
+                "model", DeliveryModel.MODEL_ID.toString()));
+            assertThat(kind.error()).as("step 3d: model refused: " + kind.text()).isTrue();
+            assertThat(kind.text()).as("step 3d: by its name").contains("model");
+            Map<?, ?> marks = (Map<?, ?>) ((Map<?, ?>) admin.tools().stream()
+                .filter(tool -> "notification_mark_read".equals(tool.get("name"))).findFirst().orElseThrow()
+                .get("inputSchema")).get("properties");
+            assertThat(marks.keySet().stream().map(String::valueOf).toList()).as("step 3d: the arguments")
+                .containsExactlyInAnyOrder("code", "about", "request");
+
+            // 3e. Neither marks every item of the caller read.
+            McpHttpSession.Answer all = admin.call("notification_mark_read", Map.of("request",
+                UUID.randomUUID().toString()));
+            assertThat(all.error()).as("step 3e: " + all.text()).isFalse();
+            assertThat(all.text()).as("step 3e: every item").contains("marked read: every item of yours");
+            assertThat(inbox.find().noCache().where(NotificationInboxModel.RECIPIENT.eq(owner))
+                .and(NotificationInboxModel.TITLE.in(List.of("mcp about " + tag, "mcp delivery " + tag)))
+                .and(NotificationInboxModel.READ_AT.isNull()).count()).as("step 3e: none of them unread").isZero();
+
             // 4. Someone without the delivery log's right retries nothing, and reads no one else's inbox item.
             McpHttpSession person = HohenheimMcpTest.presetSession(server, endpoint,
                 user("mcp-delivery-" + tag + "@surface.test", "Mcp Delivery"), "Mcp Delivery");
@@ -254,9 +305,17 @@ class HohenheimSpamNotificationToolsTest extends HohenheimHttpTestBase {
                 .as("step 4: no retry").isTrue();
             assertThat(person.call("read", Map.of("codes", List.of(aboutCode))).text())
                 .as("step 4: not his item").doesNotContain("mcp about " + tag);
+            Row unread = item(owner, "mcp one " + tag, null);
+            McpHttpSession.Answer foreign = person.call("notification_mark_read", Map.of("code",
+                HohenheimMcpTest.code(NotificationInboxModel.MODEL_ID, unread.get(NotificationInboxModel.ID),
+                    operator)));
+            assertThat(foreign.error()).as("step 4: not his to mark: " + foreign.text()).isTrue();
+            assertThat(inbox.find().noCache().where(NotificationInboxModel.ID.eq(unread.get(NotificationInboxModel.ID)))
+                .first().get(NotificationInboxModel.READ_AT)).as("step 4: still unread").isNull();
         } finally {
             inbox.find().where(NotificationInboxModel.NOTIFICATION_KEY.eq("mcp.inbox"))
-                .and(NotificationInboxModel.TITLE.eq("mcp about " + tag)).delete();
+                .and(NotificationInboxModel.TITLE.in(List.of("mcp about " + tag, "mcp one " + tag,
+                    "mcp delivery " + tag))).delete();
             deliveries.find().where(DeliveryModel.NOTIFICATION_KEY.in(List.of("mcp.failed." + tag, "mcp.sent." + tag)))
                 .delete();
         }

@@ -43,10 +43,11 @@ class HohenheimToolSpecDriftTest extends HohenheimHttpTestBase {
         "dns_zone_import", "dns_zone_queries_read", "dns_zone_set", "dns_zone_take_over", "environment_set",
         "game_address_set", "git_connection_set", "history", "host_admission_set", "host_client_key_reset",
         "host_leftover_cleanup", "host_media_set", "host_set", "host_trust", "image_cleanup", "list", "logs",
-        "notification_channel_set", "notification_mark_read", "path_redirect_set", "permission_group_permissions",
+        "notification_channel_set", "notification_mark_read", "path_redirect_set", "person_picture_read",
         "person_reset", "person_set", "power", "preview_run", "project_set", "protected_path_set", "quota_set",
-        "read", "request_upload_path", "role_set", "roll_back", "run_read", "runtime_image_set", "schedule_run",
-        "schedule_set", "session_end", "settings_apps_set", "settings_backups_set", "settings_blocking_set",
+        "read", "request_upload_path", "role_permission_list", "role_set", "roll_back", "run_read", "runtime_image_set",
+        "schedule_run", "schedule_set", "session_end", "settings_apps_set", "settings_backups_set",
+        "settings_blocking_set",
         "settings_brand_set", "settings_dns_set", "settings_general_set", "settings_hosts_set", "settings_https_set",
         "settings_installation_set", "settings_notifications_set", "settings_read", "settings_signin_set",
         "settings_spam_set", "share_read", "share_set", "sign_in_provider_set", "site_app_set", "site_clone",
@@ -56,12 +57,10 @@ class HohenheimToolSpecDriftTest extends HohenheimHttpTestBase {
         "spam_sample_set", "spam_service_power", "spam_service_set", "spam_service_test", "spam_word_set",
         "ssh_key_set", "stack_service_set", "stack_set", "stack_volumes_purge", "task_run_end", "task_run_pause",
         "template_database_set", "template_export", "template_import", "template_set", "template_variable_set",
-        "test", "traffic_read", "undo", "user_picture", "variable_set", "volume_set");
+        "test", "traffic_read", "undo", "variable_set", "volume_set");
 
     /** The specified tools not built yet, each with what it waits for; the list only shrinks. */
     static final Map<String, String> NOT_BUILT = Map.of(
-        "notification_mark_read", "the inbox marks take no request: a command facet needs an identified actor, and a"
-            + " caller without an account is answered nothing changed (decision for the coordinator)",
         "spam_client_set", "the spam service's clients carry no code (spamservice-needs.md)",
         "spam_key_set", "the spam service's keys carry no code (spamservice-needs.md)",
         "spam_sample_set", "the spam service's samples carry no code (spamservice-needs.md)",

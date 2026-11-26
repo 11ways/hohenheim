@@ -15,6 +15,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.common.operation.ResultStep;
 import be.elevenways.zenit.delivery.server.DeliveryCopy;
 import be.elevenways.zenit.delivery.server.cms.DeliveryAdmin;
+import be.elevenways.zenit.notifications.server.NotificationOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -25,15 +26,14 @@ import java.util.Map;
 /**
  * Hohenheim's hand-declared tools over the spam service it runs itself and its notifications: the service's
  * installation, its start, stop and restart, its check, its word dictionary and its reputation explanation, a
- * channel's create and change, and a failed delivery's retry, each over the operation the panel's form, button or page
- * runs; {@link HohenheimTools} offers them beside its own.
+ * channel's create and change, a failed delivery's retry and the caller's own inbox marked read, each over the
+ * operation the panel's form, button or page runs; {@link HohenheimTools} offers them beside its own.
  *
  * AIDEV-NOTE: declarations only, as in HohenheimTools: a gate, a check or a writer of a tool here is its operation's.
  * A channel's test and delete are routes of the shared test and delete tools. The retry is zenit-delivery's own (the
- * delivery log's row button). The spam service's clients, keys and samples have no codes yet (they live in the
- * service, named by UUID), so their tools wait for one (scratch spamservice-needs.md says what the service must
- * offer). notification_mark_read waits for a decision: the inbox marks take no request (no command facet, as a caller
- * without an account is answered "nothing changed"), which every writing tool here must take.
+ * delivery log's row button), the inbox marks zenit-notifications' (the inbox's own). The spam service's clients,
+ * keys and samples have no codes yet (they live in the service, named by UUID), so their tools wait for one (scratch
+ * spamservice-needs.md says what the service must offer).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -41,6 +41,7 @@ import java.util.Map;
 final class HohenheimSpamNotificationTools {
 
     private static final String ACTION = "action";
+    private static final String ABOUT = "about";
 
     private HohenheimSpamNotificationTools() {
     }
@@ -80,7 +81,33 @@ final class HohenheimSpamNotificationTools {
             .code(HohenheimTools.words("mcp_code_delivery_retry"))
             .route(deliveries.retryDelivery(), HohenheimSpamNotificationTools::retried)
             .build();
-        return List.of(serviceSet, power, test, wordSet, reputation, channelSet, retry);
+        // One item by its code, every item about a record by that record's code (which says its own kind, so the
+        // mark's model entry is never asked), or every item.
+        McpHostTool markRead = McpCodeTool.builder("notification_mark_read",
+                HohenheimTools.words("mcp_tool_notification_mark_read"), HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_notification_mark_read"))
+            .leavesOut(NotificationOperations.MODEL_ENTRY)
+            .route(NotificationOperations.MARK_READ, HohenheimSpamNotificationTools::markedOne)
+            .routeWithoutRecordBy(ABOUT, HohenheimTools.words("mcp_notification_mark_read_about"),
+                NotificationOperations.MARK_SUBJECT_READ, NotificationOperations.RECORD_ENTRY,
+                HohenheimSpamNotificationTools::markedAbout)
+            .routeWithoutRecord(NotificationOperations.MARK_ALL_READ,
+                (context, none) -> McpResponse.create().line("marked read: every item of yours"))
+            .build();
+        return List.of(serviceSet, power, test, wordSet, reputation, channelSet, retry, markRead);
+    }
+
+    /** @return whether the one item was marked read now or had been read already */
+    private static @NonNull McpResponse markedOne(@NonNull McpToolContext context, @Nullable Boolean marked) {
+        return McpResponse.create().line(Boolean.TRUE.equals(marked) ? "marked read: 1 item"
+            : "marked read: none, it was read already");
+    }
+
+    /** @return how many of the caller's items about the record were marked read */
+    private static @NonNull McpResponse markedAbout(@NonNull McpToolContext context, @Nullable Long marked) {
+        long count = marked == null ? 0 : marked;
+        return McpResponse.create().line(count == 0 ? "marked read: none" : count == 1 ? "marked read: 1 item"
+            : "marked read: " + count + " items");
     }
 
     /** @return whether the retry delivered it or queued it again, in the words of the delivery log's toast */
