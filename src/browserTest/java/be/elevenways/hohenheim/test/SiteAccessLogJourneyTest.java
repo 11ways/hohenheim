@@ -369,6 +369,15 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             this.awaitLines(++this.sent);
         }
 
+        /** Sends {@code count} requests back to back, a moment's burst, then waits for all their lines. */
+        void requests(int siteId, String path, int count, String... headers) throws Exception {
+            for (int i = 0; i < count; i++) {
+                ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(this.proxy), this.hostOf(siteId), path, headers);
+            }
+            this.sent += count;
+            this.awaitLines(this.sent);
+        }
+
         /** Waits until the log holds this many lines; a line lands once its response is sent. */
         void awaitLines(int count) {
             Poll.value("the access log holds " + count + " lines", WAIT, () -> {

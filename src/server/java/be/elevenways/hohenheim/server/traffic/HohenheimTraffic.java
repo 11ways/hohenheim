@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.traffic;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.DataDirectory;
+import be.elevenways.hohenheim.traffic.ActivityModel;
 import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.traffic.common.TrafficHit;
 import be.elevenways.zenit.traffic.server.TrafficLive;
@@ -42,8 +43,8 @@ public final class HohenheimTraffic {
     /** Hits waiting to be counted before one is dropped and the dashboard says so. */
     public static final int QUEUE_CAPACITY = 10_000;
 
-    /** Hits a site's live second carries at most; the rest is counted and said, never drawn. */
-    public static final int LIVE_HITS_PER_SECOND = 60;
+    /** Hits a site's live second carries at most, what the picture draws of a site row; the rest is counted and said. */
+    public static final int LIVE_HITS_PER_SECOND = ActivityModel.DOTS_PER_ROW_SECOND;
 
     /** The proxy's live seam: the Activity picture's and the TV page's frames (TrafficActivityHandler). */
     private static final TrafficLive LIVE = new TrafficLive(HohenheimChannels.TRAFFIC_LIVE, LIVE_HITS_PER_SECOND);

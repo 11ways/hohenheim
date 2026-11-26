@@ -1,15 +1,16 @@
 {% tag HhTrafficActivity {
     /* The live Activity picture (TrafficActivity.watch over ActivityDriver): requests flying as dots from their
-       visitors to their sites, coloured by status class, the legend naming every class in words, a line saying when
-       the picture last heard and what it left undrawn, Pause, and a screen reader told the last minute every
-       ActivitySummary.SPEAK_EVERY seconds (politely, never per request). The line, the figures and the picture's own
-       words (its accessible name, every row with its figure) all come from the summary the picture hands over after
-       the draw that shows them, so they say what the picture shows. Inside pl-kiosk, whose Full screen stages the
-       picture over the panel. `tv` is the wall screen's look, staged in its look's dark answer (pl-kiosk tone): the
-       server's name and the clock over the four figures, the bars of the last minute under the dots, the kiosk staged
-       from the start, every size taken from the screen
-       (its type grows with the shorter side, and the picture draws its rows and dots from that type), and the picture
-       filling what the screen leaves under the figures. */
+       visitors to their sites, coloured by status class, a site row glowing as one arrives with its path beside it,
+       the legend naming the classes in words, a line saying when the picture last heard and what it left undrawn,
+       Pause, and a screen reader told the last minute every ActivitySummary.SPEAK_EVERY seconds (politely, never per
+       request). The line, the figures and the picture's own words (its accessible name, every row with its figure)
+       all come from the summary the picture hands over after the draw that shows them, so they say what the picture
+       shows. In its place the picture is as tall as its rows fit; inside pl-kiosk, whose Full screen stages it over
+       the panel, it fills the screen. `tv` is the wall screen's look, staged in its look's dark answer (pl-kiosk
+       tone): the server's name and the clock over the four figures, the bars of the last minute under the dots, the
+       kiosk staged from the start, every size taken from the screen (its type grows with the shorter side, and the
+       picture draws its rows and dots from that type), and the picture filling what the screen leaves under the
+       figures. */
     public required view: ActivityView
     attribute tv: Boolean = false
 
@@ -45,10 +46,11 @@
             @include m.picture(var(--hh-swatch), 50%);
         }
 
-        /* The picture's box: the surface draws in it, its font is the labels' (TextStyle.of). */
+        /* The picture's box: the surface draws in it, its font is the labels' (TextStyle.of); in its place it is as
+           tall as its rows fit (the driver's --hh-activity-fit), never under 14rem. */
         .hh-activity-surface {
             display: block;
-            block-size: 28rem;
+            block-size: max(14rem, var(--hh-activity-fit, 28rem));
             font-size: var(--pl-font-size-sm);
             font-family: var(--pl-font-family);
         }
@@ -113,6 +115,16 @@
 
         &[tv] .hh-activity-line {
             font-size: 1em;
+        }
+
+        /* Read across a room, the legend takes the screen's type too, its swatches with it. */
+        &[tv] [data-hh-activity-legend] {
+            font-size: 0.9em;
+        }
+
+        &[tv] .hh-activity-swatch {
+            inline-size: 0.75em;
+            block-size: 0.75em;
         }
 
         .hh-activity-figure-value {

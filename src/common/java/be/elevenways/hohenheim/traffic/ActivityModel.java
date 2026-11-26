@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.traffic;
 
 import be.elevenways.protoblast.common.http.UserAgentFamily;
+import be.elevenways.protoblast.common.math.Scatter;
 import be.elevenways.zenit.traffic.common.LiveHit;
 import be.elevenways.zenit.traffic.common.LiveHits;
 import be.elevenways.zenit.traffic.common.LiveSource;
@@ -29,7 +30,9 @@ import java.util.Set;
  * and the hits it left out are said as "not drawn". The rows are ranked again every {@link #RANK_EVERY_SECONDS} heard
  * seconds of stamps (a gap counts), and at once when a frame names a site or a visitor without a row while one is
  * free, so a dot already flying keeps its path and rows do not jump at every frame; a dot still waiting when the rows
- * move is dropped.
+ * move is dropped. Requests of one visitor to one site at the same moment ({@link #MOMENT_MS}) are spread
+ * ({@link Flight#lane}, a later birth), so several read as several dots; a site row takes at most
+ * {@link #DOTS_PER_ROW_SECOND} dots a second, the rest counted as not drawn.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -50,6 +53,21 @@ public final class ActivityModel {
 
     /** How many dots wait to be born at most, while the picture is not drawn (a hidden page). */
     public static final int MOST_WAITING = 4_096;
+
+    /**
+     * How many dots a site row takes a second at most, so a site's live second carries no more
+     * (HohenheimTraffic.LIVE_HITS_PER_SECOND); past it a hit is counted as not drawn.
+     */
+    public static final int DOTS_PER_ROW_SECOND = 60;
+
+    /** How close in time two hits of one visitor to one site are drawn as one moment, so spread apart. */
+    public static final double MOMENT_MS = 80;
+
+    /** How far across its row a spread dot leaves and arrives at most, as a share of the row's height either way. */
+    public static final float LANE_SPREAD = 0.3f;
+
+    /** How much later a spread dot leaves at most, so dots of one moment also stand apart along their curve. */
+    public static final double SPREAD_MS = 250;
 
     /** Which kind of visitor a row stands for; the members are the rows' order below the visitors of their own. */
     public enum OriginKind {
@@ -86,10 +104,13 @@ public final class ActivityModel {
     }
 
     /**
-     * One dot to give birth to: from which row to which row, its answer's class, and how long after its frame is
-     * drawn it leaves (where in its second the hit was recorded).
+     * One dot to give birth to: from which row to which row, its answer's class, how long after its frame is drawn it
+     * leaves (where in its second the hit was recorded), where across the rows it flies, and the path it asked.
+     *
+     * @param lane the share of a row's height the dot leaves and arrives off the rows' middle, 0 on the guide
      */
-    public record Flight(int origin, int site, @NonNull StatusClass statusClass, double offsetMs) {
+    public record Flight(int origin, int site, @NonNull StatusClass statusClass, double offsetMs, float lane,
+                         @NonNull String path) {
     }
 
     /** One second of the window. */
@@ -106,6 +127,10 @@ public final class ActivityModel {
         final Map<String, Integer> addresses = new HashMap<>();
         final Map<String, Integer> bots = new HashMap<>();
         final Map<String, Integer> tools = new HashMap<>();
+        /** Each source's carried hits by path. */
+        final Map<String, Map<String, Integer>> paths = new HashMap<>();
+        /** Each site row's dots born for this second. */
+        final Map<Integer, Integer> rowDots = new HashMap<>();
 
         void reset(long stamp, boolean heard) {
             this.stamp = stamp;
@@ -120,6 +145,8 @@ public final class ActivityModel {
             this.addresses.clear();
             this.bots.clear();
             this.tools.clear();
+            this.paths.clear();
+            this.rowDots.clear();
         }
     }
 
@@ -137,6 +164,8 @@ public final class ActivityModel {
     private long rankedAt = Long.MIN_VALUE;
     private long spokenAt = Long.MIN_VALUE;
     private int revision;
+    /** How many dots were spread so far: the seed of the next spread. */
+    private int spread;
 
     /**
      * @param visitors whether the frames carry visitors' addresses, so a visitor's row names its address
@@ -178,20 +207,37 @@ public final class ActivityModel {
         for (LiveSource source : frame.sources()) {
             this.count(second, source);
         }
+        int ranked = this.revision;
         if (this.rankedAt == Long.MIN_VALUE || stamp - this.rankedAt >= RANK_EVERY_SECONDS
                 || this.unplaced(frame)) {
             this.rankedAt = stamp;
             this.rank();
         }
+        if (this.revision != ranked) {
+            // The rows moved: a row's place names another row now, so its bound starts again.
+            second.rowDots.clear();
+        }
+        // Hits of one visitor to one site within MOMENT_MS of the visitor's one before are a moment: spread apart.
+        Map<String, Double> lastOffset = new HashMap<>();
         for (LiveSource source : frame.sources()) {
             int site = this.siteRowOf(source.source());
             for (LiveHit hit : source.hits()) {
                 double offset = Math.max(0, Math.min(999, hit.at() - stamp * 1000));
-                if (this.births.size() < MOST_WAITING) {
-                    this.births.add(new Flight(this.originRowOf(hit), site, hit.statusClass(), offset));
-                } else {
+                int origin = this.originRowOf(hit);
+                int dots = second.rowDots.getOrDefault(site, 0);
+                if (this.births.size() >= MOST_WAITING || dots >= DOTS_PER_ROW_SECOND) {
                     second.dropped++;
+                    continue;
                 }
+                second.rowDots.put(site, dots + 1);
+                Double before = lastOffset.put(this.keyOf(hit) + "|" + site, offset);
+                float lane = 0f;
+                double leaves = offset;
+                if (before != null && Math.abs(offset - before) < MOMENT_MS) {
+                    lane = (Scatter.unit(this.spread++) * 2f - 1f) * LANE_SPREAD;
+                    leaves += Scatter.unit(this.spread++) * SPREAD_MS;
+                }
+                this.births.add(new Flight(origin, site, hit.statusClass(), leaves, lane, hit.path()));
             }
         }
     }
@@ -321,6 +367,22 @@ public final class ActivityModel {
         return sum;
     }
 
+    /**
+     * @return the path the window's carried hits of a site row asked most (equal counts by path), null for none
+     */
+    public @Nullable String busiestPath(@NonNull SiteRow row) {
+        int index = this.sites.indexOf(row);
+        Map<String, Integer> counted = new HashMap<>();
+        for (Second second : this.window()) {
+            for (Map.Entry<String, Map<String, Integer>> each : second.paths.entrySet()) {
+                if (this.siteRowOf(each.getKey()) != index) continue;
+                each.getValue().forEach((path, count) -> counted.merge(path, count, Integer::sum));
+            }
+        }
+        List<String> busiest = busiestFirst(counted);
+        return busiest.isEmpty() ? null : busiest.get(0);
+    }
+
     /** @return how many sources the row stands for in the window: one, or the sources without a row */
     public int sourcesOf(@NonNull SiteRow row) {
         if (row.kind() != SiteKind.MORE) return 1;
@@ -400,6 +462,7 @@ public final class ActivityModel {
         second.marksCut |= source.marksLeftOut() > 0;
         second.sourceRequests.merge(source.source(), source.requests(), Long::sum);
         for (LiveHit hit : source.hits()) {
+            second.paths.computeIfAbsent(source.source(), any -> new HashMap<>()).merge(hit.path(), 1, Integer::sum);
             OriginKind group = groupOf(hit.agent());
             if (group == null) {
                 second.addresses.merge(this.keyOf(hit), 1, Integer::sum);
@@ -578,7 +641,7 @@ public final class ActivityModel {
     }
 
     /** @return the keys, the most counted first, equal counts by key */
-    private static @NonNull List<String> busiestFirst(@NonNull Map<String, Integer> counts) {
+    static @NonNull List<String> busiestFirst(@NonNull Map<String, Integer> counts) {
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(counts.entrySet());
         entries.sort((a, b) -> !b.getValue().equals(a.getValue()) ? Integer.compare(b.getValue(), a.getValue())
             : a.getKey().compareTo(b.getKey()));

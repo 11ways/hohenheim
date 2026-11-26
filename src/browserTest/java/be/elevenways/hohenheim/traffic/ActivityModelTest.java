@@ -68,14 +68,16 @@ class ActivityModelTest {
 
         List<Flight> flights = model.takeBirths();
         assertEquals(7, flights.size(), "step 2: a dot for every hit the frame carries");
-        assertEquals(new Flight(0, 0, StatusClass.SUCCESS, 0), flights.get(0), "step 2: the person to site 2");
-        assertEquals(new Flight(0, 0, StatusClass.SUCCESS, 200), flights.get(2),
-            "step 2: born where in its second the hit was recorded");
-        assertEquals(new Flight(2, 0, StatusClass.SUCCESS, 400), flights.get(3), "step 2: the bot from its row");
-        assertEquals(new Flight(3, 0, StatusClass.SUCCESS, 500), flights.get(4), "step 2: the script from its row");
-        assertEquals(new Flight(1, 1, StatusClass.CLIENT_ERROR, 900), flights.get(5),
+        assertEquals(new Flight(0, 0, StatusClass.SUCCESS, 0, 0f, "/a"), flights.get(0), "step 2: the person to site 2");
+        assertEquals(new Flight(0, 0, StatusClass.SUCCESS, 200, 0f, "/a"), flights.get(2),
+            "step 2: born where in its second the hit was recorded, a tenth of a second apart: on the guide");
+        assertEquals(new Flight(2, 0, StatusClass.SUCCESS, 400, 0f, "/robots.txt"), flights.get(3),
+            "step 2: the bot from its row");
+        assertEquals(new Flight(3, 0, StatusClass.SUCCESS, 500, 0f, "/health"), flights.get(4),
+            "step 2: the script from its row");
+        assertEquals(new Flight(1, 1, StatusClass.CLIENT_ERROR, 900, 0f, "/x"), flights.get(5),
             "step 2: the refused person to site 1, in the refused class");
-        assertEquals(new Flight(3, 2, StatusClass.CLIENT_ERROR, 0), flights.get(6),
+        assertEquals(new Flight(3, 2, StatusClass.CLIENT_ERROR, 0, 0f, "/"), flights.get(6),
             "step 2: a name nobody serves to its own row");
         assertTrue(model.takeBirths().isEmpty(), "step 2: a dot is handed over once");
 
@@ -246,6 +248,157 @@ class ActivityModelTest {
     }
 
     @Test
+    void requestsOfOneMomentAreSeveralDotsUpToTheRowsBound() {
+        ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1", "2"));
+
+        // 1. One visitor asks site 1 five times within a few milliseconds: five dots, the first on the guide, the
+        //    others each off it across the row and a little later along the curve, no two in one place.
+        List<LiveHit> moment = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            moment.add(hit(SECOND * 1000 + 300 + i, "/burst", 200, "firefox", "203.0.113.5"));
+        }
+        model.accept(new LiveHits(SECOND, List.of(source("1", moment, 5))));
+        List<Flight> flights = model.takeBirths();
+        assertEquals(5, flights.size(), "step 1: a dot for every request");
+        assertEquals(0f, flights.get(0).lane(), "step 1: the first on the guide");
+        assertEquals(300, flights.get(0).offsetMs(), "step 1: when it was recorded");
+        List<String> places = new ArrayList<>();
+        for (Flight flight : flights) {
+            assertTrue(Math.abs(flight.lane()) <= ActivityModel.LANE_SPREAD, "step 1: within its row: " + flight);
+            assertTrue(flight.offsetMs() >= 300 && flight.offsetMs() <= 304 + ActivityModel.SPREAD_MS,
+                "step 1: at most a quarter second later: " + flight);
+            places.add(flight.lane() + "@" + flight.offsetMs());
+        }
+        assertEquals(5, places.stream().distinct().count(), "step 1: five places: " + places);
+
+        // 2. The next second site 1 is asked 70 times, all carried, and site 2 five times: site 1's row takes 60
+        //    dots, the other ten are counted as not drawn; site 2's row has its own 60.
+        List<LiveHit> many = new ArrayList<>();
+        for (int i = 0; i < 70; i++) {
+            many.add(hit((SECOND + 1) * 1000 + 10 * i, "/many", 200, "firefox", "203.0.113.5"));
+        }
+        List<LiveHit> other = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            other.add(hit((SECOND + 1) * 1000 + 100 * i, "/other", 200, "firefox", "203.0.113.6"));
+        }
+        model.accept(new LiveHits(SECOND + 1, List.of(source("1", many, 70), source("2", other, 5))));
+        flights = model.takeBirths();
+        assertEquals(60, flights.stream().filter(flight -> flight.site() == 0).count(), "step 2: site 1's bound");
+        assertEquals(5, flights.stream().filter(flight -> flight.site() == 1).count(), "step 2: site 2's own");
+        assertEquals(10, model.notDrawn(), "step 2: the rest counted, never drawn");
+        assertEquals(75, model.requests(model.sites().get(0)), "step 2: and every request in the rate");
+
+        // 3. Each site's busiest path of the minute, which a still picture shows beside the row.
+        assertEquals("/many", model.busiestPath(model.sites().get(0)), "step 3: site 1's");
+        assertEquals("/other", model.busiestPath(model.sites().get(1)), "step 3: site 2's");
+    }
+
+    @Test
+    void anArrivalLightsItsSiteRowAndShowsThePathAskedMost() {
+        ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1"));
+        ActivityDriver driver = driver(model, new ArrayList<>(), new int[1]);
+        OffscreenSurface surface = new OffscreenSurface(640, 400, SurfaceOptions.TRANSPARENT);
+        driver.attach(surface);
+        try {
+            // 1. A request flies: nothing glows and no path shows before it arrives.
+            driver.offer(new LiveHits(SECOND, List.of(source("1",
+                List.of(hit(SECOND * 1000, "/arrive", 200, "chrome", "203.0.113.1")), 1))));
+            surface.setFrameMs(1_000);
+            driver.frame(surface);
+            surface.setFrameMs(2_500);
+            driver.frame(surface);
+            assertEquals(0f, driver.glow(0, surface), "step 1: on its way, no glow");
+            assertNull(driver.shownPath(0, surface), "step 1: nor a path");
+
+            // 2. The first frame after it arrived draws, though no dot flies any more: the row glows at once and
+            //    its path shows; the glow is gone after PULSE_MS, the path after PATH_MS.
+            int drawn = driver.frames();
+            surface.setFrameMs(2_650);
+            driver.frame(surface);
+            assertEquals(drawn + 1, driver.frames(), "step 2: the arrival is drawn");
+            assertEquals(1f, driver.glow(0, surface), "step 2: the row glows");
+            assertEquals("/arrive", driver.shownPath(0, surface), "step 2: the path beside it");
+            surface.setFrameMs(2_650 + ActivityDriver.PULSE_MS + 10);
+            driver.frame(surface);
+            assertEquals(0f, driver.glow(0, surface), "step 2: the glow is brief");
+            assertEquals("/arrive", driver.shownPath(0, surface), "step 2: the path a moment longer");
+            surface.setFrameMs(2_650 + ActivityDriver.PATH_MS + 10);
+            driver.frame(surface);
+            assertNull(driver.shownPath(0, surface), "step 2: then gone");
+
+            // 3. Three arrive close together, /b twice then /a: the busiest path wins over the latest.
+            driver.offer(new LiveHits(SECOND + 2, List.of(source("1", List.of(
+                hit((SECOND + 2) * 1000, "/b", 200, "chrome", "203.0.113.1"),
+                hit((SECOND + 2) * 1000 + 100, "/b", 200, "chrome", "203.0.113.1"),
+                hit((SECOND + 2) * 1000 + 200, "/a", 404, "chrome", "203.0.113.1")), 3))));
+            surface.setFrameMs(5_000);
+            driver.frame(surface);
+            surface.setFrameMs(6_750);
+            driver.frame(surface);
+            assertEquals("/b", driver.shownPath(0, surface), "step 3: two arrived, both /b");
+            surface.setFrameMs(6_850);
+            driver.frame(surface);
+            assertEquals("/b", driver.shownPath(0, surface), "step 3: /a arrived last, /b was asked most");
+
+            // 4. Reduced motion: nothing glows, no path fades in; a still picture shows the minute's busiest path.
+            surface.setReducedMotion(true);
+            surface.setFrameMs(7_000);
+            driver.frame(surface);
+            assertEquals(0f, driver.glow(0, surface), "step 4: no glow");
+            assertNull(driver.shownPath(0, surface), "step 4: no arrival's path");
+            assertEquals("/b", model.busiestPath(model.sites().get(0)), "step 4: the minute's busiest path");
+        } finally {
+            driver.detach();
+            surface.dispose();
+        }
+    }
+
+    @Test
+    void theRowsFitTheirPictureAndFillAWallScreen() {
+        ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1", "2"));
+        float[] fit = {-1f};
+        ActivityDriver driver = new ActivityDriver(model, copy -> "w" + copy.key(), new ActivityDriver.Colours(
+            0x202020FF, 0x404040FF, 0x303030FF, 0xFFFFFFFF, 0xAAAAAAFF, List.of(1, 2, 3, 4, 5, 6)), TextStyle.DEFAULT,
+            Map.of("1", "site.test", "2", "two.test"), false, new ActivityDriver.Shown() {
+                @Override
+                public void minute(String picture) {
+                }
+
+                @Override
+                public void flying(int dots) {
+                }
+
+                @Override
+                public void fits(float heightPx) {
+                    fit[0] = heightPx;
+                }
+            });
+        OffscreenSurface surface = new OffscreenSurface(640, 900, SurfaceOptions.TRANSPARENT);
+        driver.attach(surface);
+        try {
+            // 1. The longer side is the visitors' three rows (bots, scripts, everyone else): the picture fits the
+            //    header and those rows with their gaps at their own size.
+            driver.offer(new LiveHits(SECOND, List.of(source("1", List.of(), 0))));
+            surface.setFrameMs(1_000);
+            driver.frame(surface);
+            float unit = Math.max(1f, TextStyle.DEFAULT.sizePx() / ActivityDriver.TYPE_PX);
+            int rows = model.origins().size();
+            assertEquals((ActivityDriver.HEAD + rows * ActivityDriver.ROW + (rows - 1) * ActivityDriver.GAP) * unit,
+                fit[0], 0.01f, "step 1: the height the rows fit");
+
+            // 2. Under reduced motion the minute's bars stand under the rows: the fit makes room for them.
+            float moving = fit[0];
+            surface.setReducedMotion(true);
+            surface.setFrameMs(2_000);
+            driver.frame(surface);
+            assertEquals(moving / ActivityDriver.ROWS_SHARE, fit[0], 0.01f, "step 2: rows and bars");
+        } finally {
+            driver.detach();
+            surface.dispose();
+        }
+    }
+
+    @Test
     void theLegendNamesTheRareClassesOnlyWhileTheMinuteHoldsOne() {
         ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1"));
         List<StatusClass> everyday = List.of(StatusClass.SUCCESS, StatusClass.REDIRECTION, StatusClass.CLIENT_ERROR,
@@ -298,6 +451,10 @@ class ActivityModelTest {
                 @Override
                 public void flying(int dots) {
                     flying[0] = dots;
+                }
+
+                @Override
+                public void fits(float heightPx) {
                 }
             });
     }

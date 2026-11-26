@@ -110,6 +110,24 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
             assertThat(flying.intValue()).as("step 2: the three dots in flight, held").isGreaterThanOrEqualTo(3);
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-activity.png"))
                 .setFullPage(true));
+            // In its place the picture is as tall as its rows fit (never under 14rem), not a fixed box.
+            assertThat((Boolean) page.evaluate("() => { const s = document.querySelector('" + SURFACE + "');"
+                + " const fit = parseFloat(s.style.getPropertyValue('--hh-activity-fit'));"
+                + " const least = 14 * parseFloat(getComputedStyle(document.documentElement).fontSize);"
+                + " return fit > 0 && Math.abs(s.getBoundingClientRect().height - Math.max(fit, least)) < 2; }"))
+                .as("step 2: the picture fits its rows").isTrue();
+
+            // 2b. One browser asks site a six times at once: six dots, spread across the row and along the curve
+            //     (ActivityModelTest pins the spread), all in flight under the held clock.
+            context.clock().resume();
+            fixture.requests(fixture.siteA, "/burst", 6, BROWSER);
+            counted = this.awaitLined(counted + 6);
+            context.clock().pauseAt(((Number) page.evaluate("() => Date.now()")).longValue() + 250);
+            context.clock().runFor(1_100);
+            assertThat(((Number) page.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d"))
+                .intValue()).as("step 2b: six dots of one moment in flight").isGreaterThanOrEqualTo(6);
+            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-activity-burst.png"))
+                .setFullPage(true));
 
             // 3. The clock runs again under a steady stream (fifteen requests a second for four seconds): the host
             //    writes the picture's frame time over its last 600 frames, read once 240 frames were drawn since.
@@ -153,12 +171,18 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
             this.awaitLined(counted + 1);
 
             // 6. Reduced motion: the surface follows the preference live and draws the rows still over the bars of
-            //    the minute.
+            //    the minute, the picture grown to fit the bars too; the frame after that draws at the grown size.
             Number before = (Number) page.evaluate("() => document.querySelector('" + SURFACE + "').frames3d");
             page.emulateMedia(new Page.EmulateMediaOptions().setReducedMotion(ReducedMotion.REDUCE));
-            page.waitForFunction("before => { const s = document.querySelector('" + SURFACE + "'); return "
-                + "s.hasAttribute('data-3d-reduced-motion') && s.frames3d > before; }", before.intValue(),
+            page.waitForFunction("before => { const s = document.querySelector('" + SURFACE + "');"
+                + " const fit = parseFloat(s.style.getPropertyValue('--hh-activity-fit'));"
+                + " const least = 14 * parseFloat(getComputedStyle(document.documentElement).fontSize);"
+                + " return s.hasAttribute('data-3d-reduced-motion') && s.frames3d > before"
+                + " && Math.abs(s.getBoundingClientRect().height - Math.max(fit, least)) < 2; }", before.intValue(),
                 new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
+            Number grown = (Number) page.evaluate("() => document.querySelector('" + SURFACE + "').frames3d");
+            page.waitForFunction("grown => document.querySelector('" + SURFACE + "').frames3d > grown",
+                grown.intValue(), new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-activity-still.png"))
                 .setFullPage(true));
             page.emulateMedia(new Page.EmulateMediaOptions().setReducedMotion(ReducedMotion.NO_PREFERENCE));

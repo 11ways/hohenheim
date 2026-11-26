@@ -143,17 +143,9 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
             assertThat(frames).as("step 3: no frame carries an address").noneMatch(frame -> frame.contains(VISITOR));
             tv.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-tv-1080.png")));
 
-            // 4. The picture is sized from the screen: at 3840x2160 its type is about twice the 1080p one.
-            double small = this.typeOf(tv);
-            tv.setViewportSize(3840, 2160);
-            tv.waitForFunction("least => parseFloat(getComputedStyle(document.querySelector('" + SURFACE
-                + "')).fontSize) >= least", small * 1.8, new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
-            tv.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-tv-2160.png")));
-            assertThat(this.typeOf(tv)).as("step 4: never tiny on a 4K screen").isGreaterThanOrEqualTo(small * 1.8);
-            tv.setViewportSize(1920, 1080);
-
-            // 5. A steady stream at 1080p (fifteen requests a second for four seconds) under the running clock: the
+            // 4. A steady stream at 1080p (fifteen requests a second for four seconds) under the running clock: the
             //    host writes the picture's frame time over its last 600 frames, read once 240 were drawn since.
+
             context.clock().resume();
             Number resumed = (Number) tv.evaluate("() => document.querySelector('" + SURFACE + "').frames3d");
             int most = 0;
@@ -170,8 +162,24 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
                 new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
             System.out.println("[traffic-tv] tickP95Ms3d=" + tv.evaluate("() => document.querySelector('" + SURFACE
                 + "').tickP95Ms3d") + " at 1920x1080 with at most " + most + " dots in flight");
-            assertThat(most).as("step 5: the stream kept dots in flight").isPositive();
-            assertThat(frames).as("step 5: still no address").noneMatch(frame -> frame.contains(VISITOR));
+            assertThat(most).as("step 4: the stream kept dots in flight").isPositive();
+            assertThat(frames).as("step 4: still no address").noneMatch(frame -> frame.contains(VISITOR));
+
+            // 5. A 4K screen opening the same link: its type about twice the 1080p one, and the picture drawn from
+            //    that type, its rows filling the screen, a dot in flight.
+            double small = this.typeOf(tv);
+            Page big = page.context().newPage();
+            big.setViewportSize(3840, 2160);
+            big.navigate(baseUrl() + "/tv/" + token);
+            big.waitForSelector("hh-traffic-activity[tv] pl-kiosk[data-staged]",
+                new Page.WaitForSelectorOptions().setTimeout(WAIT.toMillis()));
+            fixture.request(fixture.siteA, "/on-a-big-screen", BROWSER);
+            this.awaitLined(big, 1);
+            big.waitForFunction("() => document.querySelector('" + SURFACE + "').flyingDots3d > 0", null,
+                new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
+            big.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-tv-2160.png")));
+            assertThat(this.typeOf(big)).as("step 5: never tiny on a 4K screen").isGreaterThanOrEqualTo(small * 1.8);
+            big.close();
 
             // 6. The administrator ends the link on the Activity tab: the framework's dialog asks once, saying what
             //    ending does; confirmed, the row is gone and the page stands whole; the open TV page stops and says so.

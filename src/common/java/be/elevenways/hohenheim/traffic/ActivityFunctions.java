@@ -39,6 +39,9 @@ public final class ActivityFunctions {
     /** The surface's property holding how many dots flew at the last draw, as the host's frames3d counts frames. */
     public static final String FLYING_PROPERTY = "flyingDots3d";
 
+    /** The custom property the surface's height reads in its place: the height its rows fit (ActivityDriver). */
+    public static final String FIT_PROPERTY = "--hh-activity-fit";
+
     private ActivityFunctions() {
     }
 
@@ -121,6 +124,11 @@ public final class ActivityFunctions {
         @Override
         public void flying(int dots) {
             this.surface.setPropertyData(FLYING_PROPERTY, dots);
+        }
+
+        @Override
+        public void fits(float heightPx) {
+            this.surface.getStyle().setProperty(FIT_PROPERTY, Math.round(heightPx) + "px");
         }
 
         void end() {
