@@ -46,6 +46,7 @@ public final class HohenheimTemplateIds {
     public static final Identifier RECORD_TRAFFIC = Identifier.of("hohenheim", "cms/record-traffic");
     public static final Identifier TRAFFIC_REPORT = Identifier.of("hohenheim", "cms/traffic-report");
     public static final Identifier TRAFFIC_ACTIVITY = Identifier.of("hohenheim", "cms/traffic-activity");
+    public static final Identifier TRAFFIC_TV = Identifier.of("hohenheim", "cms/traffic-tv");
     public static final Identifier SPAMSERVICE_OVERVIEW = Identifier.of("hohenheim", "cms/spamservice-overview");
     public static final Identifier SPAMSERVICE_REPUTATION = Identifier.of("hohenheim", "cms/spamservice-reputation");
     public static final Identifier SPAMSERVICE_SAMPLE_ANALYSIS =

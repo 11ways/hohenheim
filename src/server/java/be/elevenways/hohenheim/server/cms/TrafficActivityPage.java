@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.traffic.ActivityView;
 import be.elevenways.plumage.component.NavTab;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -81,13 +82,22 @@ public final class TrafficActivityPage extends PanelPage {
         return HohenheimSources.ADMIN_ACCESS;
     }
 
+    /** The TV page card's make and end, placed on this tab. */
+    @Override
+    public @NonNull List<PanelAction<Object>> actions() {
+        return List.of(TrafficTvLinks.MAKE_ACTION, TrafficTvLinks.END_ACTION);
+    }
+
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", this.label().asString(request.conduit()));
-        vars.put("lead", this.description());
+        vars.put("pageLead", this.description());
         vars.put("tabs", tabs(request.panelSlug(), Tab.ACTIVITY));
-        vars.put("view", view(ActivityAsk.every(), true, false));
+        ActivityAsk every = ActivityAsk.every();
+        ActivityView view = view(every, every.spelled(), true, false);
+        vars.put("view", view);
+        vars.put("tv", TrafficTvLinks.card(request, this, view.names()));
         return new RenderTemplateResult(HohenheimTemplateIds.TRAFFIC_ACTIVITY, vars);
     }
 
@@ -104,22 +114,24 @@ public final class TrafficActivityPage extends PanelPage {
     }
 
     /**
-     * @param ask      what the picture's link asks for: every site, or the one site of {@code ask}'s value
+     * @param shows    what the picture shows: every site, or the one site of {@code shows}'s value
+     * @param open     what the picture's link asks for, spelled ({@link ActivityAsk}): {@code shows}, or a TV link
      * @param visitors whether the picture shows visitors' addresses
      * @param strip    whether the last minute's bars stand under the dots (a wall screen)
      * @return the picture's view: its ask, and the names of the sites it shows, one query
      */
-    static @NonNull ActivityView view(@NonNull ActivityAsk ask, boolean visitors, boolean strip) {
+    static @NonNull ActivityView view(@NonNull ActivityAsk shows, @NonNull String open, boolean visitors,
+                                      boolean strip) {
         Map<String, String> names = new LinkedHashMap<>();
-        boolean one = ask.kind() == ActivityAsk.Kind.SITE;
-        Integer only = one ? HohenheimTraffic.siteOf(Objects.requireNonNull(ask.value())) : null;
+        boolean one = shows.kind() == ActivityAsk.Kind.SITE;
+        Integer only = one ? HohenheimTraffic.siteOf(Objects.requireNonNull(shows.value())) : null;
         // One site's ask names that site alone; one this build cannot read names none, never every site.
         List<Row> sites = !one ? Models.get(SiteModel.class).find().orderBy(SiteModel.NAME, SortOrder.ASC).all()
             : only == null ? List.of() : Models.get(SiteModel.class).find().where(SiteModel.ID.eq(only)).all();
         for (Row site : sites) {
             names.put(HohenheimTraffic.sourceOf(site.get(SiteModel.ID)), site.get(SiteModel.NAME));
         }
-        return new ActivityView(ask.spelled(), new ArrayList<>(names.keySet()), names, HohenheimTraffic.UNSERVED,
+        return new ActivityView(open, new ArrayList<>(names.keySet()), names, HohenheimTraffic.UNSERVED,
             visitors, strip, ActivityPalette.legend());
     }
 }

@@ -98,6 +98,7 @@ public final class HohenheimHandlers {
         InstanceFigureHandler.init();
         DeployLogHandler.init();
         TrafficActivityHandler.init();
+        TrafficTvLinks.init();
     }
 
     // -----------------------------------------------------------------------

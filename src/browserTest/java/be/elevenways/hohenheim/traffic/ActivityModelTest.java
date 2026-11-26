@@ -99,8 +99,10 @@ class ActivityModelTest {
         assertEquals(200, model.requests(), "step 1: the counts are the whole second");
         assertEquals(140, model.notDrawn(), "step 1: what the frame left out is said, never drawn");
         assertEquals(60, model.takeBirths().size(), "step 1: a dot for every carried hit");
-        assertEquals(new Origin(OriginKind.OTHERS, null), model.origins().getFirst(),
-            "step 1: without addresses every person is one row");
+        Origin first = model.origins().getFirst();
+        assertEquals(new Origin(OriginKind.ADDRESS, "#7"), first,
+            "step 1: without addresses a person's row is named by the mark of their visitor");
+        assertEquals(1, model.number(first), "step 1: and worded as a number, Visitor 1");
 
         // 2. The next frame comes two seconds later: the second between was not heard, never a quiet second.
         model.accept(new LiveHits(SECOND + 2, List.of(source("1", List.of(), 0))));
@@ -261,7 +263,8 @@ class ActivityModelTest {
     }
 
     private static LiveHit hit(long at, String path, int status, String agent, String visitor) {
-        return new LiveHit(at, path, status, 100, agent, visitor);
+        // A stand-in for the live seam's mark (an HMAC it alone holds): equal for equal visitors, 7 for none named.
+        return new LiveHit(at, path, status, 100, agent, visitor == null ? 7 : visitor.hashCode(), visitor);
     }
 
     private static LiveSource source(String source, List<LiveHit> hits, long requests) {

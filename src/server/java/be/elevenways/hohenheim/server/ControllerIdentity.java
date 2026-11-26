@@ -91,6 +91,20 @@ public final class ControllerIdentity {
         Blast.slog("hohenheim.controller_identity", Map.of("token", token()));
     }
 
+    /**
+     * @return the id of this controller's one identity row, minting it on first use: the record this server's own
+     *         share links (its TV links) open
+     */
+    public static synchronized int recordId() {
+        token();
+        Row row = Models.get(ControllerIdentityModel.class).find().first();
+        Integer id = row == null ? null : row.get(ControllerIdentityModel.ID);
+        if (id == null) {
+            throw new IllegalStateException("The controller identity row did not read back after its token did");
+        }
+        return id;
+    }
+
     /** Drop the memo; the next {@link #token()} re-reads. Test lifecycle only. */
     public static synchronized void forgetForTest() {
         TOKENS.clear();

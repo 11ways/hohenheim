@@ -19,6 +19,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.SiteGuards;
+import be.elevenways.hohenheim.server.cms.TrafficTvLinkLevel;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordCompanion;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -487,6 +488,7 @@ final class HohenheimGrantPolicy {
                 // The requester IS the owner: the (id, kind) pair renewal re-decides authority
                 // against every sweep.
                 .ownedBy(CertificateModel.REQUESTER));
+        TrafficTvLinkLevel.declare();
     }
 
     /**

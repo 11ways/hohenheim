@@ -5,8 +5,11 @@
        ActivitySummary.SPEAK_EVERY seconds (politely, never per request). The line, the figures and the picture's own
        words (its accessible name, every row with its figure) all come from the summary the picture hands over after
        the draw that shows them, so they say what the picture shows. Inside pl-kiosk, whose Full screen stages the
-       picture over the panel. `tv` is the wall screen's look: the four figures large, the bars of the last minute
-       under the dots, the kiosk staged from the start. */
+       picture over the panel. `tv` is the wall screen's look, staged in its look's dark answer (pl-kiosk tone): the
+       server's name and the clock over the four figures, the bars of the last minute under the dots, the kiosk staged
+       from the start, every size taken from the screen
+       (its type grows with the shorter side, and the picture draws its rows and dots from that type), and the picture
+       filling what the screen leaves under the figures. */
     public required view: ActivityView
     attribute tv: Boolean = false
 
@@ -50,13 +53,66 @@
             font-family: var(--pl-font-family);
         }
 
-        pl-kiosk[data-staged] .hh-activity-surface {
-            block-size: calc(100dvh - 12rem);
+        /* A wall screen: the type grows with the screen's shorter side, so a 4K screen reads like a 1080p one. */
+        &[tv] {
+            font-size: max(var(--pl-font-size-md), 1.7vmin);
         }
 
         &[tv] .hh-activity-surface {
-            block-size: calc(100dvh - 22rem);
-            font-size: var(--pl-font-size-lg);
+            font-size: 1em;
+        }
+
+        /* Staged, the picture takes every line the screen leaves under the bar, the figures and the legend. */
+        pl-kiosk[data-staged] {
+            display: flex;
+            flex-direction: column;
+        }
+
+        pl-kiosk[data-staged] [data-hh-activity-picture],
+        pl-kiosk[data-staged] [data-hh-activity-picture] pl-card-content {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-block-size: 0;
+        }
+
+        pl-kiosk[data-staged] .hh-activity-surface {
+            flex: 1 1 auto;
+            block-size: auto;
+            min-block-size: 16rem;
+        }
+
+        .hh-activity-tv-top {
+            display: flex;
+            align-items: baseline;
+            gap: 1.5em;
+            margin-block-end: 0.6em;
+        }
+
+        .hh-activity-tv-name {
+            margin: 0;
+            font-size: 2.2em;
+            font-weight: var(--pl-font-weight-bold);
+        }
+
+        .hh-activity-tv-sub {
+            color: var(--pl-color-text-muted);
+            font-size: 1.2em;
+        }
+
+        .hh-activity-tv-clock {
+            margin-inline-start: auto;
+            font-size: 3.4em;
+            font-weight: var(--pl-font-weight-bold);
+            font-variant-numeric: tabular-nums;
+        }
+
+        &[tv] .hh-activity-figure-value {
+            font-size: 2.8em;
+        }
+
+        &[tv] .hh-activity-line {
+            font-size: 1em;
         }
 
         .hh-activity-figure-value {
@@ -91,8 +147,13 @@
     }
 
     template {
-        <pl-kiosk always={% tv %}>
+        <pl-kiosk always={% tv %} tone={% tv ? "dark" : "default" %}>
             {% if tv %}
+            <header class="hh-activity-tv-top" data-hh-activity-tv-top>
+                <h1 class="hh-activity-tv-name">{{ Brand.nameOrDefault() }}</h1>
+                <span class="hh-activity-tv-sub">{{ t("tv_title", scope: "traffic_screen") }}</span>
+                <span class="hh-activity-tv-clock" data-hh-activity-clock>{{ summary{:} != null && summary{:}.latest != null ? t("tv_clock", scope: "traffic_screen", at: summary{:}.latest) : "" }}</span>
+            </header>
             <pl-grid size="sm" balanced data-hh-activity-figures>
                 <pl-card data-hh-activity-figure="requests"><pl-card-content>
                     <div class="hh-activity-figure-value">{{ summary{:} != null ? t("activity_count", scope: "traffic_screen", count: summary{:}.requests) : "" }}</div>
@@ -119,7 +180,7 @@
                     {% /each %}
                 </pl-legend>
                 <span class="hh-activity-line" data-hh-activity-line>{{ summary{:} == null ? t("activity_waiting", scope: "traffic_screen")
-                    : (summary{:}.ended ? t("activity_ended", scope: "traffic_screen")
+                    : (summary{:}.ended ? (tv ? t("activity_tv_ended", scope: "traffic_screen") : t("activity_ended", scope: "traffic_screen"))
                     : t("activity_line", scope: "traffic_screen", at: summary{:}.latest, count: summary{:}.requests)) }}</span>
                 {% if summary{:} != null && summary{:}.notDrawn > 0 %}
                 <span class="hh-activity-line" data-hh-activity-not-drawn>{{ t("activity_not_drawn", scope: "traffic_screen", count: summary{:}.notDrawn) }}</span>

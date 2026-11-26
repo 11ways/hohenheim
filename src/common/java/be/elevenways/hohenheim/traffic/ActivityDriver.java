@@ -69,10 +69,16 @@ public final class ActivityDriver implements SurfaceDriver {
     /** How many bot or tool families a row names before it counts the rest. */
     static final int FAMILIES_NAMED = 2;
 
-    /** A row's height and the room between rows, in CSS pixels, at most. */
+    /** A row's height and the room between rows, in CSS pixels at the panel's type, at most. */
     static final float ROW = 46f;
     static final float GAP = 10f;
     static final float HEAD = 30f;
+
+    /**
+     * The type size every length here is drawn for: a picture whose surface sets larger type (a wall screen sizes it
+     * from the screen) draws its rows, gaps and dots that much larger, never smaller.
+     */
+    static final float TYPE_PX = 14f;
 
     /** The share of the height the rows take when the minute's bars stand under them. */
     static final float ROWS_SHARE = 0.72f;
@@ -84,6 +90,7 @@ public final class ActivityDriver implements SurfaceDriver {
     private static final Microcopy ORIGIN_MORE = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_origin_more");
     private static final Microcopy ORIGIN_REQUESTS = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_origin_requests");
     private static final Microcopy ORIGIN_TOOLS = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_origin_tools");
+    private static final Microcopy ORIGIN_VISITOR = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_origin_visitor");
     private static final Microcopy ORIGIN_VISITORS = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_origin_visitors");
     private static final Microcopy FAMILIES_MORE = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_families_more");
     private static final Microcopy RATE = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_rate");
@@ -138,6 +145,8 @@ public final class ActivityDriver implements SurfaceDriver {
     private final @NonNull TextStyle style;
     private final @NonNull Map<String, String> names;
     private final boolean strip;
+    /** How much larger than at {@link #TYPE_PX} every length is drawn. */
+    private final float unit;
     private final @NonNull Shown shown;
 
     private final RectBatch boxes = new RectBatch();
@@ -174,6 +183,7 @@ public final class ActivityDriver implements SurfaceDriver {
         this.style = Objects.requireNonNull(style, "style cannot be null");
         this.names = Map.copyOf(names);
         this.strip = strip;
+        this.unit = Math.max(1f, style.sizePx() / TYPE_PX);
         this.shown = Objects.requireNonNull(shown, "shown cannot be null");
     }
 
@@ -238,7 +248,7 @@ public final class ActivityDriver implements SurfaceDriver {
         float rows = withBars ? height * ROWS_SHARE : height;
         this.flows(surface, width, rows, still);
         if (withBars) {
-            this.bars(0, rows + GAP, width, height - rows - GAP);
+            this.bars(0, rows + GAP * this.unit, width, height - rows - GAP * this.unit);
         }
         this.picture.render(surface);
         this.frames++;
@@ -272,16 +282,16 @@ public final class ActivityDriver implements SurfaceDriver {
     private void flows(@NonNull Surface surface, float width, float height, boolean still) {
         List<Origin> origins = this.model.origins();
         List<SiteRow> sites = this.model.sites();
-        float originWidth = clamp(width * 0.2f, 140f, 260f);
-        float siteWidth = clamp(width * 0.26f, 170f, 320f);
+        float u = this.unit;
+        float originWidth = clamp(width * 0.2f, 140f * u, 260f * u);
+        float siteWidth = clamp(width * 0.26f, 170f * u, 320f * u);
         float small = this.style.sizePx() * 0.85f;
-        this.label(HEAD_VISITORS, 0, HEAD - 12, TextAnchor.LEFT, this.colours.muted, small);
-        this.label(HEAD_SITES, width, HEAD - 12, TextAnchor.RIGHT, this.colours.muted, small);
-        float originRow = rowHeight(height, origins.size());
-        float siteRow = rowHeight(height, sites.size());
+        this.label(HEAD_VISITORS, 0, (HEAD - 12) * u, TextAnchor.LEFT, this.colours.muted, small);
+        this.label(HEAD_SITES, width, (HEAD - 12) * u, TextAnchor.RIGHT, this.colours.muted, small);
+        float originRow = this.rowHeight(height, origins.size());
+        float siteRow = this.rowHeight(height, sites.size());
         float fromX = originWidth;
         float toX = width - siteWidth;
-
         // A faint guide for every pair a dot flew between since the rows were last ranked.
         if (this.model.revision() != this.drawnRevision) {
             this.guided.clear();
@@ -292,16 +302,16 @@ public final class ActivityDriver implements SurfaceDriver {
             }
             this.guided.add((long) flight.origin() << 32 | flight.site());
             if (!still) {
-                this.dots.style(4.5f, this.colours.of(flight.statusClass())).fade(0.08f, 0.15f)
+                this.dots.style(4.5f * u, this.colours.of(flight.statusClass())).fade(0.08f, 0.15f)
                     .easing(Easing.IN_OUT).bend(BEND).trail(TRAIL)
-                    .add(fromX, rowMiddle(flight.origin(), originRow), toX, rowMiddle(flight.site(), siteRow),
-                        surface.frameMs() + flight.offsetMs(), TRAVEL_MS);
+                    .add(fromX, this.rowMiddle(flight.origin(), originRow), toX,
+                        this.rowMiddle(flight.site(), siteRow), surface.frameMs() + flight.offsetMs(), TRAVEL_MS);
             }
         }
-        this.guides.style(1f, this.colours.guide);
+        this.guides.style(u, this.colours.guide);
         for (long pair : this.guided) {
-            float fromY = rowMiddle((int) (pair >>> 32), originRow);
-            float toY = rowMiddle((int) pair, siteRow);
+            float fromY = this.rowMiddle((int) (pair >>> 32), originRow);
+            float toY = this.rowMiddle((int) pair, siteRow);
             // The very curve the dots fly on (DotBatch.along), in straight pieces.
             this.guides.moveTo(fromX, fromY);
             for (int step = 1; step <= GUIDE_STEPS; step++) {
@@ -312,18 +322,19 @@ public final class ActivityDriver implements SurfaceDriver {
 
         for (int i = 0; i < origins.size(); i++) {
             Origin origin = origins.get(i);
-            float y = HEAD + i * (originRow + GAP);
-            this.boxes.rect(0, y, originWidth, originRow, 8, this.colours.box, this.colours.edge, 1f);
-            this.rowWords(this.originName(origin), this.originSub(origin), 12, y, originRow, originWidth - 24);
+            float y = (HEAD + i * GAP) * u + i * originRow;
+            this.boxes.rect(0, y, originWidth, originRow, 8 * u, this.colours.box, this.colours.edge, u);
+            this.rowWords(this.originName(origin), this.originSub(origin), 12 * u, y, originRow,
+                originWidth - 24 * u);
         }
         for (int i = 0; i < sites.size(); i++) {
             SiteRow row = sites.get(i);
-            float y = HEAD + i * (siteRow + GAP);
+            float y = (HEAD + i * GAP) * u + i * siteRow;
             boolean none = row.kind() == SiteKind.UNSERVED;
-            this.boxes.rect(toX, y, siteWidth, siteRow, 8, none ? 0 : this.colours.box, this.colours.edge, 1f);
-            this.rowWords(this.siteName(row), null, toX + 12, y, siteRow, siteWidth - 70);
-            this.label(this.rate(row), width - 10, y + siteRow / 2 + this.style.sizePx() * 0.35f, TextAnchor.RIGHT,
-                this.colours.muted, small);
+            this.boxes.rect(toX, y, siteWidth, siteRow, 8 * u, none ? 0 : this.colours.box, this.colours.edge, u);
+            this.rowWords(this.siteName(row), null, toX + 12 * u, y, siteRow, siteWidth - 70 * u);
+            this.label(this.rate(row), width - 10 * u, y + siteRow / 2 + this.style.sizePx() * 0.35f,
+                TextAnchor.RIGHT, this.colours.muted, small);
         }
     }
 
@@ -333,9 +344,9 @@ public final class ActivityDriver implements SurfaceDriver {
      */
     private void bars(float x, float y, float width, float height) {
         float small = this.style.sizePx() * 0.85f;
-        this.label(HEAD_SECONDS, x, y + 16, TextAnchor.LEFT, this.colours.muted, small);
-        float top = y + 26;
-        float plot = Math.max(1f, height - 26);
+        this.label(HEAD_SECONDS, x, y + 16 * this.unit, TextAnchor.LEFT, this.colours.muted, small);
+        float top = y + 26 * this.unit;
+        float plot = Math.max(1f, height - 26 * this.unit);
         List<long[]> seconds = this.model.perSecond();
         long most = 1;
         for (long[] second : seconds) {
@@ -397,7 +408,8 @@ public final class ActivityDriver implements SurfaceDriver {
 
     private @NonNull Microcopy originName(@NonNull Origin origin) {
         return switch (origin.kind()) {
-            case ADDRESS -> Microcopy.literal(Objects.requireNonNull(origin.address()));
+            case ADDRESS -> this.model.showsAddresses() ? Microcopy.literal(Objects.requireNonNull(origin.address()))
+                : ORIGIN_VISITOR.withArg("number", this.model.number(origin));
             case BOTS -> ORIGIN_BOTS;
             case TOOLS -> ORIGIN_TOOLS;
             case OTHERS -> this.model.origins().stream().anyMatch(each -> each.kind() == OriginKind.ADDRESS)
@@ -468,13 +480,14 @@ public final class ActivityDriver implements SurfaceDriver {
         this.text.text(label, x, baseline, anchor, rgba);
     }
 
-    private static float rowMiddle(int row, float rowHeight) {
-        return HEAD + row * (rowHeight + GAP) + rowHeight / 2;
+    private float rowMiddle(int row, float rowHeight) {
+        return (HEAD + row * GAP) * this.unit + row * rowHeight + rowHeight / 2;
     }
 
-    private static float rowHeight(float height, int rows) {
-        if (rows == 0) return ROW;
-        return Math.max(18f, Math.min(ROW, (height - HEAD - (rows - 1) * GAP) / rows));
+    private float rowHeight(float height, int rows) {
+        float u = this.unit;
+        if (rows == 0) return ROW * u;
+        return Math.max(18f * u, Math.min(ROW * u, (height - HEAD * u - (rows - 1) * GAP * u) / rows));
     }
 
     private static float clamp(float value, float least, float most) {

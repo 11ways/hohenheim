@@ -39,7 +39,7 @@ public final class ActivityModel {
     /** How many seconds the picture remembers: "the last minute". */
     public static final int WINDOW_SECONDS = 60;
 
-    /** How many visitors get a row of their own, when visitors are shown. */
+    /** How many visitors get a row of their own: by address when addresses are shown, else numbered by their mark. */
     public static final int ADDRESS_ROWS = 4;
 
     /** How many sites get a row of their own; the rest share one. */
@@ -53,7 +53,7 @@ public final class ActivityModel {
 
     /** Which kind of visitor a row stands for; the members are the rows' order below the visitors of their own. */
     public enum OriginKind {
-        /** One visitor, by address. */
+        /** One visitor, by address, or (addresses not shown) by its mark, worded as a number. */
         ADDRESS,
         /** Every crawler a user agent family calls a bot. */
         BOTS,
@@ -63,7 +63,11 @@ public final class ActivityModel {
         OTHERS
     }
 
-    /** One row a dot leaves from. */
+    /**
+     * One row a dot leaves from.
+     *
+     * @param address the visitor's address, or {@code #} and its mark when addresses are not shown; null for a group
+     */
     public record Origin(@NonNull OriginKind kind, @Nullable String address) {
     }
 
@@ -127,13 +131,15 @@ public final class ActivityModel {
     private List<Origin> origins = List.of();
     private List<SiteRow> sites = List.of();
     private long latest = Long.MIN_VALUE;
+    /** Each visitor row's number, while addresses are not shown: kept while the visitor keeps a row. */
+    private final Map<String, Integer> numbers = new HashMap<>();
     private long first = Long.MIN_VALUE;
     private long rankedAt = Long.MIN_VALUE;
     private long spokenAt = Long.MIN_VALUE;
     private int revision;
 
     /**
-     * @param visitors whether the frames carry visitors' addresses, so each of the busiest gets a row
+     * @param visitors whether the frames carry visitors' addresses, so a visitor's row names its address
      * @param unserved the source of the names no site serves
      * @param named    the sources the viewer may see, by their names' order: they rank before sources never heard
      */
@@ -218,9 +224,19 @@ public final class ActivityModel {
     public int revision() {
         return this.revision;
     }
-
     public @NonNull List<Origin> origins() {
         return this.origins;
+    }
+
+    /** @return whether a visitor's row names its address; otherwise it is numbered ({@link #number}) */
+    public boolean showsAddresses() {
+        return this.visitors;
+    }
+
+    /** @return a visitor row's number when addresses are not shown, from 1; 0 for any other row */
+    public int number(@NonNull Origin origin) {
+        return origin.kind() != OriginKind.ADDRESS || this.visitors ? 0
+            : this.numbers.getOrDefault(origin.address(), 0);
     }
 
     public @NonNull List<SiteRow> sites() {
@@ -386,8 +402,7 @@ public final class ActivityModel {
         for (LiveHit hit : source.hits()) {
             OriginKind group = groupOf(hit.agent());
             if (group == null) {
-                // Without an address (a listener not shown visitors) every person is one of the others.
-                second.addresses.merge(hit.visitor() == null ? "" : hit.visitor(), 1, Integer::sum);
+                second.addresses.merge(this.keyOf(hit), 1, Integer::sum);
             } else {
                 String name = nameOf(Objects.requireNonNull(familyOf(hit.agent())), hit.agent());
                 (group == OriginKind.BOTS ? second.bots : second.tools).merge(name, 1, Integer::sum);
@@ -397,25 +412,26 @@ public final class ActivityModel {
 
     private void rank() {
         List<Origin> ranked = new ArrayList<>();
-        if (this.visitors) {
-            Map<String, Integer> addresses = new HashMap<>();
-            for (Second second : this.window()) {
-                second.addresses.forEach((address, count) -> addresses.merge(address, count, Integer::sum));
-            }
-            addresses.remove("");
-            List<String> busiest = busiestFirst(addresses);
-            for (int i = 0; i < Math.min(ADDRESS_ROWS, busiest.size()); i++) {
-                ranked.add(new Origin(OriginKind.ADDRESS, busiest.get(i)));
-            }
+        Map<String, Integer> addresses = new HashMap<>();
+        for (Second second : this.window()) {
+            second.addresses.forEach((address, count) -> addresses.merge(address, count, Integer::sum));
         }
-        if (!this.visitors) {
-            ranked.add(new Origin(OriginKind.OTHERS, null));
+        List<String> busiest = busiestFirst(addresses);
+        List<String> kept = busiest.subList(0, Math.min(ADDRESS_ROWS, busiest.size()));
+        for (String address : kept) {
+            ranked.add(new Origin(OriginKind.ADDRESS, address));
+        }
+        // A visitor keeps its number while it keeps a row; a new one takes the lowest number free.
+        this.numbers.keySet().retainAll(kept);
+        for (String address : kept) {
+            if (this.numbers.containsKey(address)) continue;
+            int free = 1;
+            while (this.numbers.containsValue(free)) free++;
+            this.numbers.put(address, free);
         }
         ranked.add(new Origin(OriginKind.BOTS, null));
         ranked.add(new Origin(OriginKind.TOOLS, null));
-        if (this.visitors) {
-            ranked.add(new Origin(OriginKind.OTHERS, null));
-        }
+        ranked.add(new Origin(OriginKind.OTHERS, null));
 
         Map<String, Long> bySource = new LinkedHashMap<>();
         for (String source : this.named) {
@@ -463,8 +479,8 @@ public final class ActivityModel {
     }
 
     /**
-     * @return whether a frame names a source without a row, or (visitors shown) a person without a row while an
-     *         address row is free, so it is ranked at once
+     * @return whether a frame names a source without a row, or a person without a row while a visitor row is free, so
+     *         it is ranked at once
      */
     private boolean unplaced(@NonNull LiveHits frame) {
         int addressRows = 0;
@@ -473,9 +489,9 @@ public final class ActivityModel {
         }
         for (LiveSource source : frame.sources()) {
             if (source.requests() > 0 && this.siteRowOf(source.source()) < 0) return true;
-            if (!this.visitors || addressRows >= ADDRESS_ROWS) continue;
+            if (addressRows >= ADDRESS_ROWS) continue;
             for (LiveHit hit : source.hits()) {
-                if (groupOf(hit.agent()) == null && hit.visitor() != null && !this.hasRow(hit.visitor())) {
+                if (groupOf(hit.agent()) == null && !this.hasRow(this.keyOf(hit))) {
                     return true;
                 }
             }
@@ -503,12 +519,17 @@ public final class ActivityModel {
         for (int i = 0; i < this.origins.size(); i++) {
             Origin origin = this.origins.get(i);
             if (kind != null && origin.kind() == kind) return i;
-            if (kind == null && origin.kind() == OriginKind.ADDRESS && Objects.equals(origin.address(), hit.visitor())) {
+            if (kind == null && origin.kind() == OriginKind.ADDRESS && this.keyOf(hit).equals(origin.address())) {
                 return i;
             }
             if (origin.kind() == OriginKind.OTHERS) others = i;
         }
         return others;
+    }
+
+    /** @return the visitor a hit names: its address when addresses are shown, else {@code #} and its mark */
+    private @NonNull String keyOf(@NonNull LiveHit hit) {
+        return this.visitors && hit.visitor() != null ? hit.visitor() : "#" + hit.mark();
     }
 
     /** @return the row kind a client stands in by its family: bots, tools, or null for a person */

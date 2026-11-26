@@ -5,8 +5,10 @@ import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.MalformedQuery;
+import be.elevenways.zenit.common.routing.PageEndpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
+import be.elevenways.zenit.common.routing.ResponseCachePolicy;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 
 import java.time.Duration;
@@ -1541,6 +1543,22 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("health").build())
         .authenticatesItself()
+        .build();
+
+    // --- TV page ---
+    /** A TV link's token, the last segment of its address ({@code /tv/<token>}). */
+    public static final ParameterDefinition<String> TV_TOKEN = ParameterDefinition.builder(String.class)
+        .name("token").identifier(HohenheimIds.id("tv_token")).stringResolver(value -> value).build();
+
+    /**
+     * The TV page: the live Activity picture for whoever holds a TV link, signed in or not, with no panel around it.
+     * The token IS the credential, judged by its handler (TrafficTvPage); a wrong, ended or expired one is not found.
+     */
+    public static final PageEndpoint TV_PAGE = Endpoint.pageBuilder()
+        .identifier(HohenheimIds.id("traffic_tv"))
+        .addRoute(EndpointRoute.statics(HttpMethod.GET, "tv").addDelimiter().addParameter(TV_TOKEN).build())
+        .authenticatesItself()
+        .cache(ResponseCachePolicy.noStore())
         .build();
 
     // --- Interactive terminals ---

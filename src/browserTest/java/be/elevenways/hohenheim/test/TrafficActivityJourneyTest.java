@@ -77,6 +77,8 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
                 .as("step 1: no trail over the title, as on the Report tab").isZero();
             assertThat(page.locator("[data-hh-activity-legend]").textContent()).as("step 1: the classes in words")
                 .contains("2xx answered").contains("3xx").contains("4xx").contains("5xx");
+            assertThat(page.locator("pl-kiosk[data-tone]").count()).as("step 1: the tab wears the panel's theme")
+                .isZero();
             page.waitForFunction("() => document.querySelector('[data-hh-activity-line]').textContent"
                 + ".includes('in the last minute')", null, new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
 
@@ -87,7 +89,8 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
             fixture.request(fixture.siteA, "/missing", BROWSER);
             fixture.request(fixture.siteB, "/other-site", BROWSER);
             this.awaitLined(3);
-            context.clock().pauseAt(((Number) page.evaluate("() => Date.now()")).longValue() + 1);
+            // A quarter second ahead: the page's clock runs on while the hold is asked, and is never held in its past.
+            context.clock().pauseAt(((Number) page.evaluate("() => Date.now()")).longValue() + 250);
             context.clock().runFor(1_000);
             String picture = page.locator(SURFACE).getAttribute("aria-label");
             int counted = this.lined();

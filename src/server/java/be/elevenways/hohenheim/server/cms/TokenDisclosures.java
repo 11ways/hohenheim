@@ -41,6 +41,9 @@ final class TokenDisclosures {
     /** The keys a tool made for a spam client, on the client's Keys tab, beside unread ones; keyed by its id. */
     static final TokenDisclosures SPAM_KEYS = new TokenDisclosures("hohenheim.spamservice_keys");
 
+    /** The addresses of TV links an administrator made, on the Traffic page's Activity tab, beside unread ones. */
+    static final TokenDisclosures TV_LINKS = new TokenDisclosures("hohenheim.traffic_tv_links");
+
     private final @NonNull String place;
 
     private TokenDisclosures(@NonNull String place) {

@@ -1,0 +1,11 @@
+{#- The TV page (HohenheimEndpoints.TV_PAGE): the live Activity picture a TV link shows, on a document of its own with
+    no panel around it and no way into the panel, never a visitor's address (the link's frames carry none). -#}
+{% declare title: String %}
+{% declare view: ActivityView %}
+{% extend "plumage:standalone-frame" var:title=title %}
+
+{% block "main" %}
+<main data-hh-traffic-tv>
+    <hh-traffic-activity tv view={% view %}></hh-traffic-activity>
+</main>
+{% /block %}
