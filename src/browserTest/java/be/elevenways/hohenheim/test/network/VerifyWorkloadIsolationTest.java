@@ -143,7 +143,7 @@ class VerifyWorkloadIsolationTest {
                 new InstanceService().deploy(instanceId);
                 String instanceHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
                 // AIDEV-NOTE: a REAL application record, never a made-up id. The link owner
-                // is what InstanceDatabaseNetworks.liveLinkHandles reads the host off, and
+                // is what InstanceDatabaseNetworks.liveLinks reads the host off, and
                 // the only writer of instance_databases (InstanceAttachmentParts.requireLinkReachable)
                 // refuses an instance_id with no live row -- so an owner-less link row is a
                 // state the product cannot produce, and a fixture that invents one asserts
@@ -277,7 +277,10 @@ class VerifyWorkloadIsolationTest {
                 io(() -> {
                     long service = netns.nested();
                     long peer = netns.nested();
-                    wire(netns, service, peer, gateway, addressIn(stackSubnet, 200));
+                    // AIDEV-NOTE: the subnet's last host address, inside it whatever block size Hohenheim chose (a
+                    // fixed offset of 200 fell outside the /27 blocks of NetworkSubnets, so the source was no
+                    // stack-subnet source at all and the deny could not match it).
+                    wire(netns, service, peer, gateway, addressIn(stackSubnet, lastHost(stackSubnet)));
                     assertThat(netns.probe(service, METADATA, PEER_PORT))
                         .as("step 7: after the repair the metadata service is BLOCKED"
                             + " for a stack-subnet source")
@@ -609,6 +612,11 @@ class VerifyWorkloadIsolationTest {
         long address = base + offset;
         return ((address >> 24) & 0xff) + "." + ((address >> 16) & 0xff) + "."
             + ((address >> 8) & 0xff) + "." + (address & 0xff);
+    }
+
+    /** @return the offset of a subnet's last host address, one a fresh network's containers do not hold */
+    private static int lastHost(String subnet) {
+        return (1 << (32 - Integer.parseInt(subnet.split("/")[1]))) - 2;
     }
 
     /** Checked-exception plumbing: Db.run takes a Runnable, the daemon throws IOException. */
