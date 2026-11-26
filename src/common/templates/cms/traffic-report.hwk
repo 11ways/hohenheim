@@ -13,11 +13,7 @@
 {% block "main" %}
 <section class="cms-resource-list-page" data-hh-traffic-report>
     {% render "zenitcms:page-header" var:title=title var:lead=lead var:actions=download %}
-    <pl-nav orientation="horizontal" variant="tabs" label={% t("traffic_tabs", scope: "traffic_screen") %} data-hh-traffic-tabs>
-        {% each tabs as tab key tab.url %}
-        <pl-nav-item href={% tab.url %} active={% tab.active %}>{{ tab.label }}</pl-nav-item>
-        {% /each %}
-    </pl-nav>
+    <hh-traffic-tabs tabs={% tabs %}></hh-traffic-tabs>
     <hh-traffic view={% view %}></hh-traffic>
 </section>
 {% /block %}

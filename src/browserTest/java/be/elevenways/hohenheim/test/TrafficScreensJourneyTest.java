@@ -205,9 +205,10 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
             assertThat(page.locator("[data-hh-traffic-figure='failed']").textContent())
                 .as("step 1: the failed figure names its class").contains("Failed").contains("5xx");
             List<String> tabs = page.locator("[data-hh-traffic-tabs] pl-nav-item").allTextContents();
-            assertThat(tabs).as("step 1: Report and Settings, no Activity yet").hasSize(2);
+            assertThat(tabs).as("step 1: Report, Activity and Settings").hasSize(3);
             assertThat(tabs.get(0)).as("step 1: Report first").contains("Report");
-            assertThat(tabs.get(1)).as("step 1: then Settings").contains("Settings");
+            assertThat(tabs.get(1)).as("step 1: then Activity, the live picture").contains("Activity");
+            assertThat(tabs.get(2)).as("step 1: then Settings").contains("Settings");
             assertThat(page.locator("[data-hh-traffic-tabs] pl-nav-item").last().getAttribute("href"))
                 .as("step 1: Settings is the settings page's Traffic group").contains("/settings")
                 .contains("traffic");

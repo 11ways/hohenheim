@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.zenit.common.channel.Channel;
+import be.elevenways.zenit.traffic.common.LiveHits;
 import be.elevenways.zenit.common.channel.KeyedChannel;
 
 /**
@@ -42,6 +43,16 @@ public final class HohenheimChannels {
     public static final Channel<Object, Object> INSTANCE_FIGURE = Channel.builder()
         .identifier(HohenheimIds.id("instance_figure"))
         .requiresLogin()
+        .build();
+
+    /**
+     * The live traffic frames of the Activity picture. openData is an {@code ActivityAsk} spelling: every site
+     * (administrators) or one site (whoever manages it); the channel requires no login so a TV link's signed-out page
+     * can open it once its links land, and its handler admits each link by the rule of what it asks (a TV ask is
+     * refused until then), again at every revalidation.
+     */
+    public static final Channel<Object, LiveHits> TRAFFIC_LIVE = Channel.<Object, LiveHits>builder()
+        .identifier(HohenheimIds.id("traffic_live"))
         .build();
 
     /**

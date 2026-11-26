@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.traffic;
 
+import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.traffic.common.TrafficHit;
+import be.elevenways.zenit.traffic.server.TrafficLive;
 import be.elevenways.zenit.traffic.server.TrafficStore;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -39,6 +41,12 @@ public final class HohenheimTraffic {
 
     /** Hits waiting to be counted before one is dropped and the dashboard says so. */
     public static final int QUEUE_CAPACITY = 10_000;
+
+    /** Hits a site's live second carries at most; the rest is counted and said, never drawn. */
+    public static final int LIVE_HITS_PER_SECOND = 60;
+
+    /** The proxy's live seam: the Activity picture's and the TV page's frames (TrafficActivityHandler). */
+    private static final TrafficLive LIVE = new TrafficLive(HohenheimChannels.TRAFFIC_LIVE, LIVE_HITS_PER_SECOND);
 
     /** What a store counts; its key names the store's directory under {@code traffic/}. */
     public enum Counted {
@@ -96,11 +104,16 @@ public final class HohenheimTraffic {
             }
             TrafficStore store = TrafficStore.open(TrafficStore.Config.of(
                 dataPath.resolve(Path.of("traffic", counted.directory)), OfficeZone.office(),
-                HohenheimSettings.Traffic.SETTINGS, QUEUE_CAPACITY, null));
+                HohenheimSettings.Traffic.SETTINGS, QUEUE_CAPACITY, counted == Counted.WEB ? LIVE : null));
             store.start();
             OPEN.set(counted.ordinal(), new Open(dataPath, store));
             return store;
         }
+    }
+
+    /** @return the proxy's live seam, which every store of the web's traffic sends its frames through */
+    public static @NonNull TrafficLive live() {
+        return LIVE;
     }
 
     /** @return the source key of a site's traffic, {@link #UNSERVED} for a name no site serves (AccessLog.NO_SITE) */

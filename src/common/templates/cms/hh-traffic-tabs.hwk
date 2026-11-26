@@ -1,0 +1,12 @@
+{% tag HhTrafficTabs {
+    /* The server Traffic page's tab strip (TrafficActivityPage.tabs): Report, Activity, Settings. */
+    public required tabs: List<NavTab>
+
+    template {
+        <pl-nav orientation="horizontal" variant="tabs" label={% t("traffic_tabs", scope: "traffic_screen") %} data-hh-traffic-tabs>
+            {% each tabs as tab key tab.url %}
+            <pl-nav-item href={% tab.url %} active={% tab.active %}>{{ tab.label }}</pl-nav-item>
+            {% /each %}
+        </pl-nav>
+    }
+} %}

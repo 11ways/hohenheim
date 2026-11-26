@@ -88,7 +88,9 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "notifications", "backup-targets",
         // Access: the abuse-protection overview page.
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
-        "spamservice-security-events", "spamservice-words", "spamservice-reputation");
+        "spamservice-security-events", "spamservice-words", "spamservice-reputation",
+        // Traffic: the Traffic page's Activity tab, the live picture.
+        HohenheimSlugs.TRAFFIC_ACTIVITY);
 
     /** The sub-surfaces the abuse-protection front door must link, now that nav does not. */
     private static final List<String> SPAMSERVICE_SECTIONS = List.of(

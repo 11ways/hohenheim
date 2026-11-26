@@ -93,6 +93,8 @@ public final class HohenheimSlugs {
     public static final String STACKS = "stacks";
     /** The server's Traffic report: every site's requests at once. */
     public static final String TRAFFIC = "traffic";
+    /** The server's Traffic page's Activity tab: the live picture of every site's requests. */
+    public static final String TRAFFIC_ACTIVITY = "traffic-activity";
 
     private HohenheimSlugs() {
     }

@@ -1,0 +1,148 @@
+{% tag HhTrafficActivity {
+    /* The live Activity picture (TrafficActivity.watch over ActivityDriver): requests flying as dots from their
+       visitors to their sites, coloured by status class, the legend naming every class in words, a line saying when
+       the picture last heard and what it left undrawn, Pause, and a screen reader told the last minute every
+       ActivitySummary.SPEAK_EVERY seconds (politely, never per request). Inside pl-kiosk, whose Full screen stages the
+       picture over the panel. `tv` is the wall screen's look: the four figures large, the bars of the last minute
+       under the dots, the kiosk staged from the start. */
+    public required view: ActivityView
+    attribute tv: Boolean = false
+
+    private summary: ActivitySummary
+    private paused: Boolean = false
+    private surfaceEl: DominoElement
+    private regionEl: DominoElement
+
+    style {
+        @use 'plumage/mixins' as m;
+
+        display: block;
+
+        .hh-activity-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--pl-space-sm) var(--pl-space-md);
+            margin-block-end: var(--pl-space-sm);
+        }
+
+        .hh-activity-line {
+            margin-inline-start: auto;
+            color: var(--pl-color-text-muted);
+            font-size: var(--pl-font-size-sm);
+        }
+
+        .hh-activity-swatch {
+            display: inline-block;
+            inline-size: 0.75rem;
+            block-size: 0.75rem;
+            /* The class's own colour, the one the picture draws it in (ActivityPalette), as a round mark. */
+            @include m.picture(var(--hh-swatch), 50%);
+        }
+
+        /* The picture's box: the surface draws in it, its font is the labels' (TextStyle.of). */
+        .hh-activity-surface {
+            display: block;
+            block-size: 28rem;
+            font-size: var(--pl-font-size-sm);
+            font-family: var(--pl-font-family);
+        }
+
+        pl-kiosk[data-staged] .hh-activity-surface {
+            block-size: calc(100dvh - 12rem);
+        }
+
+        &[tv] .hh-activity-surface {
+            block-size: calc(100dvh - 22rem);
+            font-size: var(--pl-font-size-lg);
+        }
+
+        .hh-activity-figure-value {
+            font-size: var(--pl-font-size-3xl);
+            font-weight: var(--pl-font-weight-bold);
+            font-variant-numeric: tabular-nums;
+        }
+    }
+
+    attribute computed dataEnded: String = summary{:} != null && summary{:}.ended ? "" : null
+
+    @mount
+    function watch() {
+        TrafficActivity.watch(this, surfaceEl, view, (heard: ActivitySummary) => listen(heard))
+    }
+
+    function listen(heard: ActivitySummary) {
+        summary = heard
+        if heard.ended {
+            LiveRegion.announce(regionEl, t("activity_ended", scope: "traffic_screen"))
+        } else {
+            if heard.speak {
+                LiveRegion.announce(regionEl, t("activity_spoken", scope: "traffic_screen", count: heard.requests,
+                    refused: heard.refused, failed: heard.failed))
+            }
+        }
+    }
+
+    function togglePause() {
+        paused = !paused
+        TrafficActivity.pause(this, paused)
+    }
+
+    template {
+        <pl-kiosk always={% tv %}>
+            {% if tv %}
+            <pl-grid size="sm" balanced data-hh-activity-figures>
+                <pl-card data-hh-activity-figure="requests"><pl-card-content>
+                    <div class="hh-activity-figure-value">{{ summary{:} != null ? t("activity_count", scope: "traffic_screen", count: summary{:}.requests) : "" }}</div>
+                    <div>{{ t("activity_figure_requests", scope: "traffic_screen") }}</div>
+                </pl-card-content></pl-card>
+                <pl-card data-hh-activity-figure="sent"><pl-card-content>
+                    <div class="hh-activity-figure-value">{{ summary{:} != null ? t("activity_bytes", scope: "traffic_screen", bytes: summary{:}.bytes) : "" }}</div>
+                    <div>{{ t("activity_figure_sent", scope: "traffic_screen") }}</div>
+                </pl-card-content></pl-card>
+                <pl-card data-hh-activity-figure="visitors"><pl-card-content>
+                    <div class="hh-activity-figure-value">{% if summary{:} != null && summary{:}.visitorsCut %}{{ t("activity_count_least", scope: "traffic_screen", count: summary{:}.visitors) }}{% elseif summary{:} != null %}{{ t("activity_count", scope: "traffic_screen", count: summary{:}.visitors) }}{% /if %}</div>
+                    <div>{{ t("activity_figure_visitors", scope: "traffic_screen") }}</div>
+                </pl-card-content></pl-card>
+                <pl-card data-hh-activity-figure="refused"><pl-card-content>
+                    <div class="hh-activity-figure-value">{{ summary{:} != null ? t("activity_count", scope: "traffic_screen", count: summary{:}.refused) : "" }}</div>
+                    <div>{{ t("activity_figure_refused", scope: "traffic_screen") }}</div>
+                </pl-card-content></pl-card>
+            </pl-grid>
+            {% /if %}
+            <div class="hh-activity-bar">
+                <pl-legend label={% t("activity_legend", scope: "traffic_screen") %} variant="line" data-hh-activity-legend>
+                    {% each view.legend as entry %}
+                    <pl-legend-item><span slot="key" class="hh-activity-swatch" style={% "--hh-swatch:" + entry.colour %}></span>{{ entry.label }}</pl-legend-item>
+                    {% /each %}
+                </pl-legend>
+                <span class="hh-activity-line" data-hh-activity-line>{{ summary{:} == null ? t("activity_waiting", scope: "traffic_screen")
+                    : (summary{:}.ended ? t("activity_ended", scope: "traffic_screen")
+                    : t("activity_line", scope: "traffic_screen", at: summary{:}.latest, count: summary{:}.requests)) }}</span>
+                {% if summary{:} != null && summary{:}.notDrawn > 0 %}
+                <span class="hh-activity-line" data-hh-activity-not-drawn>{{ t("activity_not_drawn", scope: "traffic_screen", count: summary{:}.notDrawn) }}</span>
+                {% /if %}
+                {% if summary{:} != null && summary{:}.missed > 0 %}
+                <span class="hh-activity-line" data-hh-activity-missed>{{ t("activity_missed", scope: "traffic_screen", count: summary{:}.missed) }}</span>
+                {% /if %}
+                {% if !tv %}
+                <pl-button variant="outline" size="sm" type={% "button" %} event:click={% togglePause() %} data-hh-activity-pause>
+                    {% if paused{:} %}{{ t("activity_resume", scope: "traffic_screen") }}{% else %}{{ t("activity_pause", scope: "traffic_screen") }}{% /if %}
+                </pl-button>
+                {% /if %}
+            </div>
+            <pl-card data-hh-activity-picture>
+                {% if !tv %}
+                <pl-card-header>
+                    <pl-card-title>{{ t("activity_requests", scope: "traffic_screen") }}</pl-card-title>
+                    <pl-card-description>{{ t("activity_requests_lead", scope: "traffic_screen") }}</pl-card-description>
+                </pl-card-header>
+                {% /if %}
+                <pl-card-content>
+                    <z3d-surface class="hh-activity-surface" :ref={% surfaceEl %} aria-hidden="true" data-hh-activity-surface></z3d-surface>
+                </pl-card-content>
+            </pl-card>
+            <pl-live-region :ref={% regionEl %} data-hh-activity-spoken></pl-live-region>
+        </pl-kiosk>
+    }
+} %}

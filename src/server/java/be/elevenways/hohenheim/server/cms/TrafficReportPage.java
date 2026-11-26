@@ -3,13 +3,11 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
-import be.elevenways.plumage.component.NavTab;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.Csv;
@@ -17,7 +15,6 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
-import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.DataBucket;
 import be.elevenways.zenit.common.data.DataSeries;
@@ -48,7 +45,7 @@ import java.util.Set;
  *
  * AIDEV-NOTE: the report places {@code traffic_read}'s own every-site operation (TrafficReads.READ_SERVER). Settings is
  * a link to the one settings page opened on the Traffic group (HohenheimSettingsSections.INSTALLATION), never a copy
- * of its form. The board's Activity tab (the live picture) is another builder's: it joins this strip when it lands.
+ * of its form. The tabs are TrafficActivityPage.tabs, the one list of them.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -112,12 +109,7 @@ public final class TrafficReportPage extends PanelPage {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", label().asString(conduit));
         vars.put("lead", description());
-        vars.put("tabs", List.of(
-            new NavTab(CmsRoutes.list(panel, slug()).toUrl(), HohenheimMicrocopy.TRAFFIC_SCREEN.of("report_tab"),
-                "chart-line", true, false),
-            new NavTab(CmsRoutes.settingsAnchor(panel, SettingsPage.DEFAULT_SLUG,
-                    HohenheimSettingsSections.INSTALLATION.anchorOf(HohenheimSettings.Traffic.GROUP)).toUrl(),
-                HohenheimMicrocopy.TRAFFIC_SCREEN.of("settings_tab"), "gear", false, false)));
+        vars.put("tabs", TrafficActivityPage.tabs(panel, TrafficActivityPage.Tab.REPORT));
         vars.put("view", TrafficScreens.view(read, asked, TrafficReads.Reach.SERVER, CmsRoutes.list(panel, slug()),
             links, viewer, null));
         vars.put("downloadUrl", TrafficScreens.spanAt(CmsRoutes.list(panel, slug()), asked.window(), asked.until())
