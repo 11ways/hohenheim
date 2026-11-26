@@ -124,6 +124,9 @@
 
     attribute computed dataEnded: String = summary{:} != null && summary{:}.ended ? "" : null
 
+    /* The classes the legend names now: the rare ones only while the minute holds one (ActivityPalette.legend). */
+    private computed legend = summary{:} != null ? summary{:}.legend : view.legend
+
     @mount
     function watch() {
         TrafficActivity.watch(this, surfaceEl, view, (heard: ActivitySummary) => listen(heard))
@@ -175,7 +178,7 @@
             {% /if %}
             <div class="hh-activity-bar">
                 <pl-legend label={% t("activity_legend", scope: "traffic_screen") %} variant="line" data-hh-activity-legend>
-                    {% each view.legend as entry %}
+                    {% each legend{:} as entry %}
                     <pl-legend-item><span slot="key" class="hh-activity-swatch" style={% "--hh-swatch:" + entry.colour %}></span>{{ entry.label }}</pl-legend-item>
                     {% /each %}
                 </pl-legend>

@@ -8,6 +8,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * THE colour of each status class in the live traffic pictures: the legend's swatches and the picture's dots and bars
@@ -51,11 +52,28 @@ public final class ActivityPalette {
         };
     }
 
-    /** @return the legend: every class's words and colour, in {@link #LEGEND}'s order */
-    public static @NonNull List<Entry> legend() {
+    /**
+     * @return whether the legend names the class while the picture holds none of it: the four answers a server gives
+     *         every day, never the rare informational and unknown statuses
+     */
+    public static boolean always(@NonNull StatusClass statusClass) {
+        return switch (statusClass) {
+            case SUCCESS, REDIRECTION, CLIENT_ERROR, SERVER_ERROR -> true;
+            case INFORMATIONAL, OTHER -> false;
+        };
+    }
+
+    /**
+     * @param held whether the picture's window holds a request of the class
+     * @return the legend in {@link #LEGEND}'s order: every class named {@link #always}, and each other one only while
+     *         the window holds one
+     */
+    public static @NonNull List<Entry> legend(@NonNull Predicate<StatusClass> held) {
         List<Entry> entries = new ArrayList<>(LEGEND.size());
         for (StatusClass statusClass : LEGEND) {
-            entries.add(new Entry(statusClass.label(), colour(statusClass)));
+            if (always(statusClass) || held.test(statusClass)) {
+                entries.add(new Entry(statusClass.label(), colour(statusClass)));
+            }
         }
         return entries;
     }

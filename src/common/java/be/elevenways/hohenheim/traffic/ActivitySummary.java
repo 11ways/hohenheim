@@ -6,6 +6,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * The last minute of a live Activity picture as its page words it, as the picture last drew it: the figures, the line
@@ -24,13 +25,19 @@ import java.time.Instant;
  * @param picture     every row of the picture with its figure, in words; null before the picture drew
  * @param speak       whether a screen reader is told about this minute now (once every {@link #SPEAK_EVERY} seconds)
  * @param ended       whether the live link ended (revoked, or no longer allowed), so nothing more arrives
+ * @param legend      the classes the legend names now ({@link ActivityPalette#legend}): the rare ones only while held
  * @author Jelle De Loecker
  * @since  0.1.0
  */
 @HawkeyeClass
 public record ActivitySummary(boolean heard, @Nullable Instant latest, long requests, long bytes, long visitors,
                               boolean visitorsCut, long refused, long failed, long notDrawn, int missed,
-                              @Nullable String picture, boolean speak, boolean ended) {
+                              @Nullable String picture, boolean speak, boolean ended,
+                              @NonNull List<ActivityPalette.Entry> legend) {
+
+    public ActivitySummary {
+        legend = List.copyOf(legend);
+    }
 
     /** How many seconds apart a screen reader is told what the last minute held. */
     public static final int SPEAK_EVERY = 15;
@@ -43,6 +50,7 @@ public record ActivitySummary(boolean heard, @Nullable Instant latest, long requ
         return new ActivitySummary(heard, heard ? Instant.ofEpochSecond(latest) : null, model.requests(),
             model.bytes(), model.visitors(), model.visitorsCut(), model.count(StatusClass.CLIENT_ERROR),
             model.count(StatusClass.SERVER_ERROR), model.notDrawn(), model.missed(), picture,
-            !ended && model.takeSpeech(SPEAK_EVERY), ended);
+            !ended && model.takeSpeech(SPEAK_EVERY), ended,
+            ActivityPalette.legend(statusClass -> model.count(statusClass) > 0));
     }
 }

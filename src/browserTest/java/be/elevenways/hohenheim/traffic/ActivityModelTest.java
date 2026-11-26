@@ -245,6 +245,46 @@ class ActivityModelTest {
         assertEquals(StatusClass.values().length, ActivityPalette.LEGEND.size(), "each once");
     }
 
+    @Test
+    void theLegendNamesTheRareClassesOnlyWhileTheMinuteHoldsOne() {
+        ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1"));
+        List<StatusClass> everyday = List.of(StatusClass.SUCCESS, StatusClass.REDIRECTION, StatusClass.CLIENT_ERROR,
+            StatusClass.SERVER_ERROR);
+
+        // 1. Before anything is heard, and after a second of ordinary answers: the four everyday classes alone.
+        assertEquals(everyday, classesOf(ActivitySummary.of(model, null, false)), "step 1: nothing heard");
+        model.accept(new LiveHits(SECOND, List.of(source("1", List.of(hit(SECOND * 1000, "/", 200, "chrome",
+            "203.0.113.1")), 1))));
+        assertEquals(everyday, classesOf(ActivitySummary.of(model, null, false)), "step 1: ordinary answers");
+
+        // 2. A 101 joins its class, then a status outside 100 to 599 the other one, in the legend's order.
+        model.accept(new LiveHits(SECOND + 1, List.of(source("1", List.of(hit((SECOND + 1) * 1000, "/ws", 101,
+            "chrome", "203.0.113.1")), 1))));
+        assertEquals(List.of(StatusClass.SUCCESS, StatusClass.REDIRECTION, StatusClass.CLIENT_ERROR,
+            StatusClass.SERVER_ERROR, StatusClass.INFORMATIONAL), classesOf(ActivitySummary.of(model, null, false)),
+            "step 2: the informational class while held");
+        model.accept(new LiveHits(SECOND + 2, List.of(source("1", List.of(hit((SECOND + 2) * 1000, "/odd", 999,
+            "chrome", "203.0.113.1")), 1))));
+        assertEquals(ActivityPalette.LEGEND, classesOf(ActivitySummary.of(model, null, false)),
+            "step 2: and the unknown statuses");
+
+        // 3. Once the minute no longer holds them, the legend is the everyday four again.
+        model.accept(new LiveHits(SECOND + 70, List.of(source("1", List.of(hit((SECOND + 70) * 1000, "/", 200,
+            "chrome", "203.0.113.1")), 1))));
+        assertEquals(everyday, classesOf(ActivitySummary.of(model, null, false)), "step 3: gone with the minute");
+    }
+
+    /** @return the classes a summary's legend names, by their words */
+    private static List<StatusClass> classesOf(ActivitySummary summary) {
+        List<StatusClass> named = new ArrayList<>();
+        for (ActivityPalette.Entry entry : summary.legend()) {
+            for (StatusClass statusClass : StatusClass.values()) {
+                if (statusClass.label().equals(entry.label())) named.add(statusClass);
+            }
+        }
+        return named;
+    }
+
     /** @return a driver of the model wording each copy by its key, telling the minutes and dots it shows */
     private static ActivityDriver driver(ActivityModel model, List<String> minutes, int[] flying) {
         return new ActivityDriver(model, copy -> "w" + copy.key(), new ActivityDriver.Colours(0x202020FF, 0x404040FF,

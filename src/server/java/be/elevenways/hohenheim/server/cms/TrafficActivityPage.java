@@ -132,6 +132,6 @@ public final class TrafficActivityPage extends PanelPage {
             names.put(HohenheimTraffic.sourceOf(site.get(SiteModel.ID)), site.get(SiteModel.NAME));
         }
         return new ActivityView(open, new ArrayList<>(names.keySet()), names, HohenheimTraffic.UNSERVED,
-            visitors, strip, ActivityPalette.legend());
+            visitors, strip, ActivityPalette.legend(statusClass -> false));
     }
 }

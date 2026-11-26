@@ -17,7 +17,7 @@ import java.util.Objects;
  * @param unserved the source of the names no site serves
  * @param visitors whether the picture shows visitors' addresses (the frames then carry them)
  * @param strip    whether the last minute's bars stand under the flying dots (a wall screen)
- * @param legend   every status class's words and colour ({@link ActivityPalette#legend})
+ * @param legend   the legend before the picture heard anything: the classes {@link ActivityPalette#always} names
  * @author Jelle De Loecker
  * @since  0.1.0
  */

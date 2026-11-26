@@ -76,7 +76,8 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
             assertThat(page.locator("[data-hh-traffic-activity] [data-cms-trail]").count())
                 .as("step 1: no trail over the title, as on the Report tab").isZero();
             assertThat(page.locator("[data-hh-activity-legend]").textContent()).as("step 1: the classes in words")
-                .contains("2xx answered").contains("3xx").contains("4xx").contains("5xx");
+                .contains("2xx answered").contains("3xx").contains("4xx").contains("5xx").doesNotContain("1xx")
+                .doesNotContain("Other status");
             assertThat(page.locator("pl-kiosk[data-tone]").count()).as("step 1: the tab wears the panel's theme")
                 .isZero();
             page.waitForFunction("() => document.querySelector('[data-hh-activity-line]').textContent"

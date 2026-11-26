@@ -118,8 +118,9 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
                 .isZero();
             assertThat(tv.locator("a[href*='/" + HohenheimSlugs.ADMIN + "']").count())
                 .as("step 2: no way into the panel").isZero();
-            assertThat(tv.locator("[data-hh-activity-legend]").textContent()).as("step 2: the legend in words")
-                .contains("2xx answered");
+            assertThat(tv.locator("[data-hh-activity-legend]").textContent()).as("step 2: the legend in words, the"
+                + " everyday classes alone while nothing rarer was heard").contains("2xx answered").contains("5xx")
+                .doesNotContain("1xx").doesNotContain("Other status");
             assertThat(tv.locator("hh-traffic-activity[tv] pl-kiosk[data-tone='dark']").count())
                 .as("step 2: a wall screen is dark, its look's dark answer").isEqualTo(1);
 
