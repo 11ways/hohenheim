@@ -535,12 +535,21 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         McpHttpSession.Answer paused = session.call("site_pause", Map.of("code", code, "paused", true));
         assertThat(paused.error()).as("step 5: " + paused.text()).isFalse();
         assertThat(enabled(siteId)).as("step 5: disabled").isFalse();
+        // A site paused already says so in words and stays as it is, never "not found".
+        McpHttpSession.Answer twice = session.call("site_pause", Map.of("code", code, "paused", true));
+        assertThat(twice.error()).as("step 5: paused twice: " + twice.text()).isTrue();
+        assertThat(twice.text()).as("step 5: says so").contains(code + " is already paused; nothing changed.")
+            .doesNotContain("Not found");
+        assertThat(enabled(siteId)).as("step 5: still disabled").isFalse();
         // Paused and resumed are one tool's argument, never two tools; leaving it out names it.
         assertThat(session.toolNames()).as("step 5: no second tool").doesNotContain("site_resume");
         assertThat(session.call("site_pause", Map.of("code", code)).error()).as("step 5: paused left out").isTrue();
         McpHttpSession.Answer resumed = session.call("site_pause", Map.of("code", code, "paused", false));
         assertThat(resumed.error()).as("step 5: " + resumed.text()).isFalse();
         assertThat(enabled(siteId)).as("step 5: enabled again").isTrue();
+        McpHttpSession.Answer online = session.call("site_pause", Map.of("code", code, "paused", false));
+        assertThat(online.text()).as("step 5: resumed twice").contains(code + " is already online; nothing changed.");
+        assertThat(enabled(siteId)).as("step 5: still enabled").isTrue();
 
         // 6. A key of the same operator without the server's scope cannot connect.
         String plainKey = ApiKeyService.create(operator, operatorId, PREFIX + "plain", List.of("*"), null)

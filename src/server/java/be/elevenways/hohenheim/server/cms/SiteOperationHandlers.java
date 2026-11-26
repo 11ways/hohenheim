@@ -84,13 +84,16 @@ public final class SiteOperationHandlers {
     private static final Microcopy NO_INSTANCE = HohenheimMicrocopy.VIOLATIONS.of("site_exposes_no_instance");
 
     static {
+        // A switch to the state the site is in already says so and changes nothing; a trashed site is not found.
         OperationHandlers.attach(SiteOperations.ENABLE)
             .applies(site -> live(site) && !enabled(site))
+            .notApplicable(site -> alreadySo(site, "already_online"))
             .authorize(reachesSite())
             .handle(call -> switchTo(call, true));
         // The panel's own site cannot be switched off from inside the panel: dead, with the reason on screen.
         OperationHandlers.attach(SiteOperations.DISABLE)
             .applies(site -> live(site) && enabled(site))
+            .notApplicable(site -> alreadySo(site, "already_paused"))
             .availability((site, access) -> SiteParts.panelLockoutReason("toggle_self_lockout", site, access))
             .authorize(reachesSite())
             .handle(call -> switchTo(call, false));
@@ -300,6 +303,21 @@ public final class SiteOperationHandlers {
 
     private static @NonNull DomainRefusal concealed(@NonNull Row site) {
         return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "site " + site.get(SiteModel.ID) + " is not reachable");
+    }
+
+    /**
+     * @param said the site scope's words for the state it is in
+     * @return the refusal of a switch to the state a live site is in already, in words naming it; a trashed site's
+     *         is not found, as a site the panels hide
+     */
+    private static @NonNull DomainRefusal alreadySo(@NonNull Row site, @NonNull String said) {
+        if (!live(site)) {
+            return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "site " + site.get(SiteModel.ID)
+                + " is in the trash");
+        }
+        String code = RecordCodes.codeUnjudged(SiteModel.MODEL_ID, String.valueOf(site.get(SiteModel.ID)));
+        return new DomainRefusal(ZenitRefusalReason.OPERATION_UNAVAILABLE, "site " + site.get(SiteModel.ID)
+            + " is " + said, HohenheimMicrocopy.SITE.of(said).withArg("site", code));
     }
 
     /**
