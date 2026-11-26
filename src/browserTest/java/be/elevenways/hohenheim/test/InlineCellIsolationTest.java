@@ -137,22 +137,24 @@ class InlineCellIsolationTest extends HohenheimHttpTestBase {
                     + " editing on a new model").isNotNull();
 
             for (Field<?, ?> field : PartsForms.inlineEditableFields(target.resource())) {
+                // The cell speaks the field's input name, the stored row its column (zenit 944bfc4c2).
                 String name = field.getName();
+                String input = field.getInputName();
                 Map<String, Object> before = storedValues(model, id);
 
                 InlineEditState state = cellState(target, id);
                 assertThat(state.editableFields())
                     .as("step 3: " + who + " offers the '" + name + "' cell it declared")
-                    .contains(name);
+                    .contains(input);
 
                 // The value the EDITOR is showing, not the raw column: a resource whose
                 // valuesFromRow reshapes the value (the /manage DNS name renders absolute
                 // while the column stores it relative to its zone) is edited in that shape.
-                Object shown = state.values().containsKey(name)
-                    ? state.values().get(name) : before.get(name);
+                Object shown = state.values().containsKey(input)
+                    ? state.values().get(input) : before.get(name);
                 Object raw = mutatedRaw(model, state, field, shown);
                 InlineEditResult result = cellSubmit(target, id,
-                    new InlineEditSubmit(name, raw, state.snapshot()));
+                    new InlineEditSubmit(input, raw, state.snapshot()));
                 assertThat(result.succeeded())
                     .as("step 3: " + who + " committed '" + name + "' = " + raw + ": "
                         + result.violations())
@@ -241,7 +243,7 @@ class InlineCellIsolationTest extends HohenheimHttpTestBase {
             return shaped.apply(String.valueOf(current));
         }
         for (InlineCreateFieldState rendered : state.fields()) {
-            if (!rendered.name().equals(name) || rendered.options().isEmpty()) {
+            if (!rendered.name().equals(field.getInputName()) || rendered.options().isEmpty()) {
                 continue;
             }
             for (FormOptionState option : rendered.options()) {

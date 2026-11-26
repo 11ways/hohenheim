@@ -9,6 +9,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -150,9 +151,15 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
         deviceId = device.get(InstanceDeviceModel.ID);
     }
 
-    /** One writer, driven with the one entry the inline cell lane would send. */
+    /** One writer, driven with the one entry the inline cell lane would send: by its input name, read by its column. */
     private record Case(String who, Writer writer, Model model, int id,
-                        String column, Object value) {}
+                        Field<?, ?> field, Object value) {
+
+        /** @return the stored column the write must move */
+        String column() {
+            return this.field.getName();
+        }
+    }
 
     /** A partial write of one record: a row resource's updateRow, or an operation-written entry's patch. */
     @FunctionalInterface
@@ -177,28 +184,28 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
     private static List<Case> cases() {
         List<Case> cases = new ArrayList<>();
         cases.add(new Case("admin/sites", patch(HohenheimSlugs.ADMIN, gitSiteId), Models.get(SiteModel.class),
-            gitSiteId, SiteModel.NAME.getName(), PREFIX + "renamed site"));
+            gitSiteId, SiteModel.NAME, PREFIX + "renamed site"));
         cases.add(new Case("manage/sites", patch(HohenheimSlugs.MANAGE, gitSiteId), Models.get(SiteModel.class),
-            gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
+            gitSiteId, SiteModel.DESCRIPTION, "a note the operator typed"));
         cases.add(new Case("admin/hosts", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.HOSTS, serverId),
                 Models.get(HostModel.class),
-            serverId, HostModel.NAME.getName(), PREFIX + "renamed-host"));
+            serverId, HostModel.NAME, PREFIX + "renamed-host"));
         cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.AUTH_PROVIDERS,
             providerId),
             Models.get(SiteAuthProviderModel.class), providerId,
-            SiteAuthProviderModel.NAME.getName(), PREFIX + "renamed provider"));
+            SiteAuthProviderModel.NAME, PREFIX + "renamed provider"));
         cases.add(new Case("admin/certificates",
                 patch(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, certificateId),
             Models.get(CertificateModel.class), certificateId,
-            CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
+            CertificateModel.NICE_NAME, PREFIX + "renamed cert"));
         cases.add(new Case("admin/instance-schedules", rows(PanelEntryViews.of(HohenheimSlugs.ADMIN,
             HohenheimSlugs.INSTANCE_SCHEDULES)),
             Models.get(RecordScheduleModel.class), scheduleId,
-            RecordScheduleModel.NAME.getName(), PREFIX + "renamed schedule"));
+            RecordScheduleModel.NAME, PREFIX + "renamed schedule"));
         cases.add(new Case("admin/instance-schedule-steps", rows(PanelEntryViews.of(HohenheimSlugs.ADMIN,
             HohenheimSlugs.INSTANCE_SCHEDULE_STEPS)),
             Models.get(RecordScheduleStepModel.class), stepId,
-            RecordScheduleStepModel.OFFSET_SECONDS.getName(), 30));
+            RecordScheduleStepModel.OFFSET_SECONDS, 30));
         return cases;
     }
 
@@ -220,8 +227,9 @@ class PartialWriteContractTest extends HohenheimHttpTestBase {
             Map<String, Object> stored = InlineCellIsolationTest.storedValues(one.model(), one.id());
 
             // 2. The map is Map.of: ONE entry and IMMUTABLE, exactly what the cell lane
-            //    hands over. An override that stages values by mutating it dies here.
-            one.writer().write(before, Map.of(one.column(), one.value()));
+            //    hands over, keyed by the entry's input name (zenit 944bfc4c2). An override that stages values by
+            //    mutating it dies here.
+            one.writer().write(before, Map.of(one.field().getInputName(), one.value()));
 
             Map<String, Object> after = InlineCellIsolationTest.storedValues(one.model(), one.id());
             assertThat(String.valueOf(after.get(one.column())))
