@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
+import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -19,6 +21,9 @@ import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
+import be.elevenways.zenit.cms.common.resource.RowWriter;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
@@ -133,7 +138,7 @@ public final class DnsZonePeerParts {
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access, DnsZonePeerModel.ZONE_ID.getName(),
                     HohenheimSlugs.DNS_ZONES))
                 .build())
-            .writes(ResourceMutations.rows().create().update().delete()
+            .writes(ResourceMutations.rows().createAround(DnsZonePeerParts::linked).update().delete()
                 .beforeSave(save -> {
                     if (save.isCreate()) {
                         validate(save.values());
@@ -144,6 +149,9 @@ public final class DnsZonePeerParts {
                         notifyLinked(Objects.requireNonNull(save.key()));
                     }
                 })
+                // A link to a Hohenheim peer asks it over HTTP to keep its copy (linked), never inside a transaction;
+                // the framework then judges the zone the link lands under before the write, as it cannot undo it.
+                .ownsWriteEnvelope(ResourceVerb.CREATE).scopeVerifiedBeforeWrite()
                 .build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
@@ -207,6 +215,67 @@ public final class DnsZonePeerParts {
             return Freshness.CURRENT;
         }
         return DnsSecondaryFreshness.isStale(link) ? Freshness.STALE : Freshness.BEHIND;
+    }
+
+    /**
+     * The link's create: a Hohenheim peer linked as a primary zone's secondary keeps its copy there too
+     * ({@link DnsPeerMirrors#copiesTo}): asked first whether it can, so nothing is written when it cannot; told once
+     * the link is written; the link taken back when that last step fails.
+     *
+     * AIDEV-NOTE: the create owns its write envelope, so no transaction is held open while the peer is asked, and the
+     * peer, which pulls the zone from here as soon as it made its copy, finds the link authorizing its key committed.
+     *
+     * @throws Violations on the peer, naming it, when it cannot keep the copy
+     */
+    private static @NonNull Object linked(@NonNull RowWriteCall call, @NonNull RowWriter framework) {
+        Row zone = Models.get(DnsZoneModel.class).findById(call.values().get(DnsZonePeerModel.ZONE_ID.getName()));
+        Row peer = Models.get(DnsPeerModel.class).findById(call.values().get(DnsZonePeerModel.PEER_ID.getName()));
+        boolean copies = zone != null && peer != null && DnsPeerMirrors.copiesTo(zone, peer);
+        String origin = zone != null ? zone.get(DnsZoneModel.ORIGIN) : null;
+        String field = DnsZonePeerModel.PEER_ID.getName();
+        if (copies) {
+            if (Models.get(DnsZonePeerModel.class).getResolvedDatasource().hasActiveTransaction()) {
+                throw new IllegalStateException("a peer is never asked to keep a copy inside a transaction");
+            }
+            requireCopy(peer, Objects.requireNonNull(origin, "a zone has its origin"), true, field);
+        }
+        Object key = Objects.requireNonNull(framework.write(call), "the create answers its key");
+        if (copies) {
+            try {
+                requireCopy(peer, origin, false, field);
+            } catch (Violations refused) {
+                DnsZonePeerModel links = Models.get(DnsZonePeerModel.class);
+                Row link = links.findById(Integer.parseInt(String.valueOf(key)));
+                if (link != null) links.delete(link);
+                throw refused;
+            }
+        }
+        return key;
+    }
+
+    /**
+     * Asks a Hohenheim peer to keep a copy of the zone, or with {@code check} whether it could.
+     *
+     * @param field the argument a refusal names
+     * @throws Violations naming the peer when it runs an older Hohenheim, cannot be asked, already keeps a zone of
+     *         that origin of its own or copied from elsewhere, or refuses
+     */
+    static void requireCopy(@NonNull Row peer, @NonNull String origin, boolean check, @NonNull String field) {
+        Microcopy refused;
+        try {
+            if (DnsPeerMirrors.copyOn(peer, origin, check).conflicts().isEmpty()) {
+                return;
+            }
+            refused = HohenheimMicrocopy.VIOLATIONS.of("dns_copy_conflict");
+        } catch (DnsPeerApi.PeerApiException failed) {
+            String reason = String.valueOf(failed.getMessage());
+            refused = failed.older()
+                ? HohenheimMicrocopy.VIOLATIONS.of("dns_copy_older")
+                : HohenheimMicrocopy.VIOLATIONS.of(failed.unreached() ? "dns_copy_unreachable"
+                    : "dns_copy_refused").withArg("reason", reason);
+        }
+        throw Violations.ofField(field, peer.get(DnsPeerModel.ID), refused
+            .withArg("peer", String.valueOf((Object) peer.get(DnsPeerModel.NAME))).withArg("origin", origin));
     }
 
     /**

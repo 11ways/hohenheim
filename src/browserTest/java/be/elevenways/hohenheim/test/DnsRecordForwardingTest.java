@@ -196,7 +196,7 @@ class DnsRecordForwardingTest extends HohenheimHttpTestBase {
     }
 
     /** @return the relay's answer: the owner's status, type and body as it gave them to the copy's call */
-    private static StubHost.Answer relayed(HttpRequest.Builder toOwner) {
+    static StubHost.Answer relayed(HttpRequest.Builder toOwner) {
         HttpResponse<String> owner;
         try {
             owner = sendRequest(toOwner);

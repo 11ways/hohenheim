@@ -1450,6 +1450,21 @@ public class HohenheimEndpoints {
         .csrfExempt()
         .build();
 
+    /**
+     * The add-only half of mirroring: a primary that lists this side as a secondary of ONE zone asks it to keep that
+     * zone's copy, signed as a mirror request is, never removing any other copy. Its own route, never a mode of
+     * {@link #API_DNS_PEER_MIRROR}: an older Hohenheim would read one origin there as the whole list and drop the
+     * rest, where it answers this route 404. A {@code check} request only says whether the copy could be made.
+     */
+    public static final Endpoint<Object> API_DNS_PEER_MIRROR_ADD = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_dns_peer_mirror_add"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter()
+            .addStatic("peer-mirror-add").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .csrfExempt()
+        .build();
+
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
     // No requiresPermission: the token IS the credential, verified by the handler, so the
     // route authenticates itself and no login gate stands in front of it. That declaration

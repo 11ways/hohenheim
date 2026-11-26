@@ -7,7 +7,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * THE walk from a hosted zone to the peers linked to it (its NOTIFY targets and AXFR
@@ -48,6 +50,15 @@ public final class DnsZonePeers {
             }
         }
         return linked;
+    }
+
+    /** @return the ids of every peer the zone is linked to, enabled or not, existing or not */
+    public static @NonNull Set<Integer> peerIds(int zoneId) {
+        Set<Integer> peers = new HashSet<>();
+        for (Row link : Models.get(DnsZonePeerModel.class).findAll(DnsZonePeerModel.ZONE_ID, zoneId)) {
+            peers.add(link.get(DnsZonePeerModel.PEER_ID));
+        }
+        return peers;
     }
 
     /** Every link of the zone whose peer exists AND is enabled: the operational set. */

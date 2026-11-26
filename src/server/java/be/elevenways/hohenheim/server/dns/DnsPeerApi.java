@@ -83,6 +83,12 @@ public final class DnsPeerApi {
 
     /**
      * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
+
+        /** @return whether the peer does not know the route asked: an older Hohenheim */
+        public boolean older() { return status == 404 || status == 405; }
+
+        /** @return whether the request never left this server, so nothing happened there */
+        public boolean unreached() { return status == 0 && !sent; }
      * zone_id, no generated_* -- those are the server's, not a caller's). {@code managed_by}
      * is handled apart: it is settable on CREATE only, and only to a value
      * {@link DnsRecordModel#MANAGED_BY_VALUES} declares.
@@ -283,6 +289,32 @@ public final class DnsPeerApi {
         if (response == null || response.created() == null || response.removed() == null
             || response.conflicts() == null) {
             throw new PeerApiException("Unexpected response from peer", null, null);
+        }
+        return response;
+    }
+
+    /**
+     * Asks the peer to keep a copy of one zone pulling from this instance, never touching its other copies; with
+     * {@code check} it only says whether it could. Signed as {@link #mirrorZones} is (DnsPeerMirrors.addSignature).
+     *
+     * @return the origin under created when the copy was made now, under conflicts when the peer holds that zone of
+     *         its own or copies it from someone else, neither when it already copies it from this instance
+     * @throws PeerApiException with status 404 from a peer that does not know this route (an older Hohenheim)
+     */
+    public @NonNull DnsPeerMirrorResponse mirrorAdd(@NonNull String keyName, long signedAt, @NonNull String signature,
+                                                    @NonNull String origin, boolean check) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("key_name", keyName);
+        fields.put("signed_at", String.valueOf(signedAt));
+        fields.put("signature", signature);
+        fields.put("origin", origin);
+        fields.put("check", String.valueOf(check));
+        DnsPeerMirrorResponse response = parseQuietly(
+            request(HttpMethod.POST, HohenheimEndpoints.API_DNS_PEER_MIRROR_ADD.toUrl(), fields),
+            DnsPeerMirrorResponse.class);
+        if (response == null || response.created() == null || response.conflicts() == null) {
+            // Answered, yet unreadable: the copy may have been made there.
+            throw new PeerApiException("Unexpected response from peer", null, null, 0, true);
         }
         return response;
     }

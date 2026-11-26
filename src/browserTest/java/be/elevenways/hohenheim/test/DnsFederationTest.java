@@ -55,7 +55,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -740,15 +739,7 @@ class DnsFederationTest {
         }
 
         private static Map<String, String> form(String body) {
-            Map<String, String> fields = new LinkedHashMap<>();
-            for (String pair : body.split("&")) {
-                int split = pair.indexOf('=');
-                if (split > 0) {
-                    fields.put(URLDecoder.decode(pair.substring(0, split), StandardCharsets.UTF_8),
-                        URLDecoder.decode(pair.substring(split + 1), StandardCharsets.UTF_8));
-                }
-            }
-            return fields;
+            return DnsFixtures.formFields(body);
         }
     }
 

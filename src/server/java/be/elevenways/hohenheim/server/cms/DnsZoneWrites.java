@@ -6,6 +6,9 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
+import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
+import be.elevenways.hohenheim.server.dns.DnsZonePeers;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -63,6 +66,9 @@ public final class DnsZoneWrites {
         .also(List.of(OperationForms.recordIds(SECONDARIES, HohenheimMicrocopy.HELP.of("zone_secondaries"),
             DnsPeerModel.MODEL_ID)), DnsZoneWrites::secondariesChanged)
         .alsoOnCreate(DnsZoneWrites::secondariesCreated)
+        // A Hohenheim peer listed as a secondary is asked over HTTP to keep its copy, outside any transaction.
+        .createsOutsideTransaction()
+        .changesAs(CmsCommands.EXTERNAL)
         .build();
 
     /** Creates a zone, its secondaries with it. */
@@ -78,21 +84,57 @@ public final class DnsZoneWrites {
     public static void init() {
     }
 
-    /** Refuses secondaries for a zone created as a secondary itself before it is written, then links them. */
+    /**
+     * Refuses secondaries for a zone created as a secondary itself, and a Hohenheim peer that cannot keep its copy,
+     * before it is written; then links them.
+     */
     private static @NonNull Consumer<Integer> secondariesCreated(OperationInput.@NonNull Values input,
                                                                  @NonNull Set<String> sent,
                                                                  @NonNull AccessContext caller) {
         List<?> peers = peers(input);
-        refuseOnSecondary(input.get(DnsZoneModel.ROLE.getInputName()), peers);
+        Object role = input.get(DnsZoneModel.ROLE.getInputName());
+        refuseOnSecondary(role, peers);
+        requireCopies(role, input.get(DnsZoneModel.ORIGIN.getInputName()), peers, null);
         return zoneId -> linkSecondaries(zoneId, peers, caller);
     }
 
-    /** Links the secondaries once the zone's settings are written, so a role changed with them is the one judged. */
+    /**
+     * Asks each newly listed Hohenheim peer whether it can keep a copy before the zone's settings are written, then
+     * links the secondaries once they are, so a role changed with them is the one judged.
+     */
     private static @NonNull Runnable secondariesChanged(@NonNull Row zone, OperationInput.@NonNull Values input,
                                                         @NonNull Set<String> sent, @NonNull AccessContext caller) {
         List<?> peers = peers(input);
         Integer zoneId = Objects.requireNonNull(zone.get(DnsZoneModel.ID));
+        String roleInput = DnsZoneModel.ROLE.getInputName();
+        String originInput = DnsZoneModel.ORIGIN.getInputName();
+        Object role = sent.contains(roleInput) ? input.get(roleInput) : DnsZoneModel.roleOf(zone);
+        // Judged before anything is written: the settings write is no transaction shared with the links.
+        refuseOnSecondary(role, peers);
+        requireCopies(role, sent.contains(originInput) ? input.get(originInput) : zone.get(DnsZoneModel.ORIGIN),
+            peers, zoneId);
         return () -> linkSecondaries(zoneId, peers, caller);
+    }
+
+    /**
+     * Asks each Hohenheim peer the list adds whether it can keep a copy of the zone, changing nothing anywhere; an
+     * origin that is none is left to the zone's own form to refuse.
+     *
+     * @param zoneId the zone already stored, null for one being created
+     * @throws Violations on the secondaries argument, naming a peer that cannot
+     */
+    private static void requireCopies(@Nullable Object role, @Nullable Object origin, @NonNull List<?> peers,
+                                      @Nullable Integer zoneId) {
+        String normalized = origin == null ? null : DnsNames.normalizeOrigin(String.valueOf(origin));
+        if (normalized == null) return;
+        Set<Integer> linked = zoneId == null ? Set.of() : DnsZonePeers.peerIds(zoneId);
+        for (Object each : peers) {
+            Integer peerId = Integer.valueOf(String.valueOf(each));
+            Row peer = linked.contains(peerId) ? null : Models.get(DnsPeerModel.class).findById(peerId);
+            if (peer != null && DnsPeerMirrors.copiesTo(role, peer)) {
+                DnsZonePeerParts.requireCopy(peer, normalized, true, SECONDARIES);
+            }
+        }
     }
 
     /** @return the secondaries the call lists, none for an empty or cleared list */
@@ -109,7 +151,8 @@ public final class DnsZoneWrites {
 
     /**
      * Makes the zone's secondaries exactly the peers given: a peer no longer listed loses its link, a newly listed one
-     * gets one through the operator's zone-peer resource, which tells it to pull at once.
+     * gets one through the operator's zone-peer resource, which makes a Hohenheim peer keep its copy and tells it to
+     * pull at once.
      */
     private static void linkSecondaries(@NonNull Integer zoneId, @NonNull List<?> peers,
                                         @NonNull AccessContext caller) {

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsPeerMirrorResponse;
+import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsPeerMirrors;
@@ -96,6 +97,35 @@ final class DnsPeerApiHandlers {
             DnsPeerMirrorResponse adopted = DnsPeerMirrors.adopt(keyName, signedAt, signature, origins);
             if (adopted == null) {
                 // One answer for an unknown key, a wrong signature and a stale one: none of them is an oracle.
+                return refusal(conduit, "unauthenticated");
+            }
+            return new JsonResult<Object>(adopted);
+        });
+
+        HohenheimEndpoints.API_DNS_PEER_MIRROR_ADD.setHandler(conduit -> {
+            if (ApiConduits.requireKey(conduit) == null) {
+                return null;
+            }
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String keyName = trimmed(form.get("key_name"));
+            Long signedAt = RawValues.parsedLong(form.get("signed_at"));
+            String signature = trimmed(form.get("signature"));
+            String origin = trimmed(form.get("origin"));
+            String check = trimmed(form.get("check"));
+            // Whether it only checks is signed too, so it is read as sent: anything but the two words is refused.
+            if (keyName.isEmpty() || signedAt == null || signature.isEmpty() || origin.isEmpty()
+                    || !(check.equals("true") || check.equals("false"))) {
+                return refusal(conduit, "validation");
+            }
+            DnsPeerMirrorResponse adopted;
+            try {
+                adopted = DnsPeerMirrors.adoptOne(keyName, signedAt, signature, origin, check.equals("true"));
+            } catch (IllegalStateException unfillable) {
+                conduit.setResponseStatus(422);
+                return new JsonResult<Object>(new DnsValidationErrorResponse("refused", null, null,
+                    unfillable.getMessage()));
+            }
+            if (adopted == null) {
                 return refusal(conduit, "unauthenticated");
             }
             return new JsonResult<Object>(adopted);

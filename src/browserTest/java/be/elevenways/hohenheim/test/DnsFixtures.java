@@ -22,6 +22,10 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** The DNS row fixtures the browser tests share: zones, records, peers and their links. */
 public final class DnsFixtures {
@@ -175,6 +179,19 @@ public final class DnsFixtures {
         link.set(DnsZonePeerModel.PEER_ID, peerId);
         links.save(link);
         return link.get(DnsZonePeerModel.ID);
+    }
+
+    /** @return the fields of a urlencoded body, in the order sent */
+    static Map<String, String> formFields(String body) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String pair : body.split("&")) {
+            int split = pair.indexOf('=');
+            if (split > 0) {
+                fields.put(URLDecoder.decode(pair.substring(0, split), StandardCharsets.UTF_8),
+                    URLDecoder.decode(pair.substring(split + 1), StandardCharsets.UTF_8));
+            }
+        }
+        return fields;
     }
 
     /** Asks the server on the port one question over UDP, unsigned and without recursion unless asked. */
