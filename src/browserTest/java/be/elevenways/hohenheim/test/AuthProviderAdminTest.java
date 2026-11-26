@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,9 +57,12 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             .isEqualTo(1);
         assertThat(page.locator("div[role='option'][data-value='auth.admin.access']").count())
             .isEqualTo(1);
-        // Described permissions render their description line.
+        // Described permissions render their description line: the words the server resolves for the reader.
+        String described = AuthEndpoints.PERM_ADMIN_ACCESS.description()
+            .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+        assertThat(described).as("the description resolves on the server").isEqualTo("Access the admin panel");
         assertThat(page.locator("div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle")
-            .innerText()).isEqualTo("Access the admin panel");
+            .innerText()).as("and reaches the browser's picker").isEqualTo(described);
         page.keyboard().press("Escape");
 
         // Each provider type reads as its words with its description line, and in Dutch as Dutch words: the type's

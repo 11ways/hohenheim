@@ -159,6 +159,8 @@ class HohenheimPeopleToolsTest extends HohenheimHttpTestBase {
             assertThat(shared.error()).as("step 8: " + shared.text()).isFalse();
             McpHttpSession.Answer shares = admin.call("share_read", Map.of("code", site));
             assertThat(shares.error()).as("step 8: " + shares.text()).isFalse();
+            assertThat(admin.call("read", Map.of("codes", List.of(hana))).text())
+                .as("step 8: the administrator reads the person by her name").contains("Hana Given");
             assertThat(shares.text()).as("step 8: the holder and the levels").contains("Hana Given")
                 .contains("manage").contains("Access levels");
             McpHttpSession.Answer both = admin.call("share_set", Map.of("record", site, "to", hana, "remove", true,
