@@ -64,6 +64,7 @@ import be.elevenways.zenit.common.orm.history.History;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.StoredRefusalWords;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
@@ -381,17 +382,16 @@ public final class InstanceBackups {
                             InstanceOperationGuard.startFailureOf(restartFailed),
                             HohenheimViolations.reasonOf(restartFailed));
                     }
-                    failedRow(instanceId, targetId, null,
-                        "The workload could not be started again after the capture: "
-                            + HohenheimViolations.reasonOf(restartFailed));
+                    Microcopy notRestarted = notRestarted(restartFailed);
+                    failedRow(instanceId, targetId, null, stored(notRestarted));
                     if (captureFailure != null) {
                         restartFailed.addSuppressed(captureFailure);
                     }
-                    throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
-                        new IOException("The workload could not be started again after the capture ("
-                            + HohenheimViolations.reasonOf(restartFailed) + ")"
-                            + (captureFailure != null ? "; volume capture also failed" : ""),
-                            restartFailed));
+                    // The caller is told in the row's words; the failure (the capture's beside it) stays its cause.
+                    Violations refused = Violations.ofForm(HohenheimViolations.instanceRefusalText(
+                        "instance_backup_failed", owner, null).withArg("reason", notRestarted));
+                    refused.initCause(restartFailed);
+                    throw refused;
                 }
                 if (captureFailure != null) {
                     FileTrees.deleteQuietly(staging);
@@ -1716,6 +1716,22 @@ public final class InstanceBackups {
         backup.set(InstanceBackupModel.REMOTE_KEY, key);
         backup.set(InstanceBackupModel.ERROR, error);
         this.instances.operations().afterRelease(instanceId, () -> Models.get(InstanceBackupModel.class).save(backup));
+    }
+
+    /**
+     * Why a backup failed when the app its capture stopped did not start again, the reason the deploy vocabulary's
+     * (DeployFailure), never the failure's own text.
+     *
+     * @return the words, unresolved, each reader reads in their own language
+     */
+    static @NonNull Microcopy notRestarted(@NonNull Throwable restartFailed) {
+        return HohenheimMicrocopy.VIOLATIONS.of("instance_backup_not_restarted")
+            .withArg("reason", DeployFailure.of(restartFailed).reason());
+    }
+
+    /** @return words as a backup row's error keeps them ({@link StoredRefusalWords}), told in each reader's words */
+    static @NonNull String stored(@NonNull Microcopy words) {
+        return Objects.requireNonNull(StoredRefusalWords.line(words), "a backup's words store as words");
     }
 
     private static @NonNull EncryptionKeyring keyring() {

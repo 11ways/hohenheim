@@ -6982,6 +6982,10 @@
     "text": "Backup of {$name} failed: {$reason}",
     "scope": "violations"
   },
+  "instance_backup_not_restarted": {
+    "text": "The app could not be started again after the capture: {$reason}",
+    "scope": "violations"
+  },
   "instance_workload_absent": {
     "text": "App {$name} has no app at the daemon; deploy it first",
     "scope": "violations"

@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.StoredRefusalWords;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violation;
@@ -100,10 +101,10 @@ public final class HohenheimViolations {
     }
 
     /**
-     * A stored reason as a message for its reader: what {@link #reasonOf} stores, or, for a reason stored before it
-     * existed (and a task run's refusal stored before core's {@code TaskRunErrors} kept a refusal's words), the
-     * refusal it debug-rendered ("1 violation(s):  -> workspace_build_failed {reason=...}") as that refusal, which each
-     * reader resolves in its own locale.
+     * A stored reason as a message for its reader: words stored unresolved ({@link StoredRefusalWords}), what
+     * {@link #reasonOf} stores, or, for a reason stored before it existed (and a task run's refusal stored before
+     * core's {@code TaskRunErrors} kept a refusal's words), the refusal it debug-rendered ("1 violation(s):  ->
+     * workspace_build_failed {reason=...}") as that refusal, which each reader resolves in its own locale.
      *
      * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot
      * be split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old
@@ -114,6 +115,10 @@ public final class HohenheimViolations {
      * @return the one refusal the stored text renders, else the stored text as a literal
      */
     public static @NonNull Microcopy storedMessage(@NonNull String stored) {
+        Microcopy words = StoredRefusalWords.read(stored);
+        if (words != null) {
+            return words;
+        }
         String prefix = "1 violation(s): ";
         int arrow = stored.indexOf(" -> ");
         if (!stored.startsWith(prefix) || arrow < prefix.length() - 1) {

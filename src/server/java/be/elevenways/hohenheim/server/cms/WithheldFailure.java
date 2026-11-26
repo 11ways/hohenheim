@@ -4,12 +4,15 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.function.Function;
 
 /**
  * THE rule for what a reader of the rendering panel may see of a failure reason the daemon or the
@@ -32,10 +35,12 @@ public final class WithheldFailure {
 
     private final boolean delegated;
     private final @NonNull String withheld;
+    private final @NonNull Function<Microcopy, String> words;
 
-    private WithheldFailure(boolean delegated, @NonNull String withheld) {
+    private WithheldFailure(boolean delegated, @NonNull String withheld, @NonNull Function<Microcopy, String> words) {
         this.delegated = delegated;
         this.withheld = withheld;
+        this.words = words;
     }
 
     /**
@@ -79,7 +84,7 @@ public final class WithheldFailure {
             ? HohenheimMicrocopy.DELEGATED.of("failure_withheld")
                 .asString(conduit)
             : "";
-        return new WithheldFailure(delegated, withheld);
+        return new WithheldFailure(delegated, withheld, words -> words.asString(conduit));
     }
 
     /**
@@ -89,7 +94,7 @@ public final class WithheldFailure {
     static @NonNull WithheldFailure ofWork(@NonNull AccessContext access) {
         boolean withholds = !TenantWrites.actsAsOperator();
         return new WithheldFailure(withholds,
-            withholds ? access.text(HohenheimMicrocopy.DELEGATED.of("failure_withheld")) : "");
+            withholds ? access.text(HohenheimMicrocopy.DELEGATED.of("failure_withheld")) : "", access::text);
     }
 
     /** @return whether this render withholds daemon-worded text */
@@ -98,13 +103,14 @@ public final class WithheldFailure {
     }
 
     /**
-     * @return the reason as this panel may show it: blank stays blank, a delegated reader gets the tenant-safe sentence
+     * @return the reason as this panel may show it, in its reader's words where it was stored as words: blank stays
+     *         blank, a delegated reader gets the tenant-safe sentence
      */
     @NonNull String shown(@Nullable String reason) {
         if (reason == null || reason.isBlank()) {
             return "";
         }
-        return this.delegated ? this.withheld : HohenheimViolations.storedText(reason);
+        return this.delegated ? this.withheld : this.words.apply(HohenheimViolations.storedMessage(reason));
     }
 
     /** @return an operator-only text (a step log) as this panel may show it, null when withheld */

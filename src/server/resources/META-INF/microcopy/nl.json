@@ -6982,6 +6982,10 @@
     "text": "Back-up van {$name} mislukt: {$reason}",
     "scope": "violations"
   },
+  "instance_backup_not_restarted": {
+    "text": "De app kon na de opname niet opnieuw gestart worden: {$reason}",
+    "scope": "violations"
+  },
   "instance_workload_absent": {
     "text": "App {$name} heeft geen app bij de daemon; deploy ze eerst",
     "scope": "violations"
