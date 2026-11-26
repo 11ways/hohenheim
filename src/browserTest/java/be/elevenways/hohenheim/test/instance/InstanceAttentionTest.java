@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.cluster.ClusterNudge;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -371,7 +373,10 @@ class InstanceAttentionTest {
                     assertThat(targetUrl(item)).as("step 2: it links the owner").contains(owner);
                 }
                 // Counted warm, as the framework's flat-count measure takes it: the writes above emptied what a read
-                // caches, a cost no row adds.
+                // caches, a cost no row adds. The probe counts every thread's statements, so the master nudge those
+                // writes asked for (its read of linked_servers) is settled first instead of landing in one window.
+                assertThat(ClusterNudge.awaitIdle(Duration.ofSeconds(20)))
+                    .as("step 2: the nudges the writes asked for settled, round of %s", round).isTrue();
                 reads.add(probe.statementsOf(() -> InstanceAttention.unfinishedDestroys(new ArrayList<>())));
             }
 
