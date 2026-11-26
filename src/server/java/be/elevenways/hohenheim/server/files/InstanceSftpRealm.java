@@ -40,17 +40,20 @@ public final class InstanceSftpRealm implements SftpRealm {
     private static final String SITE_SCOPE = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE);
 
     /**
-     * What an SSH key login is narrowed to: the instance tier's gate, the files of every app (which only an operator
-     * holds, so a tenant's key is never widened by it), the file manager's two capabilities and a site's manage, in
-     * API key grammar.
+     * What an SSH key login is narrowed to: the instance tier's gate, the files of every app and the manage of every
+     * site (which only an operator holds, so a tenant's key is never widened by them), the file manager's two
+     * capabilities and a site's manage, in API key grammar.
      *
      * AIDEV-NOTE: the gate is carried because a narrowed credential DENIES every permission it does not declare, and
      * an explicit gate denial precedes every row, the narrowed type-level row included: an operator's files key
      * without it reached nothing, not even an app the operator held a files grant on. Site manage is carried for a
-     * site's own files: over SFTP a credential reaches nothing but files, whatever its scopes.
+     * site's own files: over SFTP a credential reaches nothing but files, whatever its scopes. The every-site
+     * permission is carried because an operator manages a site through it and holds no grant on the record: without
+     * it an administrator's key was refused on every site (found on a real server, 2026-11-27).
      */
     public static final List<String> FILE_SCOPES = List.of(ManagePanel.ACCESS.value(),
-        HohenheimAccess.FILES_ALL.value(), scopeOf(InstanceFiles.READ), scopeOf(InstanceFiles.WRITE), SITE_SCOPE);
+        HohenheimAccess.FILES_ALL.value(), HohenheimAccess.SITES_MANAGE_ALL.value(), scopeOf(InstanceFiles.READ),
+        scopeOf(InstanceFiles.WRITE), SITE_SCOPE);
 
     /** The permissions an SFTP credential carries beside its capabilities, as far as its holder holds them. */
     private static final List<Permission> PERMISSIONS = List.of(ManagePanel.ACCESS, HohenheimAccess.FILES_ALL);
@@ -122,9 +125,15 @@ public final class InstanceSftpRealm implements SftpRealm {
         return List.copyOf(scopes);
     }
 
-    /** The scopes an SFTP password for a site's own files carries: the held permissions and a site's manage. */
+    /**
+     * The scopes an SFTP password for a site's own files carries: the held permissions, the manage of every site for
+     * an operator who holds it, and a site's manage.
+     */
     public static @NonNull List<String> sitePasswordScopes(@NonNull AccessContext holder) {
         List<String> scopes = heldPermissions(holder);
+        if (holder.hasPermission(HohenheimAccess.SITES_MANAGE_ALL)) {
+            scopes.add(HohenheimAccess.SITES_MANAGE_ALL.value());
+        }
         scopes.add(SITE_SCOPE);
         return List.copyOf(scopes);
     }

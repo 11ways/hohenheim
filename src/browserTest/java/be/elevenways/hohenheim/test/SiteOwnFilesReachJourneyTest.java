@@ -189,6 +189,21 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
                     laptop))).as("step 6: a site serving a host folder has no files of its own").isNotNull();
                 assertThat(catchThrowable(() -> client.signIn(port, InstanceSftpRealm.username(email, "S987654"),
                     laptop))).as("step 6: an unknown code reads the same").isNotNull();
+
+                // 7. An administrator, who manages every site without a grant on any, signs in with his own key.
+                Row operator = TenantConduits.operatorUser();
+                KeyPair operatorsKey = KeyUtils.generateKeyPair("ssh-ed25519", 256);
+                SshKeys.add(operator.get(UserModel.ID), "operator " + tag,
+                    PublicKeyEntry.toString(operatorsKey.getPublic()));
+                try (Connection keyed = client.signIn(port,
+                        InstanceSftpRealm.username(operator.get(UserModel.EMAIL), code), operatorsKey)) {
+                    assertThat(names(keyed.sftp(), "/releases")).as("step 7: the administrator reads the site's files")
+                        .contains("Tadoma 1.2.dmg");
+                    writeBytes(keyed.sftp(), "/releases/notes.txt", bytes(64, 3));
+                }
+                assertThat(catchThrowable(() -> client.signIn(port, InstanceSftpRealm.username(
+                    operator.get(UserModel.EMAIL), folderCode), operatorsKey)))
+                    .as("step 7: a site serving a host folder stays closed to him too").isNotNull();
             }
         } finally {
             if (proxy != null) {
