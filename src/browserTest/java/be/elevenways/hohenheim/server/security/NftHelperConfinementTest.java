@@ -91,6 +91,14 @@ class NftHelperConfinementTest {
         assertRefused(run(helper, null, "nft-list", "table", "inet", "filter"), "step 3: a foreign table");
         assertRefused(run(helper, null, "nft-list", "table", "bridge", "other"), "step 3: another bridge table");
         assertRefused(run(helper, null, "nft-list", "chain", "inet", own, "-o"), "step 3: an option as chain");
+
+        // 4. The flow accounting of a network (sets, chains and rules of both families) and its removal are handed
+        //    to nft whole: the reader needs no verb of its own, its listing is step 3's.
+        WorkloadNetwork counted = new WorkloadNetwork("hohenheim-app-7-net", "172.31.5.0/24", "172.31.5.1",
+            "fd00:31:5::/64");
+        assertHanded(run(helper, FlowAccounting.ruleset(own, counted), "nft-apply"), "step 4: the accounting");
+        assertHanded(run(helper, FlowAccounting.removal(own, WorkloadNetworkPolicy.chainKey(counted.name())),
+            "nft-apply"), "step 4: its removal");
     }
 
     private static void assertRefused(NftRunner.Result result, String step) {

@@ -1,9 +1,10 @@
 {#- Network tab on an app (InstanceNetworkPage): the span choices, what the app received and sent over the span and
-    what its sites answered visitors, received and sent per step, then the app's sites with the requests each
-    brought. Every figure is a read of the counted totals, so the page is the same at every load. -#}
+    what its sites answered visitors, received and sent per step, where the app sends data, then the app's sites with
+    the requests each brought. Every figure is a read of the counted totals, so the page is the same at every load. -#}
 {% declare title: String %}
 {% declare head: RecordHeadState = null %}
 {% declare view: AppNetworkView %}
+{% declare destinations: AppDestinationsView %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -43,6 +44,8 @@
             {% /if %}
         </pl-card-content>
     </pl-card>
+
+    {% render "hohenheim:cms/instance-network-destinations" var:destinations=destinations %}
 
     <pl-card data-hh-app-network-sites>
         <pl-card-header>

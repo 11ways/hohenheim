@@ -557,6 +557,8 @@ final class TrafficScreens {
             case UNSERVED_NAMES -> List.of(Shown.NAME, Shown.REQUESTS, Shown.LAST);
             case NAMES, MISSING_NAMES -> List.of(Shown.NAME, Shown.TYPE, Shown.REQUESTS);
             case SITES, OUTCOMES -> throw new IllegalArgumentException("The " + top.token() + " read is no table");
+            case DESTINATIONS -> throw new IllegalArgumentException("The destinations table is an app's, drawn by"
+                + " its Network tab");
         };
     }
 
@@ -573,6 +575,7 @@ final class TrafficScreens {
                 case NAMES, MISSING_NAMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_name");
                 case RESOLVERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_resolver");
                 case SITES, OUTCOMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_site");
+                case DESTINATIONS -> HohenheimMicrocopy.APP_NETWORK.of("app_network_column_destination");
             };
             case SITE -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_site");
             case TYPE -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_type");
@@ -670,7 +673,7 @@ final class TrafficScreens {
             case UNSERVED_NAMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_unserved_names_lead");
             case MISSING_NAMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_missing_names_lead");
             case RESOLVERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_resolvers_lead");
-            case REFUSED_PAGES, BROWSERS, STATUSES, VISITORS, SITES, NAMES, OUTCOMES -> null;
+            case REFUSED_PAGES, BROWSERS, STATUSES, VISITORS, SITES, NAMES, OUTCOMES, DESTINATIONS -> null;
         };
     }
 

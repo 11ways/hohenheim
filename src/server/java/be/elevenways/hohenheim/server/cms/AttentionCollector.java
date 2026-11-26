@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
+import be.elevenways.hohenheim.server.traffic.AppDestinations;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
@@ -177,8 +179,9 @@ public final class AttentionCollector {
 
     /**
      * Hits the traffic counters had no room for since this process started (the totals of that time are short by that
-     * many, and a busier server needs a look), and totals that cannot be written (kept in memory until a write
-     * succeeds, lost by a restart meanwhile).
+     * many, and a busier server needs a look), totals that cannot be written (kept in memory until a write succeeds,
+     * lost by a restart meanwhile), and hosts whose apps' destinations are not read: their accounting could not be
+     * brought in line, their listing failed, or it answered so slowly that it needs a look.
      */
     public static void traffic(@NonNull List<AttentionItem> items) {
         long dropped = HohenheimTraffic.droppedHits();
@@ -191,6 +194,17 @@ public final class AttentionCollector {
         if (unwritten != null) {
             items.add(item(AttentionSeverity.WARNING, "chart-line",
                 HohenheimMicrocopy.ATTENTION_TITLE.of("traffic_unwritten"), literal(unwritten)));
+        }
+        for (AppDestinations.Problem problem : AppDestinations.problems()) {
+            String why = problem.why();
+            Duration took = problem.took();
+            Microcopy title = HohenheimMicrocopy.ATTENTION_TITLE.of(switch (problem.stage()) {
+                case ACCOUNTING -> "traffic_destinations_unkept";
+                case LISTING -> took != null ? "traffic_destinations_slow" : "traffic_destinations_unread";
+            }).withArg("host", problem.host());
+            items.add(item(AttentionSeverity.WARNING, "chart-line", title, took != null
+                ? HohenheimMicrocopy.ATTENTION_DETAIL.of("traffic_destinations_slow").withArg("took", took)
+                : literal(Objects.requireNonNullElse(why, ""))));
         }
     }
 

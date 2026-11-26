@@ -586,6 +586,20 @@ public class HohenheimSettings {
             .icon("chart-line");
 
         public static final TrafficSettings SETTINGS = TrafficSettings.declare(GROUP);
+
+        /**
+         * Whether every host this Hohenheim runs apps on counts where each app's outgoing connections go.
+         *
+         * AIDEV-NOTE: one switch for every host, read live: the isolation sweep brings each host's kernel in line
+         * within its five minutes, adding the accounting chains or removing every one, and the reader lists no host
+         * while it is off. No column per host: a host that should differ is a decision not made yet.
+         */
+        public static final SettingDefinition<Boolean> RECORD_DESTINATIONS = GROUP
+            .buildSetting("record_destinations", Boolean.class)
+            .defaultValue(true)
+            .description("Count where each app's outgoing connections go: address, port, protocol, bytes and"
+                + " connections; content is never read")
+            .build();
     }
 
     // --- Storage ---

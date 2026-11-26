@@ -71,12 +71,14 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         Endpoint.declareQueryOn(conduit, MalformedQuery.ABSENT, List.of(PERIOD));
         TrafficWindow window = TrafficReads.windowOf(conduit.getParameter(PERIOD));
-        AppNetworkReads.Read read = AppNetworkReads.read(app,
-            new AppNetworkReads.ReadInput(window.storageKey(), null), AccessContext.of(conduit));
+        AccessContext access = AccessContext.of(conduit);
+        AppNetworkReads.Read read = AppNetworkReads.read(app, new AppNetworkReads.ReadInput(window.storageKey(), null,
+            TrafficReads.Top.DESTINATIONS.token()), access);
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.APP_NETWORK, app.get(InstanceModel.NAME)));
         vars.put("head", recordHead(conduit));
         vars.put("view", view(conduit, read, window));
+        vars.put("destinations", AppDestinationsCard.view(read.destinations()));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_NETWORK, vars);
     }
 
@@ -113,7 +115,7 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
     }
 
     /** @return a size in the reader's words */
-    private static @NonNull Microcopy size(long bytes) {
+    static @NonNull Microcopy size(long bytes) {
         return HohenheimMicrocopy.APP_NETWORK.of("app_network_size").withArg("bytes", bytes);
     }
 

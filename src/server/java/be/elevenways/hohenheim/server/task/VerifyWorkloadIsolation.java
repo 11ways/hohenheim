@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
@@ -17,11 +18,13 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
+import be.elevenways.hohenheim.server.traffic.AppDestinations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -38,9 +41,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The reconciler that closes the Docker tiers' reboot window: every policied workload
@@ -108,9 +113,18 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         @NonNull String contain() throws Exception;
     }
 
-    /** One policied network the kernel must carry, with its declared egress. */
+    /**
+     * One policied network the kernel must carry, with its declared egress, and what the destination reader needs of
+     * it (AppDestinations).
+     *
+     * @param party      who its members are when it is a workload's own network, null for a link network
+     * @param countedFor the app its outgoing connections count under, null when they are not counted
+     * @param database   the database it links that app to, null for any other network
+     */
     private record Expected(@NonNull String network, @NonNull Egress egress,
-                            @NonNull String workload, @NonNull Containment containment) {
+                            @NonNull String workload, @NonNull Containment containment,
+                            AppDestinations.@Nullable Party party, @Nullable Integer countedFor,
+                            @Nullable Integer database) {
     }
 
     @Override
@@ -204,6 +218,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         collectLinks(inventory);
 
         List<HostOutcome> outcomes = new ArrayList<>();
+        Set<Integer> planned = new HashSet<>();
         for (Integer serverId : allKeys(inventory, inventoryErrors)) {
             Row server = Models.get(HostModel.class).findById(serverId);
             if (server != null && HostModel.isIncus(server)) {
@@ -211,15 +226,24 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             }
             outcomes.add(sweepHost(serverId,
                 inventory.getOrDefault(serverId, List.of()),
-                inventoryErrors.getOrDefault(serverId, List.of())));
+                inventoryErrors.getOrDefault(serverId, List.of()), planned));
         }
+        AppDestinations.retain(planned);
         return List.copyOf(outcomes);
     }
 
     // -- one host ---------------------------------------------------------------
 
+    /**
+     * AIDEV-NOTE: the destination accounting rides this sweep (AppDestinations.reconcile) because it reads the same
+     * networks and the same kernel; it runs after the isolation verdicts, never changes one and never throws, so the
+     * isolation chains are checked exactly as before and an accounting failure only reaches the dashboard.
+     *
+     * @param planned grows by the host when its destination plan is published
+     */
     private static @NonNull HostOutcome sweepHost(int serverId, @NonNull List<Expected> expected,
-                                                  @NonNull List<String> inventoryErrors) {
+                                                  @NonNull List<String> inventoryErrors,
+                                                  @NonNull Set<Integer> planned) {
         String name = HostModel.nameOf(serverId);
         WorkloadNetworkPolicy policy = WorkloadNetworkPolicy.forHost(name);
         if (!policy.isEnabled()) {
@@ -246,20 +270,26 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         List<String> repaired = new ArrayList<>();
         List<String> contained = new ArrayList<>();
         List<String> errors = new ArrayList<>(inventoryErrors);
+        AppDestinations.Planner planner = new AppDestinations.Planner(serverId, name, policy::publicPorts);
         for (Expected item : expected) {
             WorkloadNetwork network;
+            Map<String, Object> inspect;
             try {
                 if (docker.findNetworkByName(item.network()) == null) {
                     // No network at the daemon: nothing is attached to it, so there is
                     // nothing to protect; the next deploy recreates it WITH its policy.
                     continue;
                 }
-                network = WorkloadNetwork.fromInspect(docker.inspectNetwork(item.network()));
+                inspect = docker.inspectNetwork(item.network());
+                network = WorkloadNetwork.fromInspect(inspect);
             } catch (IOException | RuntimeException daemonBroken) {
                 errors.add(item.workload() + ": daemon state unreadable, isolation"
                     + " UNCONFIRMED: " + daemonBroken.getMessage());
+                // Its accounting is kept as it stands: an unreadable daemon is no reason to drop its counters.
+                planner.unread(item.network());
                 continue;
             }
+            planner.network(network, inspect, item.party(), item.countedFor(), item.database());
             boolean enforcedNow;
             try {
                 enforcedNow = policy.isEnforced(network, item.egress());
@@ -288,6 +318,12 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                         + containFailed.getMessage());
                 }
             }
+        }
+        try {
+            AppDestinations.reconcile(policy, planner.build());
+            planned.add(serverId);
+        } catch (RuntimeException unplanned) {
+            Blast.log(SWEEP, "could not plan the destination accounting of", name, "-", unplanned.getMessage());
         }
         return new HostOutcome(name, true, List.copyOf(enforced), List.copyOf(repaired),
             List.copyOf(contained), List.copyOf(errors));
@@ -354,12 +390,19 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                 continue;   // a SHARED_BRIDGE kind declared no per-workload network
             }
             String handle = resolved.spec().handle();
+            // Who the network's members are, and whether its connections are counted: an app's own network that
+            // reaches the internet and reads its counters (the Network tab's rule); a database's engine is no app.
+            AppDestinations.Party party = DatabaseModel.MODEL_ID.toString().equals(owner)
+                ? new AppDestinations.Party(null, row.get(InstanceModel.GENERATED_FOR_ID))
+                : new AppDestinations.Party(ApplicationReleases.linkOwnerOf(row), null);
+            Integer countedFor = runtime.egress() == Egress.OPEN && InstanceKinds.offers(row, WorkloadLane.LIVE_STATS)
+                ? party.appId() : null;
             inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
                 WorkloadNetworks.networkName(handle), runtime.egress(), handle,
                 () -> {
                     new InstanceService().stop(id);
                     return "stopped instance " + handle;
-                }));
+                }, party, countedFor, null));
         }
     }
 
@@ -375,8 +418,13 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             addLinks(inventory, GameDomains.liveLinkHandles(), Egress.OPEN);
             // Instance-to-database pairs: egress NONE for the same reason the site lane
             // is, and enumerated here or the sweep would read every one of them as an
-            // unexpected network and sever a running workload from its database.
-            addLinks(inventory, InstanceDatabaseNetworks.liveLinkHandles(), Egress.NONE);
+            // unexpected network and sever a running workload from its database. The
+            // app's connections to its database over it are counted, as internal.
+            InstanceDatabaseNetworks.liveLinks().forEach((serverId, links) -> {
+                for (InstanceDatabaseNetworks.Link link : links) {
+                    addLink(inventory, serverId, link.handle(), Egress.NONE, link.ownerId(), link.databaseId());
+                }
+            });
         }
         // A lowered stack's shared network IS a link network, so it needs no lane of its
         // own: the per-service workload networks ride collectInstances, and severing this
@@ -390,14 +438,23 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                                  @NonNull Map<Integer, List<String>> handlesByServer,
                                  @NonNull Egress egress) {
         for (Map.Entry<Integer, List<String>> entry : handlesByServer.entrySet()) {
-            int serverId = entry.getKey();
             for (String handle : entry.getValue()) {
-                String network = WorkloadNetworks.networkName(handle);
-                inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
-                    network, egress, "link " + handle,
-                    () -> severLink(serverId, network)));
+                addLink(inventory, entry.getKey(), handle, egress, null, null);
             }
         }
+    }
+
+    /**
+     * @param countedFor the app whose connections over it are counted, null when none are
+     * @param database   the database it links that app to
+     */
+    private static void addLink(@NonNull Map<Integer, List<Expected>> inventory, int serverId,
+                                @NonNull String handle, @NonNull Egress egress, @Nullable Integer countedFor,
+                                @Nullable Integer database) {
+        String network = WorkloadNetworks.networkName(handle);
+        inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
+            network, egress, "link " + handle,
+            () -> severLink(serverId, network), null, countedFor, database));
     }
 
     // -- containment ---------------------------------------------------------------

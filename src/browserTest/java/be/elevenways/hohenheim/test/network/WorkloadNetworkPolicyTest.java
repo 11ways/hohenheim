@@ -13,7 +13,9 @@ import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.security.FlowAccounting;
 import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.security.PublicPorts;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -498,6 +500,92 @@ class WorkloadNetworkPolicyTest {
             StreamSiteRows.switchTo(mail, false);
             StreamSiteRows.switchTo(spare, false);
         }
+    }
+
+    /**
+     * The flow accounting against REAL packets: what a tenant opens is counted per destination, through the host
+     * and to the host itself, on both families, what the isolation drops is never counted, the isolation chains read
+     * back exactly with the accounting beside them, a re-apply keeps the counters, and the teardown takes it all.
+     */
+    @Test
+    void accountingCountsWhatATenantOpensBesideAnExactIsolation() throws IOException {
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
+        try (PrivateNetns netns = new PrivateNetns()) {
+            long tenant = netns.nested();
+            long peer = netns.nested();
+            wire(netns, tenant, peer);
+            String publicHost = "203.0.113.10";
+            String publicHostV6 = "2001:db8:31::10";
+            String publicPeerV6 = "2001:db8:9::5";
+            netns.setup("ip", "addr", "add", publicHost + "/32", "dev", "lo");
+            netns.setup("ip", "addr", "add", publicHostV6 + "/128", "dev", "lo", "nodad");
+            netns.setup("ip", "addr", "add", "2001:db8:9::1/64", "dev", "vp0", "nodad");
+            netns.setupNested(peer, "ip", "addr", "add", publicPeerV6 + "/64", "dev", "vp1", "nodad");
+            netns.listenInHost(443);
+            WorkloadNetworkPolicy policy = new WorkloadNetworkPolicy(netns.nftRunner(), () -> true,
+                () -> new PublicPorts(List.of(443), List.of()));
+            WorkloadNetwork network = new WorkloadNetwork("hohenheim-counted-net", TENANT_SUBNET, TENANT_GATEWAY,
+                TENANT_SUBNET_V6);
+            // The IPv6 neighbour entries are warmed before the policy, as the stream-port test's step 3 explains.
+            assertThat(netns.probe(tenant, publicHostV6, 443)).as("step 0: the host listens on IPv6")
+                .isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, publicPeerV6, PEER_PORT)).as("step 0: the peer answers on IPv6")
+                .isEqualTo("REACHABLE");
+
+            // 1. THE ISOLATION STAYS EXACT: with the accounting beside it, the verifier reads the isolation chains as
+            //    exactly what the applier writes, and the accounting reads back as written.
+            policy.apply(network, Egress.OPEN);
+            policy.account(network);
+            assertThat(policy.isEnforced(network, Egress.OPEN))
+                .as("step 1: THE ASSERTION, the isolation chains exact beside the accounting").isTrue();
+            assertThat(FlowAccounting.carries(FlowAccounting.parse(policy.listTable()), network))
+                .as("step 1: the kernel renders the accounting as written").isTrue();
+
+            // 2. Real connections: the internet through the host on both families, the host's own public port, and
+            //    the metadata service the isolation drops.
+            assertThat(netns.probe(tenant, PUBLIC, PEER_PORT)).as("step 2: the internet").isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, publicHost, 443)).as("step 2: the host's own port").isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, publicHostV6, 443)).as("step 2: and on IPv6").isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, publicPeerV6, PEER_PORT)).as("step 2: the IPv6 internet")
+                .isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, METADATA, PEER_PORT)).as("step 2: dropped").isEqualTo("BLOCKED");
+            List<FlowAccounting.Counted> counted = FlowAccounting.parse(policy.listTable()).counted();
+            for (FlowAccounting.Counter counter : FlowAccounting.Counter.values()) {
+                assertThat(value(counted, FlowAccounting.Via.THROUGH, counter, TENANT_ADDRESS, PUBLIC, PEER_PORT))
+                    .as("step 2: the internet's %s", counter).isPositive();
+                assertThat(value(counted, FlowAccounting.Via.HOST, counter, TENANT_ADDRESS, publicHost, 443))
+                    .as("step 2: the host's own port's %s", counter).isPositive();
+                assertThat(value(counted, FlowAccounting.Via.HOST, counter, "fd00:31:5::2", publicHostV6, 443))
+                    .as("step 2: the host's own IPv6 port's %s", counter).isPositive();
+                assertThat(value(counted, FlowAccounting.Via.THROUGH, counter, "fd00:31:5::2", publicPeerV6,
+                    PEER_PORT)).as("step 2: the IPv6 internet's %s", counter).isPositive();
+            }
+            assertThat(counted).as("step 2: what the isolation dropped is never counted")
+                .noneMatch(element -> element.destination().equals(METADATA));
+
+            // 3. A re-apply (the sweep's repair) keeps what the sets counted.
+            long sent = value(counted, FlowAccounting.Via.THROUGH, FlowAccounting.Counter.SENT, TENANT_ADDRESS,
+                PUBLIC, PEER_PORT);
+            policy.account(network);
+            assertThat(value(FlowAccounting.parse(policy.listTable()).counted(), FlowAccounting.Via.THROUGH,
+                FlowAccounting.Counter.SENT, TENANT_ADDRESS, PUBLIC, PEER_PORT))
+                .as("step 3: the counters survive a re-apply").isGreaterThanOrEqualTo(sent);
+
+            // 4. The teardown takes the accounting with the isolation, and the empty table with them.
+            policy.remove(network.name());
+            assertThat(netns.inHost("nft", "list", "table", "inet", WorkloadNetworkPolicy.table()).ok())
+                .as("step 4: nothing of the network is left, the table neither").isFalse();
+        }
+    }
+
+    /** @return one counted element's value, -1 when the listing holds none */
+    private static long value(List<FlowAccounting.Counted> counted, FlowAccounting.Via via,
+                              FlowAccounting.Counter counter, String source, String destination, int port) {
+        return counted.stream().filter(element -> element.via() == via && element.counter() == counter
+                && element.source().equals(source) && element.destination().equals(destination)
+                && element.port().equals(String.valueOf(port)))
+            .mapToLong(FlowAccounting.Counted::value).findFirst().orElse(-1);
     }
 
     /** @return the rule list's public-port accepts, in order: every accept but the conntrack one */

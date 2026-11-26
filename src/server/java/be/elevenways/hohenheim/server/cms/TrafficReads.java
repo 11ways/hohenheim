@@ -88,11 +88,20 @@ public final class TrafficReads {
     /** The least requests a page needs in the span to stand among the slowest (the board's "at least 50"). */
     public static final int SLOWEST_LEAST_REQUESTS = 50;
 
-    /** What a read covers: one site, every site at once, or one DNS zone. */
+    /** What a read covers: one site, every site at once, one DNS zone, or one app's connections. */
     public enum Reach {
         SITE,
         SERVER,
-        ZONE
+        ZONE,
+        APP;
+
+        /** @return whether a read of this reach and one of the other take their top table from one field */
+        boolean sharesField(@NonNull Reach other) {
+            return switch (this) {
+                case SITE, SERVER -> other == SITE || other == SERVER;
+                case ZONE, APP -> other == this;
+            };
+        }
     }
 
     /** What a read lists beside its totals; a site's tables in a site's words, a zone's in a zone's. */
@@ -116,7 +125,9 @@ public final class TrafficReads {
         MISSING_NAMES("missing_names", TrafficTable.REFUSED_PATHS, Reach.ZONE, TopRead.Order.REQUESTS),
         RESOLVERS("resolvers", TrafficTable.VISITORS, Reach.ZONE, TopRead.Order.REQUESTS),
         /** The questions per outcome: answered, no such name, refused. */
-        OUTCOMES("outcomes", TrafficTable.STATUSES, Reach.ZONE, TopRead.Order.REQUESTS);
+        OUTCOMES("outcomes", TrafficTable.STATUSES, Reach.ZONE, TopRead.Order.REQUESTS),
+        /** Where an app's outgoing connections went, the most sent first. */
+        DESTINATIONS("destinations", TrafficTable.DESTINATIONS, Reach.APP, TopRead.Order.BYTES_SENT);
 
         private final @NonNull String token;
         private final @Nullable TrafficTable table;
@@ -156,6 +167,7 @@ public final class TrafficReads {
                 case MISSING_NAMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_missing_names");
                 case RESOLVERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_resolvers");
                 case OUTCOMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_outcomes");
+                case DESTINATIONS -> HohenheimMicrocopy.APP_NETWORK.of("app_network_destinations_title");
             };
         }
 
@@ -176,7 +188,7 @@ public final class TrafficReads {
          */
         static @Nullable Top forToken(@Nullable String token, @NonNull Reach read) {
             for (Top each : values()) {
-                if (!each.token.equals(token) || (each.reach == Reach.ZONE) != (read == Reach.ZONE)) continue;
+                if (!each.token.equals(token) || !each.reach.sharesField(read)) continue;
                 if (!each.listedOn(read)) {
                     throw Violations.ofField("top", token,
                         HohenheimMicrocopy.TRAFFIC_SCREEN.of("traffic_top_every_site"));
@@ -196,10 +208,13 @@ public final class TrafficReads {
         .build();
 
     /** A site's or every site's top table to list. */
-    public static final EnumField SITE_TOP = topField(false, "traffic_top_site");
+    public static final EnumField SITE_TOP = topField(Reach.SITE, "traffic_top_site");
 
     /** A zone's top table to list. */
-    public static final EnumField ZONE_TOP = topField(true, "traffic_top_zone");
+    public static final EnumField ZONE_TOP = topField(Reach.ZONE, "traffic_top_zone");
+
+    /** An app's top table to list. */
+    public static final EnumField APP_TOP = topField(Reach.APP, "traffic_top_app");
 
     /**
      * A read's input.
@@ -501,11 +516,11 @@ public final class TrafficReads {
         return builder.build();
     }
 
-    /** @return the top field of a site's and every site's tables, or of a zone's */
-    private static @NonNull EnumField topField(boolean zone, @NonNull String help) {
+    /** @return the top field of the reads that share one with this reach */
+    private static @NonNull EnumField topField(@NonNull Reach reach, @NonNull String help) {
         EnumField.Builder builder = EnumField.builder("top").help(HohenheimMicrocopy.HELP.of(help));
         for (Top each : Top.values()) {
-            if ((each.reach == Reach.ZONE) == zone) builder.value(each.token(), each.token(), each.label());
+            if (each.reach.sharesField(reach)) builder.value(each.token(), each.token(), each.label());
         }
         return builder.build();
     }

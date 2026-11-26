@@ -58,13 +58,22 @@ public final class InstanceDatabaseNetworks {
     }
 
     /**
-     * Per-server link-network handles of every attachment row whose instance and database
-     * both live on the same server: the isolation sweep's inventory of instance-database
-     * link networks whose kernel chains must exist (a host reboot erases them while the
-     * containers restart).
+     * One live instance-database link network.
+     *
+     * @param handle     its handle, which names its network
+     * @param ownerId    the instance that owns it: the app, whichever release serves
+     * @param databaseId the database it joins
      */
-    public static @NonNull Map<Integer, List<String>> liveLinkHandles() {
-        Map<Integer, List<String>> byServer = new LinkedHashMap<>();
+    public record Link(@NonNull String handle, int ownerId, int databaseId) {
+    }
+
+    /**
+     * Per server, every attachment row whose instance and database both live on the same server, with the app and
+     * database it joins: the isolation sweep's inventory of instance-database link networks whose kernel chains must
+     * exist (a host reboot erases them while the containers restart).
+     */
+    public static @NonNull Map<Integer, List<Link>> liveLinks() {
+        Map<Integer, List<Link>> byServer = new LinkedHashMap<>();
         DatabaseModel databases = Models.get(DatabaseModel.class);
         InstanceModel instances = Models.get(InstanceModel.class);
         for (Row link : Models.get(InstanceDatabaseModel.class).find().all()) {
@@ -85,7 +94,7 @@ public final class InstanceDatabaseNetworks {
                 continue;   // cross-host pairs are refused at deploy and carry no network
             }
             byServer.computeIfAbsent(serverId, key -> new ArrayList<>())
-                .add(linkHandle(instanceId, databaseId));
+                .add(new Link(linkHandle(instanceId, databaseId), instanceId, databaseId));
         }
         return byServer;
     }

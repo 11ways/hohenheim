@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.mcp;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AppNetworkReads;
+import be.elevenways.hohenheim.server.traffic.AppDestinations;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
@@ -95,6 +96,42 @@ final class HohenheimAppNetworkTools {
             }
         }
         response.line("to visitors: " + read.toVisitors() + " bytes through the proxy");
+        destinations(response, read.destinations());
         return response;
+    }
+
+    /**
+     * The destinations an app's read asked for (top=destinations): one line each, then the one holding every
+     * destination not listed; names a person gave, as untrusted text.
+     */
+    private static void destinations(@NonNull McpResponse response,
+                                     AppNetworkReads.@Nullable Destinations destinations) {
+        if (destinations == null) {
+            return;
+        }
+        if (!destinations.counted()) {
+            response.line(AppDestinations.recording()
+                ? "destinations: none counted in this span; each host's connection counters are read once a minute"
+                : "destinations: not recorded; an administrator switches on Traffic, record where apps send data");
+            return;
+        }
+        response.line("destinations, most sent first, each its connections, bytes sent, bytes received, last seen in"
+            + " office time, kind (internal ones never leave the server), name where Hohenheim knows one you may view,"
+            + " then address port/protocol; the last line holds every one not listed:");
+        List<String> rows = new ArrayList<>();
+        for (AppNetworkReads.Destination destination : destinations.listed()) {
+            AppDestinations.Destination where = destination.where();
+            AppNetworkReads.Moved moved = destination.moved();
+            rows.add(moved.connections() + " " + moved.bytesSent() + " " + moved.bytesReceived() + " "
+                + (destination.lastSeen() == null ? "-" : HohenheimTrafficTools.local(destination.lastSeen())) + " "
+                + where.kind().storageKey() + (where.kind().internal() ? " internal" : "")
+                + (destination.name() == null ? "" : " " + destination.name()) + " " + where.address() + " "
+                + where.port() + "/" + where.protocol());
+        }
+        AppNetworkReads.Moved other = destinations.other();
+        if (other != null) {
+            rows.add(other.connections() + " " + other.bytesSent() + " " + other.bytesReceived() + " other");
+        }
+        response.untrusted("destinations", String.join("\n", rows));
     }
 }

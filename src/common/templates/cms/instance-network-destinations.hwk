@@ -1,0 +1,64 @@
+{#- The Network tab's "Where it sends data" card (AppDestinationsCard): each destination of the app's outgoing
+    connections over the span, the most sent first, with every one not listed on one last line. Internal traffic (its
+    database link, its own containers) is a line of its own that says so. -#}
+{% declare destinations: AppDestinationsView %}
+<pl-card data-hh-app-network-destinations>
+    <pl-card-header>
+        <pl-card-title>{{ t("app_network_destinations_title", scope: "app_network") }}</pl-card-title>
+        <pl-card-description>{{ t("app_network_destinations_lead", scope: "app_network") }}</pl-card-description>
+    </pl-card-header>
+    <pl-card-content>
+        {% if destinations.rows %}
+        <pl-table textSize="small" density="snug">
+            <pl-table-header><pl-table-row>
+                <pl-table-head columnWidth="fill">{{ t("app_network_column_destination", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("app_network_column_address", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit">{{ t("app_network_column_port", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_destination_sent", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_received", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_connections", scope: "app_network") }}</pl-table-head>
+                <pl-table-head columnWidth="fit" data-alignment="right">{{ t("app_network_column_last_seen", scope: "app_network") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each destinations.rows as row key row.key %}
+                <pl-table-row attr:data-hh-app-network-destination={% row.key %} attr:data-hh-internal={% row.internal ? "true" : null %}>
+                    <pl-table-cell>
+                        <span class="hh-state-line"><span data-hh-destination-name>{{ row.name }}</span><span class="hh-state-line-detail" data-hh-destination-note>{{ row.note }}</span></span>
+                    </pl-table-cell>
+                    <pl-table-cell nowrap>{{ row.address }}</pl-table-cell>
+                    <pl-table-cell nowrap>{{ row.port }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ row.sent }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ row.received }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ row.connections }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ row.lastSeen }}</pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+                {% if destinations.other != null %}
+                <pl-table-row data-hh-app-network-destination="other">
+                    <pl-table-cell>
+                        <span class="hh-state-line"><span data-hh-destination-name>{{ destinations.other.name }}</span><span class="hh-state-line-detail" data-hh-destination-note>{{ destinations.other.note }}</span></span>
+                    </pl-table-cell>
+                    <pl-table-cell></pl-table-cell>
+                    <pl-table-cell></pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ destinations.other.sent }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ destinations.other.received }}</pl-table-cell>
+                    <pl-table-cell nowrap data-alignment="right">{{ destinations.other.connections }}</pl-table-cell>
+                    <pl-table-cell></pl-table-cell>
+                </pl-table-row>
+                {% /if %}
+            </pl-table-body>
+        </pl-table>
+        <p class="text-muted" data-hh-app-network-destinations-footnote>{{ t("app_network_destinations_footnote", scope: "app_network") }}</p>
+        {% elseif destinations.recording %}
+        <pl-empty-state icon="route" plain data-hh-app-network-no-destinations>
+            <pl-empty-state-title>{{ t("app_network_no_destinations", scope: "app_network") }}</pl-empty-state-title>
+            <pl-empty-state-description>{{ t("app_network_no_destinations_hint", scope: "app_network") }}</pl-empty-state-description>
+        </pl-empty-state>
+        {% else %}
+        <pl-empty-state icon="route" plain data-hh-app-network-destinations-off>
+            <pl-empty-state-title>{{ t("app_network_destinations_off", scope: "app_network") }}</pl-empty-state-title>
+            <pl-empty-state-description>{{ t("app_network_destinations_off_hint", scope: "app_network") }}</pl-empty-state-description>
+        </pl-empty-state>
+        {% /if %}
+    </pl-card-content>
+</pl-card>

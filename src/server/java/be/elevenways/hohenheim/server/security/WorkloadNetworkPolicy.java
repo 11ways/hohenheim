@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -146,6 +147,72 @@ public final class WorkloadNetworkPolicy {
         return this.host;
     }
 
+    /** @return the host's public ports as this applier reads them now: what an app may reach its own host on */
+    public @NonNull PublicPorts publicPorts() {
+        return this.publicPorts.get();
+    }
+
+    /**
+     * The whole policy table as the kernel renders it, isolation and accounting alike: the one listing the
+     * destination reader takes per minute.
+     *
+     * AIDEV-NOTE: deliberately WITHOUT the table lock. It reads, so it cannot race a mutation into a wrong state, and
+     * a listing that takes long must never hold a deploy's apply behind it.
+     *
+     * @return the listing, null when the table does not exist
+     * @throws IOException when nft fails for any reason other than absence, enforcement off included
+     */
+    public @Nullable String listTable() throws IOException {
+        if (!isEnabled()) {
+            throw new IOException("per-workload network policy is not enforced on this host"
+                + " (security.nftables_enabled is off)");
+        }
+        NftRunner.Result listed = this.runner.run(List.of("list", "table", "inet", table()), null);
+        if (!listed.ok()) {
+            if (listed.failureText().contains("No such file or directory")) {
+                return null;
+            }
+            throw new IOException("Could not list the policy table (exit " + listed.exitCode() + "): "
+                + listed.failureText());
+        }
+        return listed.stdout();
+    }
+
+    /**
+     * Applies (or re-applies) one network's flow accounting (FlowAccounting), a transaction of its own beside the
+     * isolation chains, never inside one; the next listing is its read-back.
+     *
+     * @throws IOException when enforcement is off or nft refuses
+     */
+    public void account(@NonNull WorkloadNetwork network) throws IOException {
+        requireEnabled(network.name());
+        accounting(FlowAccounting.ruleset(table(), network), "nft rejected the flow accounting of '" + network.name()
+            + "'");
+    }
+
+    /**
+     * Removes one network's flow accounting, whatever of it the kernel holds: one transaction that declares each of
+     * its chains and sets (a no-op for one that exists) and deletes it, so no listing is needed first and nothing
+     * absent fails it. An absent table is declared too, and the teardown's removeTableIfEmpty deletes it again.
+     *
+     * @param key the network's chain key ({@link #chainKey})
+     * @throws IOException when nft refuses
+     */
+    public void stopAccounting(@NonNull String key) throws IOException {
+        accounting(FlowAccounting.removal(table(), key), "Could not remove the flow accounting of '" + key + "'");
+    }
+
+    /** Runs one accounting transaction under the table lock; its refusal names what it was for. */
+    private void accounting(@NonNull String transaction, @NonNull String refusal) throws IOException {
+        this.chains.exclusively(() -> {
+            NftRunner.Result applied = this.runner.run(List.of("-f", "-"), transaction);
+            if (!applied.ok()) {
+                throw new IOException(refusal + " (exit " + applied.exitCode() + "): " + applied.failureText());
+            }
+            return null;
+        });
+    }
+
     /**
      * The refusal that distinguishes this applier from {@link NftService}: a tenant
      * workload does not start unprotected.
@@ -278,6 +345,15 @@ public final class WorkloadNetworkPolicy {
         this.chains.exclusively(() -> {
             for (String chain : List.of(forwardChain(key), inputChain(key))) {
                 this.chains.remove(chain);
+            }
+            // AIDEV-NOTE: the network's flow accounting goes with it, so an app's accounting disappears with the app
+            // and the table can still empty. Its failure is logged, never thrown: teardown never waits on counting,
+            // and the table then keeps it until the isolation sweep's reconcile removes what no network expects.
+            try {
+                stopAccounting(key);
+            } catch (IOException uncounted) {
+                Blast.log("WORKLOAD POLICY: the flow accounting of", networkName, "stays until the next sweep -",
+                    uncounted.getMessage());
             }
             // AIDEV-NOTE: removal used to stop at the chains, so the table outlived every
             // workload it ever held -- one empty hohenheim_net_<namespace> per namespace,

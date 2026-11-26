@@ -105,9 +105,14 @@ final class NftChains {
         }
         List<String> present = new ArrayList<>();
         for (String line : listed.stdout().split("\n")) {
-            present.add(line.trim().replaceAll("\\s+", " "));
+            present.add(normalized(line));
         }
         return present;
+    }
+
+    /** @return one line of nft's listing as the policy owners compare it: trimmed, its runs of whitespace one space */
+    static @NonNull String normalized(@NonNull String line) {
+        return line.trim().replaceAll("\\s+", " ");
     }
 
     boolean exists(@NonNull String chain) throws IOException {
