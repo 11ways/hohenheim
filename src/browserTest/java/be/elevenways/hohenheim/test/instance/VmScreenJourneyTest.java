@@ -37,6 +37,7 @@ import be.elevenways.zenit.kvm.common.ScreenStatus;
 import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
 import be.elevenways.zenit.kvm.test.support.ScreenPicture;
 import be.elevenways.zenit.server.http.SessionCookies;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -69,8 +70,11 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
 
-    /** How long a revoked viewer's screen may stay up: a fraction of the 15 s revalidation interval the tick needs. */
-    private static final double REVOKED_VIEW_ENDS_WITHIN_MS = 5_000;
+    /**
+     * The revalidation tick while the revocation journey runs: an hour, so a revoked viewer's view ending within
+     * {@link #WAIT} is the committed revocation's doing, never the tick's, however loaded the machine.
+     */
+    private static final long TICK_FAR_AWAY_MS = Duration.ofHours(1).toMillis();
 
     private static final int SCAN_A = 0x1E;
     private static final int SCAN_B = 0x30;
@@ -88,8 +92,10 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.CONSOLE, true);
         VmSpice previous = VmSpice.SEAM.installed();
+        Long tick = ServerSettings.VALUES.getValue(ServerSettings.Network.WEBSOCKET_REVALIDATION_INTERVAL_MS);
         BrowserContext tenantContext = null;
         try (ScriptedSpiceServer spice = this.spice()) {
+            ServerSettings.VALUES.setValue(ServerSettings.Network.WEBSOCKET_REVALIDATION_INTERVAL_MS, TICK_FAR_AWAY_MS);
             VmSpice.SEAM.install((serverName,
                     handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
                 spice.port())));
@@ -135,19 +141,20 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             assertThat(this.awaitKey(SCAN_B)).as("step 4: the new controller's key reached the VM").isTrue();
 
             // 5. His grant is revoked: the committed revocation asks his screen socket again at once, which closes his
-            //    view long before the next revalidation tick, and the view says so.
+            //    view with no revalidation tick due for an hour, and the view says so.
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.CONSOLE);
             tenant.waitForFunction("([selector, token]) => document.querySelector(selector)"
                     + ".getAttribute('data-screen-status') === token",
                 List.of(SCREEN, ScreenStatus.ACCESS_REVOKED.token()),
-                new Page.WaitForFunctionOptions().setTimeout(REVOKED_VIEW_ENDS_WITHIN_MS));
+                new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
             awaitRole(page, "watcher");
         } finally {
             if (tenantContext != null) {
                 tenantContext.close();
             }
             VmSpice.SEAM.restoreInstalled(previous);
+            ServerSettings.VALUES.setValue(ServerSettings.Network.WEBSOCKET_REVALIDATION_INTERVAL_MS, tick);
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimCapabilities.CONSOLE);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
