@@ -5,6 +5,7 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -15,10 +16,13 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -114,12 +118,16 @@ class WorkspaceBackupRestartTest {
                 .as("step 4: a backup whose restart fails is refused")
                 .isInstanceOf(Violations.class);
             daemon.failStart = false;
-            String restartPrefix = "The workload could not be started again after the capture: ";
+            // Since 603c339f5 the row keeps the words unresolved (StoredRefusalWords), each reader reading them in
+            // their own language: read here in English.
+            String restartPrefix = "The app could not be started again after the capture: ";
+            MessageResolver catalogs = new ShippedCatalogs();
             List<String> errors = Models.get(InstanceBackupModel.class).find()
                 .where(InstanceBackupModel.INSTANCE_ID.eq(id))
                 .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_FAILED))
                 .all().stream()
-                .map(row -> String.valueOf((Object) row.get(InstanceBackupModel.ERROR)))
+                .map(row -> HohenheimViolations.storedMessage(String.valueOf((Object) row.get(
+                    InstanceBackupModel.ERROR))).resolve(LocaleChain.ofTags("en"), catalogs))
                 .toList();
             // The restart's reason is said in a deploy failure's words: a start failure Hohenheim does not recognise
             // says so, and its exception text stays diagnostics, never copy (DeployFailure, 5b3f12fc5).
@@ -137,7 +145,7 @@ class WorkspaceBackupRestartTest {
                 .map(recorded -> String.valueOf(recorded.fact(HohenheimActivityAction.BACKUP_FAILED)
                     .get(HohenheimActivityAction.REASON_KEY))))
                 .as("step 5: the history names the failed restart with its reason")
-                .anyMatch(reason -> reason.contains("could not be started again after the capture (")
+                .anyMatch(reason -> reason.contains("could not be started again after the capture: ")
                     && reason.contains("Hohenheim does not recognise the reason")
                     && !reason.contains("scripted start failure"));
         });
