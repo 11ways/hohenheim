@@ -25,7 +25,8 @@ import java.util.List;
 
 /**
  * Template bridge of the live Activity picture (namespace {@code TrafficActivity}): opens the live traffic link the
- * view asks for, mounts the picture's driver on its surface and hands the page the last minute after every frame.
+ * view asks for, mounts the picture's driver on its surface and hands the page the last minute after every draw that
+ * shows a new one, so the page's words and the picture are one count.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -35,12 +36,16 @@ public final class ActivityFunctions {
     /** The driver an Activity element draws with, for its pause. */
     private static final IdentityKey<ActivityDriver> DRIVER = IdentityKey.create("hohenheim.traffic.activity");
 
+    /** The surface's property holding how many dots flew at the last draw, as the host's frames3d counts frames. */
+    public static final String FLYING_PROPERTY = "flyingDots3d";
+
     private ActivityFunctions() {
     }
 
     /**
      * Opens the link and mounts the picture for as long as {@code owner} is connected; {@code onSummary} hears the
-     * last minute after each frame, and once more with {@code ended} when the server ended the link.
+     * last minute after each draw that shows a new one, and once more with {@code ended} when the server ended the
+     * link.
      */
     @HawkeyeFunction(
         name = "watch",
@@ -56,7 +61,7 @@ public final class ActivityFunctions {
             @Arg(name = "view", required = true, type = ActivityView.class, expectsReference = false,
                  description = "What the picture asks for and the names of the sites it may show"),
             @Arg(name = "onSummary", required = true, type = LambdaReference1.class, expectsReference = false,
-                 description = "Called with the last minute (an ActivitySummary) after every frame")
+                 description = "Called with the last minute (an ActivitySummary) after every draw that shows a new one")
         }
     )
     public static void watch(RenderContext context, @Nullable CustomElement owner, @Nullable DominoElement surface,
@@ -65,27 +70,64 @@ public final class ActivityFunctions {
             return;
         }
         ActivityModel model = new ActivityModel(view.visitors(), view.unserved(), view.order());
+        Watch watch = new Watch(context, model, surface, onSummary);
         ActivityDriver driver = new ActivityDriver(model, words(context), colours(surface), TextStyle.of(surface),
-            view.names(), view.strip());
+            view.names(), view.strip(), watch);
         owner.setAttachment(DRIVER, driver);
         Surfaces.mount(surface, driver, SurfaceOptions.TRANSPARENT);
         ClientChannelLink<Object, LiveHits> link = ChannelLinks.openWhileConnected(owner,
-            HohenheimChannels.TRAFFIC_LIVE, view.open(), frame -> {
-                driver.offer(frame);
-                onSummary.invoke(context, ActivitySummary.of(model, view.names(), false));
-            });
+            HohenheimChannels.TRAFFIC_LIVE, view.open(), driver::offer);
         if (link != null) {
             // Refused at its open or cut later (a revoked TV link): nothing more arrives, and the page says so.
             link.onClose(refusal -> {
                 if (refusal != null) {
-                    onSummary.invoke(context, ActivitySummary.of(model, view.names(), true));
+                    watch.end();
                 }
             });
             link.ready().whenComplete((ready, refused) -> {
                 if (refused != null) {
-                    onSummary.invoke(context, ActivitySummary.of(model, view.names(), true));
+                    watch.end();
                 }
             });
+        }
+    }
+
+    /** What one picture tells its page: the minute it drew, the dots flying, and that its link ended. */
+    private static final class Watch implements ActivityDriver.Shown {
+
+        private final @NonNull RenderContext context;
+        private final @NonNull ActivityModel model;
+        private final @NonNull DominoElement surface;
+        private final @NonNull LambdaReference1<Object, ?> onSummary;
+        private @Nullable String picture;
+        private boolean ended;
+
+        Watch(@NonNull RenderContext context, @NonNull ActivityModel model, @NonNull DominoElement surface,
+              @NonNull LambdaReference1<Object, ?> onSummary) {
+            this.context = context;
+            this.model = model;
+            this.surface = surface;
+            this.onSummary = onSummary;
+        }
+
+        @Override
+        public void minute(@NonNull String picture) {
+            this.picture = picture;
+            if (!this.ended) {
+                this.onSummary.invoke(this.context, ActivitySummary.of(this.model, picture, false));
+            }
+        }
+
+        @Override
+        public void flying(int dots) {
+            this.surface.setPropertyData(FLYING_PROPERTY, dots);
+        }
+
+        void end() {
+            if (!this.ended) {
+                this.ended = true;
+                this.onSummary.invoke(this.context, ActivitySummary.of(this.model, this.picture, true));
+            }
         }
     }
 
@@ -112,7 +154,7 @@ public final class ActivityFunctions {
 
     /** @return the picture's words, each resolved for the page's reader when drawn */
     private static ActivityDriver.@NonNull Words words(@NonNull RenderContext context) {
-        return (copy, count) -> (count == null ? copy : copy.withArg("count", count)).resolve(context);
+        return copy -> copy.resolve(context);
     }
 
     /** @return the theme's colours as they stand on the surface now */

@@ -2,7 +2,9 @@
     /* The live Activity picture (TrafficActivity.watch over ActivityDriver): requests flying as dots from their
        visitors to their sites, coloured by status class, the legend naming every class in words, a line saying when
        the picture last heard and what it left undrawn, Pause, and a screen reader told the last minute every
-       ActivitySummary.SPEAK_EVERY seconds (politely, never per request). Inside pl-kiosk, whose Full screen stages the
+       ActivitySummary.SPEAK_EVERY seconds (politely, never per request). The line, the figures and the picture's own
+       words (its accessible name, every row with its figure) all come from the summary the picture hands over after
+       the draw that shows them, so they say what the picture shows. Inside pl-kiosk, whose Full screen stages the
        picture over the panel. `tv` is the wall screen's look: the four figures large, the bars of the last minute
        under the dots, the kiosk staged from the start. */
     public required view: ActivityView
@@ -139,7 +141,9 @@
                 </pl-card-header>
                 {% /if %}
                 <pl-card-content>
-                    <z3d-surface class="hh-activity-surface" :ref={% surfaceEl %} aria-hidden="true" data-hh-activity-surface></z3d-surface>
+                    <z3d-surface class="hh-activity-surface" :ref={% surfaceEl %} role="img"
+                                 aria-label={% summary{:} != null && summary{:}.picture != null ? summary{:}.picture : t("activity_requests_lead", scope: "traffic_screen") %}
+                                 data-hh-activity-surface></z3d-surface>
                 </pl-card-content>
             </pl-card>
             <pl-live-region :ref={% regionEl %} data-hh-activity-spoken></pl-live-region>

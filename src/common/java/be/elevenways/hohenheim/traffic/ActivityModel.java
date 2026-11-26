@@ -25,10 +25,11 @@ import java.util.Set;
  *
  * AIDEV-NOTE: a second is HEARD when a frame stamped with it arrived; a stamp skipped between two frames is a second
  * NOT heard, which the picture and the figures say, and never count as a quiet second. Counts are the frames' whole
- * counts (a source's every hit); rows, paths and dots read the hits a frame carries, at most the live seam's bound,
+ * counts (a source's every hit); rows and dots read the hits a frame carries, at most the live seam's bound,
  * and the hits it left out are said as "not drawn". The rows are ranked again every {@link #RANK_EVERY_SECONDS} heard
- * seconds of stamps (a gap counts), so a dot already flying keeps its path and rows do not jump at every frame; a
- * dot still waiting when the rows move is dropped.
+ * seconds of stamps (a gap counts), and at once when a frame names a site or a visitor without a row while one is
+ * free, so a dot already flying keeps its path and rows do not jump at every frame; a dot still waiting when the rows
+ * move is dropped.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -98,7 +99,6 @@ public final class ActivityModel {
         final Set<Integer> marks = new HashSet<>();
         boolean marksCut;
         final Map<String, Long> sourceRequests = new HashMap<>();
-        final Map<String, Map<String, Integer>> sourcePaths = new HashMap<>();
         final Map<String, Integer> addresses = new HashMap<>();
         final Map<String, Integer> bots = new HashMap<>();
         final Map<String, Integer> tools = new HashMap<>();
@@ -113,7 +113,6 @@ public final class ActivityModel {
             this.marks.clear();
             this.marksCut = false;
             this.sourceRequests.clear();
-            this.sourcePaths.clear();
             this.addresses.clear();
             this.bots.clear();
             this.tools.clear();
@@ -318,16 +317,6 @@ public final class ActivityModel {
         return placed;
     }
 
-    /** @return the path a source's drawn hits asked most in the window, null for none */
-    public @Nullable String busiestPath(@NonNull String source) {
-        Map<String, Integer> paths = new HashMap<>();
-        for (Second second : this.window()) {
-            Map<String, Integer> asked = second.sourcePaths.get(source);
-            if (asked != null) asked.forEach((path, count) -> paths.merge(path, count, Integer::sum));
-        }
-        return busiest(paths);
-    }
-
     /** @return the window's drawn hits of an origin row */
     public long hits(@NonNull Origin origin) {
         long sum = 0;
@@ -370,15 +359,15 @@ public final class ActivityModel {
     }
 
     /**
-     * @return the window's heard and missed seconds oldest first: null for a second not heard (or before the first
-     *         frame), else its requests per status class
+     * @return the window's seconds since the first frame, oldest first: null for a second not heard, else its
+     *         requests per status class; a page opened less than a minute ago has fewer than a minute of them
      */
     public @NonNull List<long @Nullable []> perSecond() {
         List<long[]> out = new ArrayList<>(WINDOW_SECONDS);
-        long end = this.latest == Long.MIN_VALUE ? 0 : this.latest;
-        for (long stamp = end - WINDOW_SECONDS + 1; stamp <= end; stamp++) {
-            Second second = this.latest == Long.MIN_VALUE ? null : this.slot(stamp);
-            boolean heard = second != null && second.stamp == stamp && second.heard;
+        if (this.latest == Long.MIN_VALUE) return Collections.unmodifiableList(out);
+        for (long stamp = this.windowStart(); stamp <= this.latest; stamp++) {
+            Second second = this.slot(stamp);
+            boolean heard = second.stamp == stamp && second.heard;
             out.add(heard ? second.classes.clone() : null);
         }
         return Collections.unmodifiableList(out);
@@ -394,17 +383,14 @@ public final class ActivityModel {
         second.marks.addAll(source.visitorMarks());
         second.marksCut |= source.marksLeftOut() > 0;
         second.sourceRequests.merge(source.source(), source.requests(), Long::sum);
-        Map<String, Integer> paths = second.sourcePaths.computeIfAbsent(source.source(), ignored -> new HashMap<>());
         for (LiveHit hit : source.hits()) {
-            paths.merge(hit.path(), 1, Integer::sum);
-            UserAgentFamily family = familyOf(hit.agent());
-            if (family != null && family.bot()) {
-                second.bots.merge(nameOf(family, hit.agent()), 1, Integer::sum);
-            } else if (family != null && family.tool()) {
-                second.tools.merge(nameOf(family, hit.agent()), 1, Integer::sum);
-            } else {
+            OriginKind group = groupOf(hit.agent());
+            if (group == null) {
                 // Without an address (a listener not shown visitors) every person is one of the others.
                 second.addresses.merge(hit.visitor() == null ? "" : hit.visitor(), 1, Integer::sum);
+            } else {
+                String name = nameOf(Objects.requireNonNull(familyOf(hit.agent())), hit.agent());
+                (group == OriginKind.BOTS ? second.bots : second.tools).merge(name, 1, Integer::sum);
             }
         }
     }
@@ -476,10 +462,23 @@ public final class ActivityModel {
         }
     }
 
-    /** @return whether a frame names a source without a row while rows are free, so it is ranked at once */
+    /**
+     * @return whether a frame names a source without a row, or (visitors shown) a person without a row while an
+     *         address row is free, so it is ranked at once
+     */
     private boolean unplaced(@NonNull LiveHits frame) {
+        int addressRows = 0;
+        for (Origin origin : this.origins) {
+            if (origin.kind() == OriginKind.ADDRESS) addressRows++;
+        }
         for (LiveSource source : frame.sources()) {
             if (source.requests() > 0 && this.siteRowOf(source.source()) < 0) return true;
+            if (!this.visitors || addressRows >= ADDRESS_ROWS) continue;
+            for (LiveHit hit : source.hits()) {
+                if (groupOf(hit.agent()) == null && hit.visitor() != null && !this.hasRow(hit.visitor())) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -499,9 +498,7 @@ public final class ActivityModel {
     }
 
     private int originRowOf(@NonNull LiveHit hit) {
-        UserAgentFamily family = familyOf(hit.agent());
-        OriginKind kind = family != null && family.bot() ? OriginKind.BOTS
-            : family != null && family.tool() ? OriginKind.TOOLS : null;
+        OriginKind kind = groupOf(hit.agent());
         int others = 0;
         for (int i = 0; i < this.origins.size(); i++) {
             Origin origin = this.origins.get(i);
@@ -512,6 +509,13 @@ public final class ActivityModel {
             if (origin.kind() == OriginKind.OTHERS) others = i;
         }
         return others;
+    }
+
+    /** @return the row kind a client stands in by its family: bots, tools, or null for a person */
+    private static @Nullable OriginKind groupOf(@NonNull String agent) {
+        UserAgentFamily family = familyOf(agent);
+        return family != null && family.bot() ? OriginKind.BOTS
+            : family != null && family.tool() ? OriginKind.TOOLS : null;
     }
 
     private boolean hasRow(@NonNull String address) {
@@ -564,17 +568,5 @@ public final class ActivityModel {
         long sum = 0;
         for (int count : counts.values()) sum += count;
         return sum;
-    }
-
-    private static @Nullable String busiest(@NonNull Map<String, Integer> counts) {
-        String best = null;
-        int most = 0;
-        for (Map.Entry<String, Integer> each : counts.entrySet()) {
-            if (each.getValue() > most || (each.getValue() == most && best != null && each.getKey().compareTo(best) < 0)) {
-                best = each.getKey();
-                most = each.getValue();
-            }
-        }
-        return best;
     }
 }

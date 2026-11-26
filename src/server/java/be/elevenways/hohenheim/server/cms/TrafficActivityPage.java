@@ -62,6 +62,9 @@ public final class TrafficActivityPage extends PanelPage {
     @Override public boolean showInNav() { return false; }
     @Override public @Nullable String standsUnder() { return HohenheimSlugs.TRAFFIC; }
 
+    /** A tab of the Traffic page, whose tabs lead back: its header is the Report tab's, a title with no trail. */
+    @Override public boolean showsTrail() { return false; }
+
     @Override
     public @NonNull Microcopy label() {
         return HohenheimMicrocopy.TRAFFIC_SCREEN.of("traffic_page");

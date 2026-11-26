@@ -25,10 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The live Activity picture's model and driver: which row a hit's dot leaves from and flies to, the frame bound said
- * as not drawn, a missed frame read as a second not heard (never as a quiet one), and reduced motion drawing the bars
- * of the minute with nothing flying.
- *
+ * The live Activity picture's model and driver: which row a hit's dot leaves from and flies to, a new visitor's row at
+ * once, the frame bound said as not drawn, a missed frame read as a second not heard (never as a quiet one), the page
+ * hearing a minute only once the picture drew it, and reduced motion drawing the rows and the bars of the minute with
+ * nothing flying.
  * @author Jelle De Loecker
  * @since  0.1.0
  */
@@ -82,7 +82,6 @@ class ActivityModelTest {
         // 3. The figures of the minute, the busiest path per site and the bot's name.
         assertEquals(7, model.requests(), "step 3: every request of the minute");
         assertEquals(2, model.count(StatusClass.CLIENT_ERROR), "step 3: the refused ones");
-        assertEquals("/a", model.busiestPath("2"), "step 3: site 2's busiest path");
         assertEquals(List.of("Googlebot"), model.families(OriginKind.BOTS), "step 3: the bot by its family's name");
         assertEquals(5, model.requests(model.sites().get(0)), "step 3: a site row's rate is its requests");
     }
@@ -107,24 +106,86 @@ class ActivityModelTest {
         model.accept(new LiveHits(SECOND + 2, List.of(source("1", List.of(), 0))));
         assertEquals(1, model.missed(), "step 2: one second not heard");
         List<long[]> seconds = model.perSecond();
-        assertEquals(ActivityModel.WINDOW_SECONDS, seconds.size(), "step 2: a minute of seconds");
-        assertNotNull(seconds.get(seconds.size() - 1), "step 2: a quiet second that was heard is a bar of its own");
-        assertEquals(0, sum(seconds.get(seconds.size() - 1)), "step 2: and it says zero");
-        assertNull(seconds.get(seconds.size() - 2), "step 2: the missed second is a gap");
-        assertEquals(200, sum(seconds.get(seconds.size() - 3)), "step 2: the busy second stands as it was");
+        assertEquals(3, seconds.size(), "step 2: the seconds since the first frame, none before it");
+        assertNotNull(seconds.get(2), "step 2: a quiet second that was heard is a bar of its own");
+        assertEquals(0, sum(seconds.get(2)), "step 2: and it says zero");
+        assertNull(seconds.get(1), "step 2: the missed second is a gap");
+        assertEquals(200, sum(seconds.get(0)), "step 2: the busy second stands as it was");
         assertEquals(200, model.requests(), "step 2: a gap adds nothing to the minute");
 
         // 3. A minute later the busy second has left the window.
         model.accept(new LiveHits(SECOND + 2 + ActivityModel.WINDOW_SECONDS, List.of(source("1", List.of(), 0))));
         assertEquals(0, model.requests(), "step 3: the minute is the last minute only");
+        assertEquals(ActivityModel.WINDOW_SECONDS, model.perSecond().size(), "step 3: a whole minute of seconds");
+    }
+
+    @Test
+    void thePageHearsAMinuteOnlyOnceThePictureDrewItAndANewVisitorGetsARowAtOnce() {
+        ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1", "2"));
+        List<String> minutes = new ArrayList<>();
+        int[] flying = {-1};
+        ActivityDriver driver = driver(model, minutes, flying);
+        OffscreenSurface surface = new OffscreenSurface(640, 400, SurfaceOptions.TRANSPARENT);
+        driver.attach(surface);
+        try {
+            // 1. A quiet first frame, drawn: the page hears one minute, and no visitor has a row.
+            driver.offer(new LiveHits(SECOND, List.of(source("1", List.of(), 0))));
+            surface.setFrameMs(1_000);
+            driver.frame(surface);
+            assertEquals(1, minutes.size(), "step 1: the drawn minute");
+            assertTrue(model.origins().stream().noneMatch(origin -> origin.kind() == OriginKind.ADDRESS),
+                "step 1: no visitor yet");
+
+            // 2. Two seconds later, well inside the ranking interval, a person asks site 1 twice and site 2 once:
+            //    their address gets a row at once, and the page hears nothing until the picture draws it.
+            long at = (SECOND + 2) * 1000;
+            driver.offer(new LiveHits(SECOND + 2, List.of(
+                source("1", List.of(hit(at + 100, "/a", 200, "firefox", "203.0.113.7"),
+                    hit(at + 300, "/b", 404, "firefox", "203.0.113.7")), 2),
+                source("2", List.of(hit(at + 500, "/c", 200, "firefox", "203.0.113.7")), 1))));
+            assertEquals(new Origin(OriginKind.ADDRESS, "203.0.113.7"), model.origins().getFirst(),
+                "step 2: the new visitor's row, at once");
+            assertEquals(1, minutes.size(), "step 2: nothing heard before the picture drew it");
+            surface.setFrameMs(3_000);
+            driver.frame(surface);
+            assertEquals(2, minutes.size(), "step 2: the minute, after the draw that shows it");
+            assertEquals("wactivity_picture", minutes.getLast(), "step 2: the picture in words (the journey reads them)");
+            assertEquals(2, model.requests(model.sites().get(0)), "step 2: site 1's rate");
+            assertEquals(1, model.requests(model.sites().get(1)), "step 2: site 2's rate");
+
+            // 3. Each request a dot, born where in its second it was recorded: none yet at the draw, all three on
+            //    their way 0.6 s on, all arrived 3.2 s on.
+            assertEquals(0, flying[0], "step 3: none left yet");
+            surface.setFrameMs(3_600);
+            driver.frame(surface);
+            assertEquals(3, flying[0], "step 3: all three on their way");
+            assertEquals(2, minutes.size(), "step 3: a frame that shows nothing new tells the page nothing");
+            surface.setFrameMs(6_200);
+            driver.frame(surface);
+            assertEquals(0, flying[0], "step 3: all arrived");
+
+            // 4. Paused, the picture and the page both hold what they showed; resumed, both show the new minute.
+            driver.pause(true);
+            driver.frame(surface);
+            int held = minutes.size();
+            driver.offer(new LiveHits(SECOND + 3, List.of(source("1",
+                List.of(hit((SECOND + 3) * 1000, "/", 200, "firefox", "203.0.113.7")), 1))));
+            driver.frame(surface);
+            assertEquals(held, minutes.size(), "step 4: paused, the page holds the minute the picture shows");
+            driver.pause(false);
+            driver.frame(surface);
+            assertEquals(held + 1, minutes.size(), "step 4: resumed, the page hears the minute drawn");
+            assertEquals(4, model.requests(), "step 4: and it counts the paused second");
+        } finally {
+            driver.detach();
+            surface.dispose();
+        }
     }
 
     @Test
     void underReducedMotionNothingFliesAndTheBarsStandStill() {
         ActivityModel model = new ActivityModel(true, UNSERVED, List.of("1"));
-        ActivityDriver driver = new ActivityDriver(model, (copy, count) -> copy.key() + (count == null ? "" : count),
-            new ActivityDriver.Colours(0x202020FF, 0x404040FF, 0x303030FF, 0xFFFFFFFF, 0xAAAAAAFF,
-                List.of(1, 2, 3, 4, 5, 6)), TextStyle.DEFAULT, Map.of("1", "site.test"), false);
+        ActivityDriver driver = driver(model, new ArrayList<>(), new int[1]);
         OffscreenSurface surface = new OffscreenSurface(320, 200, SurfaceOptions.TRANSPARENT);
         driver.attach(surface);
         try {
@@ -138,7 +199,8 @@ class ActivityModelTest {
             driver.frame(surface);
             assertEquals(2, driver.frames(), "step 1: a flying dot draws every frame");
 
-            // 2. Reduced motion: the next hits fly nowhere; the minute's bars are drawn once and the picture rests.
+            // 2. Reduced motion: the next hits fly nowhere; the rows and the minute's bars are drawn, and once its
+            //    labels are painted (a frame's paints are bounded) the picture rests for STILL_MS.
             surface.setReducedMotion(true);
             driver.offer(new LiveHits(SECOND + 1, List.of(source("1",
                 List.of(hit((SECOND + 1) * 1000, "/", 500, "chrome", "203.0.113.1")), 1))));
@@ -146,13 +208,14 @@ class ActivityModelTest {
             driver.frame(surface);
             assertEquals(3, driver.frames(), "step 2: the still picture is drawn");
             assertTrue(model.takeBirths().isEmpty(), "step 2: nothing waits to fly");
-            // A label made in a frame is painted as the next one begins (TextSheet), which draws it once more.
-            surface.setFrameMs(2_050);
+            for (int i = 1; i <= 3; i++) {
+                surface.setFrameMs(2_000 + 50 * i);
+                driver.frame(surface);
+            }
+            int settled = driver.frames();
+            surface.setFrameMs(2_300);
             driver.frame(surface);
-            assertEquals(4, driver.frames(), "step 2: the bars' heading is painted");
-            surface.setFrameMs(2_100);
-            driver.frame(surface);
-            assertEquals(4, driver.frames(), "step 2: nothing moves, so the picture rests");
+            assertEquals(settled, driver.frames(), "step 2: nothing moves, so the picture rests");
             assertEquals(2_000, surface.rested(), "step 2: a still picture looks again after STILL_MS");
 
             // 3. Paused: what arrives is counted, never flown, and the picture stands as it was.
@@ -178,6 +241,23 @@ class ActivityModelTest {
         assertEquals(EnumSet.allOf(StatusClass.class), EnumSet.copyOf(ActivityPalette.LEGEND),
             "every class has a colour and words");
         assertEquals(StatusClass.values().length, ActivityPalette.LEGEND.size(), "each once");
+    }
+
+    /** @return a driver of the model wording each copy by its key, telling the minutes and dots it shows */
+    private static ActivityDriver driver(ActivityModel model, List<String> minutes, int[] flying) {
+        return new ActivityDriver(model, copy -> "w" + copy.key(), new ActivityDriver.Colours(0x202020FF, 0x404040FF,
+            0x303030FF, 0xFFFFFFFF, 0xAAAAAAFF, List.of(1, 2, 3, 4, 5, 6)), TextStyle.DEFAULT,
+            Map.of("1", "site.test", "2", "two.test"), false, new ActivityDriver.Shown() {
+                @Override
+                public void minute(String picture) {
+                    minutes.add(picture);
+                }
+
+                @Override
+                public void flying(int dots) {
+                    flying[0] = dots;
+                }
+            });
     }
 
     private static LiveHit hit(long at, String path, int status, String agent, String visitor) {

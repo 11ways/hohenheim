@@ -6,11 +6,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.util.Map;
 
 /**
- * The last minute of a live Activity picture as its page words it: the figures, the line that says when it was heard
- * last, and what a screen reader is told at each interval.
+ * The last minute of a live Activity picture as its page words it, as the picture last drew it: the figures, the line
+ * that says when it was heard last, the picture in words, and what a screen reader is told at each interval.
  *
  * @param heard       whether any frame arrived yet
  * @param latest      the second the last frame was stamped with, null before the first
@@ -22,8 +21,7 @@ import java.util.Map;
  * @param failed      those that failed (5xx)
  * @param notDrawn    those the picture counts without drawing them
  * @param missed      the seconds of the minute no frame was heard for
- * @param busiest     the busiest site's name, null when none answered
- * @param busiestRate its requests in the minute
+ * @param picture     every row of the picture with its figure, in words; null before the picture drew
  * @param speak       whether a screen reader is told about this minute now (once every {@link #SPEAK_EVERY} seconds)
  * @param ended       whether the live link ended (revoked, or no longer allowed), so nothing more arrives
  * @author Jelle De Loecker
@@ -32,29 +30,19 @@ import java.util.Map;
 @HawkeyeClass
 public record ActivitySummary(boolean heard, @Nullable Instant latest, long requests, long bytes, long visitors,
                               boolean visitorsCut, long refused, long failed, long notDrawn, int missed,
-                              @Nullable String busiest, long busiestRate, boolean speak, boolean ended) {
+                              @Nullable String picture, boolean speak, boolean ended) {
 
     /** How many seconds apart a screen reader is told what the last minute held. */
     public static final int SPEAK_EVERY = 15;
 
-    /** @return the model's last minute, worded nowhere yet */
-    public static @NonNull ActivitySummary of(@NonNull ActivityModel model, @NonNull Map<String, String> names,
+    /** @return the model's last minute, with the picture's words as it was just drawn */
+    public static @NonNull ActivitySummary of(@NonNull ActivityModel model, @Nullable String picture,
                                               boolean ended) {
         long latest = model.latest();
         boolean heard = latest != Long.MIN_VALUE;
-        String busiest = null;
-        long rate = 0;
-        for (ActivityModel.SiteRow row : model.sites()) {
-            if (row.kind() != ActivityModel.SiteKind.SITE) continue;
-            long requests = model.requests(row);
-            if (requests > rate) {
-                rate = requests;
-                busiest = names.get(row.source());
-            }
-        }
         return new ActivitySummary(heard, heard ? Instant.ofEpochSecond(latest) : null, model.requests(),
             model.bytes(), model.visitors(), model.visitorsCut(), model.count(StatusClass.CLIENT_ERROR),
-            model.count(StatusClass.SERVER_ERROR), model.notDrawn(), model.missed(), busiest, rate,
-            model.takeSpeech(SPEAK_EVERY), ended);
+            model.count(StatusClass.SERVER_ERROR), model.notDrawn(), model.missed(), picture,
+            !ended && model.takeSpeech(SPEAK_EVERY), ended);
     }
 }
