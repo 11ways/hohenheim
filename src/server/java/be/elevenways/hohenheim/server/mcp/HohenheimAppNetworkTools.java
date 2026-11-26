@@ -42,8 +42,9 @@ final class HohenheimAppNetworkTools {
     }
 
     /**
-     * An app's network use: the span in office time, its bytes against the span before, one line per step with what
-     * it received and sent, then each of its sites with the requests it answered and the bytes it sent visitors.
+     * An app's network use: the span in office time, its bytes against the span before, one line per step that
+     * counted any bytes with what it received and sent (the others left out, as the traffic read leaves out steps
+     * without requests), then each of its sites with the requests it answered and the bytes it sent visitors.
      */
     static @NonNull McpResponse network(@NonNull McpToolContext context, AppNetworkReads.@Nullable Read read) {
         McpResponse response = McpResponse.create();
@@ -58,20 +59,24 @@ final class HohenheimAppNetworkTools {
         response.line("received: " + totals.bytesReceived() + " bytes; sent: " + totals.bytesSent()
             + " bytes; the span before, as long: received " + before.bytesReceived() + ", sent "
             + before.bytesSent());
-        if (!read.counted()) {
-            response.line("nothing counted in this span: the app's counters are read every 5 minutes while it runs,"
-                + " every second while someone watches its Metrics tab");
-        }
         List<DataSeries> series = read.steps().series();
-        response.line("steps, each its start, then bytes received and sent:");
-        int steps = series.isEmpty() ? 0 : series.getFirst().buckets().size();
-        for (int step = 0; step < steps; step++) {
-            List<String> amounts = new ArrayList<>();
-            for (DataSeries each : series) {
-                Double value = each.buckets().get(step).value();
-                amounts.add(String.valueOf(value == null ? 0 : Math.round(value)));
+        if (!read.counted()) {
+            response.line("steps: none, nothing counted in this span: the app's counters are read every 5 minutes"
+                + " while it runs, every second while someone watches its Metrics tab");
+        } else {
+            response.line("steps, each its start, then bytes received and sent; steps without bytes are left out:");
+            int steps = series.isEmpty() ? 0 : series.getFirst().buckets().size();
+            for (int step = 0; step < steps; step++) {
+                List<String> amounts = new ArrayList<>();
+                boolean any = false;
+                for (DataSeries each : series) {
+                    Double value = each.buckets().get(step).value();
+                    long amount = value == null ? 0 : Math.round(value);
+                    if (amount > 0) any = true;
+                    amounts.add(String.valueOf(amount));
+                }
+                if (any) response.line(series.getFirst().buckets().get(step).key() + ": " + String.join(" ", amounts));
             }
-            response.line(series.getFirst().buckets().get(step).key() + ": " + String.join(" ", amounts));
         }
         List<String> keys = new ArrayList<>();
         for (AppNetworkReads.SiteTraffic site : read.sites()) {

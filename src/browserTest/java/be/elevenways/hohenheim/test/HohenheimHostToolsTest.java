@@ -280,6 +280,17 @@ class HohenheimHostToolsTest extends HohenheimHttpTestBase {
             McpHttpSession.Answer purged = admin.call("stack_volumes_purge", Map.of("code", stack));
             assertThat(purged.error()).as("step 15: " + purged.text()).isFalse();
             assertThat(purged.text()).as("step 15: queued").contains("queued");
+            // The stack's live state read back through the shared test tool (once stack_refresh): it answers the
+            // status the refresh stored.
+            McpHttpSession.Answer refreshed = admin.call("test", Map.of("code", stack,
+                "request", UUID.randomUUID().toString()));
+            assertThat(refreshed.error()).as("step 15: " + refreshed.text()).isFalse();
+            assertThat(refreshed.text()).as("step 15: its status").contains("<output source=\"untrusted\">"
+                + Models.get(StackModel.class).findById(stackId).get(StackModel.STATUS) + "</output>");
+            assertThat(admin.toolNames()).as("step 15: no tool of its own").doesNotContain("stack_refresh");
+            Row refreshedStack = Models.get(StackModel.class).findById(stackId);
+            refreshedStack.set(StackModel.STATUS, StackModel.STATUS_INACTIVE);
+            Models.get(StackModel.class).save(refreshedStack);
 
             // 16. A customer's key is refused what the panel refuses him: a host's admission, a new host or project.
             assertThat(customer.call("host_admission_set", Map.of("code", beta, "state", "paused")).error())

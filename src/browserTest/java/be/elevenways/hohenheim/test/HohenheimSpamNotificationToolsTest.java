@@ -12,6 +12,13 @@ import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.delivery.DeliveryChannel;
+import be.elevenways.zenit.delivery.server.DeliveryModel;
+import be.elevenways.zenit.delivery.server.DeliveryStatus;
+import be.elevenways.zenit.notifications.server.NotificationInboxModel;
+import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -21,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 import static be.elevenways.hohenheim.test.ApiSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -182,5 +190,105 @@ class HohenheimSpamNotificationToolsTest extends HohenheimHttpTestBase {
             }
             SpamserviceManager.get().reconcile();
         }
+    }
+
+    /**
+     * A failed delivery retried and a delivered one refused, both listed by their codes; the caller's own inbox items
+     * listed and read by theirs; each wrong call refused by the argument it names, and someone without the delivery
+     * log's right refused.
+     */
+    @Test
+    void anAdministratorRetriesADeliveryAndReadsTheInboxByToolsAlone() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        String tag = HohenheimMcpTest.letters();
+        UUID operatorId = TenantConduits.operatorUser().get(UserModel.ID);
+        McpHttpSession admin = HohenheimMcpTest.presetSession(server, endpoint, operatorId, "Test Admin");
+        AccessContext operator = TenantConduits.operator();
+        DeliveryModel deliveries = Models.get(DeliveryModel.class);
+        NotificationInboxModel inbox = Models.get(NotificationInboxModel.class);
+        try {
+            // 1. The retry is a tool, and both kinds are listed.
+            assertThat(admin.toolNames()).as("step 1: the tools").contains("delivery_retry");
+            Row failed = delivery("mcp.failed." + tag, DeliveryStatus.FAILED);
+            Row sent = delivery("mcp.sent." + tag, DeliveryStatus.SENT);
+            String failedCode = HohenheimMcpTest.code(DeliveryModel.MODEL_ID, failed.get(DeliveryModel.ID), operator);
+            String sentCode = HohenheimMcpTest.code(DeliveryModel.MODEL_ID, sent.get(DeliveryModel.ID), operator);
+            assertThat(failedCode).as("step 1: a delivery's code").matches("ND\\d+");
+            McpHttpSession.Answer listed = admin.call("list", Map.of("kind", "delivery", "search", tag));
+            assertThat(listed.error()).as("step 1: " + listed.text()).isFalse();
+            assertThat(listed.text()).as("step 1: the failed delivery listed by its code").contains(failedCode);
+
+            // 2. The failed one goes again; the delivered one is refused in the delivery log's words.
+            McpHttpSession.Answer retried = admin.call("delivery_retry", Map.of("code", failedCode,
+                "request", UUID.randomUUID().toString()));
+            assertThat(retried.error()).as("step 2: " + retried.text()).isFalse();
+            assertThat(retried.text()).as("step 2: whether it went").containsAnyOf("Delivery retried and sent.",
+                "Delivery re-queued; the sweeper will retry it.");
+            Row again = Objects.requireNonNull(deliveries.find().noCache().where(DeliveryModel.ID.eq(
+                failed.get(DeliveryModel.ID))).first(), "step 2: the delivery");
+            assertThat((Integer) again.get(DeliveryModel.ATTEMPT_COUNT)).as("step 2: attempted once more")
+                .isGreaterThanOrEqualTo(1);
+            McpHttpSession.Answer refused = admin.call("delivery_retry", Map.of("code", sentCode));
+            assertThat(refused.error()).as("step 2: a delivered one: " + refused.text()).isTrue();
+            assertThat(refused.text()).as("step 2: in its words").contains("Only failed deliveries can be retried.");
+            assertThat(admin.call("delivery_retry", Map.of()).text()).as("step 2: the code is asked for")
+                .contains("code");
+
+            // 3. An item of the operator's own inbox: listed by code, read in its words.
+            String owner = NotificationInboxOwners.userKey(operatorId);
+            Row about = item(owner, "mcp about " + tag, null);
+            String aboutCode = HohenheimMcpTest.code(NotificationInboxModel.MODEL_ID, about.get(NotificationInboxModel.ID),
+                operator);
+            McpHttpSession.Answer items = admin.call("list", Map.of("kind", "notification_inbox_item"));
+            assertThat(items.error()).as("step 3: " + items.text()).isFalse();
+            assertThat(items.text()).as("step 3: the items listed by code").containsPattern("N\\d+");
+            McpHttpSession.Answer item = admin.call("read", Map.of("codes", List.of(aboutCode)));
+            assertThat(item.error()).as("step 3: " + item.text()).isFalse();
+            assertThat(item.text()).as("step 3: its words").contains("mcp about " + tag);
+
+            // 4. Someone without the delivery log's right retries nothing, and reads no one else's inbox item.
+            McpHttpSession person = HohenheimMcpTest.presetSession(server, endpoint,
+                user("mcp-delivery-" + tag + "@surface.test", "Mcp Delivery"), "Mcp Delivery");
+            assertThat(person.call("delivery_retry", Map.of("code", failedCode)).error())
+                .as("step 4: no retry").isTrue();
+            assertThat(person.call("read", Map.of("codes", List.of(aboutCode))).text())
+                .as("step 4: not his item").doesNotContain("mcp about " + tag);
+        } finally {
+            inbox.find().where(NotificationInboxModel.NOTIFICATION_KEY.eq("mcp.inbox"))
+                .and(NotificationInboxModel.TITLE.eq("mcp about " + tag)).delete();
+            deliveries.find().where(DeliveryModel.NOTIFICATION_KEY.in(List.of("mcp.failed." + tag, "mcp.sent." + tag)))
+                .delete();
+        }
+    }
+
+    /** @return a stored chat delivery of this key and status, as the outbox leaves one */
+    private static Row delivery(String key, DeliveryStatus status) {
+        DeliveryModel deliveries = Models.get(DeliveryModel.class);
+        Row row = deliveries.createEmptyRow();
+        row.set(DeliveryModel.NOTIFICATION_KEY, key);
+        row.set(DeliveryModel.CHANNEL, DeliveryChannel.CHAT.getDbValue());
+        row.set(DeliveryModel.STATUS, status.getDbValue());
+        row.set(DeliveryModel.PAYLOAD, "{}");
+        row.set(DeliveryModel.CREATED_AT, Now.instant());
+        deliveries.save(row);
+        return row;
+    }
+
+    /** @return an unread inbox item of the owner, about the delivery when one is given */
+    private static Row item(String owner, String title, Row about) {
+        NotificationInboxModel inbox = Models.get(NotificationInboxModel.class);
+        Row item = inbox.createEmptyRow();
+        item.set(NotificationInboxModel.RECIPIENT, owner);
+        item.set(NotificationInboxModel.NOTIFICATION_KEY, "mcp.inbox");
+        item.set(NotificationInboxModel.TITLE, title);
+        if (about != null) {
+            item.set(NotificationInboxModel.SUBJECT_MODEL, DeliveryModel.MODEL_ID.toString());
+            item.set(NotificationInboxModel.SUBJECT_ID, String.valueOf((Object) about.get(DeliveryModel.ID)));
+        }
+        item.set(NotificationInboxModel.CREATED_AT, Now.instant());
+        item.set(NotificationInboxModel.UPDATED_AT, Now.instant());
+        inbox.save(item);
+        return item;
     }
 }

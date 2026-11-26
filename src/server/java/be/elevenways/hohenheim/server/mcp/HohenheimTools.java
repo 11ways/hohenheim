@@ -47,6 +47,7 @@ import be.elevenways.hohenheim.server.cms.SiteRegistrationTokens;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
@@ -95,6 +96,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimTrafficTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimDnsMoveTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimAppNetworkTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimRecordActionTools.declared()) this.addTool(tool);
     }
 
     /** @return the collection of every hand-declared tool */
@@ -215,6 +217,8 @@ public final class HohenheimTools extends McpToolCollection {
             .route(BackupTargetParts.TEST, HohenheimMcpAnswers::tested)
             .route(HostParts.PROBE, HohenheimMcpAnswers::said)
             .route(NotificationChannelParts.TEST, HohenheimMcpAnswers::delivered)
+            .route(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
+            .route(StackOperations.REFRESH, HohenheimMcpAnswers::output)
             .build();
         // DNS records have no code: they are read and set by their zone, each by its name and type.
         McpHostTool recordList = McpCodeTool.builder("dns_record_list", words("mcp_tool_dns_record_list"),

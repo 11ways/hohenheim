@@ -13,6 +13,8 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 
 /**
  * The git provider operations: today only the connection test both provider entries place on a row.
@@ -30,7 +32,13 @@ public final class GitProviderOperations {
     /** The subject of every git provider operation: one provider record. */
     public static final SubjectType<Row> PROVIDER = SubjectType.record(GitProviderModel.REF);
 
-    /** Lists the provider's repositories through the real client. */
+    /**
+     * Lists the provider's repositories through the real client.
+     *
+     * AIDEV-NOTE: a command, as every check the assistant's test tool routes is: a retried call (the same request)
+     * answers the first probe's outcome instead of probing again. A command is no read: it takes the test verb, as
+     * the other checks do, though the probe stores nothing.
+     */
     public static final Operation<Row, Void, ConnectionTest> TEST_CONNECTION =
         Operation.declare(HohenheimIds.id("test_git_provider"))
             .happened(OperationSentences.of("test_git_provider"))
@@ -38,10 +46,11 @@ public final class GitProviderOperations {
             .description(HohenheimMicrocopy.HOHENHEIM.of("test_git_provider_description"))
             .icon(Icon.of("plug-circle-check"))
             .one(PROVIDER)
-            .verb(HohenheimVerbs.CHECK)
+            .verb(HohenheimVerbs.TEST)
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
             .result(ConnectionTest.class)
-            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.READ_ONLY)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /**

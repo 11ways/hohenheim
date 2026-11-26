@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.mcp;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.SpamserviceInstallationResource;
 import be.elevenways.hohenheim.server.cms.SpamserviceOperations;
@@ -12,6 +13,8 @@ import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
 import be.elevenways.zenit.common.operation.ResultStep;
+import be.elevenways.zenit.delivery.server.DeliveryCopy;
+import be.elevenways.zenit.delivery.server.cms.DeliveryAdmin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -20,14 +23,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Hohenheim's hand-declared tools over the spam service it runs itself and its notification channels: the service's
- * installation, its start, stop and restart, its check, its word dictionary and its reputation explanation, and a
- * channel's create and change, each over the operation the panel's form, button or page runs; {@link HohenheimTools}
- * offers them beside its own.
+ * Hohenheim's hand-declared tools over the spam service it runs itself and its notifications: the service's
+ * installation, its start, stop and restart, its check, its word dictionary and its reputation explanation, a
+ * channel's create and change, and a failed delivery's retry, each over the operation the panel's form, button or page
+ * runs; {@link HohenheimTools} offers them beside its own.
  *
  * AIDEV-NOTE: declarations only, as in HohenheimTools: a gate, a check or a writer of a tool here is its operation's.
- * A channel's test and delete are routes of the shared test and delete tools. The spam service's clients, keys and
- * samples have no codes yet (they live in the service, named by UUID), so their tools wait for one.
+ * A channel's test and delete are routes of the shared test and delete tools. The retry is zenit-delivery's own (the
+ * delivery log's row button). The spam service's clients, keys and samples have no codes yet (they live in the
+ * service, named by UUID), so their tools wait for one (scratch spamservice-needs.md says what the service must
+ * offer). notification_mark_read waits for a decision: the inbox marks take no request (no command facet, as a caller
+ * without an account is answered "nothing changed"), which every writing tool here must take.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -67,7 +73,20 @@ final class HohenheimSpamNotificationTools {
                 NotificationChannelModel.URL.getInputName()), HohenheimTools.words("notification_channel_thing"))
             .route(NotificationChannelParts.WRITES.change(), HohenheimMcpAnswers::changed)
             .build();
-        return List.of(serviceSet, power, test, wordSet, reputation, channelSet);
+        // The delivery log's own installation, the one the panel mounts (whichever asks first installs it).
+        DeliveryAdmin deliveries = HohenheimPanel.deliveryAdmin();
+        McpHostTool retry = McpCodeTool.builder("delivery_retry", HohenheimTools.words("mcp_tool_delivery_retry"),
+                HohenheimTools.writes())
+            .code(HohenheimTools.words("mcp_code_delivery_retry"))
+            .route(deliveries.retryDelivery(), HohenheimSpamNotificationTools::retried)
+            .build();
+        return List.of(serviceSet, power, test, wordSet, reputation, channelSet, retry);
+    }
+
+    /** @return whether the retry delivered it or queued it again, in the words of the delivery log's toast */
+    private static @NonNull McpResponse retried(@NonNull McpToolContext context, @Nullable Boolean delivered) {
+        return HohenheimMcpAnswers.said(context, DeliveryCopy.DELIVERY.of(Boolean.TRUE.equals(delivered)
+            ? "retry_sent" : "retry_queued"));
     }
 
     /** @return the answer of a start, stop or restart: requested, in the words of the panel's toast */

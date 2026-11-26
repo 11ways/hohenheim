@@ -2,14 +2,11 @@ package be.elevenways.hohenheim.server.mcp;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.instance.InstanceLogOperations;
-import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.HohenheimHostWiring;
 import be.elevenways.hohenheim.server.cms.*;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.ai.server.mcp.host.McpDescribeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
@@ -35,6 +32,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
+import be.elevenways.zenit.delivery.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.NotificationInboxModel;
 import be.elevenways.zenit.server.operation.OperationRunOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -77,9 +76,10 @@ public final class HohenheimMcpModule implements ZenitModule {
 
     /**
      * The models whose sources the server lists, in the order its tools are offered. Deploys and builds are not among
-     * them: app_list_deploys lists an app's history, both merged, newest first (KeptFromAssistants.DEPLOY_HISTORY).
+     * them: app_deploy_list lists an app's history, both merged, newest first (KeptFromAssistants.DEPLOY_HISTORY).
      * Variables carry no code: they are listed by their app ({@code list kind=variable of=AP12}), read by whoever may
-     * view it, as their declared visibility says (HohenheimGrantPolicy).
+     * view it, as their declared visibility says (HohenheimGrantPolicy). Deliveries and inbox items are zenit-delivery's
+     * and zenit-notifications' own sources: the delivery log's readers, and each reader's own inbox.
      */
     private static final List<Identifier> LISTED = List.of(SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID, SiteRedirectModel.MODEL_ID, AccessListModel.MODEL_ID, AccessRuleModel.MODEL_ID,
@@ -92,7 +92,7 @@ public final class HohenheimMcpModule implements ZenitModule {
         DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID,
         InstanceFileModel.MODEL_ID, InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID,
         RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID,
-        SystemTaskHistoryModel.MODEL_ID);
+        SystemTaskHistoryModel.MODEL_ID, DeliveryModel.MODEL_ID, NotificationInboxModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -151,17 +151,11 @@ public final class HohenheimMcpModule implements ZenitModule {
         // AIDEV-NOTE: an operation a hand-declared tool routes (HohenheimTools) is placed there and never here, so
         // each is reached by exactly one tool and argument value (HohenheimMcpTest pins it).
         List<Operation<?, ?, ?>> placed = new ArrayList<>(List.of(
-            InstanceOperations.CONNECT_WEBHOOK,
-            InstanceOperations.ATTACH_INSTALL_MEDIA, InstanceOperations.DETACH_INSTALL_MEDIA,
-            InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE,
-            SiteOperations.ENABLE, SiteOperations.DISABLE, SiteOperations.CLONE));
+            InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE, SiteOperations.CLONE));
         // Every tool of the server names its record by code, as the hand-declared ones do (SPEC-RULES "Parameters").
         McpToolSet.Builder set = McpToolSet.builder().namesRecordsByCode()
             .lists(sources.toArray(new RecordSource<?>[0]))
-            .places(placed.toArray(new Operation<?, ?, ?>[0]))
-            .answersWith(StackOperations.REFRESH, HohenheimMcpAnswers::output)
-            .answersWith(GitProviderOperations.TEST_CONNECTION, HohenheimMcpAnswers::connection)
-            .answersWith(InstanceLogOperations.LIST_DEPLOYS, HohenheimMcpAnswers::deploys);
+            .places(placed.toArray(new Operation<?, ?, ?>[0]));
         tools = set.build();
         HohenheimTools hand = HohenheimTools.build();
         declared = hand;

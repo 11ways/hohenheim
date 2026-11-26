@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceVariableOperations;
@@ -509,7 +508,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
 
         // 2. The tools derive from the sources, the operations and zenit-auth's accounts; an app is an app.
         assertThat(session.toolNames()).as("step 2: the tools")
-            .contains("read", "list", "describe", "site_pause", "site_resume", "power", "deploy", "run_read",
+            .contains("read", "list", "describe", "site_pause", "power", "deploy", "run_read",
                 "certificate_renew", "account_read");
 
         // 3. Listing sites by a word names the site by its code; reading that code reads the site.
@@ -528,14 +527,20 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         String strangerKey = ApiKeyService.create(strangerId, PREFIX + "stranger",
             List.of(McpScopes.server("hohenheim"), "*"), null).plaintext();
         McpHttpSession.Answer refused = McpHttpSession.open(endpoint, bearer(strangerKey))
-            .call("site_pause", Map.of("code", code));
+            .call("site_pause", Map.of("code", code, "paused", true));
         assertThat(refused.error()).as("step 4: refused: " + refused.text()).isTrue();
         assertThat(enabled(siteId)).as("step 4: still enabled").isTrue();
 
         // 5. The operator's key switches the site off through the same operation the panel places.
-        McpHttpSession.Answer paused = session.call("site_pause", Map.of("code", code));
+        McpHttpSession.Answer paused = session.call("site_pause", Map.of("code", code, "paused", true));
         assertThat(paused.error()).as("step 5: " + paused.text()).isFalse();
         assertThat(enabled(siteId)).as("step 5: disabled").isFalse();
+        // Paused and resumed are one tool's argument, never two tools; leaving it out names it.
+        assertThat(session.toolNames()).as("step 5: no second tool").doesNotContain("site_resume");
+        assertThat(session.call("site_pause", Map.of("code", code)).error()).as("step 5: paused left out").isTrue();
+        McpHttpSession.Answer resumed = session.call("site_pause", Map.of("code", code, "paused", false));
+        assertThat(resumed.error()).as("step 5: " + resumed.text()).isFalse();
+        assertThat(enabled(siteId)).as("step 5: enabled again").isTrue();
 
         // 6. A key of the same operator without the server's scope cannot connect.
         String plainKey = ApiKeyService.create(operator, operatorId, PREFIX + "plain", List.of("*"), null)
@@ -680,18 +685,20 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             System.out.println("MCP tools of a customer: " + String.join(", ", tools));
             assertThat(tools).as("step 4: his tools").contains("read", "list", "describe", "deploy", "roll_back",
                 OperationRunOperations.READ.assistantName(), "power", "logs",
-                InstanceLogOperations.LIST_DEPLOYS.assistantName(), "variable_set")
+                "app_deploy_list", "variable_set")
                 .doesNotContain(InstanceVariableOperations.LIST_VARIABLES.assistantName());
             assertThat(tools).as("step 4: no tool is named after an instance")
                 .noneMatch(tool -> tool.startsWith("instance_"));
             for (Operation<?, ?, ?> operatorOnly : List.of(InstanceOperations.INSTALL, InstanceOperations.REINSTALL,
-                    InstanceOperations.CAPTURE_TEMPLATE, InstanceOperations.ATTACH_INSTALL_MEDIA,
-                    InstanceOperations.DETACH_INSTALL_MEDIA, InstanceOperations.CONNECT_WEBHOOK,
-                    InstanceTemplateOperations.APPROVE_TEMPLATE, InstanceTemplateOperations.UNAPPROVE_TEMPLATE)) {
+                    InstanceOperations.CAPTURE_TEMPLATE, InstanceTemplateOperations.APPROVE_TEMPLATE,
+                    InstanceTemplateOperations.UNAPPROVE_TEMPLATE)) {
                 assertThat(operatorOnly.assistantName()).as("step 4: " + operatorOnly.id() + " is a tool").isNotNull();
                 assertThat(tools).as("step 4: " + operatorOnly.id() + " is not offered to him")
                     .doesNotContain(operatorOnly.assistantName());
             }
+            // The install ISO and the push webhook are operator acts: their tools are not his.
+            assertThat(tools).as("step 4: no operator act of his app").doesNotContain("app_install_media_set",
+                "app_webhook_set");
             assertThat(session.call("delete", Map.of("code", appCode, "with_data", true)).error())
                 .as("step 4: an operator's delete with data is refused him").isTrue();
 
@@ -725,7 +732,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(BuildOperationModel.class)
                 .getResolvedDatasource());
             probe.reset();
-            McpHttpSession.Answer deploys = session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(),
+            McpHttpSession.Answer deploys = session.call("app_deploy_list",
                 Map.of("code", appCode));
             List<Integer> fewer = List.of(probe.queriesAgainst(ReleaseOperationModel.MODEL_ID),
                 probe.queriesAgainst(BuildOperationModel.MODEL_ID));
@@ -736,7 +743,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             failedBuild(appId, "npm ERR! again", "exit 2");
             failedBuild(appId, "npm ERR! and again", "exit 3");
             probe.reset();
-            session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode));
+            session.call("app_deploy_list", Map.of("code", appCode));
             assertThat(List.of(probe.queriesAgainst(ReleaseOperationModel.MODEL_ID),
                 probe.queriesAgainst(BuildOperationModel.MODEL_ID)))
                 .as("step 7: the list reads as much with two more builds").isEqualTo(fewer);
@@ -815,9 +822,9 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .as("step 9: " + call.getKey() + " says what it says of none")
                     .isEqualTo(none.text().replace(missing, "<code>"));
             }
-            McpHttpSession.Answer foreignDeploys = session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(),
+            McpHttpSession.Answer foreignDeploys = session.call("app_deploy_list",
                 Map.of("code", otherCode));
-            McpHttpSession.Answer noDeploys = session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(),
+            McpHttpSession.Answer noDeploys = session.call("app_deploy_list",
                 Map.of("code", missing));
             McpHttpSession.Answer foreignVariables = session.call("list", Map.of("kind", "variable", "of", otherCode));
             McpHttpSession.Answer noVariables = session.call("list", Map.of("kind", "variable", "of", missing));
@@ -862,7 +869,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .isEqualTo(DeployTrigger.API.word());
             String deployedCode = code(ReleaseOperationModel.MODEL_ID, deployed.get(ReleaseOperationModel.ID),
                 operator);
-            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode))
+            assertThat(session.call("app_deploy_list", Map.of("code", appCode))
                 .text())
                 .as("step 12: his deploy list holds the new deploy").contains(deployedCode);
 
@@ -878,7 +885,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .isEqualTo(DeployTrigger.API.word());
             String rolledBackCode = code(ReleaseOperationModel.MODEL_ID, rolledBack.get(ReleaseOperationModel.ID),
                 operator);
-            assertThat(session.call(InstanceLogOperations.LIST_DEPLOYS.assistantName(), Map.of("code", appCode))
+            assertThat(session.call("app_deploy_list", Map.of("code", appCode))
                 .text())
                 .as("step 13: his deploy list holds the rollback").contains(rolledBackCode);
             settle("step 13");
@@ -1400,6 +1407,27 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(settings.get("repository")).as("step 4: and its repository").isEqualTo(repository);
             assertThat(admin.call("read", Map.of("codes", List.of(appCode))).text()).as("step 4: read back by its code")
                 .contains("git_connection: " + connection);
+
+            // 4b. The connection tested through the shared test tool (once git_connection_check): this forge does not
+            //     exist, so it says why not; a resent request answers the first outcome. The app's deploy history is
+            //     empty, and its push webhook is refused in words: an SSH connection registers none.
+            String testRequest = UUID.randomUUID().toString();
+            McpHttpSession.Answer tested = admin.call("test", Map.of("code", connection, "request", testRequest));
+            assertThat(tested.error()).as("step 4b: " + tested.text()).isFalse();
+            assertThat(tested.text()).as("step 4b: the forge is not reached").contains("connection failed");
+            assertThat(admin.call("test", Map.of("code", connection, "request", testRequest)).text())
+                .as("step 4b: the same request answers its first outcome").isEqualTo(tested.text());
+            assertThat(admin.toolNames()).as("step 4b: the one-per-button tools are gone")
+                .doesNotContain("git_connection_check", "app_list_deploys", "app_connect_webhook")
+                .contains("app_deploy_list", "app_webhook_set");
+            McpHttpSession.Answer history = admin.call("app_deploy_list", Map.of("code", appCode));
+            assertThat(history.error()).as("step 4b: " + history.text()).isFalse();
+            assertThat(history.text()).as("step 4b: nothing deployed yet").contains("deploys: none");
+            McpHttpSession.Answer hooked = admin.call("app_webhook_set", Map.of("code", appCode));
+            assertThat(hooked.error()).as("step 4b: an SSH connection registers no webhook: " + hooked.text())
+                .isTrue();
+            assertThat(admin.call("app_deploy_list", Map.of("code", connection)).text())
+                .as("step 4b: a code of another kind is refused by its argument").contains("code");
 
             // 5. A token connection: its token goes in and never comes out.
             String token = "glpat-" + letters() + letters();

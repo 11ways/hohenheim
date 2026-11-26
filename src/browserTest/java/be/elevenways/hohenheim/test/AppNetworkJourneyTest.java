@@ -109,6 +109,8 @@ class AppNetworkJourneyTest extends HohenheimHttpTestBase {
             assertThat(day.text()).as("step 5: the day's bytes, per hour")
                 .contains("received: 1100 bytes; sent: 500 bytes;").contains("per hour")
                 .contains(siteCode + " 1 2048").contains("to visitors: 2048 bytes");
+            assertThat(day.text()).as("step 5: only the steps that counted bytes, the empty ones left out")
+                .contains("steps without bytes are left out").doesNotContain(": 0 0");
             McpHttpSession.Answer hour = admin.call("app_network_read", Map.of("code", appCode, "period", "hour"));
             assertThat(hour.error()).as("step 5: " + hour.text()).isFalse();
             assertThat(hour.text()).as("step 5: the hour per minute").contains("per minute")

@@ -138,6 +138,16 @@ class HohenheimCatalogToolsTest extends HohenheimHttpTestBase {
                 .doesNotContain("vm-secret-");
             assertThat(admin.call("app_vm_set", Map.of("code", container, "secure_boot", true)).text())
                 .as("step 3: a container is not changed by the VM tool").contains("app_system_container_set");
+            // The machine's install ISO is one tool's argument (once app_attach_media and app_detach_media): a drive
+            // holding none has nothing to take out, a container takes no ISO, and an ISO beside remove is refused.
+            assertThat(admin.toolNames()).as("step 3: one tool").contains("app_install_media_set")
+                .doesNotContain("app_attach_media", "app_detach_media");
+            assertThat(admin.call("app_install_media_set", Map.of("code", vm, "remove", true)).error())
+                .as("step 3: no ISO to take out").isTrue();
+            assertThat(admin.call("app_install_media_set", Map.of("code", container, "install_media", "debian.iso"))
+                .error()).as("step 3: a container takes no ISO").isTrue();
+            assertThat(admin.call("app_install_media_set", Map.of("code", vm, "remove", true,
+                "install_media", "debian.iso")).text()).as("step 3: refused by its name").contains("install_media");
 
             // 4. A disk is attached to a device-carrying app, grown and detached at the daemon.
             FakeDeviceDaemon.registerKind();

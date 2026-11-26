@@ -182,8 +182,7 @@ public final class HohenheimPanel extends Panel {
         // grant; an operator holding "*" sees it, a delegated admin only through an explicit notifications.deliveries.*
         // grant (a stored comms.deliveries.* grant is its alias). Hohenheim is no
         // hub, so the hub's projects entry is not mounted.
-        PanelEntry deliveries = DeliveryAdmin.install(DeliveryAdmin.Permissions.MODULE)
-                .deliveryLog(NavGroup.SYSTEM, 93);
+        PanelEntry deliveries = deliveryAdmin().deliveryLog(NavGroup.SYSTEM, 93);
         peers.add(deliveries);
         addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
@@ -245,6 +244,14 @@ public final class HohenheimPanel extends Panel {
             HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.RUNTIME_IMAGES, HohenheimSlugs.GIT_PROVIDERS,
             HohenheimSlugs.DATABASE_ENGINES, TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG, buildInfo.slug());
         return peers;
+    }
+
+    /**
+     * @return the delivery log's installation, under zenit-delivery's own permissions (other people's notification
+     *     history): the one choice the panel's log and the assistant's delivery_retry share, whichever asks first
+     */
+    public static @NonNull DeliveryAdmin deliveryAdmin() {
+        return DeliveryAdmin.install(DeliveryAdmin.Permissions.MODULE);
     }
 
     /**
