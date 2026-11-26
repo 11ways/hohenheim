@@ -46,9 +46,12 @@ import java.util.UUID;
  * only the refusal cannot see this; assert the STORED subject set.
  *
  * AIDEV-NOTE: re-saving a still-trashed row RE-FIRES grant cleanup and a restore never
- * resurrects grants, so the owner set is only knowable on the FIRST release. {@link #record}
- * is therefore idempotent-on-first-write (an active row wins) and rows are INSERT-only --
- * there is no update path that could overwrite a real owner with an empty set.
+ * resurrects grants, so the owner set is only knowable on a site's FIRST release. {@link #record}
+ * is therefore idempotent-on-first-write PER SITE (that site's active row wins) and rows are
+ * INSERT-only -- there is no update path that could overwrite a real owner with an empty set.
+ * A release by ANOTHER site is ledgered beside the first, and a claim must pass every active row
+ * on its key: otherwise a site that held the route before the latest holder would pass as "the
+ * releasing site" and take back a route someone else served since.
  */
 public final class ReleasedClaims {
 
@@ -110,8 +113,8 @@ public final class ReleasedClaims {
     }
 
     /**
-     * Write one ledger row, unless an ACTIVE quarantine already covers the key -- the
-     * first release inside a window is the authoritative one.
+     * Write one ledger row, unless the releasing site already holds an ACTIVE row on the key --
+     * a site's first release inside a window is its authoritative one.
      */
     private static void record(@NonNull String key, @NonNull String hostname,
                                @Nullable String matchType, int siteId) {
@@ -120,8 +123,10 @@ public final class ReleasedClaims {
             // and a re-enabled window must not suddenly quarantine on stale history.
             return;
         }
-        if (activeClaimFor(key) != null) {
-            return;
+        for (Row active : activeClaimsFor(key)) {
+            if (Objects.equals(active.get(ReleasedRouteClaimModel.FORMER_SITE_ID), siteId)) {
+                return;
+            }
         }
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(siteId);
         Model ledger = Models.get(ReleasedRouteClaimModel.class);
@@ -167,9 +172,10 @@ public final class ReleasedClaims {
     public static @Nullable Row refusalFor(@NonNull String claimKey, @Nullable String matchType,
                                            int claimantSiteId) {
         Set<String> claimant = HohenheimAccess.manageSubjectsOf(claimantSiteId);
-        Row active = activeClaimFor(claimKey);
-        if (active != null && !allows(active, claimant, claimantSiteId)) {
-            return active;
+        for (Row active : activeClaimsFor(claimKey)) {
+            if (!allows(active, claimant, claimantSiteId)) {
+                return active;
+            }
         }
         return overlapRefusal(claimKey, matchType, claimant, claimantSiteId);
     }
@@ -181,7 +187,8 @@ public final class ReleasedClaims {
      * AIDEV-NOTE: the releasing site itself is never "another owner": a site trashed and then restored serves what it
      * served, for the hostname it held, so no dangling pointer reaches someone else's content. Its subjects cannot
      * say so, because the trash revoked its grants (RecordGrantCleanup) and a restore never resurrects them: judged by
-     * subjects, an operator restoring a customer's site was refused "released by another owner".
+     * subjects, an operator restoring a customer's site was refused "released by another owner". The rule answers for
+     * ONE row: a site another site took the route from since has that site's release row to pass too (refusalFor).
      *
      * AIDEV-NOTE: an EMPTY claimant set means "no manage grants YET", which is both the
      * operator case and a tenant whose fresh site has not been granted anything yet (a
@@ -253,21 +260,21 @@ public final class ReleasedClaims {
     }
 
     /**
-     * The newest ledger row still inside the window for a key -- an INDEXED lookup on the
+     * The ledger rows still inside the window for a key, newest first -- an INDEXED lookup on the
      * claim key, never a scan (the two conflict scans beside this already walk every site
      * and every domain row per write; this must not add a third).
      */
-    public static @Nullable Row activeClaimFor(@NonNull String claimKey) {
+    private static @NonNull List<Row> activeClaimsFor(@NonNull String claimKey) {
         int days = windowDays();
         if (days <= 0) {
-            return null;
+            return List.of();
         }
         return Models.get(ReleasedRouteClaimModel.class).find()
             .where(ReleasedRouteClaimModel.CLAIM_KEY.eq(claimKey))
             .and(ReleasedRouteClaimModel.RELEASED_AT.gte(Now.instant().minus(Duration.ofDays(days))))
             .orderBy(ReleasedRouteClaimModel.RELEASED_AT, SortOrder.DESC)
             .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC)
-            .first();
+            .all();
     }
 
     /** Whether the principal performing this write is one of the former owner's subjects. */
