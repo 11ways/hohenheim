@@ -5,6 +5,7 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -31,9 +32,12 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.test.RecordedChanges;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -48,6 +52,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -147,10 +152,16 @@ class ApplicationBackupRecoveryTest {
                     runtime.failStart = true;
                     assertThat(catchThrowable(() -> backups.backupNow(appId, null, target))).isNotNull();
                     assertThat(daemon.isRunning(servingHandle)).isFalse();
-                    String restartPrefix = "The workload could not be started again after the capture: ";
+                    // Since 603c339f5 the row keeps the words unresolved (StoredRefusalWords), read in each reader's
+                    // language, and the restart's reason is the deploy vocabulary's.
+                    String restartPrefix = "The app could not be started again after the capture: ";
+                    MessageResolver catalogs = new ShippedCatalogs();
                     assertThat(Models.get(InstanceBackupModel.class).find()
                         .where(InstanceBackupModel.INSTANCE_ID.eq(appId)).all().stream()
-                        .map(row -> String.valueOf((Object) row.get(InstanceBackupModel.ERROR)))
+                        .map(row -> (String) row.get(InstanceBackupModel.ERROR))
+                        .filter(Objects::nonNull)
+                        .map(error -> HohenheimViolations.storedMessage(error).resolve(LocaleChain.ofTags("en"),
+                            catalogs))
                         .filter(error -> error.startsWith(restartPrefix)
                             && error.length() > restartPrefix.length()))
                         .as("the failed row names the restart's own reason")
@@ -160,7 +171,7 @@ class ApplicationBackupRecoveryTest {
                         .map(recorded -> String.valueOf(recorded.fact(HohenheimActivityAction.BACKUP_FAILED)
                             .get(HohenheimActivityAction.REASON_KEY))))
                         .as("the history names the failure with its reason")
-                        .anyMatch(reason -> reason.contains("could not be started again after the capture ("));
+                        .anyMatch(reason -> reason.contains("could not be started again after the capture: "));
                     runtime.failStart = false;
                     ApplicationReleases.inScopeUnchecked(appId, () -> new InstanceService().deploy(servingId));
                     Row backup = Models.get(InstanceBackupModel.class).findById(backupId);

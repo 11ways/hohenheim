@@ -332,8 +332,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(empty).as("step 1: the attach is the inline page form")
             .contains("data-cms-page-action-inline")
             .doesNotContain("id=\"detach-media\"");
-        assertThat(texts(empty, "pl-label")).as("step 1: its pick is labelled ISO under the section heading")
-            .contains("ISO");
+        // The pick is required since 714359ed8 (an attach requires its ISO), so its label carries the required mark.
+        assertThat(texts(empty, "pl-label")).as("step 1: its pick is labelled ISO, required, under the heading")
+            .contains("ISO required");
 
         // 2. A drive holding an ISO: the section names it and offers the detach, and no second attach.
         new InstanceDevices().attachCdrom(instanceId, NAME_PREFIX + "cd", "debian.iso");
