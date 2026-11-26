@@ -148,6 +148,15 @@ class HohenheimCatalogToolsTest extends HohenheimHttpTestBase {
                 .error()).as("step 3: a container takes no ISO").isTrue();
             assertThat(admin.call("app_install_media_set", Map.of("code", vm, "remove", true,
                 "install_media", "debian.iso")).text()).as("step 3: refused by its name").contains("install_media");
+            // An attach names its ISO: the schema says so and a call leaving it out is refused by its name.
+            McpHttpSession.Answer bare = admin.call("app_install_media_set", Map.of("code", vm));
+            assertThat(bare.error()).as("step 3: no ISO named: " + bare.text()).isTrue();
+            assertThat(bare.text()).as("step 3: refused by its name").contains("install_media");
+            Map<?, ?> media = (Map<?, ?>) ((Map<?, ?>) admin.tools().stream()
+                .filter(tool -> "app_install_media_set".equals(tool.get("name"))).findFirst().orElseThrow()
+                .get("inputSchema")).get("properties");
+            assertThat(String.valueOf(((Map<?, ?>) media.get("install_media")).get("description")))
+                .as("step 3: required with remove=false").contains("Required with remove=false.");
 
             // 4. A disk is attached to a device-carrying app, grown and detached at the daemon.
             FakeDeviceDaemon.registerKind();

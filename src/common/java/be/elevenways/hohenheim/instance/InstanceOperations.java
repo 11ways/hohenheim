@@ -430,11 +430,13 @@ public final class InstanceOperations {
 
     /**
      * The record attach's ISO pick: the same input name as {@link #INSTALL_MEDIA}, labelled only "ISO" because the
-     * Devices tab's install-media section already heads and explains it.
+     * Devices tab's install-media section already heads and explains it. Required: an attach without an ISO puts
+     * nothing in the drive, so every caller (the panel's pick, an assistant's install_media) is refused without one.
      */
     public static final StringField DRIVE_MEDIA = StringField.builder(INSTALL_MEDIA.getName())
         .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("drive_media"))
         .help(HohenheimMicrocopy.HELP.of("drive_media"))
+        .required()
         .build();
 
     /**
