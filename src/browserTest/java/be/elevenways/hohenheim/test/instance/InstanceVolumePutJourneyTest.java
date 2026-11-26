@@ -131,7 +131,7 @@ class InstanceVolumePutJourneyTest extends HohenheimHttpTestBase {
         // Two exited helpers a failed removal left behind: one of this app's, one of another app's.
         String leftover = ControllerScope.kindPrefix(ControllerScope.KIND_FILES) + appId + "-0";
         String othersLeftover = ControllerScope.kindPrefix(ControllerScope.KIND_FILES) + (appId + 1_000_000) + "-0";
-        FakeContainerFiles helperDaemon = FakeContainerFiles.createdByCaller().directory("/data")
+        FakeContainerFiles helperDaemon = FakeContainerFiles.createdByCaller().directory("/data", "1001:1002")
             .symlink("/data/link", "/etc")
             .exited(leftover, OwnerLabels.of(InstanceModel.MODEL_ID, appId))
             .exited(othersLeftover, OwnerLabels.of(InstanceModel.MODEL_ID, appId + 1_000_000));
@@ -182,8 +182,9 @@ class InstanceVolumePutJourneyTest extends HohenheimHttpTestBase {
             assertThat(helperDaemon.exitedNames()).as("step 3: the app's leftover went before the helper started")
                 .containsExactly(othersLeftover);
 
-            // 4. The put: through a helper binding ONLY the app's volume, at the path the release mounts it, given
-            //    to the directory's owner, and the helper removed afterwards.
+            // 4. The put: through a helper binding ONLY the app's volume, at the path the release mounts it, owned
+            //    like its directory by the daemon's extraction itself (no chown follows, 515867d2a), and the helper
+            //    removed afterwards.
             HttpResponse<String> written = put(adminKey, "data", "app.sqlite", DATABASE);
             assertThat(written.statusCode()).as("step 4: written (%s)", written.body()).isEqualTo(200);
             assertThat(written.body()).as("step 4: the answer").contains("\"status\":\"written\"")
@@ -192,8 +193,8 @@ class InstanceVolumePutJourneyTest extends HohenheimHttpTestBase {
                 .isEqualTo(DATABASE);
             assertThat(helperDaemon.ownerOf("/data/app.sqlite")).as("step 4: owned like its directory")
                 .isEqualTo(helperDaemon.ownerOf("/data"));
-            assertThat(helperDaemon.calls()).as("step 4: handed to it inside the helper")
-                .contains("exec:chown-h /data/app.sqlite");
+            assertThat(helperDaemon.calls()).as("step 4: its owner came with the extraction, no chown ran after it")
+                .noneMatch(call -> call.startsWith("exec:chown"));
             Map<String, Object> create = helperDaemon.lastCreate();
             assertThat(create).as("step 4: a helper was created").isNotNull();
             assertThat(create.get("Image")).as("step 4: from the pinned image").isEqualTo(PinnedImages.ALPINE);

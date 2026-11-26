@@ -106,6 +106,13 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
         return this;
     }
 
+    /** Scripts a directory owned by {@code owner} ("uid:gid"), as stat prints it. */
+    public synchronized @NonNull FakeContainerFiles directory(@NonNull String path, @NonNull String owner) {
+        directory(path);
+        this.nodes.get(path).owner = owner;
+        return this;
+    }
+
     public synchronized @NonNull FakeContainerFiles file(@NonNull String path, @NonNull String text) {
         return file(path, text.getBytes(StandardCharsets.UTF_8));
     }
@@ -356,7 +363,10 @@ public final class FakeContainerFiles implements DockerTransport, DockerStreamTr
             } else if (entry.kind() == Tar.Kind.FILE) {
                 byte[] content = reader.body().readAllBytes();
                 ensureParents(full);
-                this.nodes.put(full, new Node(Kind.FILE, content, "", entry.mode()));
+                Node file = new Node(Kind.FILE, content, "", entry.mode());
+                // The daemon applies the header's numeric owner at extraction, as it does the mode.
+                file.owner = entry.owner().uid() + ":" + entry.owner().gid();
+                this.nodes.put(full, file);
             } else {
                 throw new IOException("FakeContainerFiles: unexpected pushed entry " + entry);
             }

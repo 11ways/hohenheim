@@ -59,9 +59,10 @@ public final class Tar {
      * @param name     the entry name, PAX/GNU long names already applied
      * @param linkName the link target for SYMLINK/HARDLINK, else empty
      * @param mode     the permission bits (low 12 bits)
+     * @param owner    the numeric uid and gid the header carries, which a daemon applies at extraction
      */
     public record Entry(@NonNull String name, @NonNull Kind kind, long size,
-                        @NonNull String linkName, int mode) {}
+                        @NonNull String linkName, int mode, @NonNull Owner owner) {}
 
     private static final int BLOCK = 512;
     private static final long MAX_OCTAL_SIZE = 077777777777L;
@@ -480,7 +481,8 @@ public final class Tar {
                 this.remaining = size;
                 this.padding = paddingOf(size);
                 int mode = (int) (parseNumber(header, 100, 8) & 07777);
-                return new Entry(name, kind, size, link, mode);
+                Owner owner = new Owner(parseNumber(header, 108, 8), parseNumber(header, 116, 8));
+                return new Entry(name, kind, size, link, mode, owner);
             }
         }
 

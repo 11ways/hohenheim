@@ -80,7 +80,7 @@ class InstanceFilesContainmentTest {
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             FakeContainerFiles daemon = new FakeContainerFiles(handle,
                 OwnerLabels.of(InstanceModel.MODEL_ID, id))
-                .directory("/data").directory("/data/sub").directory("/etc")
+                .directory("/data", "1001:1002").directory("/data/sub").directory("/etc")
                 .file("/data/hello.txt", "hello\n")
                 .file("/etc/passwd", "root:x:0:0")
                 .file("/etc/shadow", "root:SECRET-HASH")
@@ -164,13 +164,15 @@ class InstanceFilesContainmentTest {
                 .as("step 5: a SIBLING whose name merely starts the same is not managed")
                 .isEqualTo("sibling");
 
-            // 6. A dash-leading name is a file like any other, and the ownership fix-up after
-            //    the write re-owns the ENTRY (chown -h), never what it might point at.
+            // 6. A dash-leading name is a file like any other, owned like its directory by the daemon's extraction
+            //    itself: no chown follows the write that could reach what the entry points at (515867d2a).
             files.write(id, "/data/-rf", "dash".getBytes(StandardCharsets.UTF_8));
             assertThat(daemon.text("/data/-rf")).as("step 6: the dash-named file landed")
                 .isEqualTo("dash");
-            assertThat(daemon.calls()).as("step 6: its owner was fixed with chown -h")
-                .contains("exec:chown-h /data/-rf");
+            assertThat(daemon.ownerOf("/data/-rf")).as("step 6: owned like its directory")
+                .isEqualTo(daemon.ownerOf("/data"));
+            assertThat(daemon.calls()).as("step 6: and no chown ran after it")
+                .noneMatch(call -> call.startsWith("exec:chown"));
 
             // 7. A same-named FOREIGN container refuses EVERY mutating verb, rename and
             //    delete included (they used to carry no owner check at all).
@@ -190,8 +192,10 @@ class InstanceFilesContainmentTest {
                 });
                 assertThat(keyOf(refused)).as("step 7: '" + verb + "' on a foreign container")
                     .isEqualTo("files_failed");
-                assertThat(refused.getMessage()).as("step 7: named as not attributably ours")
-                    .contains("not attributably ours");
+                // The ownership refusal names the container, so it goes to the log, never into the answer
+                // (515867d2a); that it refused before anything ran is the calls' count below.
+                assertThat(refused.getMessage()).as("step 7: the answer keeps the driver's words out")
+                    .doesNotContain("not attributably ours").doesNotContain(handle);
             }
             assertThat(daemon.calls()).as("step 7: nothing ran inside the foreign container")
                 .hasSize(before);
