@@ -21322,6 +21322,7 @@
   "column_slowest": {"text": "Traagste 5%", "scope": "traffic_screen"},
   "column_last": {"text": "Laatst", "scope": "traffic_screen"},
   "no_referrer": {"text": "Geen verwijzer: apps en scripts", "scope": "traffic_screen"},
+  "last_seen": {"text": "{$at :datetime}", "scope": "traffic_screen"},
   "traffic_download": {"text": "Downloaden als bestand", "scope": "traffic_screen"},
   "download_step": {"text": "Stap", "scope": "traffic_screen"},
   "download_sent_bytes": {"text": "Verzonden naar bezoekers (bytes)", "scope": "traffic_screen"},
