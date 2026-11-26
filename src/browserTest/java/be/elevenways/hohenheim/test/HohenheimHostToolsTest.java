@@ -104,7 +104,9 @@ class HohenheimHostToolsTest extends HohenheimHttpTestBase {
             //    a call whose other setting is refused accepts nothing, and a customer accepts nothing at all.
             McpHttpSession.Answer mistyped = admin.call("host_set", Map.of("code", gamma, "accept_posture", "nope"));
             assertThat(mistyped.error()).as("step 3: " + mistyped.text()).isTrue();
-            assertThat(mistyped.text()).as("step 3: the argument is named").contains("accept_posture: ");
+            // Words that open with the argument's name carry no "accept_posture: " prefix (zenit-ai 5cc6dbf).
+            assertThat(mistyped.text()).as("step 3: the argument is named, once")
+                .startsWith("accept_posture ").doesNotContain("accept_posture: ");
             McpHttpSession.Answer halfRefused = admin.call("host_set", Map.of("code", gamma,
                 "accept_posture", gammaName, "public_ipv4", "example.org"));
             assertThat(halfRefused.error()).as("step 3: " + halfRefused.text()).isTrue();

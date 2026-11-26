@@ -236,7 +236,10 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
                     accountRoutes.add(route);
                     // A page that declares a query (the OpenID consent page and its pending interaction) answers
                     // only a request carrying it, so it is reached through a rendered link like a routed parameter.
-                    if (route.getParameters().isEmpty() && endpoint.getQueryParameters().isEmpty()) {
+                    // The account root's query is only the optional notice of a finished dialog (zenit-auth
+                    // 07f997b9), so the root is a page of its own.
+                    if (route.getParameters().isEmpty()
+                            && (endpoint.getQueryParameters().isEmpty() || endpoint == AuthEndpoints.GET_ACCOUNT)) {
                         accountPages.add(route.toUrl());
                     }
                 }

@@ -37,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * default created_at order.
  *
  * AIDEV-NOTE: the request carries no zn-tz cookie, so the cell reads in the office zone (office.zone, Europe/Brussels
- * in default.dry), the zone an unknown viewer zone reads as, and names it, since it is not the reader's own; the JVM
+ * in default.dry), the zone an unknown viewer zone reads as, and leaves it unnamed: an unknown zone is not a different
+ * one (protoblast c21e32ee, 2026-11-19); the JVM
  * default zone is forced to Asia/Kathmandu for step 1, so a render that fell back to the host's own zone fails here
  * even on a host running in Europe/Brussels.
  *
@@ -135,17 +136,20 @@ class CertificateDateColumnTest extends HohenheimHttpTestBase {
             TimeZone.setDefault(original);
         }
         assertThat(list.statusCode()).isEqualTo(200);
-        // A cookieless English reader: the office zone, which is not theirs, so the reading names it; the moment in
-        // the style a moment reads in when nothing names one (DateStyle.ofMoment, protoblast 9da86c7e).
+        // A cookieless English reader: the office zone, which is not known to be theirs nor known to differ, so the
+        // reading names no zone (protoblast c21e32ee); the moment in the style a moment reads in when nothing names
+        // one (DateStyle.ofMoment, protoblast 9da86c7e).
         Reader reader = Reader.of(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
         DateStyle moment = DateStyle.ofMoment(Map.of());
         assertThat(reader.zoneIsReaders()).as("step 1: no stamp is no zone of the reader's own").isFalse();
         assertThat(list.body())
-            .as("step 1: the expiry cell reads as a calendar day and time in the office zone, the zone named")
+            .as("step 1: the expiry cell reads as a calendar day and time in the office zone, no zone named")
             .contains(Wording.moment(reader, EARLY_EXPIRY, moment))
             .contains(Wording.moment(reader, LATE_EXPIRY, moment))
-            .contains(Wording.time(reader, EARLY_WALL) + " (" + OFFICE_ZONE.getId() + ")")
-            .contains(Wording.time(reader, LATE_WALL) + " (" + OFFICE_ZONE.getId() + ")");
+            .contains(Wording.time(reader, EARLY_WALL))
+            .contains(Wording.time(reader, LATE_WALL))
+            .doesNotContain("(" + OFFICE_ZONE.getId() + ")")
+            .doesNotContain("(" + HOST_ZONE + ")");
 
         // 2. The relative reading is still there, live, beside it.
         assertThat(list.body())

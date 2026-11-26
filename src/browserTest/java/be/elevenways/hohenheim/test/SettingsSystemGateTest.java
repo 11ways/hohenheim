@@ -18,8 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The installation settings page is an ordinary admin peer, while its operator-trusted keys carry their own authority:
- * the {@code auth_proteus} endpoint, fetched with an any-address guard, is host-only for everyone, the rest of the
- * Proteus login needs the non-delegable {@code hohenheim.admin.system}, and so do the framework's settings.
+ * the whole Proteus login, its {@code auth_proteus} endpoint included, needs the non-delegable
+ * {@code hohenheim.admin.system}, and so do the framework's settings. The endpoint is no longer host-only (zenit-auth
+ * 88d3af8f: an administrator sets all six); one set in the panel reaches only the public internet (cad8a9fa).
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -46,18 +47,20 @@ class SettingsSystemGateTest extends HohenheimHttpTestBase {
             .as("step 1: hohenheim.admin.system is declared").isNotNull();
         assertThat(Permissions.isDelegable(HohenheimSources.ADMIN_SYSTEM.value())).as("step 1: and never delegable")
             .isFalse();
-        assertThat(HohenheimSettings.AuthProteus.ENDPOINT.isHostOnly()).as("step 1: the endpoint is host-only")
-            .isTrue();
+        assertThat(HohenheimSettings.AuthProteus.ENDPOINT.isHostOnly()).as("step 1: the endpoint is an administrator's")
+            .isFalse();
+        assertThat(HohenheimSettings.AuthProteus.ENDPOINT.getWritePermission())
+            .as("step 1: and asks the system tier").isEqualTo(HohenheimSources.ADMIN_SYSTEM);
+        assertThat(HohenheimSettings.AuthProteus.ENDPOINT.getReach())
+            .as("step 1: and says what it reaches, so a panel write is held to the public internet").isNotNull();
         assertThat(HohenheimSettings.AuthProteus.REALM_CLIENT.getWritePermission())
             .as("step 1: the rest of the login asks the system tier").isEqualTo(HohenheimSources.ADMIN_SYSTEM);
 
-        // 2. The delegated admin opens the settings page: the endpoint row is host-only and the realm client row
-        //    read-only, neither with an input, while an ordinary proxy setting keeps its input.
+        // 2. The delegated admin opens the settings page: the endpoint and realm client rows are read-only, neither
+        //    with an input, while an ordinary proxy setting keeps its input.
         HttpResponse<String> read = httpGet(PROXY_AUTH_SECTION, delegatedAdmin.token());
         assertThat(read.statusCode()).as("step 2: the ordinary admin tier opens the settings (HTTP %s)",
             read.statusCode()).isEqualTo(200);
-        assertThat(read.body()).as("step 2: the endpoint row says only the host sets it")
-            .contains("data-cms-setting-host-only");
         assertThat(read.body()).as("step 2: and the realm client says the viewer may not change it")
             .contains("data-cms-setting-not-permitted");
         assertThat(hasInput(read.body(), "signin.auth_proteus.endpoint")).as("step 2: no endpoint input").isFalse();
@@ -78,16 +81,17 @@ class SettingsSystemGateTest extends HohenheimHttpTestBase {
         assertThat((Object) Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT))
             .as("step 3: the realm client is unchanged").isEqualTo(realmBefore);
 
-        // 4. The operator, who holds "*", gets the realm client's input, but the endpoint stays host-only for them too.
+        // 4. The operator, who holds "*", gets both inputs, but a loopback endpoint is out of the panel's reach: the
+        //    crafted write changes nothing.
         HttpResponse<String> operator = adminGet(PROXY_AUTH_SECTION);
         assertThat(operator.statusCode()).as("step 4: the operator opens the settings").isEqualTo(200);
         assertThat(hasInput(operator.body(), "signin.auth_proteus.realm_client")).as("step 4: the realm client input")
             .isTrue();
-        assertThat(hasInput(operator.body(), "signin.auth_proteus.endpoint")).as("step 4: still no endpoint input")
-            .isFalse();
+        assertThat(hasInput(operator.body(), "signin.auth_proteus.endpoint")).as("step 4: the endpoint input")
+            .isTrue();
         adminPostForm("/admin/settings", "signin.auth_proteus.endpoint=http%3A%2F%2F127.0.0.1%3A8080%2F");
         assertThat((Object) Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT))
-            .as("step 4: the operator's crafted write changes nothing either").isEqualTo(endpointBefore);
+            .as("step 4: the operator's loopback endpoint is refused").isEqualTo(endpointBefore);
 
         // 5. The framework's settings stay the system tier's: the delegated admin is shown no security header row at
         //    all, while the operator edits it.

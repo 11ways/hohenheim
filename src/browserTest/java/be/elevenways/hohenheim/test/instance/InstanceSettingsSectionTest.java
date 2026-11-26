@@ -119,10 +119,11 @@ class InstanceSettingsSectionTest {
             .as("step 2: the decisions are open, everything with a working default starts folded")
             .extracting(FormSection::startsCollapsed)
             .containsExactly(false, false, true, true, true);
+        // The reserved memory sits beside its maximum (42977d74d).
         assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.RUNTIME))
             .as("step 2: the runtime fold carries the environment, every ceiling and the"
                 + " console shape")
-            .containsExactly("home_quota_mb", "environment_variables", "memory_limit_mb",
+            .containsExactly("home_quota_mb", "environment_variables", "memory_reserved_mb", "memory_limit_mb",
                 "cpu_limit", "console_kind");
         assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
             .as("step 2: and the deployment fold owns the preview lane too")
@@ -202,7 +203,7 @@ class InstanceSettingsSectionTest {
         //    only the guest half folds -- the same fields, the opposite call, because
         //    the question the kind asks is different.
         assertThat(visibleRun(VmKind.SETTINGS_SCHEMA))
-            .containsExactly("image", "memory_limit_mb", "cpu_limit", "root_disk_gb",
+            .containsExactly("image", "memory_limit_mb", "memory_reserved_mb", "cpu_limit", "root_disk_gb",
                 "network_limit_mbit", "image_origin");
         assertThat(sectionMembers(VmKind.SETTINGS_SCHEMA, HohenheimFormSections.GUEST))
             .containsExactly("cloud_init", "secure_boot", "guest_agent");

@@ -121,12 +121,15 @@ class WorkspaceBackupRestartTest {
                 .all().stream()
                 .map(row -> String.valueOf((Object) row.get(InstanceBackupModel.ERROR)))
                 .toList();
+            // The restart's reason is said in a deploy failure's words: a start failure Hohenheim does not recognise
+            // says so, and its exception text stays diagnostics, never copy (DeployFailure, 5b3f12fc5).
             assertThat(errors)
                 .as("step 4: the failed row names the restart and its reason")
                 .singleElement()
                 .satisfies(error -> assertThat(error)
                     .startsWith(restartPrefix)
-                    .contains("scripted start failure"));
+                    .contains("Hohenheim does not recognise the reason")
+                    .doesNotContain("scripted start failure"));
 
             // 5. ... and in the history, where a scheduled backup's failure is read.
             assertThat(RecordedChanges.withFact(Models.get(InstanceModel.class), id,
@@ -135,7 +138,8 @@ class WorkspaceBackupRestartTest {
                     .get(HohenheimActivityAction.REASON_KEY))))
                 .as("step 5: the history names the failed restart with its reason")
                 .anyMatch(reason -> reason.contains("could not be started again after the capture (")
-                    && reason.contains("scripted start failure"));
+                    && reason.contains("Hohenheim does not recognise the reason")
+                    && !reason.contains("scripted start failure"));
         });
     }
 
