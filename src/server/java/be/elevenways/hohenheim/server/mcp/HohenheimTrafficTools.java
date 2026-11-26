@@ -96,7 +96,8 @@ final class HohenheimTrafficTools {
 
     /**
      * A read of counted traffic: the span in office time, its totals against the span before, one line per step with
-     * what was asked per status class, then the top table asked for, whose keys visitors wrote, as untrusted text.
+     * what was asked per status class (a zone's per DNS outcome), then the top table asked for, whose keys visitors
+     * wrote, as untrusted text.
      *
      * @param asked   the word for what was counted
      * @param askers  the word for who asked
@@ -123,11 +124,14 @@ final class HohenheimTrafficTools {
         response.line(totals.medianMillis() == null ? "response time: none"
             : "response time: median " + millis(totals.medianMillis()) + " ms, slowest 5 percent from "
                 + millis(totals.slowestMillis()) + " ms");
-        List<DataSeries> series = read.steps().series();
+        // A zone's steps go per exact DNS outcome; a site's per status class.
+        DataBuckets stepped = read.outcomes() != null ? read.outcomes() : read.steps();
+        String per = read.outcomes() != null ? "DNS outcome" : "status class";
+        List<DataSeries> series = stepped.series();
         if (totals.requests() == 0) {
             response.line("steps: none, no " + asked + " in this span");
         } else {
-            response.line("steps, each its start and " + asked + " per status class; steps without " + asked
+            response.line("steps, each its start and " + asked + " per " + per + "; steps without " + asked
                 + " are left out:");
             int steps = series.isEmpty() ? 0 : series.getFirst().buckets().size();
             for (int step = 0; step < steps; step++) {

@@ -326,8 +326,9 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
             McpHttpSession.Answer asked = admin.call("dns_zone_queries_read", Map.of("dns_zone", origin,
                 "top", "names"));
             assertThat(asked.error()).as("step 2: " + asked.text()).isFalse();
-            assertThat(asked.text()).as("step 2: the totals and the names asked").contains("questions: 3;")
-                .contains("answered: 2xx 2, 4xx 1").contains("www." + origin + " A");
+            assertThat(asked.text()).as("step 2: the totals, the steps per outcome and the names asked")
+                .contains("questions: 3;").contains("answered: 2xx 2, 4xx 1").contains("per DNS outcome")
+                .contains("no_such_name 1").contains("www." + origin + " A");
             assertThat(admin.call("dns_zone_queries_read", Map.of("dns_zone", origin, "top", "missing_names"))
                 .text()).as("step 2: the missing name").contains("nope." + origin + " A");
             assertThat(admin.call("dns_zone_queries_read", Map.of("dns_zone", origin, "top", "resolvers")).text())
