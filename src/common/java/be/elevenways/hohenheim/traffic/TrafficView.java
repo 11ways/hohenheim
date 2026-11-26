@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.traffic;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.plumage.chart.ChartSeries;
 import be.elevenways.plumage.chart.ChartType;
+import be.elevenways.plumage.chart.ChartValueKind;
 import be.elevenways.plumage.component.NavTab;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -23,16 +24,19 @@ import java.util.List;
  * @param previousUrl the span just before, as long
  * @param nextUrl     the span just after, null while the shown one ends now
  * @param figures     the headline figures
- * @param charts      the charts, each across the screen
+ * @param charts      the charts each across the screen
+ * @param paired      the charts under them, two across
  * @param tables      the top tables, two across
  * @param empty       what the screen says while the span counted nothing, null while it counted something
+ * @param note        the line under everything, null for none
  * @author Jelle De Loecker
  * @since  0.1.0
  */
 @HawkeyeClass
 public record TrafficView(@NonNull List<NavTab> periods, @NonNull Microcopy span, @NonNull String previousUrl,
                           @Nullable String nextUrl, @NonNull List<Figure> figures, @NonNull List<Chart> charts,
-                          @NonNull List<Table> tables, @Nullable Microcopy empty) {
+                          @NonNull List<Chart> paired, @NonNull List<Table> tables, @Nullable Microcopy empty,
+                          @Nullable Microcopy note) {
 
     /**
      * One headline figure.
@@ -55,11 +59,12 @@ public record TrafficView(@NonNull List<NavTab> periods, @NonNull Microcopy span
      * @param stacked    whether its series stack (requests per status class)
      * @param horizontal whether its bars lie down (a ranking of names)
      * @param points     whether a line marks each step it has, so a span answered in one step still shows
+     * @param valueKind  what its values are, which words every tick and reading
      */
     @HawkeyeClass
     public record Chart(@NonNull String key, @NonNull Microcopy title, @Nullable Microcopy lead,
                         @NonNull ChartType type, boolean stacked, boolean horizontal,
-                        boolean points, @NonNull List<ChartSeries> series) {
+                        boolean points, @NonNull ChartValueKind valueKind, @NonNull List<ChartSeries> series) {
     }
 
     /**
@@ -89,11 +94,12 @@ public record TrafficView(@NonNull List<NavTab> periods, @NonNull Microcopy span
     /**
      * One row of a table.
      *
-     * @param key   unique in its table
-     * @param cells one per column
+     * @param key    unique in its table
+     * @param cells  one per column
+     * @param folded the rows a group row opens to (the bots among the browsers), empty for a plain row
      */
     @HawkeyeClass
-    public record Line(@NonNull String key, @NonNull List<Cell> cells) {
+    public record Line(@NonNull String key, @NonNull List<Cell> cells, @NonNull List<Line> folded) {
     }
 
     /**

@@ -34,7 +34,7 @@
         </pl-card-header>
         <pl-card-content>
             {% if view.counted %}
-            <pl-chart type="line" legend series={% view.chart %} ariaLabel={% t("app_network_chart_title", scope: "app_network") %}></pl-chart>
+            <pl-chart type="line" valueKind="bytes" legend series={% view.chart %} ariaLabel={% t("app_network_chart_title", scope: "app_network") %}></pl-chart>
             {% else %}
             <pl-empty-state icon="network-wired" plain data-hh-app-network-empty>
                 <pl-empty-state-title>{{ t("app_network_nothing_counted", scope: "app_network") }}</pl-empty-state-title>

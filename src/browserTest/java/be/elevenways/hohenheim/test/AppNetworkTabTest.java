@@ -75,7 +75,12 @@ class AppNetworkTabTest extends HohenheimTestBase {
             assertThat(page.locator("[data-hh-app-network-chart] pl-chart .legend").textContent())
                 .as("step 1: the legend names them").contains("Received").contains("Sent");
             assertThat(page.locator("[data-hh-app-network-chart] pl-card-description").textContent())
-                .as("step 1: how the chart counts").contains("Per hour, in MB");
+                .as("step 1: how the chart counts, naming no unit").contains("Per hour, everything")
+                .doesNotContain("in MB");
+            assertThat(page.locator("[data-hh-app-network-chart] pl-chart").getAttribute("value-kind"))
+                .as("step 1: the chart says its values are sizes").isEqualTo("bytes");
+            assertThat(page.locator("[data-hh-app-network-chart] pl-chart .sr-table").textContent())
+                .as("step 1: each step's bytes read as a size").containsPattern("\\d+(?:[.,]\\d+)? (?:KB|MB)");
             assertThat(TrafficScreensJourneyTest.pointNames(page, "[data-hh-app-network-chart]"))
                 .as("step 1: every hour named apart").hasSizeGreaterThan(23).doesNotHaveDuplicates();
             String row = page.locator("[data-hh-app-network-site='" + siteId + "']").textContent();

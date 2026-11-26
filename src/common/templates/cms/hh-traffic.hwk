@@ -1,10 +1,10 @@
 {% tag HhTraffic {
     /* One traffic screen (TrafficScreens, TrafficView): a site's Traffic tab, a DNS zone's Queries tab or the server's
        Traffic report. The period switch, the span shown and its Previous and Next are links, so the address always
-       says what the screen shows; then the headline figures against the span before, the charts each across the
-       screen, and the top tables two across, each row a name a person reads with its counts and, where the board
-       draws one, its share of the span's requests as a bar. A span that counted nothing says so in one line and
-       draws no chart or table. */
+       says what the screen shows; then the headline figures against the span before, the charts (the first across
+       the screen, the others two across), and the top tables two across, each row a name a person reads with its
+       counts and, where the board draws one, its share of the span's requests as a bar; a group row (the bots among
+       the browsers) opens to its rows. A span that counted nothing says so in one line and draws no chart or table. */
     public required view: TrafficView
 
     style {
@@ -41,6 +41,36 @@
         .hh-traffic-mono {
             font-family: var(--pl-font-family-mono);
         }
+    }
+
+    /* One chart in its card. */
+    snippet chartCard(drawn: TrafficView.Chart) {
+        <pl-card attr:data-hh-traffic-chart={% drawn.key %}>
+            <pl-card-header>
+                <pl-card-title>{{ drawn.title }}</pl-card-title>
+                {% if drawn.lead != null %}<pl-card-description>{{ drawn.lead }}</pl-card-description>{% /if %}
+            </pl-card-header>
+            <pl-card-content>
+                <pl-chart type={% drawn.type %} stacked={% drawn.stacked %} horizontal={% drawn.horizontal %} legend
+                          points={% drawn.points %} valueKind={% drawn.valueKind %} height={% 240.0 %}
+                          series={% drawn.series %} ariaLabel={% drawn.title %}></pl-chart>
+            </pl-card-content>
+        </pl-card>
+    }
+
+    /* One cell of a top table's row; the first cell of a group row opens its fold. */
+    snippet tableCell(shown: TrafficView.Cell, opens: Boolean) {
+        {% if shown.share != null %}
+        <pl-table-cell><pl-usage-bar class="hh-traffic-share" variant="share" size="sm" value={% shown.share %} max={% shown.shareOf %} ariaLabel={% shown.text %}></pl-usage-bar></pl-table-cell>
+        {% elseif shown.figure %}
+        <pl-table-cell nowrap data-alignment="right">{{ shown.text }}</pl-table-cell>
+        {% elseif opens %}
+        <pl-table-cell><pl-table-fold-trigger label={% shown.text %}></pl-table-fold-trigger></pl-table-cell>
+        {% elseif shown.href != null %}
+        <pl-table-cell breakAnywhere><a href={% shown.href %} class:hh-traffic-mono={% shown.mono %}>{{ shown.text }}</a></pl-table-cell>
+        {% else %}
+        <pl-table-cell breakAnywhere><span class:hh-traffic-mono={% shown.mono %}>{{ shown.text }}</span></pl-table-cell>
+        {% /if %}
     }
 
     template {
@@ -83,19 +113,17 @@
             </pl-empty-state>
             {% /if %}
 
-            {% each view.charts as chart key chart.key %}
-            <pl-card attr:data-hh-traffic-chart={% chart.key %}>
-                <pl-card-header>
-                    <pl-card-title>{{ chart.title }}</pl-card-title>
-                    {% if chart.lead != null %}<pl-card-description>{{ chart.lead }}</pl-card-description>{% /if %}
-                </pl-card-header>
-                <pl-card-content>
-                    <pl-chart type={% chart.type %} stacked={% chart.stacked %} horizontal={% chart.horizontal %} legend
-                              points={% chart.points %} height={% 240.0 %} series={% chart.series %}
-                              ariaLabel={% chart.title %}></pl-chart>
-                </pl-card-content>
-            </pl-card>
+            {% each view.charts as each key each.key %}
+            {% render chartCard(each) %}
             {% /each %}
+
+            {% if view.paired %}
+            <pl-grid size="xl">
+                {% each view.paired as each key each.key %}
+                {% render chartCard(each) %}
+                {% /each %}
+            </pl-grid>
+            {% /if %}
 
             {% if view.tables %}
             <pl-grid size="xl">
@@ -119,23 +147,22 @@
                                 {% /if %}
                                 {% /each %}
                             </pl-table-row></pl-table-header>
-                            <pl-table-body>
-                                {% each table.rows as row key row.key %}
-                                <pl-table-row>
+                            {% each table.rows as row key row.key %}
+                            <pl-table-body fold={% row.folded |> Array.length > 0 %}>
+                                <pl-table-row attr:data-hh-traffic-row={% row.key %}>
                                     {% each row.cells as cell %}
-                                    {% if cell.share != null %}
-                                    <pl-table-cell><pl-usage-bar class="hh-traffic-share" variant="share" size="sm" value={% cell.share %} max={% cell.shareOf %} ariaLabel={% cell.text %}></pl-usage-bar></pl-table-cell>
-                                    {% elseif cell.figure %}
-                                    <pl-table-cell nowrap data-alignment="right">{{ cell.text }}</pl-table-cell>
-                                    {% elseif cell.href != null %}
-                                    <pl-table-cell breakAnywhere><a href={% cell.href %} class:hh-traffic-mono={% cell.mono %}>{{ cell.text }}</a></pl-table-cell>
-                                    {% else %}
-                                    <pl-table-cell breakAnywhere><span class:hh-traffic-mono={% cell.mono %}>{{ cell.text }}</span></pl-table-cell>
-                                    {% /if %}
+                                    {% render tableCell(cell, row.folded |> Array.length > 0) %}
+                                    {% /each %}
+                                </pl-table-row>
+                                {% each row.folded as part key part.key %}
+                                <pl-table-row attr:data-hh-traffic-row={% part.key %}>
+                                    {% each part.cells as cell %}
+                                    {% render tableCell(cell, false) %}
                                     {% /each %}
                                 </pl-table-row>
                                 {% /each %}
                             </pl-table-body>
+                            {% /each %}
                         </pl-table>
                         {% else %}
                         <p class="hh-traffic-span">{{ table.empty }}</p>
@@ -144,6 +171,10 @@
                 </pl-card>
                 {% /each %}
             </pl-grid>
+            {% /if %}
+
+            {% if view.note != null %}
+            <p class="hh-traffic-span" data-hh-traffic-note>{{ view.note }}</p>
             {% /if %}
         </div>
     }

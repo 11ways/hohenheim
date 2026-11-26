@@ -365,15 +365,15 @@ final class AppOverview {
             linkIcon);
     }
 
-    /** The lead line under a site's heading: what it serves. */
+    /** The lead line under a site's heading: the app it serves, as the board names it, else what it serves. */
     static @NonNull String siteLead(@NonNull Row site, @NonNull Conduit conduit) {
-        String kind = SiteParts.upstreamLabel(site).asString(conduit);
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
-            return kind;
+            return SiteParts.upstreamLabel(site).asString(conduit);
         }
-        return kind + " · " + Models.get(InstanceModel.class).getDisplayTitle(instance);
+        return HohenheimMicrocopy.APP_OVERVIEW.of("serves_app")
+            .withArg("app", Models.get(InstanceModel.class).getDisplayTitle(instance)).asString(conduit);
     }
 
     /** The lead line under an instance's heading: what it runs and (for the operator) where. */

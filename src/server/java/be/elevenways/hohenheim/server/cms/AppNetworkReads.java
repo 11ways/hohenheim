@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.traffic.common.TrafficMeasure;
@@ -114,7 +115,8 @@ public final class AppNetworkReads {
     static {
         OperationHandlers.attach(READ)
             .applies(AppNetworkReads::counts)
-            .handle(call -> read(call.subject(), Objects.requireNonNull(call.input(), "a read has its input")));
+            .handle(call -> read(call.subject(), Objects.requireNonNull(call.input(), "a read has its input"),
+                call.access()));
     }
 
     private AppNetworkReads() {
@@ -128,9 +130,10 @@ public final class AppNetworkReads {
     /**
      * Reads the app's bytes and its sites' answers over the span the input names.
      *
+     * @param caller whose words the steps are named in, null for the catalog's default
      * @throws DomainRefusal SERVICE_UNAVAILABLE while counting is stopped (the process is ending)
      */
-    static @NonNull Read read(@NonNull Row app, @NonNull ReadInput input) {
+    static @NonNull Read read(@NonNull Row app, @NonNull ReadInput input, @Nullable AccessContext caller) {
         TrafficStore apps = TrafficReads.opened(HohenheimTraffic.Counted.APPS);
         TrafficStore web = TrafficReads.opened(HohenheimTraffic.Counted.WEB);
         int appId = app.get(InstanceModel.ID);
@@ -148,6 +151,7 @@ public final class AppNetworkReads {
         }
         sites.sort(Comparator.comparingLong(SiteTraffic::requests).reversed());
         return new Read(query, reader.totals(query), reader.totals(query.before()),
-            reader.series(query, TrafficMeasure.BYTES, null, null), sites);
+            reader.series(query, TrafficMeasure.BYTES, caller != null ? caller.locales() : null,
+                caller != null ? caller.messageResolver() : null), sites);
     }
 }

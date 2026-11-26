@@ -11,9 +11,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.plumage.chart.ChartPoint;
 import be.elevenways.plumage.chart.ChartSeries;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.i18n.wording.ByteUnit;
-import be.elevenways.protoblast.common.i18n.wording.Reader;
-import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -28,7 +25,6 @@ import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.MalformedQuery;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.traffic.common.TrafficGranularity;
 import be.elevenways.zenit.traffic.common.TrafficMeasure;
@@ -46,17 +42,14 @@ import java.util.Objects;
  * An app's Network tab: what it received and sent over a span per step, and what its sites answered visitors, read
  * through the read an assistant's {@code app_network_read} makes (AppNetworkReads).
  *
- * AIDEV-NOTE: the chart plots megabytes, named in its lead: pl-chart words money and hours but no size yet, and one
- * fixed unit keeps a span's steps comparable. A step and a span are named as the traffic screens name them
- * (TrafficReads.stepLabel, TrafficReads.periodLabel).
+ * AIDEV-NOTE: the chart plots the bytes themselves and says they are sizes (pl-chart's valueKind), so every tick and
+ * reading words them as the reader reads a size. A step is named as the traffic engine names it for the reader, a span
+ * as the traffic screens name it (TrafficReads.periodLabel).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
 public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
-
-    /** The unit the chart plots in. */
-    static final ByteUnit CHART_UNIT = ByteUnit.MEGABYTE;
 
     private static final ParameterDefinition<String> PERIOD = ParameterDefinition.builder(String.class)
         .name(TrafficReads.PERIOD.getName()).stringResolver(value -> value).build();
@@ -79,7 +72,7 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
         Endpoint.declareQueryOn(conduit, MalformedQuery.ABSENT, List.of(PERIOD));
         TrafficWindow window = TrafficReads.windowOf(conduit.getParameter(PERIOD));
         AppNetworkReads.Read read = AppNetworkReads.read(app,
-            new AppNetworkReads.ReadInput(window.storageKey(), null));
+            new AppNetworkReads.ReadInput(window.storageKey(), null), AccessContext.of(conduit));
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.APP_NETWORK, app.get(InstanceModel.NAME)));
         vars.put("head", recordHead(conduit));
@@ -95,17 +88,13 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
                 TrafficReads.periodLabel(window),
                 "?" + PERIOD.getName() + "=" + window.storageKey(), window == chosen));
         }
-        TrafficGranularity step = read.query().granularity();
-        Reader reader = OfficeZone.reader(AccessContext.of(conduit));
         List<ChartSeries> chart = new ArrayList<>();
         for (DataSeries series : read.steps().series()) {
             TrafficMeasure measure = Objects.requireNonNull(StorageKeyed.findOrNull(
                 Arrays.asList(TrafficMeasure.values()), series.key()), "the bytes measure draws its two measures");
             List<ChartPoint> points = new ArrayList<>(series.buckets().size());
             for (DataBucket bucket : series.buckets()) {
-                Double value = bucket.value();
-                points.add(new ChartPoint(TrafficReads.stepLabel(reader, step, bucket.key()),
-                    value == null ? null : value / CHART_UNIT.factor()));
+                points.add(new ChartPoint(bucket.label(), bucket.value()));
             }
             chart.add(new ChartSeries(series.key(), measure.label(), points));
         }
@@ -119,8 +108,7 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
             HohenheimMicrocopy.APP_NETWORK.of("app_network_range").withArg("from", read.query().from())
                 .withArg("until", read.query().to()),
             size(read.totals().bytesReceived()).asString(conduit), size(read.totals().bytesSent()).asString(conduit),
-            size(read.toVisitors()).asString(conduit), chart,
-            chartLead(step).withArg("unit", Wording.unit(CHART_UNIT)),
+            size(read.toVisitors()).asString(conduit), chart, chartLead(read.query().granularity()),
             read.counted(), sites);
     }
 
@@ -129,7 +117,7 @@ public final class InstanceNetworkPage implements RecordTab.Rendered<Row> {
         return HohenheimMicrocopy.APP_NETWORK.of("app_network_size").withArg("bytes", bytes);
     }
 
-    /** @return how the chart counts at its step, its unit still to be named */
+    /** @return how the chart counts at its step */
     private static @NonNull Microcopy chartLead(@NonNull TrafficGranularity step) {
         return HohenheimMicrocopy.APP_NETWORK.of(switch (step) {
             case MINUTE -> "app_network_chart_lead_minute";

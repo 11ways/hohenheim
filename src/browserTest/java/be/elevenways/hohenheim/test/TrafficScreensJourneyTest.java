@@ -65,29 +65,46 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
             fixture.request(fixture.siteA, "/ok", "User-Agent: " + FIREFOX, "Referer: https://from.example/page");
             fixture.request(fixture.siteA, "/missing");
             fixture.request(fixture.siteA, "/items/12345/view", "User-Agent: Proteus-Client/3");
+            fixture.request(fixture.siteA, "/ok", "User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1;"
+                + " +http://www.google.com/bot.html)");
             fixture.request(fixture.siteB, "/other-site");
-            TrafficCountingJourneyTest.counted(HohenheimTraffic.sourceOf(fixture.siteA), 3, began);
+            TrafficCountingJourneyTest.counted(HohenheimTraffic.sourceOf(fixture.siteA), 4, began);
 
             // 1. The tab draws the site's day: its figures, the requests per hour by status, each hour named apart
-            //    (the day's first hour and the same hour a day later too), its tables, each row a name a person
-            //    reads; never the other site's path.
+            //    (the day's first hour and the same hour a day later too), what it sent visitors as sizes and its
+            //    response times as timings, two across under it, its tables, each row a name a person reads, the
+            //    bots one group that opens to each; never the other site's path.
             page.setViewportSize(1280, 800);
             navigateToApp(tab(HohenheimSlugs.ADMIN, fixture.siteA, ""));
             waitForHydration();
             assertThat(page.locator("[data-hh-traffic-figure='requests']").textContent()).as("step 1: requests")
-                .contains("3");
+                .contains("4");
             assertThat(page.locator("[data-hh-traffic-chart='steps'] pl-chart").count()).as("step 1: the chart")
                 .isEqualTo(1);
             assertThat(pointNames(page, "[data-hh-traffic-chart='steps']")).as("step 1: every hour named apart")
                 .hasSizeGreaterThan(23).doesNotHaveDuplicates();
+            assertThat(page.locator("[data-hh-traffic-chart='sent'] pl-chart").getAttribute("value-kind"))
+                .as("step 1: what it sent visitors, as sizes").isEqualTo("bytes");
+            assertThat(page.locator("[data-hh-traffic-chart='sent'] pl-chart .sr-table").textContent())
+                .as("step 1: a step's bytes read as a size").containsPattern("\\d+ B\\b");
+            assertThat(page.locator("[data-hh-traffic-chart='times'] pl-chart").getAttribute("value-kind"))
+                .as("step 1: response times, as timings").isEqualTo("timing");
+            assertThat(page.locator("[data-hh-traffic-chart='times'] pl-card-description").textContent())
+                .as("step 1: the lead names no unit").doesNotContain("millisecond");
+            assertThat(page.locator("[data-hh-traffic-chart='times'] pl-chart .sr-table").textContent())
+                .as("step 1: a step's time read as a timing").containsPattern("\\d+(?:[.,]\\d+)? ms");
             String pages = page.locator("[data-hh-traffic-table='pages']").textContent();
             assertThat(pages).as("step 1: the top pages, an id counted as :id").contains("/ok")
                 .contains("/items/:id/view").doesNotContain("/other-site");
             assertThat(page.locator("[data-hh-traffic-table='referrers']").textContent())
                 .as("step 1: the referrer's host").contains("from.example").doesNotContain("/page");
-            assertThat(page.locator("[data-hh-traffic-table='browsers']").textContent())
-                .as("step 1: browsers by name, a tool no family names by its own").contains("Firefox")
+            String browsers = page.locator("[data-hh-traffic-table='browsers']").textContent();
+            assertThat(browsers).as("step 1: browsers by name, a tool no family names by its own").contains("Firefox")
                 .contains("Proteus-Client").doesNotContain("agent_").doesNotContain("tool:");
+            assertThat(page.locator("[data-hh-traffic-table='browsers'] pl-table-fold-trigger").textContent())
+                .as("step 1: the bots one group, by how many kinds").contains("Bots, 1 kind");
+            assertThat(page.locator("[data-hh-traffic-table='browsers'] [data-hh-traffic-row='googlebot']")
+                .textContent()).as("step 1: the group opens to each bot").contains("Googlebot");
             assertThat(page.locator("[data-hh-traffic-table='statuses']").textContent()).as("step 1: statuses")
                 .contains("404");
             assertThat(page.locator("[data-hh-traffic-table='visitors']").textContent()).as("step 1: whole address")
@@ -125,7 +142,7 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
             navigateToAppAs(tab(HohenheimSlugs.MANAGE, fixture.siteA, ""), session);
             waitForHydration();
             assertThat(page.locator("[data-hh-traffic-figure='requests']").textContent())
-                .as("step 3: his site's requests").contains("3");
+                .as("step 3: his site's requests").contains("4");
             HttpResponse<String> foreign = httpGet(tab(HohenheimSlugs.MANAGE, fixture.siteB, ""), session);
             assertThat(foreign.statusCode()).as("step 3: another site's tab is no page of his").isIn(403, 404);
             assertThat(foreign.body()).as("step 3: and shows nothing of it").doesNotContain("/other-site");
@@ -181,7 +198,12 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
             assertThat(page.locator("[data-hh-traffic-table='pages']").textContent())
                 .as("step 1: the top pages across sites").contains(nameA).contains("/ok");
             assertThat(page.locator("[data-hh-traffic-table='unserved_names']").textContent())
-                .as("step 1: the name nobody serves").contains(nobody);
+                .as("step 1: the name nobody serves, when last asked as a list of recent moments says it")
+                .contains(nobody).contains("Today");
+            assertThat(page.locator("[data-hh-traffic-chart='sent'] pl-chart").getAttribute("value-kind"))
+                .as("step 1: what every site sent visitors, as sizes").isEqualTo("bytes");
+            assertThat(page.locator("[data-hh-traffic-figure='failed']").textContent())
+                .as("step 1: the failed figure names its class").contains("Failed").contains("5xx");
             List<String> tabs = page.locator("[data-hh-traffic-tabs] pl-nav-item").allTextContents();
             assertThat(tabs).as("step 1: Report and Settings, no Activity yet").hasSize(2);
             assertThat(tabs.get(0)).as("step 1: Report first").contains("Report");
@@ -191,6 +213,17 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
                 .contains("traffic");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-report.png"))
                 .setFullPage(true));
+
+            // 1b. "Download as a file" hands the span's steps over as a spreadsheet's file, every step a line.
+            String download = page.locator("[data-hh-traffic-download]").getAttribute("href");
+            assertThat(download).as("step 1b: the span's file").contains("download=");
+            HttpResponse<String> file = adminGet(download);
+            assertThat(file.statusCode()).as("step 1b: a file").isEqualTo(200);
+            assertThat(file.headers().firstValue("Content-Type").orElse("")).as("step 1b: a CSV").contains("text/csv");
+            List<String> lines = file.body().lines().toList();
+            assertThat(lines.getFirst()).as("step 1b: its head in words").contains("Step").contains("2xx answered")
+                .contains("Sent to visitors (bytes)").contains("Median (ms)");
+            assertThat(lines).as("step 1b: a line per hour of the day").hasSizeGreaterThan(24);
 
             // 2. Its cost stays flat as sites and their traffic grow: the sites' names are one query.
             DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
@@ -254,6 +287,11 @@ class TrafficScreensJourneyTest extends HohenheimTestBase {
                 .as("step 1: the missing name").contains("nope." + origin);
             assertThat(page.locator("[data-hh-traffic-table='resolvers']").textContent()).as("step 1: who asked")
                 .contains("127.0.0.1");
+            String legend = page.locator("[data-hh-traffic-chart='steps'] pl-chart .legend").textContent();
+            assertThat(legend).as("step 1: the chart splits each outcome").contains("Answered").contains("No such name")
+                .doesNotContain("refused or malformed");
+            assertThat(page.locator("[data-hh-traffic-note]").textContent()).as("step 1: how many zones it answers for")
+                .containsPattern("answers for \\d+ zones?");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/dns-zone-queries.png"))
                 .setFullPage(true));
 

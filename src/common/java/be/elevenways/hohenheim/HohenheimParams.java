@@ -134,4 +134,9 @@ public final class HohenheimParams {
     public static final ParameterDefinition<String> TRAFFIC_UNTIL =
         ParameterDefinition.builder(String.class).name("until")
             .stringResolver(value -> value).build();
+
+    /** Present on the server's Traffic report: the span's steps as a file instead of the page. */
+    public static final ParameterDefinition<String> TRAFFIC_DOWNLOAD =
+        ParameterDefinition.builder(String.class).name("download")
+            .stringResolver(value -> value).build();
 }

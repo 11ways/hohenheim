@@ -23,7 +23,8 @@ import java.net.InetAddress;
  * AIDEV-NOTE: the traffic engine counts web-shaped hits, so a question is one: its host the name asked, its path
  * {@code <name> <TYPE>} (the "most asked names" rows, {@link Asked} reads it back), its method {@code DNS} and
  * its status the outcome's ({@link Outcome}), which puts "no such name" and "refused" in the engine's refused-paths
- * table and an answer in its 2xx class. A question for a zone this server does not hold has no source and is not
+ * table and an answer in its 2xx class; a zone's steps read the exact status per step, so each outcome is its own
+ * series. A question for a zone this server does not hold has no source and is not
  * counted. Only questions are counted: a zone transfer (AXFR, IXFR) and a NOTIFY are replication between servers,
  * never a resolver asking a name, and stay out; so does a UDP question the rate limiter drops or answers truncated (a
  * resolver asks it again over TCP, where it is counted once).
@@ -56,6 +57,11 @@ public final class DnsTraffic {
             return this.status;
         }
 
+        /** @return the token a screen and a tool key it by */
+        public @NonNull String token() {
+            return BlastString.lower(this.name());
+        }
+
         /** @return its words, resolved in the reader's locale */
         public @NonNull Microcopy label() {
             return switch (this) {
@@ -80,6 +86,14 @@ public final class DnsTraffic {
         public static @Nullable Outcome ofStatus(@NonNull String status) {
             for (Outcome each : values()) {
                 if (String.valueOf(each.status).equals(status)) return each;
+            }
+            return null;
+        }
+
+        /** @return the outcome a token names, null for none */
+        public static @Nullable Outcome forToken(@NonNull String token) {
+            for (Outcome each : values()) {
+                if (each.token().equals(token)) return each;
             }
             return null;
         }

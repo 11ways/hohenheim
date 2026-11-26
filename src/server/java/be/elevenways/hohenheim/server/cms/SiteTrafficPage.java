@@ -71,7 +71,7 @@ public final class SiteTrafficPage implements RecordTab.Rendered<Row> {
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.TRAFFIC_SCREEN, site.get(SiteModel.NAME)));
         vars.put("head", recordHead(conduit));
         vars.put("view", TrafficScreens.view(read, asked, TrafficReads.Reach.SITE,
-            CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, HohenheimSlugs.Tab.TRAFFIC), links, viewer));
+            CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, HohenheimSlugs.Tab.TRAFFIC), links, viewer, null));
         return new RenderTemplateResult(HohenheimTemplateIds.RECORD_TRAFFIC, vars);
     }
 }

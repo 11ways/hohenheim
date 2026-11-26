@@ -12,9 +12,6 @@ import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.i18n.wording.DateStyle;
-import be.elevenways.protoblast.common.i18n.wording.Reader;
-import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastCollection;
@@ -40,7 +37,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.traffic.common.StatusClass;
-import be.elevenways.zenit.traffic.common.TrafficGranularity;
 import be.elevenways.zenit.traffic.common.TrafficMeasure;
 import be.elevenways.zenit.traffic.common.TrafficTable;
 import be.elevenways.zenit.traffic.common.TrafficWindow;
@@ -53,11 +49,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -228,16 +223,20 @@ public final class TrafficReads {
      * @param query  the span read, in its steps
      * @param totals the span's totals
      * @param before the totals of the span just before, as long
-     * @param steps  requests per step, one series per status class that answered any
-     * @param times  the median and the slowest 5 percent per step, in milliseconds
-     * @param top    the table a tool asked for, null for none
-     * @param tables every table asked ({@code top} and {@code also}), in their declared order; the sites' rankings
-     *               are no table and stand in {@code sitesByRequests} and {@code sitesBySent}
+     * @param steps    requests per step, one series per status class that answered any; a zone's named by the DNS
+     *                 outcomes each class holds
+     * @param outcomes a zone's questions per step, one series per DNS outcome asked, keyed by its token and named in
+     *                 the caller's words; null for a site's read
+     * @param sent     the bytes sent per step
+     * @param times    the median and the slowest 5 percent per step, in milliseconds
+     * @param top      the table a tool asked for, null for none
+     * @param tables   every table asked ({@code top} and {@code also}), in their declared order; the sites' rankings
+     *                 are no table and stand in {@code sitesByRequests} and {@code sitesBySent}
      */
     public record Read(@NonNull TrafficQuery query, @NonNull TrafficTotals totals, @NonNull TrafficTotals before,
-                       @NonNull DataBuckets steps, @NonNull DataBuckets times, @Nullable Top top,
-                       @NonNull Map<Top, DataTable> tables, @Nullable DataBuckets sitesByRequests,
-                       @Nullable DataBuckets sitesBySent) {
+                       @NonNull DataBuckets steps, @Nullable DataBuckets outcomes, @NonNull DataBuckets sent,
+                       @NonNull DataBuckets times, @Nullable Top top, @NonNull Map<Top, DataTable> tables,
+                       @Nullable DataBuckets sitesByRequests, @Nullable DataBuckets sitesBySent) {
 
         public Read {
             EnumMap<Top, DataTable> copied = new EnumMap<>(Top.class);
@@ -341,7 +340,9 @@ public final class TrafficReads {
             asked.add(also);
         }
         TrafficReader reader = store.reader();
-        TrafficReader.Collected span = reader.collected(query, asked.stream().anyMatch(each -> each.table != null));
+        // A zone's steps are per exact outcome, which each period's statuses table holds.
+        TrafficReader.Collected span = reader.collected(query,
+            reach == Reach.ZONE || asked.stream().anyMatch(each -> each.table != null));
         if (reach == Reach.SERVER) {
             span = span.naming(siteNames(span.sources(), caller)::get);
         }
@@ -349,14 +350,19 @@ public final class TrafficReads {
         LocaleChain chain = caller != null ? caller.locales() : LocaleChain.empty();
         MessageResolver resolver = caller != null ? caller.messageResolver() : null;
         DataBuckets steps = span.series(TrafficMeasure.REQUESTS_BY_STATUS, chain, resolver);
+        DataBuckets outcomes = null;
         if (reach == Reach.ZONE) {
             steps = outcomeClasses(steps, caller);
+            outcomes = outcomeSteps(span.series(TrafficMeasure.REQUESTS_BY_STATUS_CODE, chain, resolver), caller);
         }
         Map<Top, DataTable> tables = new EnumMap<>(Top.class);
         for (Top each : asked) {
             TrafficTable table = each.table;
             if (table == null) continue;
-            TopRead listed = new TopRead(table, TOP_ROWS, each.order,
+            // A screen groups the bots among the browsers, so it lists as many clients as one read may and cuts what
+            // it shows itself.
+            int rows = screen != null && each == Top.BROWSERS ? TopRead.MAX_LIMIT : TOP_ROWS;
+            TopRead listed = new TopRead(table, rows, each.order,
                 each.order == TopRead.Order.SLOWEST ? SLOWEST_LEAST_REQUESTS : 0, each.perSite(reach));
             DataTable found = each == Top.UNSERVED_NAMES
                 ? reader.top(new TrafficQuery(Set.of(HohenheimTraffic.UNSERVED), query.from(), query.to(),
@@ -365,7 +371,8 @@ public final class TrafficReads {
             tables.put(each, each == Top.OUTCOMES ? outcomes(found, caller) : found);
         }
         boolean sites = asked.contains(Top.SITES);
-        return new Read(query, span.totals(), reader.totals(query.before()), steps,
+        return new Read(query, span.totals(), reader.totals(query.before()), steps, outcomes,
+            span.series(TrafficMeasure.BYTES_SENT, chain, resolver),
             span.series(TrafficMeasure.RESPONSE_TIME, chain, resolver), top, tables,
             sites ? span.rank(TrafficMeasure.REQUESTS, TOP_ROWS, chain, resolver) : null,
             sites ? span.rank(TrafficMeasure.BYTES_SENT, TOP_ROWS, chain, resolver) : null);
@@ -410,6 +417,21 @@ public final class TrafficReads {
         return new DataBuckets(named, steps.omitted());
     }
 
+    /** @return a zone's series per exact status, each keyed by the DNS outcome it stands for and in its words */
+    private static @NonNull DataBuckets outcomeSteps(@NonNull DataBuckets codes, @Nullable AccessContext caller) {
+        List<DataSeries> named = new ArrayList<>(codes.series().size());
+        for (DataSeries series : codes.series()) {
+            DnsTraffic.Outcome outcome = series.key() == null ? null : DnsTraffic.Outcome.ofStatus(series.key());
+            named.add(outcome == null ? series : new DataSeries(outcome.token(), words(caller, outcome.label()),
+                series.buckets(), series.currency()));
+        }
+        named.sort(Comparator.comparingInt(series -> {
+            DnsTraffic.Outcome outcome = series.key() == null ? null : DnsTraffic.Outcome.forToken(series.key());
+            return outcome == null ? Integer.MAX_VALUE : outcome.ordinal();
+        }));
+        return new DataBuckets(named, codes.omitted());
+    }
+
     /** @return a zone's statuses table, each row named by the DNS outcome its status stands for */
     private static @NonNull DataTable outcomes(@NonNull DataTable statuses, @Nullable AccessContext caller) {
         List<DataTable.Line> named = new ArrayList<>(statuses.lines().size());
@@ -438,24 +460,6 @@ public final class TrafficReads {
             case DAY -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_day");
             case WEEK -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_week");
             case MONTH -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("period_month");
-        };
-    }
-
-    /**
-     * A step's start as a chart names it: a minute by its time, an hour by its day and time, a day by its date.
-     *
-     * AIDEV-NOTE: a chart names its points by their label, so every label of a span differs: a day's span holds its
-     * first hour twice (the hour it starts inside and the same hour of the next day), so an hour names its day too.
-     * The keys are written on the office clock, the clock an OfficeZone.reader reads, so no key is shifted.
-     *
-     * @param key the step's key: its local date and time on the office clock, its local date for a day
-     */
-    public static @NonNull String stepLabel(@NonNull Reader reader, @NonNull TrafficGranularity step,
-                                            @NonNull String key) {
-        return switch (step) {
-            case MINUTE -> Wording.time(reader, LocalDateTime.parse(key).toLocalTime());
-            case HOUR -> Wording.wall(reader, LocalDateTime.parse(key), DateStyle.SHORT);
-            case DAY -> Wording.date(reader, LocalDate.parse(key), DateStyle.DAY_MONTH);
         };
     }
 

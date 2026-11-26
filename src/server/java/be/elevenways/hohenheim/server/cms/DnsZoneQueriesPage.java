@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -64,9 +65,11 @@ public final class DnsZoneQueriesPage implements RecordTab.Rendered<Row> {
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DNS_ZONE_QUERIES,
             zone.get(DnsZoneModel.ORIGIN)));
         vars.put("head", recordHead(conduit));
+        // The board's line under the tab: how many zones this server answers for, each with this tab.
         vars.put("view", TrafficScreens.view(read, asked, TrafficReads.Reach.ZONE, CmsRoutes.subpage(
             request.panelSlug(), HohenheimSlugs.DNS_ZONES, zone.get(DnsZoneModel.ID), HohenheimSlugs.Tab.QUERIES),
-            TrafficScreens.NOWHERE, viewer));
+            TrafficScreens.NOWHERE, viewer, HohenheimMicrocopy.DNS_ZONE_QUERIES.of("queries_zones_served")
+                .withArg("count", DnsZoneStore.INSTANCE.zones().size())));
         return new RenderTemplateResult(HohenheimTemplateIds.RECORD_TRAFFIC, vars);
     }
 }
