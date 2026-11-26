@@ -93,7 +93,8 @@ class NavigationTest extends HohenheimTestBase {
 
         // Regression: after a soft nav the client renders the list footer itself;
         // filtered short keys ("none" scope=cms target=range) must resolve from
-        // the browser bundle, not degrade to their raw key.
+        // the browser bundle, not degrade to their raw key. An empty list's count says
+        // nothing (zenit-cms 40153275d): its empty state is the list's one statement of it.
         page.waitForCondition(() -> page.locator(".cms-list-count").count() > 0);
         // Allow the async microcopy fill one repaint before judging.
         page.waitForCondition(() -> {
@@ -101,9 +102,12 @@ class NavigationTest extends HohenheimTestBase {
             return !text.equals("none") && !text.equals("range");
         });
         String count = page.locator(".cms-list-count").textContent().trim();
-        assertThat(count).satisfiesAnyOf(
-            t -> assertThat(t).contains("No records"),
-            t -> assertThat(t).contains("of"));
+        boolean empty = page.locator("[data-cms-empty-state='empty']").count() > 0;
+        if (empty) {
+            assertThat(count).as("an empty list's footer says nothing beside its empty state").isEmpty();
+        } else {
+            assertThat(count).as("a list's footer states its range").contains("of");
+        }
 
         // A second soft nav keeps the brand in place.
         page.locator("pl-app-sidebar a[href='/admin/apps']").click();

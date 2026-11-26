@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.fail;
 class BackupRestoreLandingTest extends HohenheimTestBase {
 
     private static final String DIALOG = ".pl-alertdialog-modal[data-open]";
-    private static final String HOST_PICK = DIALOG + " pl-field[data-path='serverId'] .pl-select-field";
+    private static final String HOST_PICK = DIALOG + " pl-field[data-path='host'] .pl-select-field";
 
     private static int hostId;
     private static int backupId;

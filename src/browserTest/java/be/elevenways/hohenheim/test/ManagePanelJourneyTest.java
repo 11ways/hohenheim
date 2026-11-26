@@ -529,7 +529,8 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .doesNotContain("sites, instances and stacks");
 
             // 7b. The command palette finds the instance list, kept out of the sidebar, under Apps in the tenant's
-            //     words ("Machines and services"), never the operator's "Instances", which the admin panel keeps.
+            //     words ("Machines and services"), never the retired "Instances"; the admin panel's own entry says
+            //     "Apps" since the words say app (515867d2a).
             AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
                 new UserPrincipal(this.tenantId, "Survival Tenant")));
             List<String> palette = PanelNavStates.sections(manage, viewer, null).stream()
@@ -545,7 +546,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             PanelEntry operator = Objects.requireNonNull(Objects.requireNonNull(
                 PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)).entryBySlug(HohenheimSlugs.INSTANCES));
             assertThat(operator.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-                .as("step 7b: the operator's panel keeps its own word").isEqualTo("Instances");
+                .as("step 7b: the operator's panel keeps its own word").isEqualTo("Apps");
 
             // 8. Databases is a row where the tenant may create one; never a door that refuses.
             assertThat(navLinks(page("/manage/dashboard")))
