@@ -58,7 +58,7 @@ class HohenheimToolSpecDriftTest extends HohenheimHttpTestBase {
         "spam_sample_set", "spam_service_power", "spam_service_set", "spam_service_test", "spam_word_set",
         "ssh_key_set", "stack_service_set", "stack_set", "stack_volumes_purge", "task_run_end", "task_run_pause",
         "template_database_set", "template_export", "template_import", "template_set", "template_variable_set",
-        "test", "traffic_read", "undo", "variable_set", "volume_set");
+        "test", "traffic_read", "tv_link_end", "tv_link_set", "undo", "variable_set", "volume_set");
 
     /** The specified tools not built yet, each with what it waits for; the list only shrinks. */
     static final Map<String, String> NOT_BUILT = Map.of(
