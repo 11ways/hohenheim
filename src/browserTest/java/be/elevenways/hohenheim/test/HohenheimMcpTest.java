@@ -543,7 +543,10 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         assertThat(enabled(siteId)).as("step 5: still disabled").isFalse();
         // Paused and resumed are one tool's argument, never two tools; leaving it out names it.
         assertThat(session.toolNames()).as("step 5: no second tool").doesNotContain("site_resume");
-        assertThat(session.call("site_pause", Map.of("code", code)).error()).as("step 5: paused left out").isTrue();
+        McpHttpSession.Answer leftOut = session.call("site_pause", Map.of("code", code));
+        assertThat(leftOut.error()).as("step 5: paused left out").isTrue();
+        assertThat(leftOut.text()).as("step 5: names it, as the schema requires it")
+            .contains("Missing required parameter(s): paused");
         McpHttpSession.Answer resumed = session.call("site_pause", Map.of("code", code, "paused", false));
         assertThat(resumed.error()).as("step 5: " + resumed.text()).isFalse();
         assertThat(enabled(siteId)).as("step 5: enabled again").isTrue();
