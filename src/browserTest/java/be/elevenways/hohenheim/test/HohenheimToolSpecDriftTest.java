@@ -61,9 +61,6 @@ class HohenheimToolSpecDriftTest extends HohenheimHttpTestBase {
 
     /** The specified tools not built yet, each with what it waits for; the list only shrinks. */
     static final Map<String, String> NOT_BUILT = Map.of(
-        "spam_client_set", "the spam service's clients carry no code (spamservice-needs.md)",
-        "spam_key_set", "the spam service's keys carry no code (spamservice-needs.md)",
-        "spam_sample_set", "the spam service's samples carry no code (spamservice-needs.md)",
         "settings_spam_set", "the spam service ships no setting declarations to derive arguments from"
             + " (spamservice-needs.md)");
 
