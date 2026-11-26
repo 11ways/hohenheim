@@ -173,8 +173,9 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
                 "more-" + fixture.tag + ".access.test", "exact", null, false);
             fixture.awaitLines(35);
             DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
-            probe.requireFlat(() -> fetched(tab(HohenheimSlugs.ADMIN, fixture.siteA)),
-                () -> fetched(tab(HohenheimSlugs.ADMIN, fixture.siteB)), "step 6: a few lines or many, one query set");
+            probe.requireFlat(() -> adminFetched(tab(HohenheimSlugs.ADMIN, fixture.siteA)),
+                () -> adminFetched(tab(HohenheimSlugs.ADMIN, fixture.siteB)),
+                "step 6: a few lines or many, one query set");
 
             // 7. A range you pick: its From and To appear at once, without a navigation and with the lines as they
             //    were; nothing is read until both hold a value, then the tab reads the range.
@@ -260,14 +261,6 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
         return CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, HohenheimSlugs.Tab.ACCESS_LOG).toUrl();
     }
 
-    private void fetched(String path) {
-        try {
-            assertThat(adminGet(path).statusCode()).as(path).isEqualTo(200);
-        } catch (Exception failed) {
-            throw new IllegalStateException(failed);
-        }
-    }
-
     private void awaitRows(String step, int count) {
         try {
             page.waitForCondition(() -> page.locator(LINE).count() == count,
@@ -278,17 +271,22 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
         assertThat(page.locator(LINE).count()).as(step).isEqualTo(count);
     }
 
-    /** Two sites behind a running proxy and an upstream, their access log in a file of the test's own. */
-    private static final class Fixture implements AutoCloseable {
-        private final Deque<Runnable> cleanUp = new ArrayDeque<>();
-        private final String tag = HohenheimMcpTest.letters();
+    /**
+     * Two sites behind a running proxy and an upstream, their access log in a file of the test's own.
+     *
+     * AIDEV-NOTE: TrafficScreensJourneyTest boots its sites through this fixture too.
+     */
+    static final class Fixture implements AutoCloseable {
+        final Deque<Runnable> cleanUp = new ArrayDeque<>();
+        final String tag = HohenheimMcpTest.letters();
         private Path log;
-        private ProxyServer proxy;
-        private int siteA;
-        private int siteB;
+        ProxyServer proxy;
+        int siteA;
+        int siteB;
+        /** Where a site of the fixture forwards: its upstream. */
+        private Map<String, Object> forward;
         /** The requests sent, so each waits for its own line. */
         private int sent;
-
         static Fixture start(String name) throws Exception {
             Fixture fixture = new Fixture();
             try {
@@ -320,25 +318,29 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             });
             upstream.start();
             this.cleanUp.push(() -> upstream.stop(0));
-            Map<String, Object> forward = Map.of("forward_host", "127.0.0.1", "forward_port",
-                upstream.getAddress().getPort());
-            this.siteA = this.site("a", forward);
-            this.siteB = this.site("b", forward);
+            this.forward = Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort());
+            this.siteA = this.site("a");
+            this.siteB = this.site("b");
             this.proxy = ProxyTestSupport.startProxy();
             this.cleanUp.push(this.proxy::stop);
         }
 
-        private int site(String letter, Map<String, Object> forward) {
+        /** @return a new site forwarding to the fixture's upstream at an address of its own */
+        int site(String letter) {
             String slug = "access-" + letter + "-" + this.tag;
             Row site = ProxyTestSupport.setupSite("hohenheim:address", "Access " + letter + " " + this.tag, slug,
-                forward);
+                this.forward);
             ProxyTestSupport.addDomain(site, hostOf(site.get(SiteModel.ID)), "exact", null, false);
             int id = site.get(SiteModel.ID);
             this.cleanUp.push(() -> HardDeletes.byId(Models.get(SiteModel.class), id));
+            if (this.proxy != null) {
+                // A site made while the proxy runs is routed once the proxy reads its routes again.
+                this.proxy.getDispatcher().reloadRoutes();
+            }
             return id;
         }
 
-        private String hostOf(int siteId) {
+        String hostOf(int siteId) {
             return "site" + siteId + "-" + this.tag + ".access.test";
         }
 

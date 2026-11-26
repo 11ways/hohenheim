@@ -1,0 +1,150 @@
+{% tag HhTraffic {
+    /* One traffic screen (TrafficScreens, TrafficView): a site's Traffic tab, a DNS zone's Queries tab or the server's
+       Traffic report. The period switch, the span shown and its Previous and Next are links, so the address always
+       says what the screen shows; then the headline figures against the span before, the charts each across the
+       screen, and the top tables two across, each row a name a person reads with its counts and, where the board
+       draws one, its share of the span's requests as a bar. A span that counted nothing says so in one line and
+       draws no chart or table. */
+    public required view: TrafficView
+
+    style {
+        display: block;
+
+        .hh-traffic-stack {
+            display: flex;
+            flex-direction: column;
+            gap: var(--pl-space-lg);
+        }
+
+        .hh-traffic-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--pl-space-sm) var(--pl-space-md);
+        }
+
+        .hh-traffic-span {
+            color: var(--pl-color-text-muted);
+        }
+
+        .hh-traffic-steps {
+            display: flex;
+            gap: var(--pl-space-sm);
+            margin-inline-start: auto;
+        }
+
+        /* A share's bar fits its narrow column beside the figures (the gauge's own track knob). */
+        .hh-traffic-share {
+            --pl-usage-bar-track: 4rem;
+        }
+
+        .hh-traffic-mono {
+            font-family: var(--pl-font-family-mono);
+        }
+    }
+
+    template {
+        <div class="hh-traffic-stack">
+            <div class="hh-traffic-bar">
+                <pl-nav orientation="horizontal" variant="segmented" label={% t("period_label", scope: "traffic_screen") %} data-hh-traffic-periods>
+                    {% each view.periods as period key period.url %}
+                    <pl-nav-item href={% period.url %} active={% period.active %}>{{ period.label }}</pl-nav-item>
+                    {% /each %}
+                </pl-nav>
+                <span class="hh-traffic-span" data-hh-traffic-span>{{ view.span }}</span>
+                <span class="hh-traffic-steps">
+                    <pl-button href={% view.previousUrl %} variant="outline" size="sm" data-hh-traffic-previous>{{ t("previous", scope: "traffic_screen") }}</pl-button>
+                    {% if view.nextUrl != null %}
+                    <pl-button href={% view.nextUrl %} variant="outline" size="sm" data-hh-traffic-next>{{ t("next", scope: "traffic_screen") }}</pl-button>
+                    {% else %}
+                    <pl-button variant="outline" size="sm" disabled data-hh-traffic-next>{{ t("next", scope: "traffic_screen") }}</pl-button>
+                    {% /if %}
+                </span>
+            </div>
+
+            <pl-grid size="sm" balanced data-hh-traffic-figures>
+                {% each view.figures as figure key figure.key %}
+                {% if figure.trend != null and figure.up %}
+                <pl-stat-card attr:data-hh-traffic-figure={% figure.key %} label={% figure.label %} value={% figure.value %}
+                              trend={% figure.trend %} trendDirection="up" description={% figure.description %}></pl-stat-card>
+                {% elseif figure.trend != null %}
+                <pl-stat-card attr:data-hh-traffic-figure={% figure.key %} label={% figure.label %} value={% figure.value %}
+                              trend={% figure.trend %} trendDirection="down" description={% figure.description %}></pl-stat-card>
+                {% else %}
+                <pl-stat-card attr:data-hh-traffic-figure={% figure.key %} label={% figure.label %} value={% figure.value %}
+                              description={% figure.description %}></pl-stat-card>
+                {% /if %}
+                {% /each %}
+            </pl-grid>
+
+            {% if view.empty != null %}
+            <pl-empty-state icon="chart-line" data-hh-traffic-empty>
+                <pl-empty-state-title>{{ view.empty }}</pl-empty-state-title>
+            </pl-empty-state>
+            {% /if %}
+
+            {% each view.charts as chart key chart.key %}
+            <pl-card attr:data-hh-traffic-chart={% chart.key %}>
+                <pl-card-header>
+                    <pl-card-title>{{ chart.title }}</pl-card-title>
+                    {% if chart.lead != null %}<pl-card-description>{{ chart.lead }}</pl-card-description>{% /if %}
+                </pl-card-header>
+                <pl-card-content>
+                    <pl-chart type={% chart.type %} stacked={% chart.stacked %} horizontal={% chart.horizontal %} legend
+                              points={% chart.points %} height={% 240.0 %} series={% chart.series %}
+                              ariaLabel={% chart.title %}></pl-chart>
+                </pl-card-content>
+            </pl-card>
+            {% /each %}
+
+            {% if view.tables %}
+            <pl-grid size="xl">
+                {% each view.tables as table key table.key %}
+                <pl-card attr:data-hh-traffic-table={% table.key %}>
+                    <pl-card-header>
+                        <pl-card-title>{{ table.title }}</pl-card-title>
+                        {% if table.lead != null %}<pl-card-description>{{ table.lead }}</pl-card-description>{% /if %}
+                    </pl-card-header>
+                    <pl-card-content>
+                        {% if table.rows %}
+                        <pl-table textSize="small" density="snug">
+                            <pl-table-header><pl-table-row>
+                                {% each table.columns as column %}
+                                {% if column.figure %}
+                                <pl-table-head columnWidth="fit" data-alignment="right">{{ column.label }}</pl-table-head>
+                                {% elseif column.share %}
+                                <pl-table-head columnWidth="xs">{{ column.label }}</pl-table-head>
+                                {% else %}
+                                <pl-table-head>{{ column.label }}</pl-table-head>
+                                {% /if %}
+                                {% /each %}
+                            </pl-table-row></pl-table-header>
+                            <pl-table-body>
+                                {% each table.rows as row key row.key %}
+                                <pl-table-row>
+                                    {% each row.cells as cell %}
+                                    {% if cell.share != null %}
+                                    <pl-table-cell><pl-usage-bar class="hh-traffic-share" variant="share" size="sm" value={% cell.share %} max={% cell.shareOf %} ariaLabel={% cell.text %}></pl-usage-bar></pl-table-cell>
+                                    {% elseif cell.figure %}
+                                    <pl-table-cell nowrap data-alignment="right">{{ cell.text }}</pl-table-cell>
+                                    {% elseif cell.href != null %}
+                                    <pl-table-cell breakAnywhere><a href={% cell.href %} class:hh-traffic-mono={% cell.mono %}>{{ cell.text }}</a></pl-table-cell>
+                                    {% else %}
+                                    <pl-table-cell breakAnywhere><span class:hh-traffic-mono={% cell.mono %}>{{ cell.text }}</span></pl-table-cell>
+                                    {% /if %}
+                                    {% /each %}
+                                </pl-table-row>
+                                {% /each %}
+                            </pl-table-body>
+                        </pl-table>
+                        {% else %}
+                        <p class="hh-traffic-span">{{ table.empty }}</p>
+                        {% /if %}
+                    </pl-card-content>
+                </pl-card>
+                {% /each %}
+            </pl-grid>
+            {% /if %}
+        </div>
+    }
+} %}

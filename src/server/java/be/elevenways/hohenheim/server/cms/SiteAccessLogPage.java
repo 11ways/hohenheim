@@ -258,6 +258,12 @@ public final class SiteAccessLogPage implements RecordTab.Rendered<Row> {
         return target;
     }
 
+    /** @return the tab's lines whose path holds this one, cut where a counted path stands an id as {@code :id} */
+    static @NonNull String pathLines(@NonNull String panel, int siteId, @NonNull String path) {
+        int id = path.indexOf(HitKeys.ID);
+        return target(panel, siteId, Map.of(PATH.getName(), id < 0 ? path : path.substring(0, id))).toUrl();
+    }
+
     /** @return the filter row as the reader left it */
     private static @NonNull AccessLogFilters filterRow(@NonNull String panel, int siteId,
                                                       @NonNull Map<String, String> filters, int page) {

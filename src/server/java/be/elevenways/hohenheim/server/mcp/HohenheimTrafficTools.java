@@ -7,11 +7,14 @@ import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolContext;
+import be.elevenways.zenit.common.data.DataBucket;
+import be.elevenways.zenit.common.data.DataBuckets;
 import be.elevenways.zenit.common.data.DataSeries;
 import be.elevenways.zenit.common.data.DataTable;
 import be.elevenways.zenit.common.data.RecordFacet;
 import be.elevenways.zenit.common.time.OfficeZone;
 import be.elevenways.zenit.traffic.common.StatusClass;
+import be.elevenways.zenit.traffic.common.TrafficTable;
 import be.elevenways.zenit.traffic.server.TrafficQuery;
 import be.elevenways.zenit.traffic.server.TrafficTotals;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -21,6 +24,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Hohenheim's hand-declared tools over a site's traffic and a zone's questions: the access log read and the counted
@@ -107,7 +111,7 @@ final class HohenheimTrafficTools {
         TrafficTotals totals = read.totals();
         response.line("span: " + local(query.from()) + " to " + local(query.to()) + " office time, per "
             + query.granularity().storageKey());
-        response.line(asked + ": " + totals.requests() + "; the span before, as long: " + read.requestsBefore());
+        response.line(asked + ": " + totals.requests() + "; the span before, as long: " + read.before().requests());
         response.line("sent: " + totals.bytesSent() + " bytes; received: " + totals.bytesReceived() + " bytes");
         response.line(askers + ": " + totals.visitors());
         List<String> classes = new ArrayList<>();
@@ -138,24 +142,52 @@ final class HohenheimTrafficTools {
             }
         }
         TrafficReads.Top top = read.top();
-        DataTable table = read.table();
+        if (top == TrafficReads.Top.SITES) {
+            ranked(response, "sites by requests", read.sitesByRequests());
+            ranked(response, "sites by bytes sent", read.sitesBySent());
+        }
+        DataTable table = top == null ? null : read.tables().get(top);
         if (top != null && table != null) {
-            boolean timed = top.table().timed();
+            TrafficTable counted = Objects.requireNonNull(top.table(), "a listed table names its engine table");
+            boolean timed = counted.timed();
+            boolean last = counted == TrafficTable.HOSTS;
             response.line("top " + top.token() + ", each its requests, bytes sent" + (timed ? ", median and slowest 5"
-                + " percent in ms" : "") + ", then its key; the last line holds every one not listed:");
+                + " percent in ms" : "") + (last ? ", when last asked" : "") + ", then its site where it names one"
+                + " and its key; the last line holds every one not listed:");
             List<String> rows = new ArrayList<>();
             for (DataTable.Line line : table.lines()) {
+                boolean other = RecordFacet.MORE_SLUG.equals(line.groups().getLast().key());
                 StringBuilder row = new StringBuilder().append(line.records()).append(' ')
                     .append(Math.round(orZero(line.value("bytes_sent").number())));
-                if (timed && !RecordFacet.MORE_SLUG.equals(line.groups().getLast().key())) {
+                if (timed && !other) {
                     row.append(' ').append(millis(line.value("median_ms").number())).append(' ')
                         .append(millis(line.value("slowest_ms").number()));
+                }
+                Double seen = line.values().containsKey("last_seen") ? line.value("last_seen").number() : null;
+                if (last && seen != null) {
+                    row.append(' ').append(local(Instant.ofEpochMilli(Math.round(seen))));
+                }
+                if (line.groups().size() > 1 && !other) {
+                    row.append(' ').append(line.groups().getFirst().label());
                 }
                 rows.add(row.append(' ').append(line.groups().getLast().label()).toString());
             }
             response.untrusted(top.token(), rows.isEmpty() ? "none" : String.join("\n", rows));
         }
         return response;
+    }
+
+    /** A ranking of sites, best first, each its value then its name, which a person gave it, as untrusted text. */
+    private static void ranked(@NonNull McpResponse response, @NonNull String what, @Nullable DataBuckets ranking) {
+        List<String> rows = new ArrayList<>();
+        if (ranking != null && !ranking.series().isEmpty()) {
+            for (DataBucket bucket : ranking.series().getFirst().buckets()) {
+                rows.add(Math.round(orZero(bucket.value())) + " " + bucket.label());
+            }
+        }
+        response.line(what + ", each its count then its site" + (ranking != null && ranking.omitted() > 0
+            ? "; " + ranking.omitted() + " more not listed" : "") + ":");
+        response.untrusted(what.replace(' ', '_'), rows.isEmpty() ? "none" : String.join("\n", rows));
     }
 
     /** @return the moment as office time to the minute, as the steps are keyed */

@@ -350,7 +350,7 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
     }
 
     /** Points the data path, and so the stores, at a folder of the test's own; the stores count again at the end. */
-    private static void countUnder(Deque<Runnable> cleanUp, String name) throws Exception {
+    static void countUnder(Deque<Runnable> cleanUp, String name) throws Exception {
         String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         cleanUp.push(() -> {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, dataPath);
@@ -454,14 +454,14 @@ class TrafficCountingJourneyTest extends HohenheimHttpTestBase {
     }
 
     /** @return the source's totals since the test began, once they hold at least this many requests */
-    private static TrafficTotals counted(String source, long requests, Instant began) {
+    static TrafficTotals counted(String source, long requests, Instant began) {
         return Poll.value(source + " counts " + requests, WAIT, () -> {
             TrafficTotals read = totalsOf(HohenheimTraffic.Counted.WEB, source, began);
             return read.requests() >= requests ? read : null;
         });
     }
 
-    private static TrafficTotals totalsOf(HohenheimTraffic.Counted counted, String source, Instant began) {
+    static TrafficTotals totalsOf(HohenheimTraffic.Counted counted, String source, Instant began) {
         TrafficStore store = Objects.requireNonNull(HohenheimTraffic.store(counted), "the stores count");
         return store.reader().totals(TrafficQuery.of(source, began.minusSeconds(60), Now.instant().plusSeconds(60),
             TrafficGranularity.MINUTE));

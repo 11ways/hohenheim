@@ -1,0 +1,13 @@
+{#- A record's traffic tab (a site's Traffic, a DNS zone's Queries): the record head, then the one traffic screen
+    (hh-traffic) the tab's read draws. -#}
+{% declare title: String %}
+{% declare head: RecordHeadState = null %}
+{% declare view: TrafficView %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <hh-traffic view={% view %}></hh-traffic>
+</section>
+{% /block %}

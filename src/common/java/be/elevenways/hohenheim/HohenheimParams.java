@@ -124,4 +124,14 @@ public final class HohenheimParams {
     public static final ParameterDefinition<String> REMOTE_RECORD =
         ParameterDefinition.builder(String.class).name("record")
             .stringResolver(value -> value).build();
+
+    /** The span a traffic screen shows: {@code hour}, {@code day}, {@code week} or {@code month}. */
+    public static final ParameterDefinition<String> TRAFFIC_PERIOD =
+        ParameterDefinition.builder(String.class).name("period")
+            .stringResolver(value -> value).build();
+
+    /** Where a traffic screen's span ends, office time to the minute ({@code 2026-11-25T14:40}); absent, now. */
+    public static final ParameterDefinition<String> TRAFFIC_UNTIL =
+        ParameterDefinition.builder(String.class).name("until")
+            .stringResolver(value -> value).build();
 }

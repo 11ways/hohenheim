@@ -201,7 +201,7 @@ public final class SiteParts {
             .actions(SiteActions.operator())
             .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
                     protectedPaths(ProtectedPathParts.admin()), redirects(SiteRedirectParts.admin()),
-                    new SiteAccessLogPage(), new SiteDevSessionsPage()))
+                    new SiteTrafficPage(), new SiteAccessLogPage(), new SiteDevSessionsPage()))
                 .withHistory().historyInStrip().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
@@ -223,7 +223,7 @@ public final class SiteParts {
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
                 ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS,
                     protectedPaths(ProtectedPathParts.manage()), redirects(SiteRedirectParts.manage()),
-                    new SiteAccessLogPage())).withContributions())
+                    new SiteTrafficPage(), new SiteAccessLogPage())).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             // The tenant's words, where the toolbar, the heading and the command palette read them: never the
             // operator's "served from this host".

@@ -203,6 +203,8 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, SpamserviceSecurityEventsResource.create(), Role.FIREWALL);
         addIf(peers, SpamserviceWordsResource.create(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
+        // Every site's counted traffic at once, the server-wide report the proxy's counting feeds.
+        addIf(peers, new TrafficReportPage(), Role.PROXY);
         PanelEntry activity = AdminActivityResource.admin();
         peers.add(activity);
         // Where a platform alert lands with nothing configured: every administrator's

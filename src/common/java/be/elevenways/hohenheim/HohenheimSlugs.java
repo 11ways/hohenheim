@@ -91,6 +91,8 @@ public final class HohenheimSlugs {
     public static final String STACK_FILES = "stack-files";
     public static final String STACK_SERVICES = "stack-services";
     public static final String STACKS = "stacks";
+    /** The server's Traffic report: every site's requests at once. */
+    public static final String TRAFFIC = "traffic";
 
     private HohenheimSlugs() {
     }
@@ -132,6 +134,7 @@ public final class HohenheimSlugs {
         public static final String MEMBERS = "members";
         public static final String MIGRATE = "migrate";
         public static final String PROVISIONING = "provisioning";
+        public static final String QUERIES = "queries";
         public static final String RECORDS = "records";
         public static final String RESTORE = "restore";
         public static final String RULES = "rules";
@@ -140,6 +143,7 @@ public final class HohenheimSlugs {
         public static final String SHELL = "shell";
         public static final String STATS = "stats";
         public static final String STEPS = "steps";
+        public static final String TRAFFIC = "traffic";
         public static final String VARIABLES = "variables";
         public static final String VOLUMES = "volumes";
         public static final String ZONEFILE = "zonefile";

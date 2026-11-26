@@ -331,6 +331,15 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
         return httpGet(path, sessionToken);
     }
 
+    /** Reads a page as the harness admin and requires it answered, for a query count's unit of work. */
+    protected void adminFetched(String path) {
+        try {
+            assertThat(adminGet(path).statusCode()).as(path).isEqualTo(200);
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+        }
+    }
+
     /** The {@code ?q=} part narrowing a list to a rule expression; a bare word is no expression and narrows nothing. */
     protected static String listQuery(String rule) {
         return "?q=" + URLEncoder.encode(rule, StandardCharsets.UTF_8);

@@ -106,6 +106,18 @@ public final class HohenheimTraffic {
         return siteId > 0 ? String.valueOf(siteId) : UNSERVED;
     }
 
+    /** @return the site a web source names, null for {@link #UNSERVED} and a key this build does not write */
+    public static @Nullable Integer siteOf(@NonNull String source) {
+        if (UNSERVED.equals(source)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(source);
+        } catch (NumberFormatException foreign) {
+            return null;
+        }
+    }
+
     /** @return the source key of a DNS zone's queries */
     public static @NonNull String zoneSource(int zoneId) {
         return String.valueOf(zoneId);
