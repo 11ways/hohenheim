@@ -262,15 +262,17 @@ class AppImageFollowersTest {
             assertThat(trips(() -> AppImageFollowers.converge(lone)))
                 .as("step 1: an app nobody follows costs one read").isEqualTo(1);
 
-            // 2. One container or three: the same reads for the step line and the overview's version check.
-            int few = trips(() -> AppImageFollowers.stepLine(one));
-            int many = trips(() -> AppImageFollowers.stepLine(three));
-            assertThat(many).as("step 2: the step line reads flat").isEqualTo(few);
-            int fewOverview = trips(() -> AppImageFollowers.olderVersionAmong(one,
-                AppImageFollowers.followersAmong(List.of(one)).get(one)));
-            int manyOverview = trips(() -> AppImageFollowers.olderVersionAmong(
-                three, AppImageFollowers.followersAmong(List.of(three)).get(three)));
-            assertThat(manyOverview).as("step 2: the overview's reads are flat").isEqualTo(fewOverview);
+            // 2. One container or three: the same statements for the step line and the overview's version check,
+            //    each counted warm as the framework's flat-count measure takes it: the first read of a fresh app
+            //    fills what every later one reuses, a cost no container adds.
+            DatasourceProbe probe = DatasourceProbe.on(datasource);
+            probe.requireFlat(() -> AppImageFollowers.stepLine(one), () -> AppImageFollowers.stepLine(three),
+                "step 2: the step line reads flat");
+            probe.requireFlat(
+                () -> AppImageFollowers.olderVersionAmong(one, AppImageFollowers.followersAmong(List.of(one)).get(one)),
+                () -> AppImageFollowers.olderVersionAmong(three,
+                    AppImageFollowers.followersAmong(List.of(three)).get(three)),
+                "step 2: the overview's reads are flat");
         });
     }
 
