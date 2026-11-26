@@ -86,18 +86,17 @@ class DatabaseBackupAttentionTest {
             assertThat(raised()).as("step 4: stale")
                 .containsExactly("database_backup_stale warning /admin/databases/" + shop + "/page/backups");
 
-            // 5. Flat reads: three times the databases, the same round trips.
+            // 5. Flat reads: three times the databases, the same statements, each count taken warm (the framework's
+            //    flat-count measure, which names the statements of both when they differ).
             DatasourceProbe probe = DatasourceProbe.on(datasource);
-            probe.reset();
             collect();
-            int few = probe.roundTrips();
+            DatasourceProbe.Statements few = probe.statementsOf(DatabaseBackupAttentionTest::collect);
             for (int i = 0; i < 4; i++) {
                 int more = database("attn-dump-more-" + i, false, InstanceModel.STATUS_RUNNING);
                 dump(more, BackupStatus.FAILED, "target refused");
             }
-            probe.reset();
             collect();
-            assertThat(probe.roundTrips()).as("step 5: flat as databases grow").isEqualTo(few);
+            few.requireFlat(probe.statementsOf(DatabaseBackupAttentionTest::collect), "step 5: flat as databases grow");
         });
     }
 
