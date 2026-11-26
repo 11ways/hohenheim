@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.data.DataBuckets;
 import be.elevenways.zenit.common.data.DataTable;
@@ -91,6 +92,11 @@ public final class TrafficReads {
         /** @return the engine's table it lists */
         public @NonNull TrafficTable table() {
             return this.table;
+        }
+
+        /** @return its words: a site's table's own heading, a zone's in a zone's words (names, not pages) */
+        public @NonNull Microcopy label() {
+            return this.zone ? HohenheimMicrocopy.TRAFFIC_READ.of("top_" + this.token) : this.table.label();
         }
 
         /** @return the member a token spells among a site's or a zone's, null for none (fail closed) */
@@ -237,7 +243,8 @@ public final class TrafficReads {
         EnumField.Builder builder = EnumField.builder("period").help(HohenheimMicrocopy.HELP.of("traffic_period"))
             .defaultValue(TrafficWindow.DAY.storageKey());
         for (TrafficWindow each : TrafficWindow.values()) {
-            builder.value(each.storageKey(), each.storageKey());
+            builder.value(each.storageKey(), each.storageKey(),
+                HohenheimMicrocopy.TRAFFIC_READ.of("period_" + each.storageKey()));
         }
         return builder.build();
     }
@@ -246,7 +253,7 @@ public final class TrafficReads {
     private static @NonNull EnumField topField(boolean zone, @NonNull String help) {
         EnumField.Builder builder = EnumField.builder("top").help(HohenheimMicrocopy.HELP.of(help));
         for (Top each : Top.values()) {
-            if (each.zone == zone) builder.value(each.token(), each.token());
+            if (each.zone == zone) builder.value(each.token(), each.token(), each.label());
         }
         return builder.build();
     }

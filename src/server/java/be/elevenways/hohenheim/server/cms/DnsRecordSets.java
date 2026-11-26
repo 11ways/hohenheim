@@ -194,7 +194,9 @@ public final class DnsRecordSets {
     /** @return the record types, as the record form offers them */
     private static @NonNull EnumField typeField() {
         EnumField.Builder type = EnumField.builder(TYPE).help(HohenheimMicrocopy.HELP.of("dns_records_list_type"));
-        for (String each : DnsRecordModel.ALL_TYPES) type.value(each, each);
+        for (EnumField.EnumValue each : DnsRecordModel.TYPE.getValues().values()) {
+            type.value(each.getKey(), Objects.requireNonNull(each.getMicrocopy(), "every record type is worded"));
+        }
         return type.build();
     }
 

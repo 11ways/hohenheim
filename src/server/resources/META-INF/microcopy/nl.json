@@ -21160,6 +21160,13 @@
   "traffic_until": {"text": "Wanneer de periode eindigt, in kantoortijd; weggelaten nu.", "scope": "help"},
   "traffic_top_site": {"text": "Een tabel naast de totalen: pages (id's samengenomen als :id), refused_pages (beantwoord met 4xx), referrers, browsers, statuses of visitors (adressen volledig).", "scope": "help"},
   "traffic_top_zone": {"text": "Een tabel naast de totalen: names (gevraagde namen met hun type), missing_names (naam bestaat niet of geweigerd) of resolvers.", "scope": "help"},
+  "period_hour": {"text": "Het laatste uur", "scope": "traffic_read"},
+  "period_day": {"text": "De laatste dag", "scope": "traffic_read"},
+  "period_week": {"text": "De laatste week", "scope": "traffic_read"},
+  "period_month": {"text": "De laatste maand", "scope": "traffic_read"},
+  "top_names": {"text": "Gevraagde namen", "scope": "traffic_read"},
+  "top_missing_names": {"text": "Niet gevonden of geweigerde namen", "scope": "traffic_read"},
+  "top_resolvers": {"text": "Resolvers die vroegen", "scope": "traffic_read"},
   "outside_log_rotation": [
     {"text": "Een ander programma roteert {$file} ook", "scope": "attention_title"},
     {"text": "Hohenheim roteert dit logbestand zelf per dag, en {$copy} ernaast toont een tweede rotatie: de regels die dat programma wegkopieert, komen nooit in een dag die het tabblad Toegangslog leest. Verwijder {$rule} op de machine waarop deze Hohenheim draait.", "scope": "attention_detail"}

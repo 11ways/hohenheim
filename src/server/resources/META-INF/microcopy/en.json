@@ -21160,6 +21160,13 @@
   "traffic_until": {"text": "When the span ends, in office time; left out, now.", "scope": "help"},
   "traffic_top_site": {"text": "One table beside the totals: pages (ids grouped as :id), refused_pages (answered 4xx), referrers, browsers, statuses or visitors (addresses in full).", "scope": "help"},
   "traffic_top_zone": {"text": "One table beside the totals: names asked with their type, missing_names (no such name or refused) or resolvers.", "scope": "help"},
+  "period_hour": {"text": "The last hour", "scope": "traffic_read"},
+  "period_day": {"text": "The last day", "scope": "traffic_read"},
+  "period_week": {"text": "The last week", "scope": "traffic_read"},
+  "period_month": {"text": "The last month", "scope": "traffic_read"},
+  "top_names": {"text": "Names asked for", "scope": "traffic_read"},
+  "top_missing_names": {"text": "Names not found or refused", "scope": "traffic_read"},
+  "top_resolvers": {"text": "Resolvers that asked", "scope": "traffic_read"},
   "outside_log_rotation": [
     {"text": "Another program also rotates {$file}", "scope": "attention_title"},
     {"text": "Hohenheim rotates this log by day itself, and {$copy} beside it shows a second rotation: the lines that program copies away never reach a day the Access log tab reads. Remove {$rule} on the machine this Hohenheim runs on.", "scope": "attention_detail"}
