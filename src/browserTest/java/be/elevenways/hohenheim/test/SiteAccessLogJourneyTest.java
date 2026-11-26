@@ -104,7 +104,7 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-access-log-tab.png"))
                 .setFullPage(true));
 
-            // 1b. The long path stands on one line in the free width, well over 200 px beside the panel's rail at
+            // 1b. The long path stands on one line in the free width, at least 350 px beside the panel's rail at
             //     1280 px, cut by an ellipsis, whole in its title and its text: its row is as tall as a short path's.
             String longPath = LINE + ":has([title='" + LONG_PATH + "'])";
             assertThat(page.locator(longPath + " [data-hh-access-log-path]").textContent().trim())
@@ -115,8 +115,18 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             assertThat(page.locator(longPath).boundingBox().height).as("step 1b: one line tall")
                 .isCloseTo(page.locator(LINE + ":has([title='/ok'])").boundingBox().height,
                     offset(1.0));
-            assertThat(page.locator(longPath + " [data-hh-access-log-path]").boundingBox().width)
-                .as("step 1b: the path has room").isGreaterThan(220.0);
+            double pathWidth = page.locator(longPath + " [data-hh-access-log-path]").boundingBox().width;
+            assertThat(pathWidth).as("step 1b: the path has room; the columns: %s", page.locator("pl-table-head")
+                .evaluateAll("heads => heads.map(head => head.textContent.trim() + ' '"
+                    + " + Math.round(head.getBoundingClientRect().width)).join(', ')")).isGreaterThanOrEqualTo(350.0);
+            // The widest IPv4 address, in the visitor's own face, fits the column on one line.
+            assertThat((Boolean) page.locator(LINE + " [data-hh-access-log-visitor]").first().evaluate("cell => {"
+                + " const face = getComputedStyle(cell.querySelector('span'));"
+                + " const pen = document.createElement('canvas').getContext('2d'); pen.font = face.font;"
+                + " const style = getComputedStyle(cell); const room = cell.clientWidth"
+                + " - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);"
+                + " return pen.measureText('255.255.255.255').width <= room + 0.5; }"))
+                .as("step 1c: the widest IPv4 address fits its column on one line").isTrue();
 
             // 1c. A visitor's address shows whole on one line of its column, the referrer only the host the visitor
             //     came from, and the "Time taken" head stands on one line as the others do.
