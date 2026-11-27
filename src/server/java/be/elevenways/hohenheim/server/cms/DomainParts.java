@@ -168,7 +168,10 @@ public final class DomainParts {
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("site_domain"))
             .scope(ROWS)
-            .form(form(adminFormSpec(HohenheimSlugs.ADMIN), HohenheimSlugs.ADMIN))
+            .form(form(adminFormSpec(HohenheimSlugs.ADMIN), HohenheimSlugs.ADMIN,
+                AddressWrites.HttpsReader.OPERATOR))
+            // The operator's create orders the new address's certificate as its HTTPS choice says, once committed.
+            .writes(ResourceMutations.rows().createAround(AddressWrites::created).update().delete().build())
             // Requesting a certificate stays installation administration (an issued certificate is authority over a
             // name), so only the admin twin offers it.
             .actions(List.of(CertificateOperations.requestForDomainAction(), checkReachAction()))
@@ -190,11 +193,13 @@ public final class DomainParts {
         // A Domains cluster member, shown while the tenant may read an address.
         return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
                 HohenheimAccess::readsAnyAddress)
-            .form(form(manageFormSpec(HohenheimSlugs.MANAGE), HohenheimSlugs.MANAGE))
+            .form(form(manageFormSpec(HohenheimSlugs.MANAGE), HohenheimSlugs.MANAGE,
+                AddressWrites.HttpsReader.DELEGATED))
+            .writes(ResourceMutations.rows().create().update().delete().build())
             .build();
     }
 
-    /** The entry, list, reads, writes, authority and parent both twins share. */
+    /** The entry, list, reads, authority and parent both twins share; each declares its own writes. */
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         return PanelResource.builder(id, HohenheimSlugs.DOMAINS, SUBJECT)
             .label(HohenheimMicrocopy.SITE_DOMAIN.of("plural"))
@@ -208,7 +213,6 @@ public final class DomainParts {
             // The HTTPS cell of a page of addresses: their sites, the working names and the certificate rows are read
             // once for the page (its computed cell is the one-record read).
             .reads(ResourceReads.rows().pageBatch(DomainParts::certificateCells))
-            .writes(ResourceMutations.rows().create().update().delete().build())
             .authority(SiteParts.childAuthority(SiteDomainModel.SITE_ID));
     }
 
@@ -491,8 +495,10 @@ public final class DomainParts {
      * both ask the one rule, SiteDomainModel.fixedTlsSwitches.
      *
      * @param panelSlug the panel the twin is placed in, whose own site entry the preview reads its site through
+     * @param reader    who the created toast says what HTTPS gives the new address to
      */
-    private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec, @NonNull String panelSlug) {
+    private static @NonNull ResourceForm<Row> form(@NonNull FormSpec spec, @NonNull String panelSlug,
+                                                   AddressWrites.@NonNull HttpsReader reader) {
         return ResourceForm.<Row>of(spec)
             .createDefaults((access, panel) -> createDefaults(spec, access, panel))
             .bindings(List.of(switchAccess(SiteDomainModel.FORCE_SSL, panelSlug),
@@ -502,6 +508,7 @@ public final class DomainParts {
             .inlineEditable(SiteDomainModel.FORCE_SSL, SiteDomainModel.HSTS_ENABLED,
                 SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
             .lead(DomainParts::lead)
+            .createdToast(address -> AddressWrites.added(address, reader))
             .build();
     }
 
@@ -656,6 +663,7 @@ public final class DomainParts {
             .add(Select.of(SiteDomainModel.LISTEN_ON)
                 .options(OptionSource.dynamic(ctx -> listenOnOptions()))
                 .build())
+            .add(AddressWrites.HTTPS)
             .add(tlsSwitch(SiteDomainModel.FORCE_SSL, panelSlug))
             .add(RelationPick.of(SiteDomainModel.CERTIFICATE_ID, CertificateModel.MODEL_ID).build())
             .add(SiteDomainModel.HSTS_ENABLED)
@@ -670,6 +678,7 @@ public final class DomainParts {
                 SiteDomainModel.STRIP_PATH.getInputName(),
                 SiteDomainModel.LISTEN_ON.getInputName())))
             .section(HohenheimFormSections.open(HohenheimFormSections.ADDRESS_HTTPS, List.of(
+                AddressWrites.HTTPS.getInputName(),
                 SiteDomainModel.FORCE_SSL.getInputName(),
                 SiteDomainModel.CERTIFICATE_ID.getInputName(),
                 SiteDomainModel.HSTS_ENABLED.getInputName(),

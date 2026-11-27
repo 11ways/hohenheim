@@ -175,10 +175,17 @@ public final class FakeSpamservice implements AutoCloseable {
         }
     }
 
-    /** A client's create, read by id or code, and change; its keys' create under it, by its id or code. */
+    /**
+     * A client's create, read by id or code, and change; its keys' create under it, by its id or code; the clients'
+     * and a client's keys' lists, one page of every record.
+     */
     private void clients(HttpExchange exchange) throws IOException {
         List<String> path = segments(exchange, "/v1/manage/clients");
         String method = exchange.getRequestMethod();
+        if (path.isEmpty() && "GET".equals(method)) {
+            page(exchange, List.copyOf(this.clients.values()));
+            return;
+        }
         if (path.isEmpty() && "POST".equals(method)) {
             String id = UUID.randomUUID().toString();
             Map<String, Object> client = new LinkedHashMap<>();
@@ -196,6 +203,9 @@ public final class FakeSpamservice implements AutoCloseable {
         Map<String, Object> client = path.isEmpty() ? null : named(this.clients, path.getFirst());
         if (client == null) {
             answer(exchange, 404, Map.of("error", Map.of("code", "client_not_found", "message", "No such client")));
+        } else if (path.size() == 2 && "keys".equals(path.get(1)) && "GET".equals(method)) {
+            page(exchange, this.keys.values().stream().filter(key -> client.get("id").equals(key.get("client_id")))
+                .toList());
         } else if (path.size() == 1 && "GET".equals(method)) {
             answer(exchange, 200, client);
         } else if (path.size() == 1 && "PUT".equals(method)) {
@@ -244,9 +254,15 @@ public final class FakeSpamservice implements AutoCloseable {
         answer(exchange, 200, key);
     }
 
-    /** A sample's read by id or code, its verdicts and its rescore, which a confirmed sample refuses. */
+    /** A sample's read by id or code, its verdicts and its rescore, which a confirmed sample refuses; their list. */
     private void samples(HttpExchange exchange) throws IOException {
         List<String> path = segments(exchange, "/v1/manage/samples");
+        if (path.isEmpty() && "GET".equals(exchange.getRequestMethod())) {
+            String owner = query(exchange).get("client_id");
+            page(exchange, this.samples.values().stream().filter(sample -> owner == null || owner.isEmpty()
+                || owner.equals(sample.get("client_id"))).toList());
+            return;
+        }
         Map<String, Object> sample = path.isEmpty() ? null : named(this.samples, path.getFirst());
         if (sample == null) {
             answer(exchange, 404, Map.of("error", Map.of("code", "sample_not_found", "message", "No such sample")));
@@ -280,6 +296,12 @@ public final class FakeSpamservice implements AutoCloseable {
         detail.put("properties", List.of());
         detail.put("breakdown", List.of());
         answer(exchange, 200, detail);
+    }
+
+    /** Answers every record as the one page of a list. */
+    private static void page(HttpExchange exchange, List<Map<String, Object>> records) throws IOException {
+        answer(exchange, 200, Map.of("items", records, "page", 1, "page_size", Math.max(1, records.size()),
+            "total", records.size()));
     }
 
     /** Writes a client write's settings over the client, at its next revision. */

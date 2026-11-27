@@ -186,6 +186,30 @@ class HohenheimSpamRecordToolsTest extends HohenheimHttpTestBase {
             assertThat(outsider.call("read", Map.of("codes", List.of(client))).error())
                 .as("step 7a: no administrator, nothing read").isTrue();
 
+            // 7b. The one list lists each kind from the service, by code: a client's keys by of, never a key's
+            //     value; describe says the calls acting on each; a person who is no administrator lists none.
+            McpHttpSession.Answer clients = admin.call("list", Map.of("kind", "spam_client"));
+            assertThat(clients.error()).as("step 7b: " + clients.text()).isFalse();
+            assertThat(clients.text()).as("step 7b: the client by its code").contains(client).contains("mail " + tag);
+            McpHttpSession.Answer keys = admin.call("list", Map.of("kind", "spam_key", "of", client));
+            assertThat(keys.error()).as("step 7b: " + keys.text()).isFalse();
+            assertThat(keys.text()).as("step 7b: its keys, never their values").contains(keyCode).contains("renamed")
+                .contains("spam_client: " + client).doesNotContain(raw).doesNotContain(adopted);
+            McpHttpSession.Answer orphaned = admin.call("list", Map.of("kind", "spam_key"));
+            assertThat(orphaned.error()).as("step 7b: keys of no client " + orphaned.text()).isTrue();
+            assertThat(orphaned.text()).as("step 7b: names of").contains("Give of: the code of the spam client");
+            McpHttpSession.Answer samples = admin.call("list", Map.of("kind", "spam_sample"));
+            assertThat(samples.text()).as("step 7b: the samples").contains(first).contains(second)
+                .contains("203.0.113.8");
+            assertThat(admin.call("describe", Map.of("code", client)).text()).as("step 7b: describe a client")
+                .contains("spam_client_set code=" + client);
+            assertThat(admin.call("describe", Map.of("code", keyCode)).text()).as("step 7b: describe a key")
+                .contains("spam_key_set code=" + keyCode);
+            assertThat(admin.call("describe", Map.of("code", "SPC999")).error()).as("step 7b: describe nothing")
+                .isTrue();
+            assertThat(outsider.call("list", Map.of("kind", "spam_client")).error())
+                .as("step 7b: no administrator, nothing listed").isTrue();
+
             // 8. A person who is no administrator changes none of them.
             McpHttpSession person = HohenheimMcpTest.presetSession(server, endpoint,
                 user("mcp-spam-records-" + tag + "@surface.test", "Mcp Spam Records"), "Mcp Spam Records");
@@ -207,6 +231,9 @@ class HohenheimSpamRecordToolsTest extends HohenheimHttpTestBase {
         assertThat(unread.error()).as("step 9: " + unread.text()).isTrue();
         assertThat(unread.text()).as("step 9: the read too, never as a record naming nothing")
             .doesNotContain("Nothing here is named");
+        McpHttpSession.Answer unlisted = admin.call("list", Map.of("kind", "spam_client"));
+        assertThat(unlisted.error()).as("step 9: the list too " + unlisted.text()).isTrue();
+        assertThat(unlisted.text()).as("step 9: in the spam tools' words").doesNotContain("Nothing here is named");
     }
 
     /** @return the record the fake service holds under this code */

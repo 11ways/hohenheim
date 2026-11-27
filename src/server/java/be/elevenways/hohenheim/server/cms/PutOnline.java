@@ -118,9 +118,12 @@ public final class PutOnline {
         .placeholder("shop.example.com")
         .build();
 
+    /** The HTTPS step's heading for its certificate choice, which an address's own create form reads too. */
+    static final Microcopy CERTIFICATE_LABEL = HohenheimMicrocopy.PUT_ONLINE.of("certificate");
+
     /** The certificate card the step opens on: Automatic, the choice that needs nothing more from the operator. */
     public static final StringField HTTPS = StringField.builder("https")
-        .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).defaultValue(HTTPS_AUTOMATIC).build();
+        .label(CERTIFICATE_LABEL).defaultValue(HTTPS_AUTOMATIC).build();
 
     /**
      * The access list the new website follows, from the lists Hohenheim already has (their IP/CIDR rules and HTTP

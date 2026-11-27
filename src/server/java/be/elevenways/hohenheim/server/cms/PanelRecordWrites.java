@@ -268,7 +268,6 @@ public final class PanelRecordWrites {
     private final List<FormEntry> alsoEntries;
     private final @Nullable Also also;
     private final @Nullable AlsoCreated alsoCreated;
-    private final List<FormEntry> createEntries;
     private final List<FormEntry> fillEntries;
     private final @Nullable Fill fill;
     private final @Nullable Operation<Void, OperationInput.Values, Integer> create;
@@ -288,7 +287,6 @@ public final class PanelRecordWrites {
         this.alsoEntries = List.copyOf(builder.alsoEntries);
         this.also = builder.also;
         this.alsoCreated = builder.alsoCreated;
-        this.createEntries = List.copyOf(builder.createEntries);
         this.fillEntries = List.copyOf(builder.fillEntries);
         this.fill = builder.fill;
         this.keyedUnder = builder.keyedUnder;
@@ -507,7 +505,6 @@ public final class PanelRecordWrites {
             for (FormEntry entry : this.alsoEntries) form.add(entry);
         }
         if (creating) {
-            for (FormEntry entry : this.createEntries) form.add(entry);
             for (FormEntry entry : this.fillEntries) form.add(entry);
         }
         return form.build();
@@ -631,13 +628,8 @@ public final class PanelRecordWrites {
         for (FormEntry entry : this.alsoEntries) {
             if (input.get(entry.name()) != null) handled.add(entry.name());
         }
-        for (FormEntry entry : this.createEntries) {
-            if (input.get(entry.name()) != null) handled.add(entry.name());
-        }
-        // Judged before the record is written: a create is no transaction of its own. A create's own entries are
-        // judged on every create, so their writer gives an entry left out its default.
-        @Nullable Consumer<Integer> after = this.alsoCreated == null
-            || (handled.isEmpty() && this.createEntries.isEmpty()) ? null
+        // Judged before the record is written: a create is no transaction of its own.
+        @Nullable Consumer<Integer> after = handled.isEmpty() || this.alsoCreated == null ? null
             : this.alsoCreated.judge(input, handled, caller);
         Panel panel = panelOf(caller);
         PanelResource<Row> resource = offering(this.resource(panel), ResourceVerb.CREATE);
@@ -866,7 +858,6 @@ public final class PanelRecordWrites {
         private final List<FormEntry> alsoEntries = new ArrayList<>();
         private @Nullable Also also;
         private @Nullable AlsoCreated alsoCreated;
-        private final List<FormEntry> createEntries = new ArrayList<>();
         private final List<FormEntry> fillEntries = new ArrayList<>();
         private @Nullable Fill fill;
         private @Nullable Field<?, ?> container;
@@ -1043,22 +1034,6 @@ public final class PanelRecordWrites {
 
         /** Declares that a create takes the {@link #also} entries too, the writer handling them once it is created. */
         public @NonNull Builder alsoOnCreate(@NonNull AlsoCreated writer) {
-            this.alsoCreated = writer;
-            return this;
-        }
-
-        /**
-         * Declares entries only a create takes, which the writer handles once the record is created; it is judged on
-         * every create, an entry the call left out given its default by the writer.
-         *
-         * @throws IllegalStateException when a writer for creates is declared already
-         */
-        public @NonNull Builder alsoOnCreateOnly(@NonNull List<? extends FormEntry> entries,
-                                                 @NonNull AlsoCreated writer) {
-            if (this.alsoCreated != null) {
-                throw new IllegalStateException(this.word + " declares a writer for creates twice");
-            }
-            this.createEntries.addAll(entries);
             this.alsoCreated = writer;
             return this;
         }

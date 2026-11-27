@@ -222,7 +222,8 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         McpHostServer server = Objects.requireNonNull(McpHostServers.get(HohenheimMcpModule.SERVER_NAME));
         assertThat(HohenheimMcpModule.tools()).as("step 1: the boot module built the tools").isNotNull();
         List<String> uncovered = McpCoverage.uncovered("hohenheim", HohenheimMcpModule.tools(),
-                Objects.requireNonNull(HohenheimMcpModule.declared())).stream()
+                Objects.requireNonNull(HohenheimMcpModule.declared()),
+                Objects.requireNonNull(HohenheimMcpModule.spamLists())).stream()
             .map(operation -> operation.id().toString()).sorted().toList();
         assertThat(uncovered).as("step 1: operations no tool places and none keeps from assistants")
             .containsExactly("hohenheim:generate_instance_secret", "hohenheim:list_instance_variables",
