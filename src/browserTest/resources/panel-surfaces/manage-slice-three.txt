@@ -1711,13 +1711,14 @@ control CREATE%20match at=2 kind=zenitforms:form/select input=select required=fa
 control CREATE%20path at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20force_https at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
-control CREATE%20hsts at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20hsts_subdomains at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20exclude_from_automatic_certificates at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20request_headers at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control CREATE%20response_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20https at=6 kind=zenitforms:form/select input=select required=false readonly=false options=automatic,later binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20force_https at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20certificate_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20hsts at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20hsts_subdomains at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20exclude_from_automatic_certificates at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20request_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20response_headers at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 
 case admin.domains.operator.prefill admin domains operator v2
 admission - verdict=admitted
@@ -1740,13 +1741,14 @@ control CREATE%20match at=2 kind=zenitforms:form/select input=select required=fa
 control CREATE%20path at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20force_https at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
-control CREATE%20hsts at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20hsts_subdomains at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20exclude_from_automatic_certificates at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20request_headers at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control CREATE%20response_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20https at=6 kind=zenitforms:form/select input=select required=false readonly=false options=automatic,later binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20force_https at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20certificate_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20hsts at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20hsts_subdomains at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20exclude_from_automatic_certificates at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20request_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20response_headers at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 
 case admin.domains.operator.sel admin domains operator v2
 admission - verdict=admitted
@@ -1769,13 +1771,14 @@ control CREATE%20match at=2 kind=zenitforms:form/select input=select required=fa
 control CREATE%20path at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20force_https at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
-control CREATE%20hsts at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20hsts_subdomains at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20exclude_from_automatic_certificates at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20request_headers at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control CREATE%20response_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20https at=6 kind=zenitforms:form/select input=select required=false readonly=false options=automatic,later binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20force_https at=7 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20certificate_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20hsts at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20hsts_subdomains at=10 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20exclude_from_automatic_certificates at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20request_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control CREATE%20response_headers at=13 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 
 case admin.instance-templates.operator.sel admin instance-templates operator v2
 admission - verdict=admitted

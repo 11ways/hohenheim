@@ -89,7 +89,8 @@ class RoutingProblemsTest {
 
         // A site whose access list holds an ip_deny rule stored in a spelling this build's
         // parser refuses (an older parser accepted it): the site takes the list in a save while the rule is
-        // still valid, then the rule's data is written past validation like the rest.
+        // still valid, then the rule's data is stored raw like the rest (its data schema now holds encrypted kinds,
+        // so the model refuses any data write it cannot seal).
         Row guarded = setupSite("hohenheim:redirect", "Problems Broken Rule", "problems-broken-rule",
             Map.of("target_url", "https://example.com/"));
         addDomain(guarded, "broken-rule.problems.test", "exact", null, false);
@@ -106,11 +107,8 @@ class RoutingProblemsTest {
         Row guardedSite = siteModel.findById(guarded.get(SiteModel.ID));
         guardedSite.set(SiteModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
         siteModel.save(guardedSite);
-        Models.get(AccessRuleModel.class).find()
-            .where(AccessRuleModel.ID.eq(denyRule.get(AccessRuleModel.ID)))
-            .assign(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "1.2.3.4::1")))
-            .bypassBehaviours()
-            .updateAll();
+        StaleSiteRows.accessRuleData(denyRule.get(AccessRuleModel.ID),
+            new LinkedHashMap<>(Map.of("network", "1.2.3.4::1")));
 
         proxy = startProxy();
         int port = httpPort(proxy);
