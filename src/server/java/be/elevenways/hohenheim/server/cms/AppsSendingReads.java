@@ -75,7 +75,8 @@ public final class AppsSendingReads {
     /** The picture of what one ask shows, re-read whenever the hosts were read again. */
     public static final LiveRead<String, AppsSendingView> PART =
         LiveRead.of(HohenheimIds.id("apps_sending"), String.class, AppsSendingView.class)
-            .heard(asked -> List.of(LiveFeed.of(access -> mayWatch(access, asked), AppDestinations.TOPIC)));
+            .heard(asked -> List.of(LiveFeed.of(access -> mayWatch(access, asked), AppDestinations.TOPIC)))
+            .admittingLinkBearers();
 
     /**
      * Who a read is for: the apps it may show, and whose names it may say.
