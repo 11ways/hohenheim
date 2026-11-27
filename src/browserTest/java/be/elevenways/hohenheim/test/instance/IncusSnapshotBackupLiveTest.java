@@ -379,6 +379,9 @@ class IncusSnapshotBackupLiveTest {
                     @Override public boolean exists(String storeKey) throws IOException {
                         return real.exists(storeKey);
                     }
+                    @Override public long usableBytes() throws IOException {
+                        return real.usableBytes();
+                    }
                     @Override public void delete(String storeKey) throws IOException {
                         real.delete(storeKey);
                     }

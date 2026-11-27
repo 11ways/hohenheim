@@ -104,13 +104,13 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in));
 
-    /** Protected paths; tenants only those of the sites they manage. */
-    public static final RowScope PROTECTED_PATHS = RowScope.perPrincipal(
+    /** Protected paths of live sites; tenants only those of the sites they manage. */
+    public static final RowScope PROTECTED_PATHS = ProtectedPathParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(ProtectedPathModel.class),
             ProtectedPathModel.SITE_ID::in));
 
-    /** Site redirects; tenants only those of the sites they manage. */
-    public static final RowScope REDIRECTS = RowScope.perPrincipal(
+    /** Redirects of live sites; tenants only those of the sites they manage. */
+    public static final RowScope REDIRECTS = SiteRedirectParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteRedirectModel.class),
             SiteRedirectModel.SITE_ID::in));
 

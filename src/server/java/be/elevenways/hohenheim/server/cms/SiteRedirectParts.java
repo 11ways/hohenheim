@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -44,12 +45,16 @@ public final class SiteRedirectParts {
     public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("path_redirect", SUBJECT,
         HohenheimSlugs.REDIRECTS);
 
+    /** Redirects of live sites; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(() -> SiteModel.ofLiveSite(SiteRedirectModel.SITE));
+
     private SiteRedirectParts() {
     }
 
     /** @return the admin redirect resource */
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("site_redirect"))
+            .scope(ROWS)
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }

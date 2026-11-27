@@ -15406,6 +15406,10 @@
     "text": "the disk the dump is staged on has {$free :bytes} free, and the dump needs {$needed :bytes} there so the disk does not fill. Nothing was written; free some space or move old backups off this host.",
     "scope": "alert"
   },
+  "dump_target_no_room": {
+    "text": "the backup target has {$free :bytes} free, and the dump needs {$needed :bytes} there so its disk does not fill. Nothing was stored; free some space on the target, keep fewer dumps or choose another target.",
+    "scope": "alert"
+  },
   "dump_cut_off": {
     "text": "the dump grew past the {$cap :bytes} the Max dump size setting allows and was cut off; its partial file was deleted.",
     "scope": "alert"
@@ -17010,9 +17014,9 @@
   "rule_signed_link_old_until_help": {"text": "When the old secret stops working, as an ISO instant; Hohenheim writes it.", "scope": "help"},
   "access_rule_signed_link_secret_missing": {"text": "A signed link needs its secret: replace the secret on its protected path's Signed link tab.", "scope": "violations"},
   "signed_link_no_account": {"text": "A signed link's secret is shown only to the account that made it, and no account stands behind this call.", "scope": "violations"},
-  "signed_link_path_outside": {"text": "Give a path under {$prefix}.", "scope": "violations"},
+  "signed_link_path_outside": {"text": "Give the file's full path in the site, starting with {$prefix}, as in {$example}.", "scope": "violations"},
   "signed_link_minutes_range": {"text": "A link works from 1 to {$longest} minutes.", "scope": "violations"},
-  "signed_link_path_help": {"text": "The file's path under the protected path, as the file is named (a space as a space) or percent-encoded: both give one link.", "scope": "help"},
+  "signed_link_path_help": {"text": "The file's full path in the site, as the file tools take it: it starts with the protected path (/beta/my file.txt for /beta). As the file is named (a space as a space) or percent-encoded: both give one link.", "scope": "help"},
   "signed_link_minutes_help": {"text": "How many minutes the link works, at most seven days.", "scope": "help"},
   "protected_path_signed_link": {"text": "True protects the path with a signed link: Hohenheim makes its secret, shown once to you on the path's Signed link tab in the panel.", "scope": "help"},
   "signed_link_path": {"text": "Path", "scope": "protected_path"},
@@ -17057,7 +17061,7 @@
   "replace_signed_link_secret": {"text": "{$actor} replaced the secret of {$subject}", "scope": "hohenheim", "target": "happened"},
   "end_old_signed_link_secret": {"text": "{$actor} ended the old secret of {$subject}", "scope": "hohenheim", "target": "happened"},
   "make_signed_link": {"text": "{$actor} made a signed link to {$subject}", "scope": "hohenheim", "target": "happened"},
-  "mcp_tool_site_link_make": {"text": "Makes one signed link to a file under a path protected with a signed link (protected_path_set signed_link): the link opens that file for anyone holding it until it ends, and is answered here; nothing is stored. A path outside the protected path is refused. Answers the link and until when it works.", "scope": "hohenheim"},
+  "mcp_tool_site_link_make": {"text": "Makes one signed link to a file under a path protected with a signed link (protected_path_set signed_link): the link opens that file for anyone holding it until it ends, and is answered here; nothing is stored. The path is the file's full path in the site, as the file tools take it (/beta/my file.txt for the protected path /beta); one outside the protected path is refused. Answers the link and until when it works.", "scope": "hohenheim"},
   "mcp_code_site_link_make": {"text": "The protected path's code (PP7); it must be protected with a signed link.", "scope": "hohenheim"},
   "mcp_signed_link_secret": {"text": "replace makes a new secret, shown once in the panel, the old one working 7 more days; end_old ends the old one now.", "scope": "hohenheim"},
   "mcp_signed_link_made": {"text": "The link, working until {$until :datetime}: {$link}", "scope": "hohenheim"},

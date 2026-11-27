@@ -470,6 +470,18 @@ class SignedLinkJourneyTest extends HohenheimHttpTestBase {
             assertThat(undecodable.error()).as("step 4b: an escape that is no text is refused: " + undecodable.text())
                 .isTrue();
             assertThat(undecodable.text()).as("step 4b: named").contains("path");
+            // 4c. The path is the file's full path in the site, by tool and by the API alike: one given relative to the
+            //     protected path is refused, and the refusal shows the full path it meant.
+            McpHttpSession.Answer relative = admin.call("site_link_make", Map.of("protected_path", pathCode,
+                "path", "Tadoma Setup.exe"));
+            assertThat(relative.error()).as("step 4c: a relative path is refused: " + relative.text()).isTrue();
+            assertThat(relative.text()).as("step 4c: with the full path as its example")
+                .contains("/beta/Tadoma Setup.exe");
+            HttpResponse<String> relativeByApi = keyPost(key, "/api/v1/protected-paths/" + pathId + "/links",
+                "path=" + URLEncoder.encode("Tadoma Setup.exe", StandardCharsets.UTF_8));
+            assertThat(relativeByApi.statusCode()).as("step 4c: refused by the API too").isEqualTo(422);
+            assertThat(relativeByApi.body().replace("\\/", "/")).as("step 4c: in the same words")
+                .contains("/beta/Tadoma Setup.exe");
 
             // 5. A list mixing ways in: a request passes when the list's own any or all is met, a valid signed link
             //    being one way among them.

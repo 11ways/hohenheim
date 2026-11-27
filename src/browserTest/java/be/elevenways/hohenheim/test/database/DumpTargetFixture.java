@@ -40,6 +40,13 @@ public final class DumpTargetFixture implements AutoCloseable {
     /** The start of every scripted dump's SQL text; the dump's number and {@code ");\n"} follow it. */
     public static final String DUMP_SQL = "CREATE TABLE things (x integer);\nINSERT INTO things VALUES (";
 
+    /** The rows a {@code bulky} database's dump inserts, about a megabyte of SQL text a real dump resembles. */
+    public static final int BULKY_ROWS = 20_000;
+
+    /** The last line of every {@code bulky} database's dump. */
+    public static final String BULKY_LAST_LINE = "INSERT INTO orders VALUES (" + BULKY_ROWS
+        + ", 'customer-" + BULKY_ROWS + "@example.com', 'Order " + BULKY_ROWS + " paid by bank transfer');\n";
+
     private final @NonNull Path root;
     private final int targetId;
     private final @NonNull String name;
@@ -100,8 +107,9 @@ public final class DumpTargetFixture implements AutoCloseable {
     }
 
     /**
-     * A dump lane whose engine is a script: every dump is a distinct, recognisable SQL text, and a database whose name
-     * starts with {@code broken} fails its dump.
+     * A dump lane whose engine is a script: every dump is a distinct, recognisable SQL text, a database whose name
+     * starts with {@code broken} fails its dump, and one whose name starts with {@code bulky} dumps
+     * {@link #BULKY_ROWS} order rows after it.
      */
     public static @NonNull Scripted scriptedDumps(@NonNull AtomicInteger counter) {
         return new Scripted(counter);
@@ -160,7 +168,14 @@ public final class DumpTargetFixture implements AutoCloseable {
             }
             Files.createDirectories(directory);
             Path dump = directory.resolve(baseName + ".sql");
-            Files.writeString(dump, DUMP_SQL + this.counter.incrementAndGet() + ");\n");
+            StringBuilder sql = new StringBuilder(DUMP_SQL + this.counter.incrementAndGet() + ");\n");
+            if (name.startsWith("bulky")) {
+                for (int row = 1; row <= BULKY_ROWS; row++) {
+                    sql.append("INSERT INTO orders VALUES (").append(row).append(", 'customer-").append(row)
+                        .append("@example.com', 'Order ").append(row).append(" paid by bank transfer');\n");
+                }
+            }
+            Files.writeString(dump, sql);
             return dump;
         }
 

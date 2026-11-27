@@ -571,6 +571,9 @@ class InstanceSnapshotBackupLiveTest {
                 @Override public boolean exists(String key) throws IOException {
                     return real.exists(key);
                 }
+                @Override public long usableBytes() throws IOException {
+                    return real.usableBytes();
+                }
                 @Override public void delete(String key) throws IOException {
                     real.delete(key);
                 }

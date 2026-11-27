@@ -191,8 +191,8 @@ public final class SignedLinkSecrets {
 
     /**
      * @return one link to the path, signed with the current secret
-     * @throws Violations naming {@code path} for one outside the protected path, {@code minutes} for a length out of
-     *                    range
+     * @throws Violations naming {@code path} for one outside the protected path (the file's full path in the site is
+     *                    asked, as the file tools take it), {@code minutes} for a length out of range
      */
     private static @NonNull String make(@NonNull Row path, SignedLinks.@NonNull MakeInput input) {
         Row rule = Objects.requireNonNull(ruleOf(path), "applies only to a path with a signed-link rule");
@@ -202,7 +202,8 @@ public final class SignedLinkSecrets {
         String raw = SignedLink.rawPathOf(input.path());
         if (raw == null || !SignedLink.under(prefix, raw)) {
             throw Violations.ofField(SignedLinks.PATH.getName(), input.path(),
-                HohenheimMicrocopy.VIOLATIONS.of("signed_link_path_outside").withArg("prefix", prefix));
+                HohenheimMicrocopy.VIOLATIONS.of("signed_link_path_outside").withArg("prefix", prefix)
+                    .withArg("example", exampleUnder(prefix, input.path())));
         }
         int minutes = input.minutes() == null ? SignedLinks.DEFAULT_MINUTES : input.minutes();
         if (minutes < 1 || minutes > SignedLinks.LONGEST_MINUTES) {
@@ -212,6 +213,16 @@ public final class SignedLinkSecrets {
         }
         long expires = Now.instant().getEpochSecond() + Duration.ofMinutes(minutes).toSeconds();
         return SignedLink.link(addressOf(path), raw, expires, current.secret());
+    }
+
+    /** @return the given path's last part under {@code prefix}: the full path a refusal shows as its example */
+    private static @NonNull String exampleUnder(@NonNull String prefix, @NonNull String given) {
+        String name = given.strip();
+        name = name.substring(name.lastIndexOf('/') + 1);
+        if (name.isEmpty()) {
+            name = "report.pdf";
+        }
+        return prefix.endsWith("/") ? prefix + name : prefix + "/" + name;
     }
 
     /** @return a new secret made now by the caller's account */

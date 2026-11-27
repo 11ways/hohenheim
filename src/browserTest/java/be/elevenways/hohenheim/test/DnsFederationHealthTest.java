@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.dns.AxfrResponder;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DelegationLookup;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
+import be.elevenways.hohenheim.server.dns.DnsFederationTrace;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsResponder;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
@@ -230,6 +231,23 @@ class DnsFederationHealthTest {
                 .as("step 7: the fake secondary acks").isEqualTo("noerror");
             assertThat(link(deadLinkId).get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME))
                 .as("step 7: nobody listens on the dead port").isEqualTo("timeout");
+
+            // 8. A stamp writes only its own columns where the link still is: a NOTIFY's link changed while it waited
+            //    keeps the change, and one removed meanwhile is not put back.
+            Row read = link(linkId);
+            Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ID.eq(linkId))
+                .assign(DnsZonePeerModel.PROBE_ERROR, "changed meanwhile").updateAll();
+            DnsFederationTrace.notifySent(read, keyed, ORIGIN, bumped, "refused");
+            assertThat(link(linkId).get(DnsZonePeerModel.PROBE_ERROR)).as("step 8: the change is kept")
+                .isEqualTo("changed meanwhile");
+            assertThat(link(linkId).get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME)).as("step 8: the stamp landed")
+                .isEqualTo("refused");
+            Row removed = link(deadLinkId);
+            Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ID.eq(deadLinkId)).delete();
+            DnsFederationTrace.notifySent(removed, keyed, ORIGIN, bumped, "timeout");
+            assertThat(Models.get(DnsZonePeerModel.class).find().noCache()
+                .where(DnsZonePeerModel.ID.eq(deadLinkId)).first()).as("step 8: a removed link stays removed")
+                .isNull();
         }
         finally {
             secondary.stop();

@@ -66,6 +66,18 @@ public final class DumpOverCap extends IOException {
             .withArg("free", freeBytes).withArg("needed", neededBytes), null);
     }
 
+    /**
+     * A dump refused before it was stored because its backup target has too little room for it.
+     *
+     * @param freeBytes   what the target has free
+     * @param neededBytes what the dump needs there, the reserve kept free included
+     */
+    static @NonNull DumpOverCap noTargetRoom(@NonNull String name, long freeBytes, long neededBytes) {
+        return new DumpOverCap("Dump of database '" + name + "' refused: its backup target has too little free space"
+            + " for it (nothing was stored)", HohenheimMicrocopy.ALERT.of("dump_target_no_room")
+            .withArg("free", freeBytes).withArg("needed", neededBytes), null);
+    }
+
     /** @return the refusal in the operator's words, its sizes worded for the reader */
     public @NonNull Microcopy words() {
         return this.words;

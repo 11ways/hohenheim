@@ -15406,6 +15406,10 @@
     "text": "de schijf waarop de dump wordt klaargezet heeft {$free :bytes} vrij, en de dump heeft daar {$needed :bytes} nodig zodat de schijf niet volloopt. Er is niets geschreven; maak ruimte vrij of verplaats oude back-ups van deze host.",
     "scope": "alert"
   },
+  "dump_target_no_room": {
+    "text": "het back-updoel heeft {$free :bytes} vrij, en de dump heeft daar {$needed :bytes} nodig zodat de schijf niet volloopt. Er is niets opgeslagen; maak ruimte vrij op het back-updoel, bewaar minder dumps of kies een ander back-updoel.",
+    "scope": "alert"
+  },
   "dump_cut_off": {
     "text": "de dump werd groter dan de {$cap :bytes} die de instelling Max. dumpgrootte toestaat en is afgebroken; het gedeeltelijke bestand is verwijderd.",
     "scope": "alert"
@@ -17010,9 +17014,9 @@
   "rule_signed_link_old_until_help": {"text": "Wanneer het oude geheim stopt met werken, als ISO-tijdstip; Hohenheim schrijft het.", "scope": "help"},
   "access_rule_signed_link_secret_missing": {"text": "Een ondertekende link heeft zijn geheim nodig: vervang het geheim op het tabblad Ondertekende link van het beschermde pad.", "scope": "violations"},
   "signed_link_no_account": {"text": "Het geheim van een ondertekende link wordt alleen getoond aan het account dat het maakte, en achter deze aanroep staat geen account.", "scope": "violations"},
-  "signed_link_path_outside": {"text": "Geef een pad onder {$prefix}.", "scope": "violations"},
+  "signed_link_path_outside": {"text": "Geef het volledige pad van het bestand in de site, beginnend met {$prefix}, zoals {$example}.", "scope": "violations"},
   "signed_link_minutes_range": {"text": "Een link werkt van 1 tot {$longest} minuten.", "scope": "violations"},
-  "signed_link_path_help": {"text": "Het pad van het bestand onder het beschermde pad, zoals het bestand heet (een spatie als spatie) of procent-gecodeerd: beide geven een link.", "scope": "help"},
+  "signed_link_path_help": {"text": "Het volledige pad van het bestand in de site, zoals de bestandstools het nemen: het begint met het beschermde pad (/beta/mijn bestand.txt voor /beta). Zoals het bestand heet (een spatie als spatie) of procent-gecodeerd: beide geven een link.", "scope": "help"},
   "signed_link_minutes_help": {"text": "Hoeveel minuten de link werkt, hoogstens zeven dagen.", "scope": "help"},
   "protected_path_signed_link": {"text": "True beschermt het pad met een ondertekende link: Hohenheim maakt het geheim, dat u een keer ziet op het tabblad Ondertekende link van het pad in het paneel.", "scope": "help"},
   "signed_link_path": {"text": "Pad", "scope": "protected_path"},
@@ -17057,7 +17061,7 @@
   "replace_signed_link_secret": {"text": "{$actor} verving het geheim van {$subject}", "scope": "hohenheim", "target": "happened"},
   "end_old_signed_link_secret": {"text": "{$actor} stopte het oude geheim van {$subject}", "scope": "hohenheim", "target": "happened"},
   "make_signed_link": {"text": "{$actor} maakte een ondertekende link naar {$subject}", "scope": "hohenheim", "target": "happened"},
-  "mcp_tool_site_link_make": {"text": "Maakt een ondertekende link naar een bestand onder een pad dat beschermd is met een ondertekende link (protected_path_set signed_link): de link opent dat bestand voor iedereen die hem heeft tot hij eindigt, en wordt hier geantwoord; er wordt niets bewaard. Een pad buiten het beschermde pad wordt geweigerd. Antwoordt de link en tot wanneer hij werkt.", "scope": "hohenheim"},
+  "mcp_tool_site_link_make": {"text": "Maakt een ondertekende link naar een bestand onder een pad dat beschermd is met een ondertekende link (protected_path_set signed_link): de link opent dat bestand voor iedereen die hem heeft tot hij eindigt, en wordt hier geantwoord; er wordt niets bewaard. Het pad is het volledige pad van het bestand in de site, zoals de bestandstools het nemen (/beta/mijn bestand.txt voor het beschermde pad /beta); een pad buiten het beschermde pad wordt geweigerd. Antwoordt de link en tot wanneer hij werkt.", "scope": "hohenheim"},
   "mcp_code_site_link_make": {"text": "De code van het beschermde pad (PP7); het moet beschermd zijn met een ondertekende link.", "scope": "hohenheim"},
   "mcp_signed_link_secret": {"text": "replace maakt een nieuw geheim, een keer getoond in het paneel, het oude werkt nog 7 dagen; end_old stopt het oude nu.", "scope": "hohenheim"},
   "mcp_signed_link_made": {"text": "De link, werkt tot {$until :datetime}: {$link}", "scope": "hohenheim"},

@@ -198,6 +198,24 @@ public final class SshBackupTarget implements BackupTarget {
     }
 
     /**
+     * AIDEV-NOTE: POSIX {@code df -Pk} (coreutils and busybox both speak it): one header line, then one line whose
+     * fourth column is the available 1024-byte blocks of the filesystem the base lives on.
+     */
+    @Override
+    public long usableBytes() throws IOException {
+        String base = HostShell.quote(this.basePath);
+        String output = new String(run("mkdir -p " + base + " && df -Pk " + base, null, null),
+            StandardCharsets.UTF_8).trim();
+        String[] lines = output.split("\n");
+        String[] columns = lines[lines.length - 1].trim().split("\\s+");
+        try {
+            return Math.multiplyExact(Long.parseLong(columns.length > 3 ? columns[3] : ""), 1024L);
+        } catch (NumberFormatException unexpected) {
+            throw new IOException("Remote df answered unexpectedly: " + output, unexpected);
+        }
+    }
+
+    /**
      * AIDEV-NOTE: the remote command is guarded by {@code test -d} and exits 0 on an absent
      * base directory, so "nothing uploaded yet" is an empty list while an unreachable host is
      * still an IOException. Filtering happens HERE, on full keys, rather than through a remote

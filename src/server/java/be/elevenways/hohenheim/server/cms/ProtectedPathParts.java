@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -59,12 +60,16 @@ public final class ProtectedPathParts {
     public static final Operation<Row, Void, Integer> DELETE = PanelRecordWrites.deletion("protected_path", SUBJECT,
         HohenheimSlugs.PROTECTED_PATHS);
 
+    /** Protected paths of live sites; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(() -> SiteModel.ofLiveSite(ProtectedPathModel.SITE));
+
     private ProtectedPathParts() {
     }
 
     /** @return the admin protected-path resource */
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("protected_path"), true)
+            .scope(ROWS)
             .tabs(ResourceTabs.<Row>of(List.of(new ProtectedPathSignedLinkPage())).withHistory().withContributions())
             .build();
     }

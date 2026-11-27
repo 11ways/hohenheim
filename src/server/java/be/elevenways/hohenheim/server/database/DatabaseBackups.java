@@ -42,6 +42,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -50,8 +51,9 @@ import java.util.stream.Stream;
 
 /**
  * The stored dumps of managed databases: every dump (the nightly task, "Back up now", an in-place restore's
- * pre-restore backup) is encrypted with the field-encryption keyring and stored on THE backup target the
- * {@code database.backup_target} setting names, and recorded as a {@link DatabaseDumpModel} row a restore lists.
+ * pre-restore backup) is compressed and encrypted with the field-encryption keyring in one pass and stored on THE
+ * backup target the {@code database.backup_target} setting names, and recorded as a {@link DatabaseDumpModel} row a
+ * restore lists.
  *
  * AIDEV-NOTE: the target is the ONE path a dump takes. The local directory that used to be the record is now only
  * the staging area: owner-only, each dump's or restore's directory deleted in a finally block, and swept at boot
@@ -69,8 +71,11 @@ import java.util.stream.Stream;
  */
 public final class DatabaseBackups {
 
-    /** The four magic bytes every encrypted dump starts with ({@link BackupCipher}). */
-    static final byte[] MAGIC = {'H', 'D', 'B', '1'};
+    /** The magic of a dump written uncompressed, before dumps were compressed; still read, never written. */
+    static final byte[] MAGIC_PLAIN = {'H', 'D', 'B', '1'};
+
+    /** The magic of a dump zlib-compressed before its encryption ({@link BackupCipher#encryptDeflated}). */
+    static final byte[] MAGIC_DEFLATED = {'H', 'D', 'B', '2'};
 
     /** The suffix of an encrypted dump's key, after the engine's own extension. */
     static final String ENCRYPTED_SUFFIX = ".hdb";
@@ -147,13 +152,13 @@ public final class DatabaseBackups {
     }
 
     /**
-     * Dumps one database, encrypts the dump, stores it on the target and verifies it there, then prunes the
-     * database's older dumps to the retention setting, all holding the database's {@link DatabaseContentLock}; refused
-     * at once while another dump or restore of it runs.
+     * Dumps one database, compresses and encrypts the dump, stores it on the target and verifies it there, then prunes
+     * the database's older dumps to the retention setting, all holding the database's {@link DatabaseContentLock};
+     * refused at once while another dump or restore of it runs.
      *
      * @return the COMPLETE ledger row
-     * @throws IOException when the target is unset or unhealthy, or the staging, the dump, the upload or the
-     *                     verification fails; the row stays FAILED and no artifact stays behind
+     * @throws IOException when the target is unset or unhealthy or has no room for the dump, or the staging, the dump,
+     *                     the upload or the verification fails; the row stays FAILED and no artifact stays behind
      */
     public static @NonNull Row backUp(@NonNull DatabaseService service, @NonNull String name) throws IOException {
         return backUp(service, name, InstanceOperationLock.Contention.REFUSE);
@@ -202,9 +207,12 @@ public final class DatabaseBackups {
         try {
             staging = stagingDirectory("dump-");
             Stored previous = newest(databaseId);
-            // Estimated from the previous dump (the plain dump and its encrypted copy share the disk); the dump's own
-            // write keeps the reserve exactly (ReservedDiskOutput), and the encryption is judged on the real size.
-            requireRoom(staging, name, Math.multiplyExact(previous == null ? 0 : previous.bytes(), 2));
+            long previousBytes = previous == null ? 0 : previous.bytes();
+            // Estimated from the previous artifact: the target gets about as much again, and the staging disk holds
+            // the plain dump and its compressed copy, at least twice that. The dump's own write keeps the staging
+            // reserve exactly (ReservedDiskOutput); the encryption and the upload are judged on the real sizes.
+            requireTargetRoom(target, name, previousBytes);
+            requireRoom(staging, name, Math.multiplyExact(previousBytes, 2));
             String stamp = UtcStamp.now();
             Path plain = service.backupToFile(name, staging, stamp, contention);
             DurableFiles.restrictToOwner(plain);
@@ -215,11 +223,12 @@ public final class DatabaseBackups {
                 + dump.get(DatabaseDumpModel.ID) + extension + ENCRYPTED_SUFFIX;
             Path encrypted = staging.resolve("dump" + ENCRYPTED_SUFFIX);
             requireRoom(staging, name, Files.size(plain));
-            BackupCipher.encrypt(MAGIC, plain, encrypted, FieldEncryption.requireKeyring());
+            BackupCipher.encryptDeflated(MAGIC_DEFLATED, plain, encrypted, FieldEncryption.requireKeyring());
             DurableFiles.restrictToOwner(encrypted);
             Files.delete(plain);
             String localSha = SecureTokens.sha256Hex(encrypted);
             long size = Files.size(encrypted);
+            requireTargetRoom(target, name, size);
             dump.set(DatabaseDumpModel.REMOTE_KEY, key);
             dumps.saveWritten(dump);
             target.store(key, encrypted);
@@ -276,8 +285,9 @@ public final class DatabaseBackups {
      *
      * AIDEV-NOTE: on Robbedoes (2026-10-30) a 5 GB mongo dump filled the disk every night and finally took the shared
      * engine down with it; a refusal here costs one night's dump of one database, in words, and nothing else. Asked
-     * twice: before the dump, with twice the previous dump as its estimate (a database never dumped is judged by the
-     * reserve alone), and before the encryption, with the plain dump's real size.
+     * twice: before the dump, with twice the previous artifact as its estimate (a database never dumped is judged by the
+     * reserve alone), and before the encryption, with the plain dump's real size (the compressed copy is never larger,
+     * but for zlib's few bytes of framing). The target's own room is {@link #requireTargetRoom}'s.
      *
      * @throws DumpOverCap naming what is free and what was needed
      */
@@ -295,6 +305,30 @@ public final class DatabaseBackups {
         long needed = Math.addExact(bytes, DUMP_FREE_RESERVE_BYTES);
         if (freeBytes < needed) {
             throw DumpOverCap.noRoom(name, freeBytes, needed);
+        }
+    }
+
+    /**
+     * Refuses a dump its backup target has no room for: {@code bytes} plus {@link #DUMP_FREE_RESERVE_BYTES} must be
+     * free there, so a target on the disk the engines live on never fills it.
+     *
+     * @throws DumpOverCap naming what the target has free and what was needed
+     */
+    private static void requireTargetRoom(@NonNull BackupTarget target, @NonNull String name, long bytes)
+            throws IOException {
+        judgeTargetRoom(name, target.usableBytes(), bytes);
+    }
+
+    /**
+     * The DECISION half of {@link #requireTargetRoom}, reachable without a target to measure.
+     *
+     * @param bytes what the dump stores there, before the reserve
+     * @throws DumpOverCap naming what is free and what was needed
+     */
+    public static void judgeTargetRoom(@NonNull String name, long freeBytes, long bytes) throws IOException {
+        long needed = Math.addExact(bytes, DUMP_FREE_RESERVE_BYTES);
+        if (freeBytes < needed) {
+            throw DumpOverCap.noTargetRoom(name, freeBytes, needed);
         }
     }
 
@@ -378,11 +412,12 @@ public final class DatabaseBackups {
     }
 
     /**
-     * Downloads a complete dump into {@code workDir}, re-hashes it against its row and decrypts it.
+     * Downloads a complete dump into {@code workDir}, re-hashes it against its row, decrypts it and inflates it (a dump
+     * written before compression is only decrypted: its magic says which).
      *
      * @return the verified plaintext dump; the caller deletes {@code workDir}
-     * @throws IOException naming why the dump cannot be used: not complete, missing on its target, its checksum or
-     *                     its GCM tag not matching
+     * @throws IOException naming why the dump cannot be used: not complete, missing on its target, its checksum,
+     *                     its magic or its GCM tag not matching
      */
     public static @NonNull Path fetchVerified(@NonNull Row dump, @NonNull Path workDir) throws IOException {
         String key = dump.get(DatabaseDumpModel.REMOTE_KEY);
@@ -414,7 +449,12 @@ public final class DatabaseBackups {
         Files.deleteIfExists(plain);
         Files.createFile(plain);
         DurableFiles.restrictToOwner(plain);
-        BackupCipher.decrypt(MAGIC, encrypted, plain, FieldEncryption.requireKeyring());
+        if (Arrays.equals(BackupCipher.readMagic(encrypted, MAGIC_PLAIN.length), MAGIC_PLAIN)) {
+            BackupCipher.decrypt(MAGIC_PLAIN, encrypted, plain, FieldEncryption.requireKeyring());
+        } else {
+            // Anything else must be the compressed form: a foreign magic is refused by the cipher, naming it.
+            BackupCipher.decryptInflated(MAGIC_DEFLATED, encrypted, plain, FieldEncryption.requireKeyring());
+        }
         Files.delete(encrypted);
         return plain;
     }

@@ -718,6 +718,6 @@ public final class DomainParts {
      * because a relation hop runs no find hook.
      */
     private static @NonNull Criteria liveSiteScope() {
-        return Criteria.related(SiteDomainModel.SITE, SiteModel.SOFT_DELETE.isNotTrashed());
+        return SiteModel.ofLiveSite(SiteDomainModel.SITE);
     }
 }

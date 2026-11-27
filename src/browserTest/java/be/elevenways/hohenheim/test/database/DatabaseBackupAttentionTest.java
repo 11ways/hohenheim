@@ -87,16 +87,21 @@ class DatabaseBackupAttentionTest {
                 .containsExactly("database_backup_stale warning /admin/databases/" + shop + "/page/backups");
 
             // 5. Flat reads: three times the databases, the same statements, each count taken warm (the framework's
-            //    flat-count measure, which names the statements of both when they differ).
+            //    flat-count measure, which names the statements of both when they differ). Only this thread is
+            //    counted: the read runs here, and a code refill or task tick of another thread on the shared
+            //    datasource (a linked_servers read) is no statement of it.
             DatasourceProbe probe = DatasourceProbe.on(datasource);
-            collect();
-            DatasourceProbe.Statements few = probe.statementsOf(DatabaseBackupAttentionTest::collect);
-            for (int i = 0; i < 4; i++) {
-                int more = database("attn-dump-more-" + i, false, InstanceModel.STATUS_RUNNING);
-                dump(more, BackupStatus.FAILED, "target refused");
+            try (DatasourceProbe.Armed only = probe.measuringOnlyThisThread()) {
+                collect();
+                DatasourceProbe.Statements few = probe.statementsOf(DatabaseBackupAttentionTest::collect);
+                for (int i = 0; i < 4; i++) {
+                    int more = database("attn-dump-more-" + i, false, InstanceModel.STATUS_RUNNING);
+                    dump(more, BackupStatus.FAILED, "target refused");
+                }
+                collect();
+                few.requireFlat(probe.statementsOf(DatabaseBackupAttentionTest::collect),
+                    "step 5: flat as databases grow");
             }
-            collect();
-            few.requireFlat(probe.statementsOf(DatabaseBackupAttentionTest::collect), "step 5: flat as databases grow");
         });
     }
 
@@ -135,6 +140,17 @@ class DatabaseBackupAttentionTest {
         });
         assertThat(stopped).as("step 3: the write is stopped by name").isInstanceOf(DumpOverCap.class);
         assertThat(free[0]).as("step 3: and the reserve was never touched").isGreaterThanOrEqualTo(2 * GIB);
+
+        // 4. The target has a reserve of its own: a dump of 3 GiB on a target with 4 GiB free would leave less than
+        //    the reserve, so it is refused before it is stored, in words naming both sizes; 5 GiB free takes it.
+        Throwable full = catchThrowable(() -> DatabaseBackups.judgeTargetRoom("invulassistent", 4 * GIB, 3 * GIB));
+        assertThat(DumpOverCap.wordsOf(full)).as("step 4: the target refuses it in words").isNotNull()
+            .satisfies(words -> {
+                assertThat(words.key()).isEqualTo("dump_target_no_room");
+                assertThat(words.args().get("free")).isEqualTo(4 * GIB);
+                assertThat(words.args().get("needed")).isEqualTo(5 * GIB);
+            });
+        DatabaseBackups.judgeTargetRoom("invulassistent", 5 * GIB, 3 * GIB);
     }
 
     /** A database whose dedicated engine instance reads {@code engineStatus}. */

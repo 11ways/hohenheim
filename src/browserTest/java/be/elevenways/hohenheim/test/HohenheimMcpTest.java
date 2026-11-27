@@ -1806,21 +1806,64 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 .get(SiteModel.NAME)).as("step 7a: its first name again").isEqualTo(siteName);
 
             // 8. roll_back takes a site (its release engine then answers in its own words); delete sends the site to
-            //    the trash; site_restore brings it back, the manager's grant of step 6b notwithstanding (the trash
-            //    revoked the grant, and the site that released its hostnames takes them back); trashed again,
+            //    the trash, and with it its address, protected path and path redirect leave every list, by tool and in
+            //    the panel; site_restore brings it back with them, the manager's grant of step 6b notwithstanding (the
+            //    trash revoked the grant, and the site that released its hostnames takes them back); trashed again,
             //    permanent removes it for good.
             assertThat(admin.call("roll_back", Map.of("code", siteCode)).text()).as("step 8: a site is rolled back")
                 .doesNotContain("is none of them");
             assertThat(admin.call("delete", Map.of("code", siteCode, "permanent", true)).error())
                 .as("step 8: permanent takes only a site in the trash").isTrue();
+            String guardedPath = "/trash-" + letters();
+            McpHttpSession.Answer guarded = admin.call("protected_path_set", Map.of("site", siteCode, "path",
+                guardedPath, "networks", List.of("10.1.0.0/16")));
+            assertThat(guarded.error()).as("step 8: " + guarded.text()).isFalse();
+            String guardedCode = HohenheimAppPartToolsTest.codeIn(guarded.text(), "PP");
+            McpHttpSession.Answer moved = admin.call("path_redirect_set", Map.of("site", siteCode, "from_path",
+                guardedPath + "-old", "target_url", "/new"));
+            assertThat(moved.error()).as("step 8: " + moved.text()).isFalse();
+            String movedCode = HohenheimAppPartToolsTest.codeIn(moved.text(), "RD");
+            String pathsList = CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.PROTECTED_PATHS).toUrl();
+            String redirectsList = CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.REDIRECTS).toUrl();
+            String sitePaths = CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+                HohenheimSlugs.PROTECTED_PATHS).toUrl();
+            String siteRedirects = CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+                HohenheimSlugs.REDIRECTS).toUrl();
+            assertThat(admin.call("list", Map.of("kind", "protected_path", "of", siteCode)).text())
+                .as("step 8: listed while the site is live").contains(guardedCode);
+            assertThat(rendered(adminGet(sitePaths).body())).as("step 8: on the site's tab").contains(guardedPath);
             McpHttpSession.Answer deleted = admin.call("delete", Map.of("code", siteCode));
             assertThat(deleted.error()).as("step 8: " + deleted.text()).isFalse();
             assertThat(Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first())
                 .as("step 8: in the trash").isNull();
+            assertThat(admin.call("list", Map.of("kind", "protected_path", "search", guardedPath)).text())
+                .as("step 8: a trashed site's protected path is listed nowhere")
+                .doesNotContainPattern("\\b" + guardedCode + "\\b");
+            assertThat(admin.call("list", Map.of("kind", "path_redirect", "search", guardedPath)).text())
+                .as("step 8: nor its path redirect").doesNotContainPattern("\\b" + movedCode + "\\b");
+            assertThat(admin.call("list", Map.of("kind", "address", "search", hostname)).text())
+                .as("step 8: nor its address").doesNotContainPattern("\\b" + addressCode + "\\b");
+            assertThat(rendered(adminGet(pathsList).body())).as("step 8: nor in the panel's lists")
+                .doesNotContain(guardedPath);
+            assertThat(rendered(adminGet(redirectsList).body())).doesNotContain(guardedPath + "-old");
             McpHttpSession.Answer restored = admin.call("site_restore", Map.of("code", siteCode));
             assertThat(restored.error()).as("step 8: restored " + restored.text()).isFalse();
             assertThat(Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first())
                 .as("step 8: live again").isNotNull();
+            assertThat(admin.call("list", Map.of("kind", "protected_path", "of", siteCode)).text())
+                .as("step 8: back with its site").contains(guardedCode);
+            assertThat(admin.call("list", Map.of("kind", "path_redirect", "of", siteCode)).text())
+                .as("step 8: its redirect too").contains(movedCode);
+            assertThat(rendered(adminGet(sitePaths).body())).as("step 8: and in the panel").contains(guardedPath);
+            assertThat(rendered(adminGet(siteRedirects).body())).contains(guardedPath + "-old");
+            // The path, its unshared list and the redirect go before the site does, as a person removes them.
+            Integer guardedList = HohenheimAppPartToolsTest.row(ProtectedPathModel.MODEL_ID,
+                HohenheimAppPartToolsTest.keyOf(ProtectedPathModel.MODEL_ID, guardedCode))
+                .get(ProtectedPathModel.ACCESS_LIST_ID);
+            assertThat(admin.call("delete", Map.of("code", guardedCode)).error()).as("step 8: path deleted").isFalse();
+            assertThat(admin.call("delete", Map.of("code", movedCode)).error()).as("step 8: redirect deleted")
+                .isFalse();
+            HardDeletes.byId(Models.get(AccessListModel.class), Objects.requireNonNull(guardedList));
             assertThat(admin.call("delete", Map.of("code", siteCode)).error()).as("step 8: trashed again").isFalse();
             McpHttpSession.Answer purged = admin.call("delete", Map.of("code", siteCode, "permanent", true));
             assertThat(purged.error()).as("step 8: deleted for good " + purged.text()).isFalse();

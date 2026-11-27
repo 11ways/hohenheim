@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
@@ -183,6 +184,17 @@ public class SiteModel extends Model {
      * subqueries run no find hooks), so it spells {@code SOFT_DELETE.isNotTrashed()}.
      */
     public static final SoftDeleteBehaviour SOFT_DELETE = SCHEMA.addBehaviour(SoftDeleteBehaviour.create());
+
+    /**
+     * THE base of every list and count of a site's children (addresses, protected paths, redirects): a child of a
+     * trashed site is not listed, and comes back with its site.
+     *
+     * @param site the child's relation to its site
+     * @return the rows whose site is live
+     */
+    public static @NonNull Criteria ofLiveSite(@NonNull BelongsTo<SiteModel> site) {
+        return Criteria.related(site, SOFT_DELETE.isNotTrashed());
+    }
 
     /** The site-level login gate; the provider's delete refuses while a live site names it. */
     public static final BelongsTo<SiteAuthProviderModel> AUTH_PROVIDER = SCHEMA.addRelation(

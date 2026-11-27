@@ -98,6 +98,12 @@ public final class FilesystemBackupTarget implements BackupTarget {
     }
 
     @Override
+    public long usableBytes() throws IOException {
+        Files.createDirectories(this.root);
+        return Files.getFileStore(this.root).getUsableSpace();
+    }
+
+    @Override
     public @NonNull List<String> list(@NonNull String prefix) throws IOException {
         Path base = this.root.normalize();
         if (!Files.isDirectory(base)) {

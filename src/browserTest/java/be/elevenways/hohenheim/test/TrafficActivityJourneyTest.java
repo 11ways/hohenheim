@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.TrafficActivityHandler;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.traffic.ActivityAsk;
+import be.elevenways.hohenheim.traffic.ActivityModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -118,14 +119,24 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
                 .as("step 2: the picture fits its rows").isTrue();
 
             // 2b. One browser asks site a six times at once: six dots, spread across the row and along the curve
-            //     (ActivityModelTest pins the spread), all in flight under the held clock.
-            context.clock().resume();
+            //     (ActivityModelTest pins the spread), all in flight under the clock step 2 holds. The clock stays held
+            //     while the requests are made, so their dots fly from the frame that draws them however late it comes
+            //     under load: the held time is stepped a frame at a time until the picture counted the six, then until
+            //     all six have left, never past the latest leaving (999 ms into their second plus SPREAD_MS), before
+            //     which the first cannot land (ActivityDriver.TRAVEL_MS).
             fixture.requests(fixture.siteA, "/burst", 6, BROWSER);
-            counted = this.awaitLined(counted + 6);
-            context.clock().pauseAt(((Number) page.evaluate("() => Date.now()")).longValue() + 250);
-            context.clock().runFor(1_100);
-            assertThat(((Number) page.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d"))
-                .intValue()).as("step 2b: six dots of one moment in flight").isGreaterThanOrEqualTo(6);
+            int burst = counted + 6;
+            for (long step = 0; counted < burst && step < WAIT.toMillis() / 16; step++) {
+                context.clock().runFor(16);
+                counted = this.lined();
+            }
+            assertThat(counted).as("step 2b: the held picture counted the six").isGreaterThanOrEqualTo(burst);
+            int inFlight = this.flying();
+            for (int stepped = 0; inFlight < 6 && stepped <= 999 + ActivityModel.SPREAD_MS; stepped += 16) {
+                context.clock().runFor(16);
+                inFlight = this.flying();
+            }
+            assertThat(inFlight).as("step 2b: six dots of one moment in flight").isGreaterThanOrEqualTo(6);
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-activity-burst.png"))
                 .setFullPage(true));
 
@@ -205,6 +216,11 @@ class TrafficActivityJourneyTest extends HohenheimTestBase {
         Matcher matched = Pattern.compile("(\\d+) requests? in the last minute").matcher(line);
         assertThat(matched.find()).as("the line counts the minute's requests: " + line).isTrue();
         return Integer.parseInt(matched.group(1));
+    }
+
+    /** @return how many dots the picture drew in flight at its last frame */
+    private int flying() {
+        return ((Number) page.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d")).intValue();
     }
 
     @Test

@@ -11,7 +11,9 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
+import be.elevenways.hohenheim.server.backup.BackupCipher;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.database.DumpOverCap;
 import be.elevenways.hohenheim.server.database.DatabaseRestores;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -26,6 +28,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,10 +54,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * A managed-database dump goes through THE backup target: refused while none is set, stored encrypted and verified
- * there, recorded and listed, pruned to the retention, and refused for a restore when its artifact was tampered with
- * or is gone, or when it is of another kind than its database. The dump itself is scripted, so no engine is needed;
- * the live restore journey is {@code DatabaseDumpRestoreLiveTest}.
+ * A managed-database dump goes through THE backup target: refused while none is set, stored compressed and encrypted
+ * and verified there, recorded and listed, refused before a byte is written when the target has no room for it, pruned
+ * to the retention, and refused for a restore when its artifact was tampered with or is gone, or when it is of another
+ * kind than its database; a dump stored uncompressed before stays restorable. The dump itself is scripted, so no
+ * engine is needed; the live restore journey is {@code DatabaseDumpRestoreLiveTest}.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -75,6 +79,7 @@ class DatabaseDumpTargetTest {
         DatabaseService service = DumpTargetFixture.scriptedDumps(counter);
         Row shop = DumpTargetFixture.databaseRow("dumpshop", DatabaseModel.ENGINE_POSTGRES);
         Row broken = DumpTargetFixture.databaseRow("brokendump", DatabaseModel.ENGINE_POSTGRES);
+        Row bulky = DumpTargetFixture.databaseRow("bulkyshop", DatabaseModel.ENGINE_POSTGRES);
         Integer shopId = shop.get(DatabaseModel.ID);
         Integer previousRetention = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
         try {
@@ -89,14 +94,15 @@ class DatabaseDumpTargetTest {
             try (DumpTargetFixture target = DumpTargetFixture.install("dump-target-test")) {
                 assertThat(DatabaseBackups.targetRefusal()).as("step 2: a set target takes dumps").isNull();
 
-                // 2. The dump lands on the target encrypted, verified by the target's own hash, nothing left staged.
+                // 2. The dump lands on the target compressed and encrypted, verified by the target's own hash, nothing
+                // left staged.
                 Row dump = DatabaseBackups.backUp(service, "dumpshop");
                 assertThat((String) dump.get(DatabaseDumpModel.STATUS)).as("step 2: complete")
                     .isEqualTo(BackupStatus.COMPLETE.key());
                 Path artifact = target.artifactOf(dump);
                 byte[] stored = Files.readAllBytes(artifact);
-                assertThat(new String(stored, 0, 4, StandardCharsets.US_ASCII)).as("step 2: the dump format's magic")
-                    .isEqualTo("HDB1");
+                assertThat(new String(stored, 0, 4, StandardCharsets.US_ASCII))
+                    .as("step 2: the compressed dump format's magic").isEqualTo("HDB2");
                 assertThat(new String(stored, StandardCharsets.ISO_8859_1)).as("step 2: no plaintext on the target")
                     .doesNotContain("CREATE TABLE");
                 assertThat(SecureTokens.sha256Hex(artifact)).as("step 2: the row holds the target's hash")
@@ -113,6 +119,58 @@ class DatabaseDumpTargetTest {
                 Path plain = DatabaseBackups.fetchVerified(dump, work);
                 assertThat(Files.readString(plain)).as("step 3: the round trip is exact")
                     .isEqualTo(DumpTargetFixture.DUMP_SQL + "1);\n");
+
+                // 3b. A dump the size of a real one is stored a fraction of its size, and one stored uncompressed
+                // before (HDB1, as every dump was until now) still downloads to the very dump.
+                Row bulkyDump = DatabaseBackups.backUp(service, "bulkyshop");
+                Path bulkyPlain = DatabaseBackups.fetchVerified(bulkyDump, work);
+                String bulkyText = Files.readString(bulkyPlain);
+                assertThat(bulkyText).as("step 3b: the round trip is exact").startsWith(DumpTargetFixture.DUMP_SQL)
+                    .endsWith(DumpTargetFixture.BULKY_LAST_LINE);
+                long plainBytes = Files.size(bulkyPlain);
+                long compressedBytes = bulkyDump.get(DatabaseDumpModel.SIZE_BYTES);
+                Path bulkyArtifact = target.artifactOf(bulkyDump);
+                BackupCipher.encrypt(new byte[] {'H', 'D', 'B', '1'}, bulkyPlain, bulkyArtifact,
+                    FieldEncryption.requireKeyring());
+                long uncompressedBytes = Files.size(bulkyArtifact);
+                System.out.println("DUMP SIZE: a " + plainBytes + "-byte test dump is stored as " + uncompressedBytes
+                    + " bytes uncompressed (HDB1) and " + compressedBytes + " bytes compressed (HDB2)");
+                assertThat(compressedBytes * 4).as("step 3b: compressed to under a quarter")
+                    .isLessThan(uncompressedBytes);
+                Models.get(DatabaseDumpModel.class).find()
+                    .where(DatabaseDumpModel.ID.eq(bulkyDump.get(DatabaseDumpModel.ID)))
+                    .assign(DatabaseDumpModel.SHA256, SecureTokens.sha256Hex(bulkyArtifact))
+                    .assign(DatabaseDumpModel.SIZE_BYTES, uncompressedBytes).updateAll();
+                Row oldForm = Models.get(DatabaseDumpModel.class).findById(bulkyDump.get(DatabaseDumpModel.ID));
+                assertThat(Files.readString(DatabaseBackups.fetchVerified(oldForm, work)))
+                    .as("step 3b: an uncompressed dump stays restorable").isEqualTo(bulkyText);
+
+                // 3c. A dump the target has no room for (estimated from the previous one) is refused before the
+                // engine dumps a byte, in the operator's words, and its FAILED row is what the attention item reads.
+                long targetFree = Files.getFileStore(target.root()).getUsableSpace();
+                Models.get(DatabaseDumpModel.class).find()
+                    .where(DatabaseDumpModel.ID.eq(bulkyDump.get(DatabaseDumpModel.ID)))
+                    .assign(DatabaseDumpModel.SIZE_BYTES, targetFree).updateAll();
+                int dumpsBefore = counter.get();
+                long artifactsBefore;
+                try (Stream<Path> files = Files.walk(target.root())) {
+                    artifactsBefore = files.filter(Files::isRegularFile).count();
+                }
+                Throwable noRoom = catchThrowable(() -> DatabaseBackups.backUp(service, "bulkyshop"));
+                assertThat(noRoom).as("step 3c: refused for the target's room").isInstanceOf(DumpOverCap.class)
+                    .hasMessageContaining("backup target has too little free space");
+                assertThat(DumpOverCap.wordsOf(noRoom)).as("step 3c: the alert has the operator's words").isNotNull();
+                assertThat(counter.get()).as("step 3c: the engine dumped nothing").isEqualTo(dumpsBefore);
+                try (Stream<Path> files = Files.walk(target.root())) {
+                    assertThat(files.filter(Files::isRegularFile).count()).as("step 3c: nothing was stored")
+                        .isEqualTo(artifactsBefore);
+                }
+                Row refused = DatabaseBackups.latestAttemptOf(List.of((Integer) bulky.get(DatabaseModel.ID)))
+                    .get((Integer) bulky.get(DatabaseModel.ID));
+                assertThat((String) refused.get(DatabaseDumpModel.STATUS)).as("step 3c: the attempt is FAILED")
+                    .isEqualTo(BackupStatus.FAILED.key());
+                assertThat((String) refused.get(DatabaseDumpModel.ERROR))
+                    .contains("backup target has too little free space");
 
                 // 4. A failed dump leaves a FAILED row with its reason and no artifact, and lists nothing.
                 assertThat(DatabaseBackups.backUpOrAlert(service, "brokendump", InstanceOperationLock.Contention.QUEUE))
@@ -182,6 +240,7 @@ class DatabaseDumpTargetTest {
             Models.get(DatabaseDumpModel.class).find().delete();
             Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("dumpshop")).delete();
             Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("brokendump")).delete();
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("bulkyshop")).delete();
         }
     }
 

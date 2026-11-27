@@ -12,9 +12,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Name;
 
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * The primary's own trace of what it did for each secondary: one structured log line per
@@ -37,9 +39,8 @@ public final class DnsFederationTrace {
             "outcome", "ok"));
         Row link = linkFor(zone.getZoneId(), key);
         if (link != null) {
-            link.set(DnsZonePeerModel.LAST_AXFR_AT, Now.instant());
-            link.set(DnsZonePeerModel.LAST_AXFR_SERIAL, (int) zone.getSerial());
-            stamp(link);
+            stamp(link, columns -> columns.assign(DnsZonePeerModel.LAST_AXFR_AT, Now.instant())
+                .assign(DnsZonePeerModel.LAST_AXFR_SERIAL, (int) zone.getSerial()));
         }
     }
 
@@ -55,23 +56,26 @@ public final class DnsFederationTrace {
                                   long serial, @NonNull String outcome) {
         Blast.slog("dns.notify_sent", fields(origin, serial,
             String.valueOf(peer.get(DnsPeerModel.NAME)), "outcome", outcome));
-        link.set(DnsZonePeerModel.LAST_NOTIFY_AT, Now.instant());
-        link.set(DnsZonePeerModel.LAST_NOTIFY_SERIAL, (int) serial);
-        link.set(DnsZonePeerModel.LAST_NOTIFY_OUTCOME,
-            outcome.length() > 255 ? outcome.substring(0, 255) : outcome);
-        stamp(link);
+        stamp(link, columns -> columns.assign(DnsZonePeerModel.LAST_NOTIFY_AT, Now.instant())
+            .assign(DnsZonePeerModel.LAST_NOTIFY_SERIAL, (int) serial)
+            .assign(DnsZonePeerModel.LAST_NOTIFY_OUTCOME,
+                outcome.length() > 255 ? outcome.substring(0, 255) : outcome));
     }
 
     /**
-     * Saves a trace stamp as the system's DNS federation work.
+     * Writes a trace stamp's own columns on the link, as the system's DNS federation work, where the link still is.
      *
      * AIDEV-NOTE: a trace stamp is bookkeeping, like {@link DnsSecondaryFreshness}'s probe: DnsZonePeerModel captures
-     * none of its fields, so the save records nothing. The AXFR responder runs on the DNS server's own thread with no
-     * identity, which is why the save runs under its own purpose. The structured log line above is the trace.
+     * none of its fields, so the write records nothing. The AXFR responder runs on the DNS server's own thread with no
+     * identity, which is why the write runs under its own purpose. The structured log line above is the trace. It
+     * assigns the stamp's columns by the link's id and never saves the row: a NOTIFY reads its links, then waits up to
+     * five seconds for an ack, and a whole-row save of what it read put back a link removed or changed meanwhile (a
+     * FOREIGN KEY failure on the dns-notify thread, and a take-over finding its owner no longer listing it).
      */
-    private static void stamp(@NonNull Row link) {
-        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DNS_FEDERATION,
-            () -> Models.get(DnsZonePeerModel.class).save(link));
+    private static void stamp(@NonNull Row link, @NonNull UnaryOperator<QueryBuilder<Row>> columns) {
+        Integer id = link.get(DnsZonePeerModel.ID);
+        ExecutionIdentity.runAsSystem(HohenheimSystemPurposes.DNS_FEDERATION, () -> columns.apply(
+            Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ID.eq(id))).updateAll());
     }
 
     /** @return the zone's link to the enabled peer holding the TSIG key, or null */

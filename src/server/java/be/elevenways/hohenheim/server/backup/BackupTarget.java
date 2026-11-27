@@ -55,6 +55,13 @@ public interface BackupTarget {
     boolean exists(@NonNull String key) throws IOException;
 
     /**
+     * What an unprivileged writer may still store on the filesystem the target's base lives on, read RIGHT NOW.
+     *
+     * @throws IOException when the target cannot be reached or does not answer with a size
+     */
+    long usableBytes() throws IOException;
+
+    /**
      * Every COMMITTED key under a prefix, staging debris excluded.
      *
      * Retention lives here rather than in a local ledger on purpose: a control-plane backup

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.cms.TrafficTvLinkLevel;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.traffic.ActivityAsk;
+import be.elevenways.hohenheim.traffic.ActivityModel;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
@@ -144,10 +145,17 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
                 counted = this.linedNow(tv);
             }
             assertThat(counted).as("step 3: the held picture drew the three").isGreaterThanOrEqualTo(3);
+            // A dot leaves at its hit's moment within its second, up to 999 ms after the frame that took it, plus a
+            // spread of up to SPREAD_MS; it lands TRAVEL_MS after it left. So the held time is stepped, a frame at a
+            // time, until one has left, and never past the latest leaving, before which the first one cannot land.
+            int flying = this.flyingNow(tv);
+            for (int stepped = 0; flying < 1 && stepped <= 999 + ActivityModel.SPREAD_MS; stepped += 16) {
+                context.clock().runFor(16);
+                flying = this.flyingNow(tv);
+            }
             String picture = tv.locator(SURFACE).getAttribute("aria-label");
             assertThat(picture).as("step 3: the visitor by number").contains("Visitor 1");
-            assertThat(((Number) tv.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d"))
-                .intValue()).as("step 3: the dots in flight, held").isGreaterThanOrEqualTo(1);
+            assertThat(flying).as("step 3: the dots in flight, held").isGreaterThanOrEqualTo(1);
             String words = (String) tv.evaluate("() => document.body.innerText");
             assertThat(words + picture).as("step 3: no visitor address in the page").doesNotContain(VISITOR);
             assertThat(tv.content()).as("step 3: nor in its markup").doesNotContain(VISITOR);
@@ -326,6 +334,15 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
                 .doesNotContain("znsl_").doesNotContain("/tv/").doesNotContain("share_link");
             assertThat(admin.call("list", Map.of("kind", "share_link")).error())
                 .as("step 2: zenit-auth's word is no kind here").isTrue();
+            // 2b. Its site in the trash, the link of that one site is listed nowhere; the site restored, it is back.
+            assertThat(admin.call("delete", Map.of("code", siteCode)).error()).as("step 2b: the site trashed")
+                .isFalse();
+            assertThat(admin.call("list", Map.of("kind", "tv_link")).text()).as("step 2b: not listed")
+                .doesNotContainPattern("\\b" + code + "\\b");
+            McpHttpSession.Answer restored = admin.call("site_restore", Map.of("code", siteCode));
+            assertThat(restored.error()).as("step 2b: restored " + restored.text()).isFalse();
+            assertThat(admin.call("list", Map.of("kind", "tv_link")).text()).as("step 2b: back with its site")
+                .contains(code);
 
             // 3. A wrong call is refused by the argument it names.
             McpHttpSession.Answer nowhere = admin.call("tv_link_set", Map.of("site", "S999999"));
@@ -371,6 +388,11 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
     private int linedNow(Page tv) {
         Matcher counted = LINED.matcher(tv.locator("[data-hh-activity-line]").textContent());
         return counted.find() ? Integer.parseInt(counted.group(1)) : 0;
+    }
+
+    /** @return how many dots the TV picture drew in flight at its last frame */
+    private int flyingNow(Page tv) {
+        return ((Number) tv.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d")).intValue();
     }
 
     /** @return the TV picture's type size in CSS pixels */
