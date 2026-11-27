@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.hohenheim.server.proxy.auth.SessionAuthority;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.cache.Cache;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -44,6 +45,9 @@ import java.util.Set;
  * {@code basic_auth} and {@code auth_provider} PASS when the request already carries
  * the credential/session they name, and are otherwise PENDING -- never FAIL.
  *
+ * {@code signed_link} PASSES for an address one of its secrets signed (SignedLink) and FAILS
+ * otherwise; a tree holding one answers a refusal as not found ({@link #refusesAsNotFound}).
+ *
  * An {@code any} group passes when a child passes, fails when every child fails, and
  * is PENDING in between; an {@code all} group fails when a child fails, passes when
  * every child passes, and is PENDING in between. An EMPTY group PASSES (which is what
@@ -73,6 +77,7 @@ public final class AccessRuleTree {
     private final boolean ownsAuthorizationHeader;
     private final boolean ownsPersistentCookie;
     private final List<String> unusableRules;
+    private final boolean refusesAsNotFound;
 
     private AccessRuleTree(Node root, List<SiteAuthGate> gates, CompileFacts facts) {
         this.root = root;
@@ -89,6 +94,7 @@ public final class AccessRuleTree {
         this.ownsAuthorizationHeader = authorization;
         this.ownsPersistentCookie = persistentCookie;
         this.unusableRules = List.copyOf(facts.unusable);
+        this.refusesAsNotFound = facts.signedLink;
     }
 
     /**
@@ -123,6 +129,14 @@ public final class AccessRuleTree {
     /** Whether a provider gate of this tree owns the persistent remember-me cookie on the site's host. */
     public boolean ownsPersistentCookie() {
         return this.ownsPersistentCookie;
+    }
+
+    /**
+     * Whether a refusal no credential could change answers the ordinary not-found page instead of 403: a tree holding a
+     * signed-link leaf never tells a visitor that something lies behind the path.
+     */
+    public boolean refusesAsNotFound() {
+        return this.refusesAsNotFound;
     }
 
     /**
@@ -339,6 +353,14 @@ public final class AccessRuleTree {
                 gates.add(gate);
                 return new AuthProviderNode(gate, context.sessionStore(), context.siteId());
             }
+            case AccessRuleModel.TYPE_SIGNED_LINK -> {
+                facts.signedLink = true;
+                List<SignedLink.Key> keys = SignedLinkKeys.of(data).keys();
+                if (keys.isEmpty()) {
+                    return facts.unusable("signed_link without a secret");
+                }
+                return new SignedLinkNode(keys);
+            }
             default -> {
                 return facts.unusable("of unknown type " + type);
             }
@@ -349,6 +371,7 @@ public final class AccessRuleTree {
     private static final class CompileFacts {
         boolean blocking;
         boolean basicLeaf;
+        boolean signedLink;
         final List<String> unusable = new ArrayList<>();
 
         /** Record one rule the tree cannot evaluate and return the leaf that refuses in its place. */
@@ -406,7 +429,7 @@ public final class AccessRuleTree {
     }
 
     private sealed interface Node
-        permits GroupNode, NetworkNode, UnusableNode, BasicAuthNode, AuthProviderNode {
+        permits GroupNode, NetworkNode, UnusableNode, BasicAuthNode, AuthProviderNode, SignedLinkNode {
 
         @NonNull Result evaluate(@NonNull Evaluation evaluation);
     }
@@ -459,6 +482,20 @@ public final class AccessRuleTree {
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
             boolean inside = this.range.matches(evaluation.clientAddress());
             return new Result(inside == this.passWhenInside ? Verdict.PASS : Verdict.FAIL, null);
+        }
+    }
+
+    /**
+     * A signed-link leaf: PASS for a GET or HEAD whose address a secret in force signed, FAIL for anything else. It
+     * asks the client for nothing, so it is never PENDING; a raw stream carries no address and fails.
+     */
+    private record SignedLinkNode(@NonNull List<SignedLink.Key> keys) implements Node {
+
+        @Override
+        public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
+            HttpServerExchange exchange = evaluation.exchange();
+            boolean admitted = exchange != null && SignedLink.admits(exchange, this.keys, Now.instant());
+            return new Result(admitted ? Verdict.PASS : Verdict.FAIL, null);
         }
     }
 

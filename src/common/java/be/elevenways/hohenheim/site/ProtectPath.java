@@ -45,6 +45,9 @@ public final class ProtectPath {
     /** A visitor signs in through one of the installation's sign-in providers. */
     public static final String METHOD_SIGN_IN = "sign_in";
 
+    /** A visitor opens a link the site owner's own code signed with the path's secret (SignedLinks). */
+    public static final String METHOD_SIGNED_LINK = "signed_link";
+
     public static final StringField PATH = StringField.builder("path")
         .label(HohenheimMicrocopy.PROTECT_PATH.of("path"))
         .help(HohenheimMicrocopy.PROTECT_PATH.of("path_help"))
@@ -59,6 +62,8 @@ public final class ProtectPath {
             .icon("network-wired"))
         .value(METHOD_SIGN_IN, v -> v.displayName("Sign-in").label(HohenheimMicrocopy.PROTECT_PATH.of("method_sign_in"))
             .icon("user-lock"))
+        .value(METHOD_SIGNED_LINK, v -> v.displayName("Signed link")
+            .label(HohenheimMicrocopy.PROTECT_PATH.of("method_signed_link")).icon("link"))
         .defaultValue(METHOD_PASSWORD)
         .label(HohenheimMicrocopy.PROTECT_PATH.of("method"))
         .required()

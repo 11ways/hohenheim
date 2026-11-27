@@ -950,6 +950,11 @@ final class AppHealth {
         return open;
     }
 
+    /** @return the site's own address with the scheme that works for it, null while visitors reach nothing of it */
+    static @Nullable String addressOf(@NonNull Row site) {
+        return openUrl(site, SiteFacts.of(List.of(site)));
+    }
+
     /** @return where this site's Open site link goes by its address alone, null while visitors reach nothing there */
     private static @Nullable String openUrl(@NonNull Row site, @NonNull SiteFacts facts) {
         if (site.get(SiteModel.DELETED_AT) != null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {

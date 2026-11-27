@@ -44,6 +44,8 @@ public final class HohenheimTemplateIds {
     public static final Identifier SITE_DEV_SESSIONS = Identifier.of("hohenheim", "cms/site-dev-sessions");
     public static final Identifier SITE_ACCESS_LOG = Identifier.of("hohenheim", "cms/site-access-log");
     public static final Identifier RECORD_TRAFFIC = Identifier.of("hohenheim", "cms/record-traffic");
+    public static final Identifier PROTECTED_PATH_SIGNED_LINK = Identifier.of("hohenheim",
+        "cms/protected-path-signed-link");
     public static final Identifier TRAFFIC_REPORT = Identifier.of("hohenheim", "cms/traffic-report");
     public static final Identifier TRAFFIC_ACTIVITY = Identifier.of("hohenheim", "cms/traffic-activity");
     public static final Identifier TRAFFIC_TV = Identifier.of("hohenheim", "cms/traffic-tv");

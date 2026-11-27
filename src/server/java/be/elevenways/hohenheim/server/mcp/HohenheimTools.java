@@ -95,6 +95,7 @@ public final class HohenheimTools extends McpToolCollection {
         for (McpHostTool tool : HohenheimSpamNotificationTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimTrafficTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimTvLinkTools.declared()) this.addTool(tool);
+        for (McpHostTool tool : HohenheimSignedLinkTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimDnsMoveTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimAppNetworkTools.declared()) this.addTool(tool);
         for (McpHostTool tool : HohenheimRecordActionTools.declared()) this.addTool(tool);

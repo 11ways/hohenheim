@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -61,14 +62,14 @@ public final class ProtectedPathParts {
     /** @return the admin protected-path resource */
     public static @NonNull PanelResource<Row> admin() {
         return entry(HohenheimIds.id("protected_path"))
-            .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(new ProtectedPathSignedLinkPage())).withHistory().withContributions())
             .build();
     }
 
     /** @return the /manage twin: the protected paths of the sites the caller manages */
     public static @NonNull PanelResource<Row> manage() {
         return ManageTwin.reached(entry(ManageTwin.id("protected_path")), TenantScopes.PROTECTED_PATHS,
-                ResourceTabs.<Row>none().withContributions())
+                ResourceTabs.<Row>of(List.of(new ProtectedPathSignedLinkPage())).withContributions())
             .build();
     }
 

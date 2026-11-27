@@ -44,6 +44,12 @@ final class TokenDisclosures {
     /** The addresses of TV links an administrator made, on the Traffic page's Activity tab, beside unread ones. */
     static final TokenDisclosures TV_LINKS = new TokenDisclosures("hohenheim.traffic_tv_links");
 
+    /** A signed link's new secret, on its protected path's Signed link tab; keyed by the path's access list. */
+    static final TokenDisclosures SIGNED_LINK_SECRETS = new TokenDisclosures("hohenheim.signed_link_secret");
+
+    /** A link the panel's Make a link made, on the same tab, once; keyed by the path's access list. */
+    static final TokenDisclosures SIGNED_LINKS = new TokenDisclosures("hohenheim.signed_link");
+
     private final @NonNull String place;
 
     private TokenDisclosures(@NonNull String place) {

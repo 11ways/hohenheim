@@ -56,6 +56,7 @@ final class AccessRuleSummaries {
                     .withArg("provider", providerName(data.get(AccessRuleModel.PROVIDER_ID.getName())));
                 yield permission == null ? summary : summary.withArg("permission", permission);
             }
+            case AccessRuleModel.TYPE_SIGNED_LINK -> HohenheimMicrocopy.ACCESS_RULE.of("summary_signed_link");
             default -> HohenheimMicrocopy.ACCESS_RULE.of("summary_unknown");
         };
     }
@@ -118,7 +119,7 @@ final class AccessRuleSummaries {
 
     /**
      * How a list lets visitors in, in a few words, when its enabled rules are all of one plain kind: a password for
-     * some people, a few networks, or one sign-in provider.
+     * some people, a few networks, one sign-in provider or one signed link.
      *
      * @return the words, or null when the list mixes kinds or nests groups (the caller then names the list)
      */
@@ -135,12 +136,14 @@ final class AccessRuleSummaries {
         int people = 0;
         int networks = 0;
         Row provider = null;
+        int signed = 0;
         for (Row rule : rules) {
             String type = rule.get(AccessRuleModel.TYPE);
             switch (type == null ? "" : type) {
                 case AccessRuleModel.TYPE_BASIC_AUTH -> people++;
                 case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> networks++;
                 case AccessRuleModel.TYPE_AUTH_PROVIDER -> provider = rule;
+                case AccessRuleModel.TYPE_SIGNED_LINK -> signed++;
                 default -> {
                     return null;
                 }
@@ -155,6 +158,9 @@ final class AccessRuleSummaries {
         if (provider != null && rules.size() == 1) {
             return HohenheimMicrocopy.ACCESS_RULE.of("protection_sign_in").withArg("provider",
                 providerName(AccessRuleModel.dataOf(provider).get(AccessRuleModel.PROVIDER_ID.getName())));
+        }
+        if (signed == 1 && rules.size() == 1) {
+            return HohenheimMicrocopy.ACCESS_RULE.of("protection_signed_link");
         }
         return null;
     }

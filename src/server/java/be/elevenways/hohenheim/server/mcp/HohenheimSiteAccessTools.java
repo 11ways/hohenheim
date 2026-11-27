@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteRedirectModel;
 import be.elevenways.hohenheim.server.cms.AccessWrites;
 import be.elevenways.hohenheim.server.cms.SitePartWrites;
+import be.elevenways.hohenheim.site.SignedLinks;
 import be.elevenways.zenit.ai.server.mcp.host.McpCodeTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostTool;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -26,6 +27,9 @@ import java.util.List;
  */
 final class HohenheimSiteAccessTools {
 
+    /** The protected_path_set choice acting on a signed link's secrets instead of changing the path. */
+    static final String SIGNED_LINK_SECRET = "signed_link_secret";
+
     private HohenheimSiteAccessTools() {
     }
 
@@ -34,9 +38,13 @@ final class HohenheimSiteAccessTools {
         McpHostTool protectedPath = McpCodeTool.builder("protected_path_set",
                 HohenheimTools.words("mcp_tool_protected_path_set"), HohenheimTools.writes())
             .code(HohenheimTools.words("mcp_code_protected_path_set"))
+            .optionalChoice(SIGNED_LINK_SECRET, HohenheimTools.words("mcp_signed_link_secret"),
+                List.of("replace", "end_old"))
             .creates(SitePartWrites.PROTECTED_PATHS.create(), null, List.of(SitePartWrites.SITE,
                 ProtectedPathModel.PATH.getInputName()), HohenheimTools.words("protected_path_thing"))
             .route(SitePartWrites.PROTECTED_PATHS.change(), HohenheimMcpAnswers::changed)
+            .route(SignedLinks.REPLACE_SECRET, HohenheimMcpAnswers::said, SIGNED_LINK_SECRET, "replace")
+            .route(SignedLinks.END_OLD_SECRET, HohenheimMcpAnswers::said, SIGNED_LINK_SECRET, "end_old")
             .build();
         McpHostTool pathRedirect = McpCodeTool.builder("path_redirect_set",
                 HohenheimTools.words("mcp_tool_path_redirect_set"), HohenheimTools.writes())

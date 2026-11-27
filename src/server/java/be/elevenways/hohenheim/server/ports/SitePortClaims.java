@@ -107,10 +107,8 @@ public final class SitePortClaims {
         }
         for (Row rule : Models.get(AccessRuleModel.class).find()
                 .where(AccessRuleModel.ACCESS_LIST_ID.eq(listId)).all()) {
-            String type = rule.get(AccessRuleModel.TYPE);
-            boolean credential = AccessRuleModel.TYPE_BASIC_AUTH.equals(type)
-                || AccessRuleModel.TYPE_AUTH_PROVIDER.equals(type);
-            if (credential && !Boolean.FALSE.equals(rule.get(AccessRuleModel.ENABLED))) {
+            if (AccessRuleModel.needsHttpRequest(rule.get(AccessRuleModel.TYPE))
+                    && !Boolean.FALSE.equals(rule.get(AccessRuleModel.ENABLED))) {
                 return Violations.ofField(SiteModel.ACCESS_LIST_ID.getName(), listId,
                     HohenheimMicrocopy.VIOLATIONS.of("stream_access_list_credentials"));
             }

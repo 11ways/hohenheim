@@ -28,7 +28,8 @@ column path at=0 shown=true hidden=false sortable=false filterable=true copyable
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-tab history at=0 landing=false view=false
+tab signed-link at=0 landing=false view=false
+tab history at=1 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:true
@@ -297,6 +298,7 @@ column path at=0 shown=true hidden=false sortable=false filterable=true copyable
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab signed-link at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false

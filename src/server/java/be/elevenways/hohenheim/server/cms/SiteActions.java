@@ -171,14 +171,14 @@ final class SiteActions {
 
     /**
      * Protect a path in place: the operation's form in a sheet on the site, which lands back on the site's overview,
-     * where the Protection card now lists the path in words.
+     * where the Protection card now lists the path in words; a path protected with a signed link lands on its Signed
+     * link tab instead, where its new secret is shown once.
      *
      * AIDEV-NOTE: a record action, not the Protection card's link: a placed operation opens its sheet from its own
      * button, and the card keeps linking to the site's protected paths, where the written path is listed.
      */
     private static @NonNull PanelAction<Row> protectPathAction() {
-        return CmsSupport.opensWhatItMade(ProtectPath.OPERATION,
-                (panel, pathId) -> SiteParts.recordRoute(panel, siteOfPath(pathId)).toUrl(),
+        return CmsSupport.opensWhatItMade(ProtectPath.OPERATION, SiteActions::protectedLanding,
                 HohenheimMicrocopy.PROTECT_PATH.of("action"),
                 HohenheimMicrocopy.PROTECT_PATH.of("description"))
             .inlineOnRecord(true)
@@ -186,11 +186,16 @@ final class SiteActions {
             .build();
     }
 
-    /** The site a protected path guards. */
-    private static @NonNull Object siteOfPath(@NonNull Integer pathId) {
+    /** @return where a protection lands: a signed path's Signed link tab, else its site's overview */
+    private static @NonNull String protectedLanding(@NonNull String panel, @NonNull Integer pathId) {
         Row path = Objects.requireNonNull(Models.get(ProtectedPathModel.class).findById(pathId),
             "the protected path was just written");
-        return Objects.requireNonNull(path.get(ProtectedPathModel.SITE_ID), "a protected path belongs to a site");
+        if (SignedLinkSecrets.ruleOf(path) != null) {
+            return CmsRoutes.subpage(panel, HohenheimSlugs.PROTECTED_PATHS, pathId, HohenheimSlugs.Tab.SIGNED_LINK)
+                .toUrl();
+        }
+        return SiteParts.recordRoute(panel, Objects.requireNonNull(path.get(ProtectedPathModel.SITE_ID),
+            "a protected path belongs to a site")).toUrl();
     }
 
     /**

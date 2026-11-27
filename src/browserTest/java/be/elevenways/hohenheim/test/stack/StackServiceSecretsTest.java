@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-class StackServiceSecretsTest {
+public class StackServiceSecretsTest {
 
     @RegisterExtension
     static final ServedApp APP = HohenheimServedApp.app();
@@ -237,7 +237,7 @@ class StackServiceSecretsTest {
     }
 
     /** The stored column exactly as it sits on disk, bypassing the ORM's decryption. */
-    private static List<String> rawColumn(String sql, int id) throws Exception {
+    public static List<String> rawColumn(String sql, int id) throws Exception {
         List<String> values = new ArrayList<>();
         // The class database's own address, which the served app hands the host as database.url.
         try (Connection connection = DriverManager.getConnection(

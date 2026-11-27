@@ -144,6 +144,7 @@ public final class HohenheimSlugs {
         public static final String SECONDARIES = "secondaries";
         public static final String SERVICES = "services";
         public static final String SHELL = "shell";
+        public static final String SIGNED_LINK = "signed-link";
         public static final String STATS = "stats";
         public static final String STEPS = "steps";
         public static final String TRAFFIC = "traffic";

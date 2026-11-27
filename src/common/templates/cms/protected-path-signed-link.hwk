@@ -1,0 +1,71 @@
+{#- A protected path's Signed link tab (ProtectedPathSignedLinkPage): the secrets in force with Replace the secret and
+    End now, how a link is made with a worked example signed with the current secret, and Make a link; a new secret
+    and a made link are shown here once, to the viewer they were made for. -#}
+{% declare title: String %}
+{% declare head: RecordHeadState = null %}
+{% declare card: SignedLinkCard %}
+{% declare oldDays: Long %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-list-page" data-hh-signed-link>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <pl-card data-hh-signed-link-secrets>
+        <pl-card-header>
+            <pl-card-title>{{ t("signed_link_secret_card", scope: "protected_path") }}</pl-card-title>
+            <pl-card-description>{{ t("signed_link_secret_lead", scope: "protected_path", days: oldDays) }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if card.newSecret %}
+            <pl-one-time-secret heading={% t("signed_link_new_secret", scope: "protected_path") %} warning={% t("signed_link_new_secret_warning", scope: "protected_path") %} value={% card.newSecret %} data-hh-new-secret></pl-one-time-secret>
+            {% /if %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("signed_link_secret_head", scope: "protected_path") }}</pl-table-head>
+                    <pl-table-head>{{ t("signed_link_made_head", scope: "protected_path") }}</pl-table-head>
+                    <pl-table-head>{{ t("signed_link_until_head", scope: "protected_path") }}</pl-table-head>
+                    <pl-table-head></pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each card.secrets as key key key.endsIn %}
+                    <pl-table-row data-hh-secret={% key.endsIn %}>
+                        <pl-table-cell><code>{{ t("signed_link_ends_in", scope: "protected_path", end: key.endsIn) }}</code></pl-table-cell>
+                        <pl-table-cell>{% if key.madeAt != null %}{{ t("signed_link_made_at", scope: "protected_path", at: key.madeAt) }} {% /if %}{{ key.madeBy }}</pl-table-cell>
+                        <pl-table-cell>{% if key.until != null %}{{ t("signed_link_until", scope: "protected_path", until: key.until) }}{% /if %}</pl-table-cell>
+                        <pl-table-cell>{% if key.end != null %}<div data-hh-end-old>{% render "zenitcms:form/page-action" var:page=key.end %}</div>{% /if %}</pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% if card.replace != null %}
+            <div data-hh-replace-secret>{% render "zenitcms:form/page-action" var:page=card.replace %}</div>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    {% if card.howTo %}
+    <pl-card data-hh-signed-link-how>
+        <pl-card-header>
+            <pl-card-title>{{ t("signed_link_how_card", scope: "protected_path") }}</pl-card-title>
+            <pl-card-description>{{ t("signed_link_how_lead", scope: "protected_path") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-code value={% card.howTo %} wrap="wrap" copy={% true %} label={% t("signed_link_how_card", scope: "protected_path") %}></pl-code>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+    {% if card.make != null %}
+    <pl-card data-hh-signed-link-make>
+        <pl-card-header>
+            <pl-card-title>{{ t("signed_link_make", scope: "protected_path") }}</pl-card-title>
+            <pl-card-description>{{ t("signed_link_make_lead", scope: "protected_path") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% render "zenitcms:form/page-action" var:page=card.make var:inline=true %}
+            {% if card.madeLink %}
+            <pl-one-time-secret variant="success" heading={% t("signed_link_made_link", scope: "protected_path") %} warning={% t("signed_link_works_until", scope: "protected_path", until: card.linkUntil) %} value={% card.madeLink %} data-hh-made-link></pl-one-time-secret>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+</section>
+{% /block %}

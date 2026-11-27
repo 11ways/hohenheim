@@ -188,15 +188,17 @@ public final class SiteOperationHandlers {
 
     /**
      * Writes the list a protection of one path makes, named after the site and the path, satisfied by any of its rules,
-     * unshared and owned by the caller, one rule per person, network or provider the input names: the list both the
-     * site's "Protect a path" and protected_path_set point the path at.
+     * unshared and owned by the caller, one rule per person, network or provider the input names, or one signed-link
+     * rule whose new secret waits for the caller: the list both the site's "Protect a path" and protected_path_set
+     * point the path at.
      *
      * @return the list's key
-     * @throws Violations when the chosen method's entry is empty, before anything is written
+     * @throws Violations when the chosen method's entry is empty, or a secret would be shown to nobody, before
+     *                    anything is written
      */
     static @NonNull Integer dedicatedList(@NonNull Row site, ProtectPath.@NonNull Input input,
                                           @Nullable AccessContext access) {
-        List<ProtectionRule> rules = protectionRules(input);
+        List<ProtectionRule> rules = protectionRules(input, access);
         AccessListModel lists = Models.get(AccessListModel.class);
         Row list = lists.createEmptyRow();
         list.set(AccessListModel.NAME, site.get(SiteModel.NAME) + " " + input.path());
@@ -214,6 +216,10 @@ public final class SiteOperationHandlers {
             row.set(AccessRuleModel.DATA, rule.data());
             row.set(AccessRuleModel.ENABLED, true);
             ruleModel.save(row);
+            if (rule.madeSecret() != null) {
+                SignedLinkSecrets.parkNew(Objects.requireNonNull(access, "a made secret has its caller"),
+                    list.get(AccessListModel.ID), rule.madeSecret());
+            }
         }
         return list.get(AccessListModel.ID);
     }
@@ -224,7 +230,8 @@ public final class SiteOperationHandlers {
      *
      * @throws Violations when the chosen method's entry is empty
      */
-    private static @NonNull List<ProtectionRule> protectionRules(ProtectPath.@NonNull Input input) {
+    private static @NonNull List<ProtectionRule> protectionRules(ProtectPath.@NonNull Input input,
+                                                                 @Nullable AccessContext access) {
         List<ProtectionRule> rules = new ArrayList<>();
         switch (input.method()) {
             case ProtectPath.METHOD_PASSWORD -> {
@@ -235,7 +242,7 @@ public final class SiteOperationHandlers {
                         rules.add(new ProtectionRule(AccessRuleModel.TYPE_BASIC_AUTH, Map.<String, Object>of(
                             AccessRuleModel.BASIC_AUTH_USERNAME.getName(), username,
                             AccessRuleModel.BASIC_AUTH_PASSWORD.getName(),
-                            Objects.requireNonNull(BasicCredentials.hashIfNeeded(password)))));
+                            Objects.requireNonNull(BasicCredentials.hashIfNeeded(password))), null));
                     }
                 }
                 requireSome(rules, ProtectPath.PEOPLE.name(), "protect_path_nobody");
@@ -243,16 +250,20 @@ public final class SiteOperationHandlers {
             case ProtectPath.METHOD_NETWORK -> {
                 for (String network : input.networks()) {
                     rules.add(new ProtectionRule(AccessRuleModel.TYPE_IP_ALLOW,
-                        Map.<String, Object>of(AccessRuleModel.NETWORK.getName(), network)));
+                        Map.<String, Object>of(AccessRuleModel.NETWORK.getName(), network), null));
                 }
                 requireSome(rules, ProtectPath.NETWORKS.getName(), "protect_path_no_network");
             }
             case ProtectPath.METHOD_SIGN_IN -> {
                 if (input.provider_id() != null) {
                     rules.add(new ProtectionRule(AccessRuleModel.TYPE_AUTH_PROVIDER,
-                        Map.<String, Object>of(AccessRuleModel.PROVIDER_ID.getName(), input.provider_id())));
+                        Map.<String, Object>of(AccessRuleModel.PROVIDER_ID.getName(), input.provider_id()), null));
                 }
                 requireSome(rules, ProtectPath.PROVIDER_ID.getName(), "protect_path_no_provider");
+            }
+            case ProtectPath.METHOD_SIGNED_LINK -> {
+                SignedLinkSecrets.NewSecret made = SignedLinkSecrets.first(access);
+                rules.add(new ProtectionRule(AccessRuleModel.TYPE_SIGNED_LINK, made.data(), made.secret()));
             }
             default -> throw Violations.ofField(ProtectPath.METHOD.getName(), input.method(),
                 HohenheimMicrocopy.VIOLATIONS.of("protect_path_method"));
@@ -260,8 +271,17 @@ public final class SiteOperationHandlers {
         return rules;
     }
 
-    /** One access rule the protection writes: its type token and its type-specific data. */
-    private record ProtectionRule(@NonNull String type, @NonNull Map<String, Object> data) {
+    /**
+     * One access rule the protection writes: its type token, its type-specific data and the secret it made, which is
+     * parked for the caller once the rule is stored.
+     */
+    private record ProtectionRule(@NonNull String type, @NonNull Map<String, Object> data,
+                                  @Nullable String madeSecret) {
+
+        @Override
+        public @NonNull String toString() {
+            return "ProtectionRule[" + this.type + "]";
+        }
     }
 
     private static void requireSome(@NonNull List<?> rules, @NonNull String entry, @NonNull String reason) {
@@ -301,7 +321,7 @@ public final class SiteOperationHandlers {
         return (site, input, access) -> HohenheimAccess.isAdmin(access) ? null : concealed(site);
     }
 
-    private static @NonNull DomainRefusal concealed(@NonNull Row site) {
+    static @NonNull DomainRefusal concealed(@NonNull Row site) {
         return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "site " + site.get(SiteModel.ID) + " is not reachable");
     }
 

@@ -79,6 +79,7 @@ public final class HohenheimHandlers {
         DeployReads.init();
         PreviewOperationHandlers.init();
         SiteOperationHandlers.init();
+        SignedLinkSecrets.init();
         PutOnline.init();
         GitProviderOperationHandlers.init();
         GameDomainOperationHandlers.init();

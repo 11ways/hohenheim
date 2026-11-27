@@ -117,6 +117,7 @@ final class ForwardingHeaders {
         requestHeaders.put(X_PROXIED_BY, chain.isBlank() ? instanceId : chain + ", " + instanceId);
 
         stripOwnCredentials(requestHeaders, entry);
+        SignedLink.stripFrom(exchange);
 
         String sourceIp = TrustedProxies.socketPeerIp(exchange);
         boolean trustedRemoteProxy = ProxyScheme.isTrustedRemoteProxy(exchange);

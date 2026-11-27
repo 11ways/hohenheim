@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.behaviour.TreeBehaviour;
 import be.elevenways.zenit.common.orm.behaviour.TreeDeletePolicy;
@@ -75,6 +76,12 @@ public class AccessRuleModel extends Model {
     /** Passes when the request is authenticated by the named site auth provider. */
     public static final String TYPE_AUTH_PROVIDER = "auth_provider";
 
+    /**
+     * Passes when the request's address carries an unexpired signature made with one of the rule's secrets; the
+     * secrets are made by Hohenheim, never typed (SignedLinkSecrets).
+     */
+    public static final String TYPE_SIGNED_LINK = "signed_link";
+
     /** PermissionSuggestionSources key: the realm of the provider THIS rule points at. */
     public static final Identifier RULE_PROVIDER_SUGGESTION_SOURCE = HohenheimIds.id("access_rule_realm");
 
@@ -135,6 +142,44 @@ public class AccessRuleModel extends Model {
             .remoteKey(SiteAuthProviderModel.ID)
             .build());
 
+    /**
+     * A signed link's secrets: the one in force and, after a replacement, the old one until its end.
+     *
+     * AIDEV-NOTE: every field is secret and drawn on the detail view only, so neither the rule editor nor a form ever
+     * offers or echoes one, history redacts them and an edit keeps them; only the two secrets are encrypted, their
+     * dates and makers are bookkeeping. Times are ISO instants and a maker is an account id, as text: the shape the
+     * one reader (SignedLinkKeys) and the one writer (SignedLinkSecrets) agree on.
+     */
+    public static final Schema SIGNED_LINK_DATA_SCHEMA = new Schema();
+    public static final StringField SIGNED_LINK_SECRET = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("secret").secret().encrypted().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_secret"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_secret_help")).build());
+    public static final StringField SIGNED_LINK_MADE_AT = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("secret_made_at").secret().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_made_at"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_made_at_help")).build());
+    public static final StringField SIGNED_LINK_MADE_BY = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("secret_made_by").secret().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_made_by"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_made_by_help")).build());
+    public static final StringField SIGNED_LINK_OLD_SECRET = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("old_secret").secret().encrypted().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_old_secret"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_old_secret_help")).build());
+    public static final StringField SIGNED_LINK_OLD_MADE_AT = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("old_secret_made_at").secret().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_old_made_at"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_old_made_at_help")).build());
+    public static final StringField SIGNED_LINK_OLD_MADE_BY = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("old_secret_made_by").secret().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_old_made_by"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_old_made_by_help")).build());
+    public static final StringField SIGNED_LINK_OLD_UNTIL = SIGNED_LINK_DATA_SCHEMA.addField(
+        StringField.builder().name("old_secret_until").secret().visibleIn(EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_signed_link_old_until"))
+            .help(HohenheimMicrocopy.HELP.of("rule_signed_link_old_until_help")).build());
+
     // --- Columns ---
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -169,6 +214,9 @@ public class AccessRuleModel extends Model {
         .value(TYPE_AUTH_PROVIDER, v -> v.displayName("Auth provider")
             .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("auth_provider"))
             .icon("shield-halved").color(ColorHue.INDIGO).schema(AUTH_PROVIDER_DATA_SCHEMA))
+        .value(TYPE_SIGNED_LINK, v -> v.displayName("Signed link")
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("signed_link"))
+            .icon("link").color(ColorHue.TEAL).schema(SIGNED_LINK_DATA_SCHEMA))
         .build());
 
     /** Type-specific configuration, shaped by the sub-schema the rule's TYPE declares. */
@@ -302,10 +350,31 @@ public class AccessRuleModel extends Model {
                         HohenheimMicrocopy.VIOLATIONS.of("access_rule_provider_missing"));
                 }
             }
+            case TYPE_SIGNED_LINK -> {
+                // Hohenheim makes the secret; a rule switched on without one could only refuse every request.
+                if (enabled && Texts.trimmedOrNull(map.get(SIGNED_LINK_SECRET.getName())) == null) {
+                    throw Violations.ofField("data." + SIGNED_LINK_SECRET.getName(), null,
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_signed_link_secret_missing"));
+                }
+            }
             default -> {
                 // An unknown type is already refused above, by the vocabulary check.
             }
         }
+    }
+
+    /**
+     * Whether a rule of this type judges something only an HTTP request carries (a credential, a session, a signed
+     * address), so a raw stream relayed unread can never pass it.
+     *
+     * @return true for an unknown type too: a rule this build cannot read never rides a stream
+     */
+    public static boolean needsHttpRequest(@Nullable String type) {
+        return switch (type == null ? "" : type) {
+            case TYPE_GROUP, TYPE_IP_ALLOW, TYPE_IP_DENY -> false;
+            case TYPE_BASIC_AUTH, TYPE_AUTH_PROVIDER, TYPE_SIGNED_LINK -> true;
+            default -> true;
+        };
     }
 
     /** @return the stored provider reference as a usable record id, or null */

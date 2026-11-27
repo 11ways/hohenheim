@@ -51,6 +51,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +81,9 @@ public final class SitePartWrites {
     /** The argument naming the sign-in provider visitors must pass. */
     public static final String SIGN_IN_PROVIDER = SiteKindWrites.SIGN_IN_PROVIDER;
 
+    /** The argument protecting a new path with a signed link, its secret made by Hohenheim and shown once. */
+    public static final String SIGNED_LINK = "signed_link";
+
     /** A person's username, in each entry of the credentials list. */
     static final String USERNAME = "username";
 
@@ -106,6 +110,9 @@ public final class SitePartWrites {
     private static final FormEntry PROVIDER_PICK = OperationForms.recordId(SIGN_IN_PROVIDER,
         HohenheimMicrocopy.HELP.of("protected_path_sign_in_provider"), SiteAuthProviderModel.MODEL_ID, false);
 
+    private static final FormEntry SIGNED_LINK_ENTRY = Plain.of(BooleanField.builder(SIGNED_LINK).defaultValue(false)
+        .help(HohenheimMicrocopy.HELP.of("protected_path_signed_link")).build());
+
     /**
      * A protected path: made under its site, guarding a path prefix by a list picked or made from the people, networks
      * or provider given; a change moves the path or points it at another list.
@@ -118,7 +125,8 @@ public final class SitePartWrites {
         .settings(List.of(ProtectedPathModel.PATH))
         .link(SiteKindWrites.ACCESS_LIST, HohenheimMicrocopy.HELP.of("protected_path_list"),
             ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID, false)
-        .fillsOnCreate(List.of(CREDENTIAL_LIST, ProtectPath.NETWORK_LIST, PROVIDER_PICK), SitePartWrites::protection)
+        .fillsOnCreate(List.of(CREDENTIAL_LIST, ProtectPath.NETWORK_LIST, PROVIDER_PICK, SIGNED_LINK_ENTRY),
+            SitePartWrites::protection)
         .build();
 
     /** A path redirect: made under its site, its path, match, target and status changing after. */
@@ -196,20 +204,23 @@ public final class SitePartWrites {
     }
 
     /**
-     * Points a new path at the list the people, networks or provider given make, written as the site's "Protect a
-     * path" writes it; with an access list given instead, nothing is filled and the path names that one.
+     * Points a new path at the list the people, networks, provider or signed link given make, written as the site's
+     * "Protect a path" writes it; with an access list given instead, nothing is filled and the path names that one.
      *
-     * @throws Violations for more than one of the four, or an empty one
+     * @throws Violations for more than one of the five, or an empty one
      * @throws DomainRefusal not found for a site the caller does not manage
      */
     private static @NonNull Map<String, Object> protection(OperationInput.@NonNull Values input,
                                                            @NonNull Set<String> sent, @Nullable Object siteKey,
                                                            @NonNull AccessContext caller) {
+        boolean signed = Boolean.TRUE.equals(input.get(SIGNED_LINK));
+        Set<String> guards = new HashSet<>(sent);
+        if (!signed) guards.remove(SIGNED_LINK);
         boolean listed = input.get(SiteKindWrites.ACCESS_LIST) != null;
-        if (sent.size() + (listed ? 1 : 0) > 1) {
+        if (guards.size() + (listed ? 1 : 0) > 1) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("protected_path_one_guard"));
         }
-        if (sent.isEmpty() || siteKey == null) return Map.of();
+        if (guards.isEmpty() || siteKey == null) return Map.of();
         Row site = Models.get(SiteModel.class).findById(Integer.valueOf(String.valueOf(siteKey)));
         if (site == null || !SiteOperationHandlers.live(site) || !HohenheimAccess.reachesRecord(caller,
                 SiteModel.MODEL_ID, site.get(SiteModel.ID), HohenheimCapabilities.MANAGE)) {
@@ -218,8 +229,9 @@ public final class SitePartWrites {
         if (!SiteParts.servesHttp(site)) {
             throw Violations.ofField(SITE, null, HohenheimMicrocopy.VIOLATIONS.of("protected_path_no_http"));
         }
-        String method = sent.contains(CREDENTIALS) ? ProtectPath.METHOD_PASSWORD
-            : sent.contains(ProtectPath.NETWORKS.getName()) ? ProtectPath.METHOD_NETWORK : ProtectPath.METHOD_SIGN_IN;
+        String method = signed ? ProtectPath.METHOD_SIGNED_LINK
+            : guards.contains(CREDENTIALS) ? ProtectPath.METHOD_PASSWORD
+            : guards.contains(ProtectPath.NETWORKS.getName()) ? ProtectPath.METHOD_NETWORK : ProtectPath.METHOD_SIGN_IN;
         Object provider = input.get(SIGN_IN_PROVIDER);
         String path = String.valueOf(input.get(ProtectedPathModel.PATH.getInputName()));
         ProtectPath.Input asked = new ProtectPath.Input(path, method, people(input.get(CREDENTIALS)),

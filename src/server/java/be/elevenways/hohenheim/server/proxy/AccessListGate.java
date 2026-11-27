@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
+import be.elevenways.hohenheim.net.Hostnames;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -11,6 +13,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the leaf that could still flip a PENDING verdict, and this class only turns that into a
  * response. See {@link AccessRuleTree} for the semantics, including why a refusal that no
  * credential could change answers 403 without ever emitting a challenge.
+ * A tree holding a signed-link leaf answers that refusal with the ordinary not-found page instead
+ * ({@link AccessRuleTree#refusesAsNotFound}).
  */
 final class AccessListGate {
 
@@ -43,6 +47,12 @@ final class AccessListGate {
             AccessRuleTree.Result result = tree.evaluate(exchange);
             if (result.allowed()) {
                 return true;
+            }
+            if (tree.refusesAsNotFound() && result.verdict() == AccessRuleTree.Verdict.FAIL) {
+                // A signed path refused looks like no path at all: the site's ordinary not-found page.
+                ErrorPages.send404(exchange, Hostnames.fromHostHeader(
+                    exchange.getRequestHeaders().getFirst(Headers.HOST)));
+                return false;
             }
             SiteAuthDecision refusal = result.refusal(exchange);
             if (refusal != null) {
