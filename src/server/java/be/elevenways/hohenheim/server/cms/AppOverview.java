@@ -421,7 +421,7 @@ final class AppOverview {
 
     // -- helpers ----------------------------------------------------------------------
 
-    private static @NonNull String listName(@Nullable Integer accessListId) {
+    static @NonNull String listName(@Nullable Integer accessListId) {
         Row list = Models.get(AccessListModel.class).findById(accessListId);
         return list == null ? "#" + accessListId : String.valueOf((Object) list.get(AccessListModel.NAME));
     }

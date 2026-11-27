@@ -57,7 +57,8 @@ import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/manage-slice-three.txt}) is today's behaviour, captured on the
  * stage 4 branch before SiteResource, SiteDomainResource and the template resources move onto parts (recaptured once
  * with the complete control, confirmation and destination facts, still before the move; re-pinned on 2026-11-26 for
- * the Files tab an own-files site offers and the static kind's own_files and storage settings, nothing else); a failing
+ * the Files tab an own-files site offers and the static kind's own_files and storage settings, and on 2026-11-27 for
+ * the Private paths a site's Sharing section lists, nothing else); a failing
  * comparison is a changed /manage or /admin surface, never a file to refresh. A twin table entry states one
  * deliberate tenant difference; an unlisted difference fails closed.
  *

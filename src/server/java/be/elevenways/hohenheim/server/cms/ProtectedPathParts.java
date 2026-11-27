@@ -50,6 +50,9 @@ public final class ProtectedPathParts {
     /** The virtual column saying whether the path is really guarded. */
     static final String PROTECTION_COLUMN = "protection";
 
+    /** The virtual column saying how one gets in ({@link AccessRuleSummaries#wayInOf}). */
+    public static final String WAY_COLUMN = "way_in";
+
     private static final SubjectType<Row> SUBJECT = SubjectType.record(ProtectedPathModel.REF);
 
     /** Removes a protected path from its site through the panel's own delete. */
@@ -77,6 +80,7 @@ public final class ProtectedPathParts {
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(ProtectedPathModel.PATH).filterable().copyable().build())
+            .column(ColumnSpec.virtual(WAY_COLUMN, HohenheimMicrocopy.PROTECT_PATH.of("method")).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.ACCESS_LIST_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.ACCESS_LIST_ID))
                 .relation(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
@@ -112,6 +116,8 @@ public final class ProtectedPathParts {
                 .emptyDescription(HohenheimMicrocopy.PROTECTED_PATH.of("no_own_protection"))
                 .computed(Objects.requireNonNull(table.column(PROTECTION_COLUMN)),
                     (path, request) -> protectionBadge(path))
+                .computed(Objects.requireNonNull(table.column(WAY_COLUMN)),
+                    (path, request) -> AccessRuleSummaries.wayInOf(path))
                 .build())
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows().create().update().delete().build())

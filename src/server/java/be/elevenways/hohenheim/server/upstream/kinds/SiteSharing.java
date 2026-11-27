@@ -1,11 +1,17 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.files.SiteFiles;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteFileSuggestions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.ChildList;
+import be.elevenways.zenit.cms.common.resource.RelatedList;
 import be.elevenways.zenit.common.data.DataProvider;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.Select;
@@ -28,12 +34,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * THE home of what a site shares with browsers: which other websites may read its answers and how long a browser may
- * keep its files, three settings every kind that answers with content declares in its own settings ({@link #addTo}).
+ * THE home of what a site shares with browsers and who may fetch what from it, the folded "Sharing and downloads"
+ * section after the site form's own sections: which other websites may read its answers, how long a browser may keep
+ * its files, and its private paths ({@link #addTo}).
  *
- * AIDEV-NOTE: settings keys, never columns, like {@code own_files}: no migration carries them, and every kind's tool
- * takes them by the same names because each kind's schema holds the same three fields. The proxy reads them once per
- * route (SharingAnswers); a redirect, a stream and a TLS passthrough answer no content, so they declare none.
+ * AIDEV-NOTE: the settings are settings keys, never columns, like {@code own_files}: no migration carries them,
+ * and every kind's tool takes them by the same names because each kind's schema holds the same fields. The proxy reads
+ * them once per route (SharingAnswers); a redirect, a stream and a TLS passthrough answer no content, so they declare
+ * none. The private paths are the site's protected paths read through the Protection tab's own child list, never
+ * stored here and never written here.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -54,6 +63,9 @@ public final class SiteSharing {
 
     /** The member a tool names a path by in {@link #BROWSER_KEEP}. */
     public static final String PATH_MEMBER = "path";
+
+    /** The section's entry listing the site's protected paths, which holds no value. */
+    public static final String PRIVATE_PATHS = "private_paths";
 
     /** Who may read the site's answers from another website. */
     public enum Readers {
@@ -125,13 +137,15 @@ public final class SiteSharing {
     }
 
     /**
-     * Declares the three settings on a kind's settings schema, folded in one section drawn after the site form's own
-     * sections, after "Advanced".
+     * Declares the two settings and the site's private paths on a kind's settings schema, folded in one section drawn
+     * after the site form's own sections, after "Advanced".
      *
-     * AIDEV-NOTE: they stay KIND settings although every kind that answers with content declares the same three: the
-     * kind's schema is what stores them in the site's settings (no column, no migration), what the tools derive their
-     * arguments from and what a redirect, a stream and a TLS passthrough leave out. Where they DRAW is the form's
-     * business, so the section says it trails its host form (FormSection.afterHostSections).
+     * AIDEV-NOTE: the settings stay KIND settings although every kind that answers with content declares the same
+     * ones: the kind's schema is what stores them in the site's settings (no column, no migration), what the tools
+     * derive their arguments from and what a redirect, a stream and a TLS passthrough leave out. Where they DRAW is the
+     * form's business, so the section says it trails its host form (FormSection.afterHostSections). The private paths
+     * are an entry holding no value (Schema.addEntry): the site's protected paths with how one gets in, an Edit link
+     * each and the site's "Protect a path", the same records and the one writer of the Protection tab.
      *
      * @return the schema
      */
@@ -152,6 +166,7 @@ public final class SiteSharing {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(READING_WEBSITES))
             .help(HohenheimMicrocopy.HELP.of(READING_WEBSITES))
             .addLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("reading_websites_add"))
+            .unordered()
             .build());
         schema.showWhen(READING_WEBSITES, READABLE_BY, Readers.LISTED.token());
         List<FieldOption<String>> choices = new ArrayList<>();
@@ -170,10 +185,25 @@ public final class SiteSharing {
             .keySuggestions(SiteSharing::fileSuggestions)
             .validator(SiteSharing::refuseUnreadableKeep)
             .build());
+        schema.addEntry(RelatedList.of(PRIVATE_PATHS, HohenheimSlugs.SITES, privatePaths(),
+            HohenheimMicrocopy.HOHENHEIM_FIELD.of(PRIVATE_PATHS),
+            HohenheimMicrocopy.HOHENHEIM_FIELD.of("private_paths_edit"),
+            HohenheimMicrocopy.HOHENHEIM_FIELD.of("private_paths_none")));
         schema.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.SHARING,
             HohenheimMicrocopy.FORM_SECTION.of("sharing_description"),
-            List.of(READABLE_BY, READING_WEBSITES, BROWSER_KEEP)).afterHostSections());
+            List.of(READABLE_BY, READING_WEBSITES, BROWSER_KEEP, PRIVATE_PATHS)).afterHostSections());
         return schema;
+    }
+
+    /**
+     * @return the site's protected paths as its Protection tab lists them, each its path and how one gets in, with
+     *         the site's own "Protect a path"
+     */
+    private static @NonNull ChildList<Object> privatePaths() {
+        return ChildList.sections(HohenheimSlugs.PROTECTED_PATHS,
+                HohenheimMicrocopy.HOHENHEIM_FIELD.of(PRIVATE_PATHS), HohenheimSlugs.PROTECTED_PATHS)
+            .columns(HohenheimSlugs.PROTECTED_PATHS, ProtectedPathModel.PATH.getName(), ProtectedPathParts.WAY_COLUMN)
+            .parentActions(HohenheimSlugs.PROTECTED_PATHS, ProtectPath.OPERATION.id());
     }
 
     /** @return the suggestions of a typed path: the edited site's own files, none for a site serving none */

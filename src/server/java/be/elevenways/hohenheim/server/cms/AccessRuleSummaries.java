@@ -4,7 +4,9 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -118,12 +120,23 @@ final class AccessRuleSummaries {
     }
 
     /**
-     * How a list lets visitors in, in a few words, when its enabled rules are all of one plain kind: a password for
-     * some people, a few networks, one sign-in provider or one signed link.
+     * How a list lets visitors in when its enabled rules are all of one plain kind: the protect-a-path method they
+     * make ({@link ProtectPath#METHOD}), with how many people or networks, or which provider.
      *
-     * @return the words, or null when the list mixes kinds or nests groups (the caller then names the list)
+     * @param method   one of the {@code ProtectPath.METHOD_*} tokens
+     * @param count    the people or networks of a password or network list, else 1
+     * @param provider the sign-in provider's id of a sign-in list, else null
      */
-    static @Nullable Microcopy protectionOf(@Nullable Integer listId) {
+    record Way(@NonNull String method, int count, @Nullable Object provider) {
+    }
+
+    /**
+     * THE reading of which way into a protected path a list's rules make, the one every surface naming it asks: a
+     * password for some people, a few networks, one sign-in provider or one signed link.
+     *
+     * @return the way, or null when the list has no enabled rule, mixes kinds or nests groups
+     */
+    static @Nullable Way wayOf(@Nullable Integer listId) {
         if (listId == null) {
             return null;
         }
@@ -150,19 +163,55 @@ final class AccessRuleSummaries {
             }
         }
         if (people == rules.size()) {
-            return HohenheimMicrocopy.ACCESS_RULE.of("protection_password").withArg("count", people);
+            return new Way(ProtectPath.METHOD_PASSWORD, people, null);
         }
         if (networks == rules.size()) {
-            return HohenheimMicrocopy.ACCESS_RULE.of("protection_network").withArg("count", networks);
+            return new Way(ProtectPath.METHOD_NETWORK, networks, null);
         }
         if (provider != null && rules.size() == 1) {
-            return HohenheimMicrocopy.ACCESS_RULE.of("protection_sign_in").withArg("provider",
-                providerName(AccessRuleModel.dataOf(provider).get(AccessRuleModel.PROVIDER_ID.getName())));
+            return new Way(ProtectPath.METHOD_SIGN_IN, 1,
+                AccessRuleModel.dataOf(provider).get(AccessRuleModel.PROVIDER_ID.getName()));
         }
         if (signed == 1 && rules.size() == 1) {
-            return HohenheimMicrocopy.ACCESS_RULE.of("protection_signed_link");
+            return new Way(ProtectPath.METHOD_SIGNED_LINK, 1, null);
         }
         return null;
+    }
+
+    /**
+     * How a list lets visitors in, in a few words, when its enabled rules are all of one plain kind ({@link #wayOf}).
+     *
+     * @return the words, or null when the list mixes kinds or nests groups (the caller then names the list)
+     */
+    static @Nullable Microcopy protectionOf(@Nullable Integer listId) {
+        Way way = wayOf(listId);
+        if (way == null) {
+            return null;
+        }
+        return switch (way.method()) {
+            case ProtectPath.METHOD_PASSWORD -> HohenheimMicrocopy.ACCESS_RULE.of("protection_password")
+                .withArg("count", way.count());
+            case ProtectPath.METHOD_NETWORK -> HohenheimMicrocopy.ACCESS_RULE.of("protection_network")
+                .withArg("count", way.count());
+            case ProtectPath.METHOD_SIGN_IN -> HohenheimMicrocopy.ACCESS_RULE.of("protection_sign_in")
+                .withArg("provider", providerName(way.provider()));
+            default -> CmsSupport.enumValueLabel(ProtectPath.METHOD, way.method());
+        };
+    }
+
+    /**
+     * THE words of how one gets in at a protected path, on its list, its read and a site's Private paths: the way's
+     * own label ("With a signed link"), the list it follows by name where its rules mix ways, or "Open to everyone"
+     * where its list lets every visitor through.
+     */
+    static @NonNull Microcopy wayInOf(@NonNull Row path) {
+        if (ProtectedPathInvariant.isOpen(path)) {
+            return HohenheimMicrocopy.PROTECTED_PATH.of("open_to_everyone");
+        }
+        Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
+        Way way = wayOf(listId);
+        return way != null ? CmsSupport.enumValueLabel(ProtectPath.METHOD, way.method())
+            : HohenheimMicrocopy.APP_OVERVIEW.of("by_list").withArg("list", AppOverview.listName(listId));
     }
 
     /**

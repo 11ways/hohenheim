@@ -31,9 +31,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A signed link's secrets over their life: made by Hohenheim, parked once for the account that caused it, replaced
@@ -56,7 +58,10 @@ public final class SignedLinkSecrets {
     /** The entropy of a made secret; its text is the URL-safe base64 of these bytes. */
     private static final int SECRET_BYTES = 32;
 
-    /** The read line naming a protected path's way in. */
+    /** The read line naming how one gets in at a protected path ({@link AccessRuleSummaries#wayInOf}). */
+    static final String WAY_LINE = "way_in";
+
+    /** The read line naming a signed path's secrets by their last characters. */
     static final String READ_LINE = "signed_link";
 
     /** The read line saying a new secret waits for the reader, where and until when. */
@@ -235,18 +240,25 @@ public final class SignedLinkSecrets {
         };
     }
 
-    /** A read's line for each path guarded by a signed link: the way in and its secrets by their last characters. */
+    /**
+     * A read's lines for each protected path: how one gets in, then, for a path guarded by a signed link, its secrets
+     * by their last characters.
+     */
     private static @NonNull Map<String, List<RecordReadLines.Line>> readLines(@NonNull Collection<String> keys,
                                                                               @NonNull AccessContext reader) {
         List<Integer> ids = new ArrayList<>();
         for (String key : keys) ids.add(Integer.valueOf(key));
         Map<Integer, String> pathByList = new HashMap<>();
-        for (Row path : Models.get(ProtectedPathModel.class).find().where(ProtectedPathModel.ID.in(ids)).all()) {
-            Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
-            if (listId != null) pathByList.put(listId, String.valueOf((Object) path.get(ProtectedPathModel.ID)));
-        }
         Map<String, List<RecordReadLines.Line>> lines = new HashMap<>();
+        for (Row path : Models.get(ProtectedPathModel.class).find().where(ProtectedPathModel.ID.in(ids)).all()) {
+            String pathKey = String.valueOf((Object) path.get(ProtectedPathModel.ID));
+            lines.computeIfAbsent(pathKey, ignored -> new ArrayList<>()).add(new RecordReadLines.Line(WAY_LINE,
+                reader.text(AccessRuleSummaries.wayInOf(path))));
+            Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
+            if (listId != null) pathByList.put(listId, pathKey);
+        }
         if (pathByList.isEmpty()) return lines;
+        Set<String> told = new HashSet<>();
         Instant now = Now.instant();
         Map<Integer, Instant> waiting = TokenDisclosures.SIGNED_LINK_SECRETS.waiting(reader, pathByList.keySet());
         for (Row rule : Models.get(AccessRuleModel.class).find()
@@ -254,24 +266,23 @@ public final class SignedLinkSecrets {
                 .and(AccessRuleModel.TYPE.eq(AccessRuleModel.TYPE_SIGNED_LINK))
                 .and(AccessRuleModel.ENABLED.eq(true)).orderBy(AccessRuleModel.ID, SortOrder.ASC).all()) {
             String pathKey = pathByList.get(rule.get(AccessRuleModel.ACCESS_LIST_ID));
-            if (pathKey == null || lines.containsKey(pathKey)) continue;
+            if (pathKey == null || !told.add(pathKey)) continue;
             SignedLinkKeys held = keysOf(rule);
             SignedLinkKeys.Made old = held.oldInForce(now);
-            Microcopy said = held.current() == null ? HohenheimMicrocopy.PROTECTED_PATH.of("signed_link_read_none")
+            Microcopy words = held.current() == null ? HohenheimMicrocopy.PROTECTED_PATH.of("signed_link_read_none")
                 : old == null ? HohenheimMicrocopy.PROTECTED_PATH.of("signed_link_read")
                     .withArg("end", held.current().endsIn())
                 : HohenheimMicrocopy.PROTECTED_PATH.of("signed_link_read_old")
                     .withArg("end", held.current().endsIn()).withArg("old", old.endsIn())
                     .withArg("until", Objects.requireNonNull(old.until()));
-            List<RecordReadLines.Line> told = new ArrayList<>();
-            told.add(new RecordReadLines.Line(READ_LINE, reader.text(said)));
+            List<RecordReadLines.Line> said = lines.computeIfAbsent(pathKey, ignored -> new ArrayList<>());
+            said.add(new RecordReadLines.Line(READ_LINE, reader.text(words)));
             Instant shownUntil = waiting.get(rule.get(AccessRuleModel.ACCESS_LIST_ID));
             if (shownUntil != null) {
-                told.add(new RecordReadLines.Line(WAITING_LINE, reader.text(HohenheimMicrocopy.PROTECTED_PATH
+                said.add(new RecordReadLines.Line(WAITING_LINE, reader.text(HohenheimMicrocopy.PROTECTED_PATH
                     .of("signed_link_read_waiting").withArg("account", TokenDisclosures.shownTo(reader))
                     .withArg("until", shownUntil))));
             }
-            lines.put(pathKey, told);
         }
         return lines;
     }

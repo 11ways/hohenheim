@@ -2,22 +2,28 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.server.upstream.kinds.SiteSharing;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
 import be.elevenways.zenit.server.storage.Storages;
@@ -329,6 +335,13 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             page.waitForSelector(band);
             String websites = "pl-field[data-path='settings." + SiteSharing.READING_WEBSITES + "']";
             assertThat(page.locator(websites).isVisible()).as("step 1: no websites while nobody reads").isFalse();
+            String privatePaths = section + " pl-field[data-zf-related-list='" + SiteSharing.PRIVATE_PATHS + "']";
+            assertThat(page.locator(privatePaths + " pl-label").textContent().strip()).as("step 1: the third part")
+                .isEqualTo("Private paths");
+            assertThat(page.locator(privatePaths + " [data-related-empty]").textContent().strip())
+                .as("step 1: none yet, in one quiet line").isEqualTo("No private paths.");
+            assertThat(page.locator(privatePaths + " [data-related-actions] pl-button").textContent().strip())
+                .as("step 1: the site's own Protect a path").isEqualTo("Protect a path");
 
             // 2. These websites shows the list; its button and the paths' say what they add; the last row is quiet.
             page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.LISTED.token() + "'] button");
@@ -338,6 +351,9 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             page.click(websites + " pl-button[data-array-add]");
             page.locator(websites + " input[name='settings." + SiteSharing.READING_WEBSITES + "']:not([type='hidden'])")
                 .last().fill(READER);
+            assertThat(page.locator(websites + " [data-array-move-up]").count()).as("step 2: a website has no order")
+                .isZero();
+            assertThat(page.locator(websites + " [data-array-remove]").count()).as("step 2: but is removed").isOne();
             String keep = "pl-field[data-path='settings." + SiteSharing.BROWSER_KEEP + "']";
             assertThat(page.locator(keep + " pl-button[data-key-value-add]").textContent().strip())
                 .as("step 2: the paths' button").isEqualTo("Add a path");
@@ -359,8 +375,6 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             chooseOptionOf(choice, SiteSharing.Keep.ASK_AGAIN.token());
             assertThat(page.locator(choice + " .pl-select-value").first().textContent())
                 .as("step 3: the choice in words before the save").contains("Always ask again");
-            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-sharing-section.png"))
-                .setFullPage(true));
             page.click(".cms-form-actions pl-button[type='submit']");
             page.waitForSelector("text=have been saved");
             Map<?, ?> stored = (Map<?, ?>) Models.get(SiteModel.class).findById(siteId).get(SiteModel.SETTINGS);
@@ -370,7 +384,16 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
                 .isEqualTo(Map.of("/beta/latest.json", "ask_again"));
             assertThat(stored.get("own_files")).as("step 3: the kind's own settings kept").isEqualTo(true);
 
-            // 4. Reopened, the values are kept on screen; switched away and back, the typed website is still there.
+            // 4. Reopened, the values are kept on screen, and the path protected since is listed with how one gets in
+            // and an Edit link to its page; switched away and back, the typed website is still there.
+            Map<String, Object> protect = new LinkedHashMap<>();
+            protect.put(ProtectPath.PATH.getName(), "/beta/");
+            protect.put(ProtectPath.METHOD.getName(), ProtectPath.METHOD_SIGNED_LINK);
+            OperationPipeline.invoke(OperationRequest.of(ProtectPath.OPERATION, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(TenantConduits.operator()).subjects(List.of(Models.get(SiteModel.class).findById(siteId)))
+                .form(protect));
+            Row beta = Objects.requireNonNull(Models.get(ProtectedPathModel.class).find()
+                .where(ProtectedPathModel.SITE_ID.eq(siteId)).first(), "step 4: /beta/ is protected");
             navigateToApp("/admin/sites/" + siteId);
             waitForHydration();
             page.click(section + " pl-collapsible-trigger button");
@@ -382,6 +405,24 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             assertThat(page.locator(typedWebsite).first().inputValue()).as("step 4: the website").isEqualTo(READER);
             assertThat(page.locator(choice + " .pl-select-value").first().textContent())
                 .as("step 4: the path's choice in words").contains("Always ask again");
+            String row = privatePaths + " [data-related-row]";
+            assertThat(page.locator(row).count()).as("step 4: one private path").isOne();
+            assertThat(page.locator(row + " [data-column='path']").textContent().strip()).as("step 4: its path")
+                .isEqualTo("/beta");
+            assertThat(page.locator(row + " [data-column='" + ProtectedPathParts.WAY_COLUMN + "']").textContent()
+                .strip()).as("step 4: how one gets in, the way's own label").isEqualTo("With a signed link");
+            assertThat(page.locator(row + " [data-related-opener]").textContent().strip()).as("step 4: Edit")
+                .isEqualTo("Edit");
+            assertThat(page.locator(row + " [data-related-opener]").getAttribute("href")).as("step 4: to its page")
+                .contains(HohenheimSlugs.PROTECTED_PATHS + "/" + beta.get(ProtectedPathModel.ID));
+            assertThat(page.locator(privatePaths + " [data-related-empty]").count()).as("step 4: no empty line")
+                .isZero();
+            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-sharing-section.png"))
+                .setFullPage(true));
+            assertThat(page.locator(row + " input, " + row + " select, " + row + " pl-select").count())
+                .as("step 4: read only, no second writer").isZero();
+            // The path is no longer protected, so the files under /beta/ are fetched in step 6.
+            Models.get(ProtectedPathModel.class).delete(beta.get(ProtectedPathModel.ID));
             page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.ANY.token() + "'] button");
             page.waitForSelector(websites, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
             page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.LISTED.token() + "'] button");
