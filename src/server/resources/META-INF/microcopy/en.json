@@ -21567,6 +21567,8 @@
   "browser_keep_decide": {"text": "Decide by itself", "scope": "hohenheim_field"},
   "browser_keep_ask_again": {"text": "Always ask again", "scope": "hohenheim_field"},
   "browser_keep_year": {"text": "Keep for a year", "scope": "hohenheim_field"},
+  "reading_websites_add": {"text": "Add website", "scope": "hohenheim_field"},
+  "browser_keep_add": {"text": "Add a path", "scope": "hohenheim_field"},
   "sharing_website_unreadable": {"text": "{$address} is no website address: write its full address, such as https://account.example.com, without a path", "scope": "violations"},
   "sharing_path_unrooted": {"text": "{$path} is no path of the site: start it with /", "scope": "violations"},
   "sharing_keep_unknown": {"text": "Choose how long browsers may keep {$path}", "scope": "violations"},

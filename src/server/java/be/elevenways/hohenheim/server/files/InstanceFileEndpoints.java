@@ -19,10 +19,12 @@ import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.result.DryResult;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RequestBodyTooLargeException;
@@ -87,6 +89,12 @@ public final class InstanceFileEndpoints {
             HohenheimEndpoints.INSTANCE_ID, FileRoot::app);
         htmlLane(HohenheimEndpoints.SITE_FILE_DOWNLOAD, HohenheimEndpoints.SITE_FILE_ACTION,
             HohenheimEndpoints.SITE_ID, FileRoot::site);
+        // The path suggestions of a site's settings read through the same gate as its Files tab (SiteFiles).
+        HohenheimEndpoints.SITE_FILE_SUGGESTIONS.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            return new DryResult<>(DataPage.singlePage(siteId == null ? List.of()
+                : SiteFiles.suggestions(siteId, conduit.getParameter(HohenheimEndpoints.PROVIDER_TEXT))));
+        });
     }
 
     /** One Files tab's download and action routes, over the record its id parameter names. */

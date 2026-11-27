@@ -2,9 +2,15 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.files.SiteFiles;
+import be.elevenways.hohenheim.site.SiteFileSuggestions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.data.DataProvider;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.http.CacheDirectives;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.ListField;
 import be.elevenways.zenit.common.orm.field.MapEntries;
@@ -119,14 +125,22 @@ public final class SiteSharing {
     }
 
     /**
-     * Declares the three settings on a kind's settings schema, folded in one section after the kind's own.
+     * Declares the three settings on a kind's settings schema, folded in one section drawn after the site form's own
+     * sections, after "Advanced".
+     *
+     * AIDEV-NOTE: they stay KIND settings although every kind that answers with content declares the same three: the
+     * kind's schema is what stores them in the site's settings (no column, no migration), what the tools derive their
+     * arguments from and what a redirect, a stream and a TLS passthrough leave out. Where they DRAW is the form's
+     * business, so the section says it trails its host form (FormSection.afterHostSections).
      *
      * @return the schema
      */
     public static @NonNull Schema addTo(@NonNull Schema schema) {
         EnumField.Builder readers = EnumField.builder(READABLE_BY).defaultValue(Readers.NOBODY.token())
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(READABLE_BY))
-            .help(HohenheimMicrocopy.HELP.of(READABLE_BY));
+            .help(HohenheimMicrocopy.HELP.of(READABLE_BY))
+            .presentation(Select.Presentation.SEGMENTS)
+            .keepsAValue();
         for (Readers each : Readers.values()) {
             readers.value(each.token(), each.token(), HohenheimMicrocopy.HOHENHEIM_FIELD.of("readable_by_"
                 + each.token()));
@@ -137,7 +151,9 @@ public final class SiteSharing {
         schema.addField(ListField.<String>builder(website).name(READING_WEBSITES)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(READING_WEBSITES))
             .help(HohenheimMicrocopy.HELP.of(READING_WEBSITES))
+            .addLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("reading_websites_add"))
             .build());
+        schema.showWhen(READING_WEBSITES, READABLE_BY, Readers.LISTED.token());
         List<FieldOption<String>> choices = new ArrayList<>();
         for (Keep each : Keep.values()) {
             choices.add(FieldOption.of(each.token(), each.label()));
@@ -149,12 +165,21 @@ public final class SiteSharing {
             .valueLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("browser_keep_choice"))
             .entries(MapEntries.keyedBy(PATH_MEMBER, HohenheimMicrocopy.HELP.of("browser_keep_path"))
                 .choice(KEEP_MEMBER, choices, HohenheimMicrocopy.HELP.of("browser_keep_choice")))
+            .addLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("browser_keep_add"))
+            .otherwise(Keep.DECIDE.label())
+            .keySuggestions(SiteSharing::fileSuggestions)
             .validator(SiteSharing::refuseUnreadableKeep)
             .build());
         schema.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.SHARING,
             HohenheimMicrocopy.FORM_SECTION.of("sharing_description"),
-            List.of(READABLE_BY, READING_WEBSITES, BROWSER_KEEP)));
+            List.of(READABLE_BY, READING_WEBSITES, BROWSER_KEEP)).afterHostSections());
         return schema;
+    }
+
+    /** @return the suggestions of a typed path: the edited site's own files, none for a site serving none */
+    private static @Nullable DataProvider fileSuggestions(@Nullable Object record) {
+        return record instanceof Row site && SiteFiles.servesOwnFiles(site)
+            ? new SiteFileSuggestions(site.get(SiteModel.ID)) : null;
     }
 
     /** @return the normalized website a full address names (scheme, host and port alone), null for anything else */

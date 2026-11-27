@@ -1364,6 +1364,20 @@ public class HohenheimEndpoints {
         .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
         .build();
 
+    /**
+     * The site's own files and folders under a typed path ({@code text}), a few at a time: the suggestions of a path a
+     * site's settings name. The same reading gate as the site's Files tab; a refused or empty reading lists nothing.
+     */
+    public static final Endpoint<DataPage> SITE_FILE_SUGGESTIONS = Endpoint.<DataPage>builder()
+        .identifier(HohenheimIds.id("site_file_suggestions"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("suggestions").build())
+        .query(MalformedQuery.ABSENT, PROVIDER_TEXT)
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_READ_LIMIT)
+        .build();
+
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
     //     channel other Hohenheim instances use to edit zones this instance owns, and the
     //     record API of any key whose owner may author records) ---

@@ -22,6 +22,7 @@ import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
 import be.elevenways.zenit.server.storage.Storages;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -295,9 +296,10 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
     }
 
     /**
-     * The site's form in a browser: the folded section after the kind's own settings, set, saved and reopened with
-     * its values kept; then the Traffic tab lists the files fetched across the screen. Both are screenshot for the
-     * board.
+     * The site's form in a browser as the approved board draws it: the folded section after Advanced, the band, the
+     * websites only for "These websites", the add buttons saying what they add, a path suggested from the site's own
+     * files, its choice read in words before the save, and the quiet last row; saved, reopened, switched away and
+     * saved again. Then the Traffic tab lists the files fetched across the screen. Both are screenshot for the board.
      */
     @Test
     void theSharingSectionIsSavedInTheFormAndTheTrafficTabListsTheFilesFetched() throws Exception {
@@ -310,8 +312,9 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             Row site = ProxyTestSupport.setupSite("hohenheim:static", "Tadoma downloads " + tag, "form-" + tag,
                 new LinkedHashMap<>(Map.of("own_files", true)));
             int siteId = site.get(SiteModel.ID);
+            putFiles(siteId);
 
-            // 1. The section is folded; opened, it holds the three settings.
+            // 1. The section is folded and stands after the form's Advanced section.
             navigateToApp("/admin/sites/" + siteId);
             waitForHydration();
             String section = "pl-card.zf-form-section[data-section$='" + HohenheimFormSections.SHARING + "']";
@@ -320,43 +323,83 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
                     + "advanced).compareDocumentPosition(document.querySelector(section))"
                     + " & Node.DOCUMENT_POSITION_FOLLOWING)",
                 List.of("pl-card.zf-form-section[data-section='" + FormSection.ADVANCED_ID + "']", section));
-            System.out.println("SHARING section after the form's Advanced: " + afterAdvanced);
+            assertThat(afterAdvanced).as("step 1: after Advanced").isTrue();
             page.click(section + " pl-collapsible-trigger button");
-            page.waitForSelector(section + " pl-select[name='settings." + SiteSharing.READABLE_BY + "']");
-
-            // 2. These websites, one website, and one path asked again; saved.
-            chooseOption("settings." + SiteSharing.READABLE_BY, SiteSharing.Readers.LISTED.token());
+            String band = section + " pl-toggle-group[name='settings." + SiteSharing.READABLE_BY + "']";
+            page.waitForSelector(band);
             String websites = "pl-field[data-path='settings." + SiteSharing.READING_WEBSITES + "']";
+            assertThat(page.locator(websites).isVisible()).as("step 1: no websites while nobody reads").isFalse();
+
+            // 2. These websites shows the list; its button and the paths' say what they add; the last row is quiet.
+            page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.LISTED.token() + "'] button");
+            page.waitForSelector(websites, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.VISIBLE));
+            assertThat(page.locator(websites + " pl-button[data-array-add]").textContent().strip())
+                .as("step 2: the websites' button").isEqualTo("Add website");
             page.click(websites + " pl-button[data-array-add]");
             page.locator(websites + " input[name='settings." + SiteSharing.READING_WEBSITES + "']:not([type='hidden'])")
                 .last().fill(READER);
             String keep = "pl-field[data-path='settings." + SiteSharing.BROWSER_KEEP + "']";
+            assertThat(page.locator(keep + " pl-button[data-key-value-add]").textContent().strip())
+                .as("step 2: the paths' button").isEqualTo("Add a path");
+            assertThat(page.locator(keep + " [data-key-value-rest]").textContent())
+                .as("step 2: the quiet last row").contains("Everything else").contains("Decide by itself");
+
+            // 3. A path typed is suggested from the site's own files; its choice reads in words before the save.
             page.click(keep + " pl-button[data-key-value-add]");
-            page.locator(keep + " pl-input[name$='.key'] input").last().fill("/beta/latest.json");
+            String path = keep + " pl-select[name$='.key']";
+            page.locator(path + " .pl-select-field").last().click();
+            page.locator("he-bottom .pl-select-popup[data-open] .pl-select-search input").fill("/beta/la");
+            String suggested = "he-bottom .pl-select-popup[data-open] div[role='option']"
+                + "[data-value='/beta/latest.json']";
+            page.waitForSelector(suggested);
+            page.click(suggested);
+            page.waitForSelector("he-bottom .pl-select-popup[data-open]",
+                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.DETACHED));
             String choice = keep + " pl-select[name$='.value']";
             chooseOptionOf(choice, SiteSharing.Keep.ASK_AGAIN.token());
+            assertThat(page.locator(choice + " .pl-select-value").first().textContent())
+                .as("step 3: the choice in words before the save").contains("Always ask again");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-sharing-section.png"))
                 .setFullPage(true));
             page.click(".cms-form-actions pl-button[type='submit']");
             page.waitForSelector("text=have been saved");
             Map<?, ?> stored = (Map<?, ?>) Models.get(SiteModel.class).findById(siteId).get(SiteModel.SETTINGS);
-            assertThat(stored.get(SiteSharing.READABLE_BY)).as("step 2: saved").isEqualTo("listed");
-            assertThat(stored.get(SiteSharing.READING_WEBSITES)).as("step 2: the website").isEqualTo(List.of(READER));
-            assertThat(stored.get(SiteSharing.BROWSER_KEEP)).as("step 2: the path")
+            assertThat(stored.get(SiteSharing.READABLE_BY)).as("step 3: saved").isEqualTo("listed");
+            assertThat(stored.get(SiteSharing.READING_WEBSITES)).as("step 3: the website").isEqualTo(List.of(READER));
+            assertThat(stored.get(SiteSharing.BROWSER_KEEP)).as("step 3: the suggested path")
                 .isEqualTo(Map.of("/beta/latest.json", "ask_again"));
-            assertThat(stored.get("own_files")).as("step 2: the kind's own settings kept").isEqualTo(true);
+            assertThat(stored.get("own_files")).as("step 3: the kind's own settings kept").isEqualTo(true);
 
-            // 3. Reopened, the values are kept on screen.
+            // 4. Reopened, the values are kept on screen; switched away and back, the typed website is still there.
             navigateToApp("/admin/sites/" + siteId);
             waitForHydration();
-            assertThat(page.locator("pl-select[name='settings." + SiteSharing.READABLE_BY + "'] .pl-select-value")
-                .textContent()).as("step 3: the choice").contains("These websites");
-            assertThat(page.locator(websites + " input[name='settings." + SiteSharing.READING_WEBSITES
-                + "']:not([type='hidden'])").first().inputValue()).as("step 3: the website").isEqualTo(READER);
+            page.click(section + " pl-collapsible-trigger button");
+            page.waitForSelector(band);
+            assertThat(page.locator(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.LISTED.token()
+                + "'] button").getAttribute("aria-checked")).as("step 4: the choice").isEqualTo("true");
+            String typedWebsite = websites + " input[name='settings." + SiteSharing.READING_WEBSITES
+                + "']:not([type='hidden'])";
+            assertThat(page.locator(typedWebsite).first().inputValue()).as("step 4: the website").isEqualTo(READER);
             assertThat(page.locator(choice + " .pl-select-value").first().textContent())
-                .as("step 3: the path's choice in words").contains("Always ask again");
+                .as("step 4: the path's choice in words").contains("Always ask again");
+            page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.ANY.token() + "'] button");
+            page.waitForSelector(websites, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+            page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.LISTED.token() + "'] button");
+            page.waitForSelector(websites, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.VISIBLE));
+            assertThat(page.locator(typedWebsite).first().inputValue()).as("step 4: kept within the form")
+                .isEqualTo(READER);
 
-            // 4. Files fetched on the Traffic tab, across the screen, after real requests.
+            // 5. Any website saved: the websites typed before are dropped with the choice.
+            page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.ANY.token() + "'] button");
+            page.click(".cms-form-actions pl-button[type='submit']");
+            page.waitForSelector("text=have been saved");
+            stored = (Map<?, ?>) Models.get(SiteModel.class).findById(siteId).get(SiteModel.SETTINGS);
+            assertThat(stored.get(SiteSharing.READABLE_BY)).as("step 5: any website").isEqualTo("any");
+            assertThat(stored.containsKey(SiteSharing.READING_WEBSITES)).as("step 5: no websites kept").isFalse();
+            assertThat(stored.get(SiteSharing.BROWSER_KEEP)).as("step 5: the path kept")
+                .isEqualTo(Map.of("/beta/latest.json", "ask_again"));
+
+            // 6. Files fetched on the Traffic tab, across the screen, after real requests.
             fetchSomeFiles(cleanUp, siteId, tag);
             TrafficCountingJourneyTest.counted(HohenheimTraffic.sourceOf(siteId), 6, began);
             navigateToApp(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
@@ -364,11 +407,11 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             waitForHydration();
             String table = "pl-card[data-hh-traffic-table='files']";
             page.waitForSelector(table);
-            assertThat(page.locator("pl-grid " + table).count()).as("step 4: across the screen, not paired")
+            assertThat(page.locator("pl-grid " + table).count()).as("step 6: across the screen, not paired")
                 .isZero();
             assertThat(page.locator(table + " pl-table-head").allTextContents().stream().map(String::strip).toList())
-                .as("step 4: its columns").containsExactly("Path", "Fetched", "Sent", "Last fetched");
-            assertThat(page.locator(table).textContent()).as("step 4: the files")
+                .as("step 6: its columns").containsExactly("Path", "Fetched", "Sent", "Last fetched");
+            assertThat(page.locator(table).textContent()).as("step 6: the files")
                 .contains("/beta/releases/Tadoma-1.2.0.dmg").contains("/beta/latest.json")
                 .doesNotContain("/beta/missing.json");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-traffic-files-fetched.png"))
@@ -380,14 +423,19 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
 
     // -- plumbing -------------------------------------------------------------
 
-    /**
-     * Puts two files in the site's own files and fetches them through the proxy: the installer twice whole and once
-     * resumed as a range, the json twice, a missing file that counts as no file fetched.
-     */
-    private static void fetchSomeFiles(Deque<Runnable> cleanUp, int siteId, String tag) throws Exception {
+    /** Puts two files in the site's own files: the json the account page reads and an installer. */
+    private static void putFiles(int siteId) throws Exception {
         Path files = storage.resolve(SiteFiles.prefixOf(siteId));
         write(files.resolve("beta/latest.json"), "{\"version\":\"1.2.0\"}");
         write(files.resolve("beta/releases/Tadoma-1.2.0.dmg"), "d".repeat(4096));
+    }
+
+    /**
+     * Puts the two files in the site's own files and fetches them through the proxy: the installer twice whole and
+     * once resumed as a range, the json twice, a missing file that counts as no file fetched.
+     */
+    private static void fetchSomeFiles(Deque<Runnable> cleanUp, int siteId, String tag) throws Exception {
+        putFiles(siteId);
         String host = "fetch-" + siteId + "-" + tag + ".share.test";
         ProxyTestSupport.addDomain(Models.get(SiteModel.class).findById(siteId), host, "exact", null, false);
         ProxyServer proxy = ProxyTestSupport.startProxy();

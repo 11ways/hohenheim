@@ -38,6 +38,6 @@ final class GitProviderParams {
         if (trimmed.isEmpty()) {
             return null;
         }
-        return new DataItem(trimmed, trimmed, null, null, null, null, null, Map.of());
+        return DataItem.ofText(trimmed);
     }
 }

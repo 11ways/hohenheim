@@ -9,7 +9,9 @@ import be.elevenways.protoblast.common.util.BlastThread;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.data.DataItem;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.FilesystemNodeKind;
 import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.zenit.server.storage.StoredObject;
 import be.elevenways.zenit.server.storage.Storages;
@@ -20,6 +22,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Duration;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -111,6 +115,39 @@ public final class SiteFiles {
     static @NonNull StoredFileTree treeOf(int siteId) {
         Row site = requireSite(siteId);
         return new StoredFileTree(storageOf(RawValues.map(site.get(SiteModel.SETTINGS))), prefixOf(siteId));
+    }
+
+    /** At most this many files and folders are suggested for one typed path. */
+    private static final int SUGGESTIONS = 20;
+
+    /**
+     * The site's own files and folders whose path starts with what was typed, read in the folder it names: folders
+     * first, each ending in a slash, at most {@link #SUGGESTIONS}.
+     *
+     * @return nothing for a reader the Files tab would refuse, a site without its own files or a folder not there
+     */
+    public static @NonNull List<DataItem> suggestions(int siteId, @Nullable String typed) {
+        String text = typed == null || typed.isBlank() ? "/" : typed.strip();
+        text = text.startsWith("/") ? text : "/" + text;
+        int slash = text.lastIndexOf('/');
+        String start = text.substring(slash + 1);
+        List<DataItem> items = new ArrayList<>();
+        try {
+            InstanceFiles.Listing listing = new InstanceFiles().list(FileRoot.site(siteId),
+                slash == 0 ? "/" : text.substring(0, slash));
+            for (InstanceFiles.Entry entry : listing.entries()) {
+                if (items.size() == SUGGESTIONS) {
+                    break;
+                }
+                if (entry.name().startsWith(start)) {
+                    boolean folder = FilesystemNodeKind.DIRECTORY.name().equals(entry.kind());
+                    items.add(DataItem.ofText(folder ? entry.path() + "/" : entry.path()));
+                }
+            }
+        } catch (Violations refused) {
+            return List.of();
+        }
+        return items;
     }
 
     /** @return the most bytes one site's files may hold together */

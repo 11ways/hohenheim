@@ -21567,6 +21567,8 @@
   "browser_keep_decide": {"text": "Zelf laten beslissen", "scope": "hohenheim_field"},
   "browser_keep_ask_again": {"text": "Altijd opnieuw vragen", "scope": "hohenheim_field"},
   "browser_keep_year": {"text": "Een jaar bewaren", "scope": "hohenheim_field"},
+  "reading_websites_add": {"text": "Website toevoegen", "scope": "hohenheim_field"},
+  "browser_keep_add": {"text": "Een pad toevoegen", "scope": "hohenheim_field"},
   "sharing_website_unreadable": {"text": "{$address} is geen adres van een website: schrijf het volledige adres, zoals https://account.example.com, zonder pad", "scope": "violations"},
   "sharing_path_unrooted": {"text": "{$path} is geen pad van de site: begin het met /", "scope": "violations"},
   "sharing_keep_unknown": {"text": "Kies hoe lang browsers {$path} mogen bewaren", "scope": "violations"},
