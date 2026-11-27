@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteSharing;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -194,6 +196,21 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(TenantUpstreams.publicOnly(site)).as("step 5: any-address reach").isFalse();
             assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
                 .as("step 5: loopback is dialled").isInstanceOf(OutboundUrlGuard.Allowed.class);
+
+            // 6. A manager of the site changes what it shares: that aims nothing, so the operator's mark stays, and
+            //    once the grant goes the operator's loopback upstream is still dialled.
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE, true);
+            Map<String, Object> shared = new LinkedHashMap<>(RawValues.map(sites.findById(siteId)
+                .get(SiteModel.SETTINGS)));
+            shared.put(SiteSharing.READABLE_BY, SiteSharing.Readers.ANY.token());
+            assertThat(write(new UserPrincipal(tenantId, "Provenance Tenant"), sites, siteId, SiteModel.SETTINGS,
+                shared)).as("step 6: the manager's sharing saves").isNull();
+            assertThat(trusted(siteId)).as("step 6: THE ASSERTION -- the operator's upstream stays marked").isTrue();
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE);
+            assertThat(TenantUpstreams.publicOnly(sites.findById(siteId))).as("step 6: any-address reach kept")
+                .isFalse();
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
                 HohenheimCapabilities.MANAGE);

@@ -65,19 +65,23 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_path"))
             .help(HohenheimMicrocopy.HELP.of("root_path")).build());
 
-    // Default true matches the Node original (ecstatic showed listings out of the box).
+    // Default true matches the Node original (ecstatic showed listings out of the box). The three listing settings are
+    // the site manager's to change (SiteManagerSettings): what a folder shows names no host path.
     public static final BooleanField AUTOINDEX = SETTINGS_SCHEMA.addField(
         BooleanField.builder("autoindex").defaultValue(true).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("autoindex"))
-            .help(HohenheimMicrocopy.HELP.of("autoindex")).build());
+            .help(HohenheimMicrocopy.HELP.of("autoindex"))
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true).build());
 
     public static final BooleanField INDEXES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("indexes").defaultValue(true).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("indexes"))
-            .help(HohenheimMicrocopy.HELP.of("indexes")).build());
+            .help(HohenheimMicrocopy.HELP.of("indexes"))
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true).build());
 
     public static final BooleanField SHOW_HIDDEN_FILES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("show_hidden_files").defaultValue(false)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("show_hidden_files"))
-            .help(HohenheimMicrocopy.HELP.of("show_hidden_files")).build());
+            .help(HohenheimMicrocopy.HELP.of("show_hidden_files"))
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 

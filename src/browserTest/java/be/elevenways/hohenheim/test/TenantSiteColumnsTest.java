@@ -3,6 +3,9 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteSharing;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -11,10 +14,13 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -23,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
- * A delegated tenant writes exactly what the /manage site surface offers -- name, enabled,
- * description -- on EVERY writer, and removes a domain row only of a site it manages.
+ * A delegated tenant writes exactly what the /manage site surface offers -- name, enabled, description and the
+ * settings its kind gives the site's manager -- on EVERY writer, and removes a domain row only of a site it manages.
  *
  * AIDEV-NOTE: before this, sites were the one tenant-writable model with no column
  * allow-list in TenantWrites: the /manage resource's field bindings were the only thing
@@ -89,6 +95,19 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
         return refused == null ? null : refused.all().get(0).message().key();
     }
 
+    /** @return the first refusal of a tenant write of these settings over the stored ones, or null when it saved */
+    private static Violation settingsWrite(Map<String, Object> changes) {
+        Violations refused = catchThrowableOfType(() -> TenantConduits.as(tenant, () -> {
+            Model model = Models.get(SiteModel.class);
+            Row row = model.findById(ownSite);
+            Map<String, Object> settings = new LinkedHashMap<>(RawValues.map(row.get(SiteModel.SETTINGS)));
+            settings.putAll(changes);
+            row.set(SiteModel.SETTINGS, settings);
+            model.save(row);
+        }), Violations.class);
+        return refused == null ? null : refused.all().get(0);
+    }
+
     @Test
     void aTenantWritesOnlyTheDelegatedSiteColumns() {
         Model model = Models.get(SiteModel.class);
@@ -127,6 +146,30 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
             row.set(SiteModel.SLUG, "site-columns-operator-slug");
             model.save(row);
         })).as("step 4: an operator is unconstrained").doesNotThrowAnyException();
+
+        // 5. The settings its manager changes save by a direct write too, beside an operator's LAN folder, and leave
+        //    who set its target as it was; a host setting, a key no kind declares and a mix are refused on the key,
+        //    and leave the settings as stored.
+        assertThat(model.findById(ownSite).get(SiteModel.TARGET_TRUSTED)).as("step 5: the seed's target is trusted")
+            .isEqualTo(true);
+        assertThat(settingsWrite(Map.of(SiteSharing.READABLE_BY, "any", StaticUpstreamKind.AUTOINDEX.getName(),
+            false))).as("step 5: sharing and listing are the manager's").isNull();
+        assertThat(model.findById(ownSite).get(SiteModel.TARGET_TRUSTED))
+            .as("step 5: what it shares aims nothing, so the operator's target mark stays").isEqualTo(true);
+        for (Map<String, Object> host : List.of(Map.<String, Object>of(StaticUpstreamKind.ROOT_PATH.getName(), "/etc"),
+                Map.<String, Object>of(StaticUpstreamKind.STORAGE.getName(), "elsewhere"),
+                Map.<String, Object>of("undeclared", "x"),
+                Map.<String, Object>of(SiteSharing.READABLE_BY, "nobody", StaticUpstreamKind.ROOT_PATH.getName(),
+                    "/etc"))) {
+            Violation refused = settingsWrite(host);
+            assertThat(refused).as("step 5: %s refused", host).isNotNull();
+            assertThat(refused.message().key()).as("step 5: %s frozen", host).isEqualTo("tenant_field_frozen");
+            assertThat(refused.path()).as("step 5: on its key").startsWith(SiteModel.SETTINGS.getName() + ".");
+        }
+        Map<?, ?> kept = (Map<?, ?>) model.findById(ownSite).get(SiteModel.SETTINGS);
+        assertThat(kept).as("step 5: THE ASSERTION -- only the manager's settings changed").isEqualTo(Map.of(
+            StaticUpstreamKind.ROOT_PATH.getName(), "/tmp", SiteSharing.READABLE_BY, "any",
+            StaticUpstreamKind.AUTOINDEX.getName(), false));
     }
 
     @Test

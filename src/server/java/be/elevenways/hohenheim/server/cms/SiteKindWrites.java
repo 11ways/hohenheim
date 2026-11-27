@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteManagerSettings;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
@@ -39,6 +40,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,9 +51,9 @@ import java.util.Set;
  * family run through the site panel resource's own create and save, so its gates, the route claims and the enable
  * invariant decide as they do for the panel's form.
  *
- * AIDEV-NOTE: someone who is no administrator changes only the name, the switch and the description, through the
- * delegated save the /manage form posts. The panel's create and save decide who may (SiteOperationHandlers), so both
- * operations are open.
+ * AIDEV-NOTE: someone who is no administrator changes only the name, the switch, the description and the settings
+ * the kind gives the site's manager (SiteManagerSettings), through the delegated save the /manage form posts. The
+ * panel's create and save decide who may (SiteOperationHandlers), so both operations are open.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -165,22 +167,45 @@ public final class SiteKindWrites {
     /**
      * Writes what the call sent over the site as it stands: an administrator's through the operator's save (a site
      * turned into this kind keeping the settings this kind declares, its app link cleared when it serves no app),
-     * anyone else's through the delegated save.
+     * anyone else's through the delegated save, which takes the name, the switch, the description and the settings the
+     * kind gives the site's manager.
      *
      * @return the names of the settings written
-     * @throws Violations for a setting only an administrator changes
+     * @throws Violations for a setting only an administrator changes, on its argument
      */
     private static @NonNull String changed(@NonNull Kind kind, @NonNull Row site, OperationInput.@NonNull Values input,
                                            @NonNull Set<String> sent, boolean turned,
                                            @NonNull AccessContext caller) {
         List<String> written = new ArrayList<>(sent);
         if (!HohenheimAccess.isAdmin(caller)) {
-            if (turned || !DELEGATED.containsAll(sent)) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
+            if (turned) throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
+            List<Field<?, ?>> managed = new ArrayList<>(SiteManagerSettings.of(kind.schema()));
+            managed.retainAll(kind.settings());
+            Set<String> delegated = new LinkedHashSet<>(DELEGATED);
+            for (Field<?, ?> field : managed) delegated.add(field.getInputName());
+            for (String name : sent) {
+                if (!delegated.contains(name)) {
+                    throw Violations.ofField(name, input.get(name),
+                        HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
+                }
             }
+            if (sent.isEmpty()) return "";
+            // The delegated save takes its whole form: what the call left out is posted as it is stored (the patch
+            // base), the kind is the site's own, and every other setting keeps its stored value there.
             Map<String, Object> raw = new LinkedHashMap<>();
-            for (String name : sent) raw.put(name, input.get(name));
-            if (raw.isEmpty()) return "";
+            for (String name : DELEGATED) raw.put(name, input.get(name));
+            Map<String, Object> settings = new LinkedHashMap<>();
+            for (Field<?, ?> field : managed) {
+                // What the call left out stays as stored (its default where none is), so the delegated save posts it
+                // back unchanged: a switch left out of a post would otherwise read as off.
+                Object kept = RawValues.map(site.get(SiteModel.SETTINGS)).get(field.getName());
+                Object value = sent.contains(field.getInputName()) ? input.get(field.getInputName())
+                    : kept != null ? kept : field.getDefaultValue();
+                if (value != null) settings.put(field.getInputName(), value);
+            }
+            // Settings go only when the call changes one, so a rename leaves the settings exactly as stored.
+            boolean changesSettings = managed.stream().anyMatch(field -> sent.contains(field.getInputName()));
+            if (changesSettings) raw.put(SiteModel.SETTINGS.getName(), KindSettingsWrites.posted(managed, settings));
             Panel panel = ApiConduits.managePanel();
             ResourceWrites.update(panel, sites(panel), Objects.requireNonNull(site.get(SiteModel.ID)), site, raw,
                 caller);

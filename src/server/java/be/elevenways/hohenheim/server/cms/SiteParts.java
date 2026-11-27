@@ -84,8 +84,9 @@ import java.util.Set;
  * placed site operations, and the write verbs as domain operations ({@link SiteWrites}).
  *
  * AIDEV-NOTE: the /manage twin is a NARROWING, never a gate of its own: its rows are the sites the caller manages
- * ({@link TenantScopes#SITES}), its form edits three metadata columns, it creates and deletes nothing and keeps no
- * trash or history; the operations' authorizers and the model's write hooks judge every writer alike.
+ * ({@link TenantScopes#SITES}), its form edits three metadata columns and the settings the site's kind gives its
+ * manager, it creates and deletes nothing and keeps no trash or history; the operations' authorizers and the model's
+ * write hooks judge every writer alike.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -213,8 +214,8 @@ public final class SiteParts {
     }
 
     /**
-     * @return the /manage twin: the sites the caller manages, their three metadata columns, the switches; no create,
-     *         delete, clone, rollback, trash or history
+     * @return the /manage twin: the sites the caller manages, their three metadata columns and their manager's
+     *         settings, the switches; no create, delete, clone, rollback, trash or history
      */
     public static @NonNull PanelResource<Row> manage() {
         // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar. The
@@ -246,7 +247,10 @@ public final class SiteParts {
                 .bindings(List.of(
                     ResourceFieldBinding.of(SiteModel.NAME.getName(), FieldAccess.ALWAYS_EDITABLE),
                     ResourceFieldBinding.of(SiteModel.ENABLED.getName(), FieldAccess.ALWAYS_EDITABLE),
-                    ResourceFieldBinding.of(SiteModel.DESCRIPTION.getName(), FieldAccess.ALWAYS_EDITABLE)))
+                    ResourceFieldBinding.of(SiteModel.DESCRIPTION.getName(), FieldAccess.ALWAYS_EDITABLE),
+                    // The kind is the operator's; shown so the settings drawn are the site's own kind's, which are
+                    // only those its manager changes (SiteWrites.MANAGE_FORM): a kind giving none draws no box.
+                    ResourceFieldBinding.of(SiteModel.UPSTREAM_KIND.getName(), FieldAccess.alwaysReadonly())))
                 .build())
             .writes(ResourceMutations.rows()
                 .update(SiteWrites.MANAGE_UPDATE, SiteOperationHandlers::revisionOf)

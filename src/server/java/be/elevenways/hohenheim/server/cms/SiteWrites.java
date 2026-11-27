@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteManagerSettings;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.edit.EditView;
@@ -21,6 +22,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
@@ -80,6 +82,13 @@ public final class SiteWrites {
     static final Plain ENABLED = Plain.of(SiteModel.ENABLED)
         .withHelp(record -> record instanceof Row site ? SiteParts.reachOf(site).enabledHelp() : null);
 
+    /** The upstream kind as choice cards: chosen on the operator's form, read on the delegated one. */
+    static final Select<?> KIND = Select.of(SiteModel.UPSTREAM_KIND)
+        .options(FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND))
+        .presentation(Select.Presentation.CARDS)
+        .clearable(false)
+        .build();
+
     /**
      * The operator's site form: choice cards decide the upstream kind, the per-kind settings switch under it without a
      * round trip, and the instance pick only wakes up for the {@code instance} kind, narrowed to instances the routing
@@ -89,11 +98,7 @@ public final class SiteWrites {
         .add(SiteModel.NAME)
         // Optional, CREATE only: a blank one still creates a hostname-less site and lands on the Domains tab.
         .add(CREATE_HOSTNAME)
-        .add(Select.of(SiteModel.UPSTREAM_KIND)
-            .options(FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND))
-            .presentation(Select.Presentation.CARDS)
-            .clearable(false)
-            .build())
+        .add(KIND)
         // The pick is SHOWN only while the chosen upstream kind is the instance one (its showWhen below), and offers
         // only kinds whose serving container publishes a port. An instance is never created on a whim from inside a
         // site form, so there is no "create new" here. The submit is re-narrowed by this same form's coercion.
@@ -135,11 +140,18 @@ public final class SiteWrites {
             InstanceUpstreamKind.ID.toString())
         .build();
 
-    /** The delegated form: only non-execution metadata is editable on /manage. */
+    /**
+     * The delegated form: the non-execution metadata, and the settings of the site's kind its manager changes
+     * ({@link SiteManagerSettings}), the kind itself shown read-only (SiteParts.manage binds it) so the sub-form draws
+     * the site's own kind.
+     */
     public static final FormSpec MANAGE_FORM = FormSpec.builder()
         .add(SiteModel.NAME)
         .add(ENABLED)
         .add(SiteModel.DESCRIPTION)
+        .add(KIND)
+        .add(Nested.of(SiteModel.SETTINGS).schemaFrom(SiteModel.UPSTREAM_KIND.getName())
+            .retaining(SiteManagerSettings::managerChanges).build())
         .build();
 
     /**
@@ -166,8 +178,9 @@ public final class SiteWrites {
                             @Nullable Integer auth_provider_id, @Nullable Integer access_list_id) {
     }
 
-    /** The delegated edit's input. */
-    public record ManageInput(@Nullable String name, @Nullable Boolean enabled, @Nullable String description) {
+    /** The delegated edit's input; the kind is context only, never written. */
+    public record ManageInput(@Nullable String name, @Nullable Boolean enabled, @Nullable String description,
+                              @Nullable String upstream_kind, @Nullable Map<String, Object> settings) {
     }
 
     /** Why the panel's create and saves are kept from assistants: the site tools of each upstream kind post them. */
@@ -207,7 +220,7 @@ public final class SiteWrites {
             .command(CmsCommands.TRANSACTIONAL)
             .register();
 
-    /** The delegated edit: name, switch and description only, never the admin normalizers. */
+    /** The delegated edit: name, switch, description and the manager's settings, never the admin normalizers. */
     public static final Operation<Row, ManageInput, Void> MANAGE_UPDATE =
         Operation.declare(HohenheimIds.id("manage_update_site"))
             .happened(OperationSentences.of("manage_update_site"))
@@ -218,7 +231,8 @@ public final class SiteWrites {
             .verb(OperationVerb.UPDATE)
             .gate(OperationGate.open())
             .input(OperationInput.of(MANAGE_FORM, ManageInput.class, v -> new ManageInput(
-                v.get(SiteModel.NAME), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION))))
+                v.get(SiteModel.NAME), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION),
+                v.get(SiteModel.UPSTREAM_KIND), RawValues.mapOrNull(v.get(SiteModel.SETTINGS.getName())))))
             .patchable()
             .command(CmsCommands.TRANSACTIONAL)
             .register();

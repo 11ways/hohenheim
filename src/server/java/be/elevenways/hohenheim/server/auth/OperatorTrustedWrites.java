@@ -2,12 +2,14 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.source.GitRepository;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteManagerSettings;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -72,6 +74,16 @@ public final class OperatorTrustedWrites {
                 value -> true);
         }
 
+        /**
+         * A site's settings without those its manager changes (SiteManagerSettings): what it shares and what its
+         * folders list aim nothing, so changing them neither clears the mark nor is refused on an operator's site.
+         */
+        static @NonNull Target siteSettings() {
+            return new Target(SiteModel.SETTINGS.getName(), SiteModel.SETTINGS,
+                row -> row.get(SiteModel.SETTINGS.getName()) == null ? null : SiteManagerSettings.hostSettings(
+                    row.get(SiteModel.UPSTREAM_KIND.getName()), RawValues.map(row.get(SiteModel.SETTINGS.getName()))),
+                SiteModel.SETTINGS.getDefaultValue(), value -> true);
+        }
         /** An instance's source repository URL, a delegate being refused only a local one (a controller path). */
         static @NonNull Target instanceSource() {
             return new Target(GitSourceSchema.REPOSITORY_URL, InstanceModel.SETTINGS,
@@ -89,12 +101,13 @@ public final class OperatorTrustedWrites {
     }
 
     /**
-     * The targets: a site's upstream (its kind, the per-kind settings holding every dial target, and the trust flag
-     * that lifts a tenant site to any-address reach), a provider's base URL and an instance's source.
+     * The targets: a site's upstream (its kind, the per-kind settings holding every dial target but its manager's,
+     * and the trust flag that lifts a tenant site to any-address reach), a provider's base URL and an instance's
+     * source.
      */
     private static final List<Guarded> GUARDED = List.of(
         new Guarded(SiteModel.class, SiteModel.MODEL_ID, SiteModel.ID, SiteModel.TARGET_TRUSTED,
-            List.of(Target.column(SiteModel.UPSTREAM_KIND), Target.column(SiteModel.SETTINGS),
+            List.of(Target.column(SiteModel.UPSTREAM_KIND), Target.siteSettings(),
                 Target.column(SiteModel.TRUSTED_UPSTREAM))),
         new Guarded(GitProviderModel.class, GitProviderModel.MODEL_ID, GitProviderModel.ID,
             GitProviderModel.TARGET_TRUSTED, List.of(Target.column(GitProviderModel.BASE_URL))),

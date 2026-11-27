@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.server.upstream.kinds.SiteSharing;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
@@ -240,7 +241,9 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
 
     /**
      * An assistant sets what a site shares through the real MCP endpoint, reads it back, is refused by argument name
-     * for a website without its scheme and a path without its slash, takes a path away, and reads the files fetched.
+     * for a website without its scheme and a path without its slash, takes a path away, and reads the files fetched;
+     * the site's manager, no administrator, then changes its sharing and listing by tool and is refused a host
+     * setting and the trust by name, which the administrator still changes.
      */
     @Test
     void anAssistantSetsWhatASiteSharesAndReadsTheFilesFetched() throws Exception {
@@ -304,6 +307,49 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
             assertThat(fetched.text()).as("step 5: the files fetched")
                 .contains("/beta/releases/Tadoma-1.2.0.dmg").contains("/beta/latest.json")
                 .doesNotContain("/beta/missing.json");
+
+            // 6. A person managing the site, no administrator, changes what it shares and what its folders list by
+            //    tool; a host setting and the trust are refused by name in the same call, and nothing of it is kept.
+            UUID managerId = ApiSupport.user("sharing-tool-" + tag + "@hohenheim.local", "Sharing Tool Manager");
+            RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE, true);
+            McpHttpSession manager = HohenheimMcpTest.presetSession(server, endpoint, managerId,
+                "Sharing Tool Manager");
+            McpHttpSession.Answer shared = manager.call("site_static_files_set", Map.of("code", code,
+                SiteSharing.READABLE_BY, "any", StaticUpstreamKind.SHOW_HIDDEN_FILES.getName(), true,
+                SiteSharing.BROWSER_KEEP, List.of(Map.of("path", "/beta/releases/", "keep", "year"))));
+            assertThat(shared.error()).as("step 6: " + shared.text()).isFalse();
+            Row managed = Models.get(SiteModel.class).findById(siteId);
+            stored = (Map<?, ?>) managed.get(SiteModel.SETTINGS);
+            assertThat(stored.get(SiteSharing.READABLE_BY)).as("step 6: any website").isEqualTo("any");
+            assertThat(stored.get(StaticUpstreamKind.SHOW_HIDDEN_FILES.getName())).as("step 6: hidden files listed")
+                .isEqualTo(true);
+            assertThat(stored.get(SiteSharing.BROWSER_KEEP)).as("step 6: a path added, the other kept")
+                .isEqualTo(Map.of("/beta/latest.json", "ask_again", "/beta/releases/", "year"));
+            assertThat(stored.get(StaticUpstreamKind.OWN_FILES.getName())).as("step 6: the kind's own kept")
+                .isEqualTo(true);
+            assertThat(stored.get(StaticUpstreamKind.AUTOINDEX.getName())).as("step 6: a listing left out kept")
+                .isNotEqualTo(false);
+            assertThat((String) managed.get(SiteModel.NAME)).as("step 6: the name kept").isEqualTo("Shared tool " + tag);
+            assertThat((Boolean) managed.get(SiteModel.ENABLED)).as("step 6: still on").isTrue();
+            for (Map.Entry<String, Object> host : Map.<String, Object>of(StaticUpstreamKind.ROOT_PATH.getName(), "/etc",
+                    SiteModel.TRUSTED_UPSTREAM.getName(), true).entrySet()) {
+                McpHttpSession.Answer refused = manager.call("site_static_files_set", Map.of("code", code,
+                    SiteSharing.READABLE_BY, "nobody", host.getKey(), host.getValue()));
+                assertThat(refused.error()).as("step 6: %s refused %s", host.getKey(), refused.text()).isTrue();
+                assertThat(refused.text()).as("step 6: named").contains(host.getKey());
+            }
+            managed = Models.get(SiteModel.class).findById(siteId);
+            assertThat(((Map<?, ?>) managed.get(SiteModel.SETTINGS)).get(SiteSharing.READABLE_BY))
+                .as("step 6: THE ASSERTION -- a refused call keeps nothing").isEqualTo("any");
+            assertThat((Boolean) managed.get(SiteModel.TRUSTED_UPSTREAM)).as("step 6: no trust").isNotEqualTo(true);
+
+            // 7. The administrator still changes the trust by the same tool.
+            McpHttpSession.Answer trusted = admin.call("site_static_files_set", Map.of("code", code,
+                SiteModel.TRUSTED_UPSTREAM.getName(), true));
+            assertThat(trusted.error()).as("step 7: " + trusted.text()).isFalse();
+            assertThat((Boolean) Models.get(SiteModel.class).findById(siteId).get(SiteModel.TRUSTED_UPSTREAM))
+                .as("step 7: trusted by the administrator").isTrue();
         } finally {
             cleanUp.forEach(Runnable::run);
         }
@@ -474,8 +520,9 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
      * The site's private paths as a person meets them: one quiet line on a site with none; "Protect a path" from the
      * part, with unsaved changes in the site's form, posts only its own fields, makes the path and asks before the
      * page leaves the unsaved form; the path then lists in one line with how one gets in; the Protection tab names the
-     * way in its column; a person who manages the site without being an administrator edits no kind settings on
-     * /manage, so meets the paths on its Protection tab there.
+     * way in its column; a person who manages the site without being an administrator sees and saves its sharing and
+     * listing settings on /manage and no host setting, a crafted post of one changes nothing, and meets the paths on
+     * its Protection tab there.
      */
     @Test
     void privatePathsListInOneLineAndAreProtectedFromThePartAlone() {
@@ -587,8 +634,8 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
         page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-protection-tab.png"))
             .setFullPage(true));
 
-        // 6. A person managing the site, no administrator, edits no kind settings on /manage, so the site's form
-        //    draws no Sharing section for them; the site's Protection tab lists the path with how one gets in.
+        // 6. A person managing the site, no administrator, sees its Sharing section on /manage with the path and how
+        //    one gets in, and its folders' listing settings, but no host setting: no folder, storage or trust.
         UUID managerId = ApiSupport.user("private-paths-" + tag + "@hohenheim.local", "Private Paths Manager");
         RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
             HohenheimCapabilities.MANAGE, true);
@@ -596,14 +643,61 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
         navigateToAppAs("/" + HohenheimSlugs.MANAGE + "/sites/" + siteId, managerSession);
         waitForHydration();
         page.waitForSelector(name);
-        assertThat(page.locator(section).count()).as("step 6: no kind settings, so no Sharing section").isZero();
+        assertThat(page.locator(section).count()).as("step 6: the Sharing section").isOne();
+        assertThat(page.locator("pl-field[data-path='settings." + StaticUpstreamKind.AUTOINDEX.getName() + "']")
+            .count()).as("step 6: what its folders list").isOne();
+        for (String host : List.of(StaticUpstreamKind.ROOT_PATH.getName(), StaticUpstreamKind.STORAGE.getName(),
+                StaticUpstreamKind.OWN_FILES.getName())) {
+            assertThat(page.locator("pl-field[data-path='settings." + host + "']").count())
+                .as("step 6: no %s for a manager", host).isZero();
+        }
+        assertThat(page.locator("pl-field[data-path='" + SiteModel.TRUSTED_UPSTREAM.getName() + "']").count())
+            .as("step 6: no trust").isZero();
+        page.click(section + " pl-collapsible-trigger button");
+        page.waitForSelector(privatePaths + " [data-related-row]");
+        assertThat(page.locator(privatePaths + " [data-related-row]").textContent()).as("step 6: the private path")
+            .contains("/private").contains("With a signed link");
         page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-form-manage.png"))
             .setFullPage(true));
+
+        // 7. The manager saves a sharing setting there; the kind and its own settings are kept as stored.
+        String band = section + " pl-toggle-group[name='settings." + SiteSharing.READABLE_BY + "']";
+        page.click(band + " pl-toggle-group-item[data-value='" + SiteSharing.Readers.ANY.token() + "'] button");
+        page.click(".cms-form-actions pl-button[type='submit']");
+        page.waitForSelector("text=have been saved");
+        Row saved = Models.get(SiteModel.class).findById(siteId);
+        Map<?, ?> settings = (Map<?, ?>) saved.get(SiteModel.SETTINGS);
+        assertThat(settings.get(SiteSharing.READABLE_BY)).as("step 7: saved by the manager").isEqualTo("any");
+        assertThat(settings.get(StaticUpstreamKind.OWN_FILES.getName())).as("step 7: the kind's own kept")
+            .isEqualTo(true);
+        assertThat((String) saved.get(SiteModel.UPSTREAM_KIND)).as("step 7: the kind kept")
+            .isEqualTo("hohenheim:static");
+
+        // 8. A crafted post of the same form naming a host setting, the trust and another kind changes nothing.
+        navigateToAppAs("/" + HohenheimSlugs.MANAGE + "/sites/" + siteId, managerSession);
+        waitForHydration();
+        page.waitForSelector(name);
+        page.locator(name).fill("Crafted " + tag);
+        page.evaluate("form => { for (const [key, value] of [['settings."
+            + StaticUpstreamKind.ROOT_PATH.getName() + "', '/etc'], ['" + SiteModel.TRUSTED_UPSTREAM.getName()
+            + "', 'true'], ['" + SiteModel.UPSTREAM_KIND.getName() + "', 'hohenheim:address']]) {"
+            + " const input = document.createElement('input'); input.type = 'hidden'; input.name = key;"
+            + " input.value = value; document.querySelector(form).appendChild(input); } }", form);
+        page.waitForResponse(response -> "POST".equals(response.request().method()),
+            () -> page.click(".cms-form-actions pl-button[type='submit']"));
+        Row crafted = Models.get(SiteModel.class).findById(siteId);
+        assertThat(((Map<?, ?>) crafted.get(SiteModel.SETTINGS)).containsKey(StaticUpstreamKind.ROOT_PATH.getName()))
+            .as("step 8: THE ASSERTION -- no folder of the host").isFalse();
+        assertThat((Boolean) crafted.get(SiteModel.TRUSTED_UPSTREAM)).as("step 8: no trust").isNotEqualTo(true);
+        assertThat((String) crafted.get(SiteModel.UPSTREAM_KIND)).as("step 8: the kind kept")
+            .isEqualTo("hohenheim:static");
+
+        // 9. The site's Protection tab lists the path with how one gets in.
         navigateToAppAs(CmsRoutes.subpage(HohenheimSlugs.MANAGE, HohenheimSlugs.SITES, siteId,
             HohenheimSlugs.PROTECTED_PATHS).toUrl(), managerSession);
         waitForHydration();
         page.waitForSelector(paths);
-        assertThat(page.locator(paths).textContent()).as("step 6: the path and how one gets in")
+        assertThat(page.locator(paths).textContent()).as("step 9: the path and how one gets in")
             .contains("/private").contains("With a signed link");
         page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-protection-tab-manage.png"))
             .setFullPage(true));

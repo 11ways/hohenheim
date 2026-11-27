@@ -58,7 +58,8 @@ import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
  * stage 4 branch before SiteResource, SiteDomainResource and the template resources move onto parts (recaptured once
  * with the complete control, confirmation and destination facts, still before the move; re-pinned on 2026-11-26 for
  * the Files tab an own-files site offers and the static kind's own_files and storage settings, and on 2026-11-27 for
- * the Private paths a site's Sharing section lists, nothing else); a failing
+ * the Private paths a site's Sharing section lists and the settings a site's manager changes on /manage, nothing
+ * else); a failing
  * comparison is a changed /manage or /admin surface, never a file to refresh. A twin table entry states one
  * deliberate tenant difference; an unlisted difference fails closed.
  *
@@ -356,7 +357,12 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
             .own("column name shown=true hidden=false sortable=false filterable=false copyable=false subtext="
                 + " relation=false")
             .own("column enabled shown=true hidden=false sortable=false filterable=false copyable=false subtext="
-                + " relation=false");
+                + " relation=false")
+            // The kind is the operator's: read on /manage, so the settings drawn are the site's own kind's.
+            .own("control EDIT%20upstream_kind kind=zenitforms:form/select input=select required=false readonly=true"
+                + " options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,"
+                + "hohenheim:static,hohenheim:stream,hohenheim:tls_passthrough"
+                + " binding=searchable:false,clearable:false,presentation:CARDS");
     }
 
     /** The /manage domain twin's deliberate differences from the admin domain resource. */

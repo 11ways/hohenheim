@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteManagerSettings;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.SlugText;
@@ -571,10 +572,12 @@ public final class SiteOperationHandlers {
             site.get(SiteModel.AUTH_PROVIDER_ID), site.get(SiteModel.ACCESS_LIST_ID));
     }
 
-    /** The delegated edit's current input. */
+    /** The delegated edit's current input: its columns, and the manager's settings of the site's kind. */
     private static SiteWrites.@NonNull ManageInput manageInput(@NonNull Row site) {
+        String kind = site.get(SiteModel.UPSTREAM_KIND);
         return new SiteWrites.ManageInput(site.get(SiteModel.NAME), site.get(SiteModel.ENABLED),
-            site.get(SiteModel.DESCRIPTION));
+            site.get(SiteModel.DESCRIPTION), kind,
+            SiteManagerSettings.posted(kind, RawValues.map(site.get(SiteModel.SETTINGS))));
     }
 
     /**
@@ -641,8 +644,10 @@ public final class SiteOperationHandlers {
     }
 
     /**
-     * The delegated edit: the three delegated columns only, never the admin normalizers. A tenant flipping the switch
-     * goes live through the save below, which the write-pipeline enable invariant judges like every other writer.
+     * The delegated edit: the three delegated columns and the manager's settings of the site's kind only, never the
+     * admin normalizers. A tenant flipping the switch goes live through the save below, which the write-pipeline
+     * enable invariant judges like every other writer; the kind is never written, and every setting its manager does
+     * not change keeps its stored value (TenantWrites refuses any other change of the settings, whoever writes them).
      */
     private static @Nullable Void updateDelegated(@NonNull OperationCall<Row, SiteWrites.ManageInput> call) {
         Row site = call.subject();
@@ -657,6 +662,11 @@ public final class SiteOperationHandlers {
         }
         if (writes(written, SiteModel.DESCRIPTION)) {
             site.set(SiteModel.DESCRIPTION, input.description());
+        }
+        // No settings posted (a kind whose manager changes none draws none): nothing to write.
+        if (writes(written, SiteModel.SETTINGS) && input.settings() != null) {
+            site.set(SiteModel.SETTINGS, SiteManagerSettings.merged(site.get(SiteModel.UPSTREAM_KIND),
+                RawValues.map(site.get(SiteModel.SETTINGS)), input.settings()));
         }
         Models.get(SiteModel.class).saveWrittenRefusingGone(site);
         return null;

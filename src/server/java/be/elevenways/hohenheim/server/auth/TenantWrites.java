@@ -26,6 +26,7 @@ import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.SiteManagerSettings;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -722,8 +723,9 @@ public final class TenantWrites {
     /**
      * The only columns a delegated tenant may author on a site: exactly what
      * the /manage site twin offers ({@code SiteParts.manage()}: its form, its bindings, its update and the
-     * enable toggle). The upstream kind, the settings (every dial target: forward_host,
-     * socket, root_path, ...), instance_id, slug, the access list, the auth provider, the
+     * enable toggle), plus the settings its manager changes ({@link SiteManagerSettings}), judged per key by
+     * {@link #checkSiteWrite}. The upstream kind, every other setting (every dial target: forward_host,
+     * socket, root_path, storage, ...), instance_id, slug, the access list, the auth provider, the
      * status and the quota bucket are all operator decisions -- authoring one is authoring
      * where the site's traffic goes or what it may reach.
      *
@@ -752,12 +754,18 @@ public final class TenantWrites {
      * Refuse a tenant site write that aims the upstream somewhere a tenant may not dial or
      * that reaches past the delegated column set.
      *
-     * AIDEV-NOTE: the upstream judgement runs FIRST and only when the upstream MOVES (kind
-     * or settings differ from the stored row): an operator may have pointed a tenant's site
-     * at a LAN backend on purpose, and a tenant renaming that site is not re-aiming it. With
-     * settings frozen the column rule would refuse the same write anyway; the upstream
-     * judgement is the defence that survives a later widening of the allow-list, and it
-     * gives the precise refusal while both apply.
+     * AIDEV-NOTE: the upstream judgement runs FIRST and only when the upstream MOVES (the kind,
+     * or a setting the manager does not change, differs from the stored row): an operator may have
+     * pointed a tenant's site at a LAN backend on purpose, and a tenant renaming that site or
+     * changing what it shares is not re-aiming it. With those settings frozen the per-key rule
+     * would refuse the same write anyway; the upstream judgement is the defence that survives a
+     * later widening of the manager's settings, and it gives the precise refusal while both apply.
+     *
+     * AIDEV-NOTE: the settings column joins the writable set only for an UPDATE that keeps the
+     * kind, of a site the tenant manages, and only when every key it changes is a setting the
+     * kind declares its manager changes ({@link SiteManagerSettings#firstHostKeyChanged}): a key
+     * no schema declares, and a kind this build does not know, stay frozen (fail closed). A create
+     * or a re-kinding keeps the whole map frozen.
      *
      * AIDEV-NOTE: {@code trusted_upstream} is deliberately NOT consulted here. It vouches
      * for the OPERATOR's upstream (TenantUpstreams.publicOnly reads it at dial time), never
@@ -765,7 +773,8 @@ public final class TenantWrites {
      * flag says; and the flag itself is outside {@link #SITE_TENANT_WRITABLE}, so a tenant
      * setting it is refused as a frozen column.
      *
-     * @throws Violations {@code tenant_proxy_upstream_private} or {@code tenant_field_frozen}
+     * @throws Violations {@code tenant_proxy_upstream_private}, {@code tenant_site_not_managed} or
+     *         {@code tenant_field_frozen}
      */
     private static void checkSiteWrite(@NonNull Row row) {
         Model model = Models.get(SiteModel.class);
@@ -775,14 +784,26 @@ public final class TenantWrites {
 
         Object kind = row.afterWrite(SiteModel.UPSTREAM_KIND, stored);
         Object settings = row.afterWrite(SiteModel.SETTINGS, stored);
-        boolean upstreamMoves = stored == null
-            || !Objects.equals(kind, stored.get(SiteModel.UPSTREAM_KIND))
-            || !Objects.equals(settings, stored.get(SiteModel.SETTINGS));
+        boolean kindKept = stored != null && Objects.equals(kind, stored.get(SiteModel.UPSTREAM_KIND));
+        Map<String, Object> storedSettings = stored == null ? Map.of() : RawValues.map(stored.get(SiteModel.SETTINGS));
+        Map<String, Object> writtenSettings = RawValues.map(settings);
+        String hostKey = SiteManagerSettings.firstHostKeyChanged(kind, storedSettings, writtenSettings);
+        boolean upstreamMoves = !kindKept || hostKey != null;
         if (upstreamMoves && settings instanceof Map<?, ?> map) {
             refuseTenantUpstream(String.valueOf(kind), map);
         }
 
-        refuseFrozenColumns(model, row, stored, SITE_TENANT_WRITABLE, SITE_DERIVED);
+        Set<String> writable = SITE_TENANT_WRITABLE;
+        if (kindKept && !Objects.equals(storedSettings, writtenSettings)) {
+            if (hostKey != null) {
+                throw Violations.ofField(settingsKey(hostKey), writtenSettings.get(hostKey),
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
+            }
+            requireManagedSite(stored.get(SiteModel.ID));
+            writable = new LinkedHashSet<>(SITE_TENANT_WRITABLE);
+            writable.add(SiteModel.SETTINGS.getName());
+        }
+        refuseFrozenColumns(model, row, stored, writable, SITE_DERIVED);
     }
 
     // --- Proxy upstream (SSRF) -------------------------------------------------------
@@ -883,8 +904,8 @@ public final class TenantWrites {
      * /var/run/docker.sock} walked past a host-only check; the TLS-passthrough kind dials
      * its own {@code forward_host} raw; and a static {@code root_path}/{@code fallback_file}
      * is a HOST filesystem path, which is operator authority outright. A kind this method
-     * does not name dials nothing it can judge, and it stays closed anyway: the site column
-     * allow-list ({@link #SITE_TENANT_WRITABLE}) freezes the whole settings map for a tenant.
+     * does not name dials nothing it can judge, and it stays closed anyway: every setting outside the manager's
+     * ({@link SiteManagerSettings}) is frozen to a tenant by {@link #checkSiteWrite}.
      *
      * @throws Violations {@code tenant_proxy_upstream_private} or {@code tenant_field_frozen}
      */

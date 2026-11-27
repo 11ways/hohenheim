@@ -138,7 +138,8 @@ public final class SiteSharing {
 
     /**
      * Declares the two settings and the site's private paths on a kind's settings schema, folded in one section drawn
-     * after the site form's own sections, after "Advanced".
+     * after the site form's own sections, after "Advanced". The site's manager changes all three settings
+     * ({@link SiteManagerSettings}).
      *
      * AIDEV-NOTE: the settings stay KIND settings although every kind that answers with content declares the same
      * ones: the kind's schema is what stores them in the site's settings (no column, no migration), what the tools
@@ -154,7 +155,8 @@ public final class SiteSharing {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(READABLE_BY))
             .help(HohenheimMicrocopy.HELP.of(READABLE_BY))
             .presentation(Select.Presentation.SEGMENTS)
-            .keepsAValue();
+            .keepsAValue()
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true);
         for (Readers each : Readers.values()) {
             readers.value(each.token(), each.token(), HohenheimMicrocopy.HOHENHEIM_FIELD.of("readable_by_"
                 + each.token()));
@@ -167,6 +169,7 @@ public final class SiteSharing {
             .help(HohenheimMicrocopy.HELP.of(READING_WEBSITES))
             .addLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("reading_websites_add"))
             .unordered()
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true)
             .build());
         schema.showWhen(READING_WEBSITES, READABLE_BY, Readers.LISTED.token());
         List<FieldOption<String>> choices = new ArrayList<>();
@@ -184,6 +187,7 @@ public final class SiteSharing {
             .otherwise(Keep.DECIDE.label())
             .keySuggestions(SiteSharing::fileSuggestions)
             .validator(SiteSharing::refuseUnreadableKeep)
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true)
             .build());
         schema.addEntry(RelatedList.of(PRIVATE_PATHS, HohenheimSlugs.SITES, privatePaths(),
             HohenheimMicrocopy.HOHENHEIM_FIELD.of(PRIVATE_PATHS),
