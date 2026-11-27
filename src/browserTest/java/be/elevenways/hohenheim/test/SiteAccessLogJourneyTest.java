@@ -199,8 +199,7 @@ class SiteAccessLogJourneyTest extends HohenheimTestBase {
             waitForHydration();
             awaitRows("step 7: today's lines", 4);
             String today = page.url();
-            page.click("[data-hh-access-log-filters] pl-select[name='when'] .pl-select-field");
-            page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='range']");
+            chooseOptionOf("[data-hh-access-log-filters] pl-select[name='when']", "range");
             page.locator("[data-hh-access-log-filters] pl-input[name='from'] input").waitFor();
             assertThat(page.locator("[data-hh-access-log-filters] pl-input[name='to'] input").isVisible())
                 .as("step 7: both ends appear").isTrue();

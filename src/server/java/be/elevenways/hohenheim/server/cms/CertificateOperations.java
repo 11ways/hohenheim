@@ -114,7 +114,12 @@ public final class CertificateOperations {
         PrimitiveCoercion.toTrimmedTextList(values.get(DOMAINS)), values.get(NICE_NAME), values.get(EMAIL),
         values.get(CHALLENGE), values.get(DNS_PUBLISHER)));
 
-    /** A new certificate for the names the operator lists; the certificate list's header action. */
+    /**
+     * A new certificate for the names the operator lists; the certificate list's header action.
+     *
+     * AIDEV-NOTE: this, the address row's request and the re-issue declare no rate limit of their own: the orderer
+     * spends the order budget (CertificateOperationHandlers.order), shared with the wizard and an address's create.
+     */
     public static final Operation<Void, Order, Integer> REQUEST =
             Operation.declare(HohenheimIds.id("request_certificate"))
         .happened(OperationSentences.of("request_certificate"))
@@ -129,7 +134,6 @@ public final class CertificateOperations {
         .result(Integer.class)
         .createdRecord(CertificateModel.MODEL_ID, id -> id)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
         .command(CmsCommands.EXTERNAL)
         .register();
 
@@ -149,7 +153,6 @@ public final class CertificateOperations {
             .result(Integer.class)
             .createdRecord(CertificateModel.MODEL_ID, id -> id)
             .facts(OperationFact.REACHES_OUTSIDE)
-            .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
             .command(CmsCommands.EXTERNAL)
             .register();
 
@@ -169,7 +172,6 @@ public final class CertificateOperations {
         .result(Integer.class)
         .createdRecord(CertificateModel.MODEL_ID, id -> id)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .rateLimit(HohenheimEndpoints.LE_REQUEST_LIMIT)
         .command(CmsCommands.EXTERNAL)
         .register();
 

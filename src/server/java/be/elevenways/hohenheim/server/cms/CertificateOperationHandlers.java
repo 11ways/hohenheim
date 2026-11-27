@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -35,6 +36,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.server.operation.Applicability;
 import be.elevenways.zenit.server.operation.Authorizer;
+import be.elevenways.zenit.server.operation.CallerBudgets;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -57,6 +59,9 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * AcmeService, never this class's; the operator-only gate here is the admin surface's.
  */
 public final class CertificateOperationHandlers {
+
+    /** What spends the order budget, as a refusal's security report names it. */
+    private static final String ORDER_WORK = "hohenheim:certificate_order";
 
     static {
         OperationHandlers.attach(CertificateOperations.REQUEST).authorize(admin())
@@ -121,6 +126,12 @@ public final class CertificateOperationHandlers {
             ? null : HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("letsencrypt_disabled");
     }
 
+    /** @return why the caller may place no order now, the hour's orders spent ({@link #order}), or null */
+    static @Nullable Microcopy orderBudgetSpent(@NonNull AccessContext access) {
+        return CallerBudgets.spent(HohenheimEndpoints.LE_REQUEST_LIMIT, access)
+            ? HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("order_budget_spent") : null;
+    }
+
     /**
      * A hostname a certificate can be ordered for: one exact name on a site this proxy terminates TLS for. The sites of
      * a page of hostnames are read once for the page.
@@ -152,13 +163,22 @@ public final class CertificateOperationHandlers {
     }
 
     /**
-     * Places one order, new or written back into {@code reissue}.
+     * Places one order, new or written back into {@code reissue}, spending one of the caller's orders of the hour.
+     *
+     * AIDEV-NOTE: THE spend of the order budget (LE_REQUEST_LIMIT) for every order with a key held here: the
+     * certificate list's and an address row's request, a re-issue, the "Put online" wizard and an address's own create
+     * all come here, so they share one budget, and a create that orders nothing spends nothing. Spent first, before the
+     * input is judged, as the operation lane spent it at admission. Renewals, a manual DNS order's finish and the
+     * signing-request operations spend the same named budget through their operations' own rate limit; the HTTP API's
+     * signing-request routes keep their endpoint limit (hh_certificate_order) alone, as before.
      *
      * @return the certificate row the order wrote
      * @throws Violations a refusal the input form shows, the typed values kept
+     * @throws DomainRefusal {@link ZenitRefusalReason#RATE_LIMITED} when the caller's orders of the hour are spent
      */
     static int order(CertificateOperations.@NonNull Order order, @NonNull AccessContext access,
                      @Nullable Row reissue) {
+        CallerBudgets.spend(HohenheimEndpoints.LE_REQUEST_LIMIT, access, ORDER_WORK);
         String email = trimmed(order.email());
         if (!Email.instance().validate(email, ValidationContext.of("email")).isValid()) {
             throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("invalid_email").withArg("email", email));

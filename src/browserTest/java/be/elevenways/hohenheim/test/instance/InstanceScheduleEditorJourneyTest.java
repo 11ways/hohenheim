@@ -175,10 +175,7 @@ class InstanceScheduleEditorJourneyTest extends HohenheimTestBase {
     }
 
     private void choose(String select, String value) {
-        click(select + " .pl-select-field");
-        String option = "he-bottom [data-open] [role='option'][data-value='" + value + "']";
-        waitForSelector(option);
-        click(option);
+        chooseOptionOf(select, value);
         waitForReactiveIdle();
     }
 

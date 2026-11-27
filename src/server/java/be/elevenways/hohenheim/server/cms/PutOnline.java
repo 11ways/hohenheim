@@ -118,7 +118,7 @@ public final class PutOnline {
         .placeholder("shop.example.com")
         .build();
 
-    /** The HTTPS step's heading for its certificate choice, which an address's own create form reads too. */
+    /** The HTTPS step's heading for its certificate choice. */
     static final Microcopy CERTIFICATE_LABEL = HohenheimMicrocopy.PUT_ONLINE.of("certificate");
 
     /** The certificate card the step opens on: Automatic, the choice that needs nothing more from the operator. */

@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -12,7 +11,6 @@ import be.elevenways.hohenheim.server.proxy.TlsClientHelloReader;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,7 +33,6 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
@@ -167,7 +164,7 @@ class TlsPassthroughTest {
     @Test
     void exactTerminatingRouteWinsOverBroaderPassthroughWildcard() throws Exception {
         APP.renewDatabase();
-        installCertificate("control.example.test");
+        TlsCertificateTest.saveCert("TLS mux test", "control.example.test");
         httpBackend = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         httpBackend.createContext("/", exchange -> {
             byte[] body = "terminated".getBytes(StandardCharsets.UTF_8);
@@ -431,7 +428,7 @@ class TlsPassthroughTest {
     @Test
     void trustedProxyIdentityIsRestoredBeforeTerminatedHttpSecurityAndForwarding() throws Exception {
         APP.renewDatabase();
-        installCertificate("identity.example.test");
+        TlsCertificateTest.saveCert("TLS mux test", "identity.example.test");
         Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1"));
         AtomicReference<String> realIp = new AtomicReference<>();
@@ -528,19 +525,6 @@ class TlsPassthroughTest {
                 }
             }
         }
-    }
-
-    private static void installCertificate(String hostname) throws Exception {
-        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
-        X509Certificate certificate = TlsCertificateTest.generateSelfSignedCert(keyPair, hostname);
-        var model = Models.get(CertificateModel.class);
-        Row row = model.createEmptyRow();
-        row.set(CertificateModel.NICE_NAME, "TLS mux test");
-        row.set(CertificateModel.PROVIDER, "custom");
-        row.set(CertificateModel.STATUS, "active");
-        row.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(certificate));
-        row.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
-        model.save(row);
     }
 
     private static SSLContext trustAllContext() throws Exception {

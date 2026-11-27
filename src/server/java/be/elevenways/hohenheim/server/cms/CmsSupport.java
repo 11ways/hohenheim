@@ -46,8 +46,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static be.elevenways.hohenheim.RawValues.parsedInt;
 
@@ -410,15 +413,32 @@ public final class CmsSupport {
      */
     static boolean opens(@NonNull AccessContext access, @NonNull String entrySlug, @Nullable Object key,
                          @Nullable String tab) {
+        return key != null && openable(access, entrySlug, List.of(key), tab).contains(String.valueOf(key));
+    }
+
+    /**
+     * {@link #opens} for every record of a card or a list at once: one grouped read of the records, so a card's doors
+     * cost the same for two records as for twenty.
+     *
+     * @param tab the record tab the doors open, null for the records themselves
+     * @return the keys, as the records' pages spell them, whose doors this viewer may follow
+     */
+    static @NonNull Set<String> openable(@NonNull AccessContext access, @NonNull String entrySlug,
+                                         @NonNull Collection<?> keys, @Nullable String tab) {
         Conduit conduit = access.conduit();
-        Panel panel = key == null || conduit == null ? null : PanelRegistry.getBySlug(panelSlug(conduit));
+        Panel panel = keys.isEmpty() || conduit == null ? null : PanelRegistry.getBySlug(panelSlug(conduit));
         PanelResource<Row> entry = panel == null ? null : declaredRowEntry(panel, entrySlug);
         if (entry == null || !panel.admits(entry, access)) {
-            return false;
+            return Set.of();
         }
         PanelRequest request = PanelGate.request(panel, access);
-        Row record = PartsReads.loadRow(request, entry, key, access);
-        return record != null && (tab == null
-            || RecordTabGate.judge(request, entry, record, tab) instanceof RecordTabGate.Verdict.Open<Row>);
+        Set<String> open = new HashSet<>();
+        for (Row record : PartsReads.<Row>loadRows(request, entry, List.<Object>copyOf(keys), access)) {
+            if (tab == null
+                || RecordTabGate.judge(request, entry, record, tab) instanceof RecordTabGate.Verdict.Open<Row>) {
+                open.add(PartsReads.rowKey(entry, record));
+            }
+        }
+        return open;
     }
 }

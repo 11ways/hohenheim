@@ -15979,6 +15979,10 @@
     "text": "Let's Encrypt staat uit in de instellingen.",
     "scope": "certificate_request_error"
   },
+  "order_budget_spent": {
+    "text": "U hebt zoveel certificaten besteld als een uur toelaat.",
+    "scope": "certificate_request_error"
+  },
   "does_not_point_here": {
     "text": "{$hostname} wijst nog niet hierheen, maar naar {$addresses}.",
     "scope": "certificate_request_error"
@@ -16757,6 +16761,10 @@
   },
   "outcome_https_refused_note": {
     "text": "Online op {$address} via HTTP. De certificaataanvraag werd geweigerd; vraag het opnieuw aan vanaf het adres zodra het hierheen wijst.",
+    "scope": "put_online"
+  },
+  "outcome_https_limited_note": {
+    "text": "Online op {$address} via HTTP. U hebt zoveel certificaten besteld als een uur toelaat; bestel dit later opnieuw vanaf het adres.",
     "scope": "put_online"
   },
   "outcome_https_passthrough_note": {

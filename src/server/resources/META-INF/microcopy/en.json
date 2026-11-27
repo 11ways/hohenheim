@@ -15979,6 +15979,10 @@
     "text": "Let's Encrypt is switched off in Settings.",
     "scope": "certificate_request_error"
   },
+  "order_budget_spent": {
+    "text": "You have ordered as many certificates as an hour allows.",
+    "scope": "certificate_request_error"
+  },
   "does_not_point_here": {
     "text": "{$hostname} does not point here yet, it points to {$addresses}.",
     "scope": "certificate_request_error"
@@ -16757,6 +16761,10 @@
   },
   "outcome_https_refused_note": {
     "text": "Live at {$address} over HTTP. The certificate request was refused; request it again from the address once it points here.",
+    "scope": "put_online"
+  },
+  "outcome_https_limited_note": {
+    "text": "Live at {$address} over HTTP. You have ordered as many certificates as an hour allows; order this one again later from the address.",
     "scope": "put_online"
   },
   "outcome_https_passthrough_note": {

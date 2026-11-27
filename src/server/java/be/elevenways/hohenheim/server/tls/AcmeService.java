@@ -31,6 +31,8 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.http.HostPattern;
 import be.elevenways.zenit.server.security.SecureTokens;
+import be.elevenways.zenit.common.net.IpRanges;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.shredzone.acme4j.*;
@@ -42,6 +44,8 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -1542,16 +1546,37 @@ public class AcmeService {
     /**
      * The ACME directory every order and account registration goes to.
      *
+     * AIDEV-NOTE: THE fail-closed point of a test lane: every order and renewal reaches a CA through here, so a test
+     * that left the directory at Let's Encrypt (or pointed it anywhere but a fake CA on the loopback, which is where
+     * FakeAcmeServer listens) is refused before any network call, whatever path ordered.
+     *
      * @param staging whether the Let's Encrypt staging directory is asked for; ignored
      *                when an explicit directory URL is configured
+     * @throws IllegalStateException in a test lane, for a directory that is no loopback address
      */
     static String directoryUri(boolean staging) {
         String configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
-        if (configured != null && !configured.isBlank()) {
-            return configured.trim();
+        String directory = configured != null && !configured.isBlank() ? configured.trim()
+            : staging ? "acme://letsencrypt.org/staging" : "acme://letsencrypt.org";
+        if (ServerZenitRuntime.isTestLane() && !onLoopback(directory)) {
+            throw new IllegalStateException("A test orders from a fake certificate authority on the loopback only,"
+                + " never from " + directory);
         }
-        return staging ? "acme://letsencrypt.org/staging" : "acme://letsencrypt.org";
+        return directory;
+    }
+
+    /** @return whether the directory is an HTTP address on a loopback literal */
+    private static boolean onLoopback(@NonNull String directory) {
+        URI uri;
+        try {
+            uri = new URI(directory);
+        } catch (URISyntaxException unreadable) {
+            return false;
+        }
+        String host = uri.getHost();
+        return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) && host != null
+            && IpRanges.matchesAnyLiteral(IpRanges.LOOPBACK, IpRanges.stripBrackets(host));
     }
 
     /**

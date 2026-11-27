@@ -508,7 +508,7 @@ public final class DomainParts {
             .inlineEditable(SiteDomainModel.FORCE_SSL, SiteDomainModel.HSTS_ENABLED,
                 SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
             .lead(DomainParts::lead)
-            .createdToast(address -> AddressWrites.added(address, reader))
+            .createdToast((address, viewer) -> AddressWrites.added(address, reader, viewer))
             .build();
     }
 

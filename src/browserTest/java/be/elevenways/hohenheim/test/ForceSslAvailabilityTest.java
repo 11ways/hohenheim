@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.net.InetSocketAddress;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -178,7 +176,7 @@ class ForceSslAvailabilityTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
         // Step 5: a certificate arrives; after reload the same request becomes the redirect.
-        installCertificate("forced.fssl.test");
+        TlsCertificateTest.saveCert("Force SSL Test", "forced.fssl.test");
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy.reload();
         assertThat(proxy.isHttpsTerminationAvailable())
@@ -191,7 +189,7 @@ class ForceSslAvailabilityTest {
             .contains("Location: https://forced.fssl.test");
 
         // Step 5b: once an active certificate covers the plain name, global force_https applies to it as well.
-        installCertificate("plain.fssl.test");
+        TlsCertificateTest.saveCert("Force SSL Test", "plain.fssl.test");
         proxy.reload();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
         assertThat(ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/"))
@@ -215,19 +213,5 @@ class ForceSslAvailabilityTest {
         domain.set(SiteDomainModel.MATCH_TYPE, "exact");
         domain.set(SiteDomainModel.FORCE_SSL, true);
         domainModel.save(domain);
-    }
-
-    private static void installCertificate(String hostname) throws Exception {
-        var certModel = Models.get(CertificateModel.class);
-        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
-        X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, hostname);
-        Row certRow = certModel.createEmptyRow();
-        certRow.set(CertificateModel.NICE_NAME, "Force SSL Test");
-        certRow.set(CertificateModel.PROVIDER, "custom");
-        certRow.set(CertificateModel.STATUS, "active");
-        certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, hostname);
-        certRow.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
-        certRow.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
-        certModel.save(certRow);
     }
 }

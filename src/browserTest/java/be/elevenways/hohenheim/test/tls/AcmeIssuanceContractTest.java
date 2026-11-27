@@ -483,6 +483,36 @@ class AcmeIssuanceContractTest {
         });
     }
 
+    @Test
+    void aTestLaneOrdersFromNoCertificateAuthorityButAFakeOnTheLoopback() {
+        Db.run(datasource, () -> {
+            int siteId = site("acme-test-lane");
+            String[] real = {"", "https://acme-v02.api.letsencrypt.org/directory"};
+            int asked = ca.requests().size();
+            try {
+                for (int i = 0; i < real.length; i++) {
+                    // 1. Let's Encrypt by default, then a real directory by address: refused before any network call,
+                    //    the order stored as failed with why.
+                    String hostname = "test-lane-" + i + ".test";
+                    domain(siteId, hostname);
+                    Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, real[i]);
+                    AcmeService.RequestOutcome refused = acme.requestCertificate(List.of(hostname),
+                        "ACME test lane " + i, null, CertificateAuthority.Requester.SYSTEM);
+                    assertThat(refused.issued()).as("step 1: " + real[i] + " is never ordered from").isFalse();
+                    assertThat((String) latestCertificateNamed("ACME test lane " + i)
+                            .get(CertificateModel.RENEWAL_ERROR))
+                        .as("step 1: the stored failure says a test orders from a fake only")
+                        .contains("fake certificate authority on the loopback");
+                }
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, ca.directoryUrl());
+            }
+
+            // 2. Neither reached the fake either: the refusal came before anything was asked of any CA.
+            assertThat(ca.requests()).as("step 2: no request was made").hasSize(asked);
+        });
+    }
+
     // -- fixture plumbing -----------------------------------------------------
 
     private static int site(String slug) {

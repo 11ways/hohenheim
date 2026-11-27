@@ -27,14 +27,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RateLimitBudgetIsolationTest extends HohenheimHttpTestBase {
 
     private static Boolean letsEncryptWas;
-    /** The refusal a certificate request answers while Let's Encrypt is off, with budget left. */
-    private static int refusedWhileOff;
+    /** The refusal a certificate order with a malformed email answers, with budget left. */
+    private static int refusedAsMalformed;
 
     @BeforeAll
-    static void switchLetsEncryptOff() {
+    static void switchLetsEncryptOn() {
         letsEncryptWas = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED);
-        // Off, the request is refused before any order, yet still spends the operation's budget at admission.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, false);
+        // On, the order reaches the orderer, which spends the budget first and then refuses the email: no CA is asked.
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
     }
 
     @AfterAll
@@ -45,9 +45,9 @@ class RateLimitBudgetIsolationTest extends HohenheimHttpTestBase {
     @Test
     @Order(1)
     void anEarlierTestSpendsTheAdminsCertificateBudget() throws Exception {
-        // 1. With budget left, the request is refused for what it is: Let's Encrypt is off.
-        refusedWhileOff = request().statusCode();
-        assertThat(refusedWhileOff).as("step 1: refused as switched off, not as over budget")
+        // 1. With budget left, the order is refused for what it is: a malformed email.
+        refusedAsMalformed = request().statusCode();
+        assertThat(refusedAsMalformed).as("step 1: refused as malformed, not as over budget")
             .isGreaterThanOrEqualTo(400).isNotEqualTo(429);
 
         // 2. The admin spends the rest of the budget, as earlier classes of a combined run do, and is refused 429.
@@ -63,12 +63,13 @@ class RateLimitBudgetIsolationTest extends HohenheimHttpTestBase {
     void aLaterTestStartsWithABudgetOfItsOwn() throws Exception {
         // 3. THE ASSERTION: the same admin, one test later, is answered as with budget left, never 429.
         assertThat(request().statusCode()).as("step 3: the earlier test's spent budget does not reach this one")
-            .isEqualTo(refusedWhileOff);
+            .isEqualTo(refusedAsMalformed);
     }
 
     private HttpResponse<String> request() throws Exception {
         return adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
-            "hostnames", "isolation.rate-limit.test", "name", "rate-limit-isolation", "challenge", "http")
+            "hostnames", "isolation.rate-limit.test", "name", "rate-limit-isolation", "email", "not-an-email",
+            "challenge", "http")
             + "&" + ApiSupport.invokeTransport());
     }
 }

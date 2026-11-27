@@ -51,8 +51,6 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -426,7 +424,7 @@ class BuildHookJourneyTest extends HohenheimHttpTestBase {
                 .startsWith(BuildHookHandler.PREFIX);
             assertThat(adminGet(tab(served)).body()).as("step 5: and the tab says why")
                 .contains("It answers over HTTPS only");
-            certificate = installCertificate("buildhooks-served.example.test");
+            certificate = TlsCertificateTest.saveCert(PREFIX + "served", "buildhooks-served.example.test");
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
             proxy.reload();
             assertThat(proxy.isHttpsTerminationAvailable()).as("step 5: HTTPS terminates with the certificate")
@@ -480,20 +478,6 @@ class BuildHookJourneyTest extends HohenheimHttpTestBase {
                 .isLessThanOrEqualTo(BuildHookHandler.HOOK_TOTAL_POLICY.requests());
         }
         return spent;
-    }
-
-    /** A self-signed certificate for {@code hostname}, stored the way a custom upload is. */
-    private static Row installCertificate(String hostname) throws Exception {
-        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
-        X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, hostname);
-        Row row = Models.get(CertificateModel.class).createEmptyRow();
-        row.set(CertificateModel.NICE_NAME, PREFIX + "served");
-        row.set(CertificateModel.PROVIDER, "custom");
-        row.set(CertificateModel.STATUS, "active");
-        row.set(CertificateModel.DOMAIN_NAMES_TEXT, hostname);
-        row.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
-        row.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
-        return Models.get(CertificateModel.class).save(row);
     }
 
     /** {@link #postHook} for a lambda that may not throw. */

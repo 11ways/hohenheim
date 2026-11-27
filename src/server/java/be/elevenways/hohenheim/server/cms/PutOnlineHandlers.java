@@ -986,7 +986,7 @@ final class PutOnlineHandlers {
      *
      * AIDEV-NOTE: THE orderer of a new address's certificate: this wizard's certificate step and an address's own
      * create (AddressWrites, its https choice) both come here, so a refusal is a note on both and never undoes the
-     * address the caller made.
+     * address the caller made; that includes the caller's spent orders of the hour, which the order itself spends.
      *
      * @return what is left to do, or null when HTTPS is set up
      */
@@ -1026,6 +1026,9 @@ final class PutOnlineHandlers {
         } catch (Violations refused) {
             Blast.log("PUT_ONLINE: certificate for", hostname, "refused:", refused.getMessage());
             return message("https_refused_note").withArg("address", hostname);
+        } catch (DomainRefusal limited) {
+            if (!limited.is(ZenitRefusalReason.RATE_LIMITED)) throw limited;
+            return message("https_limited_note").withArg("address", hostname);
         }
     }
 

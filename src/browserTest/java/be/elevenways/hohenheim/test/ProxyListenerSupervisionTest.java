@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.ProxyAttention;
@@ -34,8 +33,6 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -115,7 +112,7 @@ class ProxyListenerSupervisionTest {
 
         // Step 1: a certificate exists but the HTTPS port is already taken -> HTTPS start
         // FAILS while HTTP runs. This is the incident's observable state (443 dead, 80 fine).
-        installCertificate("supervised.test");
+        TlsCertificateTest.saveCert("Supervision Test", "supervised.test");
         try (ServerSocket blocker = new ServerSocket(0)) {
             int blockedPort = blocker.getLocalPort();
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
@@ -413,18 +410,5 @@ class ProxyListenerSupervisionTest {
         AtomicLong clock = new AtomicLong(Now.millis());
         target.setClockForTesting(clock::get);
         return clock;
-    }
-
-    private static void installCertificate(String hostname) throws Exception {
-        var certModel = Models.get(CertificateModel.class);
-        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
-        X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, hostname);
-        Row certRow = certModel.createEmptyRow();
-        certRow.set(CertificateModel.NICE_NAME, "Supervision Test");
-        certRow.set(CertificateModel.PROVIDER, "custom");
-        certRow.set(CertificateModel.STATUS, "active");
-        certRow.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
-        certRow.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
-        certModel.save(certRow);
     }
 }

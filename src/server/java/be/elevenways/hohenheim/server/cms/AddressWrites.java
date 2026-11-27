@@ -58,13 +58,17 @@ public final class AddressWrites {
     /** The argument pinning the certificate an address serves. */
     public static final String CERTIFICATE = "certificate";
 
-    /** A new address's certificate: ordered now, or not yet; the wizard's HTTPS step's label, words and default. */
+    /**
+     * A new address's certificate: ordered now, or not yet; labelled as the order it places ("Get a certificate"), so it
+     * never reads as the certificate picker beside it, with the wizard's words for its two choices and its default.
+     */
     public static final EnumField HTTPS = EnumField.builder(PutOnline.HTTPS.getName())
-        .label(PutOnline.CERTIFICATE_LABEL)
+        .label(CertificateOperations.REQUEST_FOR_DOMAIN.label())
         .help(HohenheimMicrocopy.HELP.of("address_https_order"))
         .value(HttpsChoice.AUTOMATIC.token(), HttpsChoice.AUTOMATIC.token(), HttpsChoice.AUTOMATIC.label())
         .value(HttpsChoice.LATER.token(), HttpsChoice.LATER.token(), HttpsChoice.LATER.label())
         .defaultValue(String.valueOf(PutOnline.HTTPS.getDefaultValue()))
+        .keepsAValue()
         .visibleIn(EditView.CREATE)
         .build();
 
@@ -160,10 +164,11 @@ public final class AddressWrites {
     }
 
     /** @return the toast of an address the panel's create form added: its name, then what HTTPS gives it */
-    static @NonNull Microcopy added(@NonNull Row address, @NonNull HttpsReader reader) {
+    static @NonNull Microcopy added(@NonNull Row address, @NonNull HttpsReader reader,
+                                    @NonNull AccessContext access) {
         return HohenheimMicrocopy.HOHENHEIM.of("address_added")
             .withArg("address", String.valueOf((Object) address.get(SiteDomainModel.HOSTNAME)))
-            .withArg("https", httpsSaid(address, reader, null, null));
+            .withArg("https", httpsSaid(address, reader, null, access));
     }
 
     /**
@@ -171,10 +176,10 @@ public final class AddressWrites {
      * why, with the way to order one; read from the address and its certificates as they stand.
      *
      * @param code   the address's code, for an assistant's call
-     * @param access the reader whose codes an assistant is shown, null on the panel
+     * @param access the reader: whose codes an assistant is shown, and whose orders of the hour may be spent
      */
     private static @NonNull Microcopy httpsSaid(@NonNull Row address, @NonNull HttpsReader reader,
-                                                @Nullable String code, @Nullable AccessContext access) {
+                                                @Nullable String code, @NonNull AccessContext access) {
         String hostname = String.valueOf((Object) address.get(SiteDomainModel.HOSTNAME));
         boolean passthrough = SiteParts.tlsPassthrough(Models.get(SiteModel.class)
             .findById(address.get(SiteDomainModel.SITE_ID)));
@@ -191,14 +196,15 @@ public final class AddressWrites {
                 : cert != null && CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))
                 ? Https.UNSERVED : Https.NONE;
         };
-        Microcopy why = state == Https.NONE && reader != HttpsReader.DELEGATED ? whyNone(hostname, cert) : null;
+        Microcopy why = state == Https.NONE && reader != HttpsReader.DELEGATED
+            ? whyNone(hostname, cert, access) : null;
         Microcopy said = said(key(reader, state, why != null));
         if (why != null) said = said.withArg("reason", why);
         return switch (reader) {
             case ASSISTANT -> said.withArg("address", Objects.requireNonNullElse(code, hostname))
                 .withArg("certificate", cert == null ? "" : Objects.requireNonNullElse(RecordCodes.code(
-                    CertificateModel.MODEL_ID, String.valueOf((Object) cert.get(CertificateModel.ID)),
-                    Objects.requireNonNull(access, "an assistant's answer has its reader")), name(cert)));
+                    CertificateModel.MODEL_ID, String.valueOf((Object) cert.get(CertificateModel.ID)), access),
+                    name(cert)));
             case OPERATOR -> said.withArg("certificate", cert == null ? "" : name(cert))
                 .withArg("action", CertificateOperations.REQUEST_FOR_DOMAIN.label());
             case DELEGATED -> said;
@@ -246,16 +252,18 @@ public final class AddressWrites {
 
     /**
      * @return why an address without a working certificate has none: Let's Encrypt off, its order refused (the
-     *     certificate's stored failure), or the name not pointing here by the order's own pre-check; null for none of
-     *     these (later was chosen)
+     *     certificate's stored failure), the name not pointing here by the order's own pre-check, or the reader's
+     *     orders of the hour spent; null for none of these (later was chosen)
      */
-    private static @Nullable Microcopy whyNone(@NonNull String hostname, @Nullable Row cert) {
+    private static @Nullable Microcopy whyNone(@NonNull String hostname, @Nullable Row cert,
+                                               @NonNull AccessContext access) {
         Microcopy off = CertificateOperationHandlers.letsEncryptUnavailable();
         if (off != null) return off;
         if (cert != null && CertificateModel.STATUS_ERROR.equals(cert.get(CertificateModel.STATUS))) {
             return RenewalFailure.sentenceFor(cert.get(CertificateModel.RENEWAL_ERROR));
         }
-        return CertificateOperationHandlers.unreachable(hostname, HostnameReach.recent(hostname));
+        Microcopy unreachable = CertificateOperationHandlers.unreachable(hostname, HostnameReach.recent(hostname));
+        return unreachable != null ? unreachable : CertificateOperationHandlers.orderBudgetSpent(access);
     }
 
     private static @NonNull Microcopy said(@NonNull String key) {

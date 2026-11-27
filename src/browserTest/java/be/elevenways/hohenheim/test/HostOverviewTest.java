@@ -148,9 +148,7 @@ class HostOverviewTest extends HohenheimTestBase {
         assertThat(page.locator(incus).isVisible()).as("step 1: no Incus wording yet").isFalse();
 
         // 2. Choosing Incus shows the Incus wording and hides the Docker one, without a round trip.
-        page.click("pl-select[name='runtime'] .pl-select-field");
-        page.waitForSelector("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='incus']");
-        page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='incus']");
+        chooseOptionOf("pl-select[name='runtime']", "incus");
         waitForReactiveIdle();
         page.waitForCondition(() -> page.locator(incus).isVisible());
         assertThat(page.locator(incus).textContent()).as("step 2: the Incus wording").contains("Incus daemon");

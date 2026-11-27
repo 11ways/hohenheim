@@ -214,6 +214,8 @@ final class AppOverview {
         List<Row> allPaths = Models.get(ProtectedPathModel.class).find()
             .where(ProtectedPathModel.SITE_ID.in(siteIds)).all();
         AccessListRules read = AccessListRules.ofPaths(allPaths);
+        Set<String> openPaths = CmsSupport.openable(access, HohenheimSlugs.PROTECTED_PATHS,
+            allPaths.stream().map(path -> path.get(ProtectedPathModel.ID)).toList(), null);
         List<AppProtection> rows = new ArrayList<>();
         for (Row site : served) {
             String lead = prefix ? site.get(SiteModel.NAME) + " " : "";
@@ -228,7 +230,7 @@ final class AppOverview {
                     : AccessRuleSummaries.protectionOf(AccessRuleSummaries.wayOf(read.rulesOf(listId)));
                 Integer pathId = path.get(ProtectedPathModel.ID);
                 rows.add(new AppProtection(lead + path.get(ProtectedPathModel.PATH),
-                    opens(access, HohenheimSlugs.PROTECTED_PATHS, pathId, null)
+                    openPaths.contains(String.valueOf(pathId))
                         ? CmsRoutes.detail(panelSlug, HohenheimSlugs.PROTECTED_PATHS, pathId).toUrl() : null,
                     (how != null ? how : HohenheimMicrocopy.APP_OVERVIEW.of(open ? "list_admits_everyone" : "by_list")
                         .withArg("list", read.nameOf(listId)))

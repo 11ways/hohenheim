@@ -64,27 +64,37 @@ public final class ProtectedPathParts {
 
     /** @return the admin protected-path resource */
     public static @NonNull PanelResource<Row> admin() {
-        return entry(HohenheimIds.id("protected_path"))
+        return entry(HohenheimIds.id("protected_path"), true)
             .tabs(ResourceTabs.<Row>of(List.of(new ProtectedPathSignedLinkPage())).withHistory().withContributions())
             .build();
     }
 
-    /** @return the /manage twin: the protected paths of the sites the caller manages */
+    /**
+     * @return the /manage twin: the protected paths of the sites the caller manages, which says how one gets in and
+     *     never which access list: the list "Protect a path" makes is the operator's, which a manager cannot read
+     */
     public static @NonNull PanelResource<Row> manage() {
-        return ManageTwin.reached(entry(ManageTwin.id("protected_path")), TenantScopes.PROTECTED_PATHS,
+        return ManageTwin.reached(entry(ManageTwin.id("protected_path"), false), TenantScopes.PROTECTED_PATHS,
                 ResourceTabs.<Row>of(List.of(new ProtectedPathSignedLinkPage())).withContributions())
             .build();
     }
 
-    /** The identity, list, form, reads, writes, parent and authority both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
-        TableSpec<Row> table = TableSpec.<Row>builder()
+    /**
+     * The identity, list, form, reads, writes, parent and authority both twins share.
+     *
+     * @param listColumn whether the list names each path's access list, beside how one gets in
+     */
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id, boolean listColumn) {
+        TableSpec.Builder<Row> columns = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(ProtectedPathModel.PATH).filterable().copyable().code().build())
-            .column(ColumnSpec.virtual(WAY_COLUMN, HohenheimMicrocopy.PROTECT_PATH.of("method")).build())
-            .column(ColumnSpec.fromField(ProtectedPathModel.ACCESS_LIST_ID)
+            .column(ColumnSpec.virtual(WAY_COLUMN, HohenheimMicrocopy.PROTECT_PATH.of("method")).build());
+        if (listColumn) {
+            columns.column(ColumnSpec.fromField(ProtectedPathModel.ACCESS_LIST_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.ACCESS_LIST_ID))
                 .relation(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
-                .build())
+                .build());
+        }
+        TableSpec<Row> table = columns
             .column(ColumnSpec.virtual(PROTECTION_COLUMN, HohenheimMicrocopy.PROTECTED_PATH.of("protection"))
                 .renderer(CmsTemplateIds.CELL_ENUM_BADGE).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.SITE_ID)

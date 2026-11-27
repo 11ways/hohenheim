@@ -17,8 +17,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
@@ -51,7 +49,7 @@ class TlsMultiplexerLifecycleTest {
     @Test
     void removingLastCertificateStopsUnusedPublicTlsListener() throws Exception {
         APP.renewDatabase();
-        Row certificate = installCertificate("remove.example.test");
+        Row certificate = TlsCertificateTest.saveCert("Lifecycle certificate", "remove.example.test");
         startProxy();
         assertThat(proxy.getHttpsState()).isEqualTo(ProxyServer.State.RUNNING);
 
@@ -66,7 +64,7 @@ class TlsMultiplexerLifecycleTest {
     @Test
     void removingCertificateKeepsPassthroughButStopsLocalTermination() throws Exception {
         APP.renewDatabase();
-        Row certificate = installCertificate("remove.example.test");
+        Row certificate = TlsCertificateTest.saveCert("Lifecycle certificate", "remove.example.test");
         backend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         Row site = setupSite(SiteModel.UPSTREAM_TLS_PASSTHROUGH,
             "TLS backend", "tls-backend", Map.of(
@@ -88,19 +86,5 @@ class TlsMultiplexerLifecycleTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
-    }
-
-    private static Row installCertificate(String hostname) throws Exception {
-        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
-        X509Certificate certificate = TlsCertificateTest.generateSelfSignedCert(keyPair, hostname);
-        var model = Models.get(CertificateModel.class);
-        Row row = model.createEmptyRow();
-        row.set(CertificateModel.NICE_NAME, "Lifecycle certificate");
-        row.set(CertificateModel.PROVIDER, "custom");
-        row.set(CertificateModel.STATUS, "active");
-        row.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(certificate));
-        row.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
-        model.save(row);
-        return row;
     }
 }

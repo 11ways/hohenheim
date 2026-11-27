@@ -587,13 +587,13 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             page.keyboard().press("Escape");
 
             // 2. Choosing project one judges the host for project one's bucket: offered, live, without a reload.
-            choose(projectSelect, popup, projectOneId);
+            choose(projectSelect, projectOneId);
             page.waitForCondition(() -> !"true".equals(
                 hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
             page.keyboard().press("Escape");
 
             // 3. Project two is another owner again.
-            choose(projectSelect, popup, projectTwoId);
+            choose(projectSelect, projectTwoId);
             page.waitForCondition(() -> "true".equals(
                 hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
             page.keyboard().press("Escape");
@@ -604,7 +604,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             waitForHydration();
             page.locator("pl-choice-card[data-value='hohenheim:docker_container']").click();
             waitForReactiveIdle();
-            choose(environmentSelect, popup, environmentId);
+            choose(environmentSelect, environmentId);
             page.waitForCondition(() -> !"true".equals(
                 hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
             page.keyboard().press("Escape");
@@ -636,7 +636,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             assertThat(hostOption(templateHost, popup, hostId).innerText()).as("step 6: with its reason")
                 .contains(refusal);
             page.keyboard().press("Escape");
-            choose("pl-select[name='projectId']", popup, projectOneId);
+            choose("pl-select[name='projectId']", projectOneId);
             page.waitForCondition(() -> !"true".equals(
                 hostOption(templateHost, popup, hostId).getAttribute("aria-disabled")));
             page.keyboard().press("Escape");
@@ -670,12 +670,9 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         return page.locator(option);
     }
 
-    /** Chooses one value of a select and waits for the form to settle. */
-    private void choose(String select, String popup, int value) {
-        page.click(select + " .pl-select-field");
-        String option = popup + " div[role='option'][data-value='" + value + "']";
-        page.waitForSelector(option);
-        page.click(option);
+    /** Chooses one value of a select ({@link #chooseOptionOf}) and waits for the form to settle. */
+    private void choose(String select, int value) {
+        chooseOptionOf(select, String.valueOf(value));
         waitForReactiveIdle();
     }
 

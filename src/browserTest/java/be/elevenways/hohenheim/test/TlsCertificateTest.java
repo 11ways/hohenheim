@@ -128,19 +128,7 @@ public class TlsCertificateTest {
 
     @Test
     void httpsStartsWhenCertificatesAvailable() throws Exception {
-        var ds = HohenheimDatabase.datasource();
-        var certModel = Models.get(CertificateModel.class);
-
-        KeyPair keyPair = generateKeyPair();
-        X509Certificate cert = generateSelfSignedCert(keyPair, "ssl.example.com");
-
-        Row row = certModel.createEmptyRow();
-        row.set(CertificateModel.NICE_NAME, "SSL Test");
-        row.set(CertificateModel.PROVIDER, "custom");
-        row.set(CertificateModel.STATUS, "active");
-        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
-        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
-        certModel.save(row);
+        saveCert("SSL Test", "ssl.example.com");
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
@@ -178,8 +166,11 @@ public class TlsCertificateTest {
     // Self-signed cert generation for testing
     // -----------------------------------------------------------------------
 
-    /** Store one active self-signed certificate for {@code cn}. */
-    private static void saveCert(String niceName, String cn) throws Exception {
+    /**
+     * Stores one active self-signed certificate for {@code cn}, its names stored as an upload stores them: THE
+     * certificate fixture of the proxy and TLS tests.
+     */
+    public static Row saveCert(String niceName, String cn) throws Exception {
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(keyPair, cn);
         var certModel = Models.get(CertificateModel.class);
@@ -187,9 +178,10 @@ public class TlsCertificateTest {
         row.set(CertificateModel.NICE_NAME, niceName);
         row.set(CertificateModel.PROVIDER, "custom");
         row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.DOMAIN_NAMES_TEXT, cn);
         row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
         row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
-        certModel.save(row);
+        return certModel.save(row);
     }
 
     public static KeyPair generateKeyPair() throws Exception {

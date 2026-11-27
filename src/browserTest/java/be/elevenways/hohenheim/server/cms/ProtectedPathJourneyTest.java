@@ -199,12 +199,34 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             .as("step 7: the row names the rest beside the path")
             .contains("data-app-protection=\"Everything else\"")
             .contains("data-app-protection=\"/members\"");
+
+        // 8. Its paths, read by the tenant who manages the site but not the list: how one gets in, never which list
+        //    (a list it cannot read would show as its bare id), where the operator's tab names the list.
+        assertThat(pathsOf(adminGet(protectionTab("admin", guardedId)).body()))
+            .as("step 8: the operator's paths name their list").contains("data-column=\"access_list_id\"");
+        String tenantPaths = pathsOf(httpGet(protectionTab("manage", guardedId), sessionFor(tenantId).token()).body());
+        assertThat(tenantPaths).as("step 8: the tenant reads the path and how one gets in")
+            .contains("/members").contains("data-column=\"" + ProtectedPathParts.WAY_COLUMN + "\"");
+        assertThat(tenantPaths).as("step 8: THE ASSERTION -- and no list column")
+            .doesNotContain("data-column=\"access_list_id\"");
+    }
+
+    /** @return the tab's paths section, from its mount on */
+    private static String pathsOf(String page) {
+        int section = page.indexOf("data-cms-child-list=\"" + HohenheimSlugs.PROTECTED_PATHS + "\"");
+        assertThat(section).as("the paths section is drawn: " + page).isNotNegative();
+        return page.substring(section);
     }
 
     /**
-     * The Protection tab and a site's Private paths read whether each path is open and how one gets in once for the
-     * page: the statements naming the lists, their rules and the paths are the same for 2 paths as for 20, each with
-     * a list of its own (password, network, or both mixed, read by the list's name).
+     * The Protection tab, a site's Private paths and its overview's Protection card read whether each path is open,
+     * how one gets in and whether its door opens once for the page: the statements naming the lists, their rules and
+     * the paths stay the same as paths grow, each with a list of its own (password, network, or both mixed, read by
+     * the list's name).
+     *
+     * AIDEV-NOTE: the overview is counted from 20 paths on: its Recent card lists the site's last six changes, each a
+     * path's creation here, so below six paths it reads fewer of them; past that it is bounded and the card's own
+     * reads are what grows, if anything.
      */
     @Test
     void theProtectionTabAndThePrivatePathsReadFlatAsPathsAndListsGrow() throws Exception {
@@ -213,6 +235,7 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         Object siteId = site.get(SiteModel.ID);
         String tab = protectionTab("admin", siteId);
         String form = "/admin/sites/" + siteId;
+        String overview = "/admin/sites/" + siteId + "/page/overview";
         guardedPaths(site, suffix, 0, 2);
 
         // 1. Two paths: their ways in words on both pages.
@@ -226,6 +249,12 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             .as("step 2: the Protection tab").isEqualTo(tabFew);
         assertThat(statements(form, "step 2", "With a password", "From a network")).as("step 2: the Private paths")
             .isEqualTo(formFew);
+
+        // 3. The overview's Protection card, twenty paths and then forty, each with its door: the same statements.
+        Map<String, Integer> overviewTwenty = statements(overview, "step 3", "/flat-19");
+        guardedPaths(site, suffix, 20, 40);
+        assertThat(statements(overview, "step 3", "/flat-39")).as("step 3: the overview's Protection card")
+            .isEqualTo(overviewTwenty);
     }
 
     /** Protects paths {@code from} up to {@code to}, each with a list of its own: password, network or both mixed. */
