@@ -79,7 +79,7 @@ public final class ProtectedPathParts {
     /** The identity, list, form, reads, writes, parent and authority both twins share. */
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(ProtectedPathModel.PATH).filterable().copyable().build())
+            .column(ColumnSpec.fromField(ProtectedPathModel.PATH).filterable().copyable().code().build())
             .column(ColumnSpec.virtual(WAY_COLUMN, HohenheimMicrocopy.PROTECT_PATH.of("method")).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.ACCESS_LIST_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.ACCESS_LIST_ID))
@@ -109,7 +109,16 @@ public final class ProtectedPathParts {
             .showInNav(false)
             .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID)
             .tab(HohenheimSlugs.PROTECTED_PATHS))
-            .reads(ResourceReads.rows())
+            // Whether each path is open and how one gets in, read for the whole page at once (the computed cells are
+            // the one-record reads): the Protection tab and a site's Private paths cost the same for 2 paths as 20.
+            .reads(ResourceReads.rows().pageBatch((paths, access) -> {
+                AccessListRules read = AccessListRules.ofPaths(paths);
+                return (path, column) -> switch (column.name()) {
+                    case PROTECTION_COLUMN -> protectionBadge(read.isOpen(path));
+                    case WAY_COLUMN -> AccessRuleSummaries.wayInOf(path, read);
+                    default -> null;
+                };
+            }))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(ProtectedPathModel.PATH)
                 // An empty list says paths follow their app's protection until one is protected, and what that does.
@@ -129,7 +138,11 @@ public final class ProtectedPathParts {
      * visitor through never reads as protection.
      */
     static @NonNull EnumBadgeState protectionBadge(@NonNull Row path) {
-        return ProtectedPathInvariant.isOpen(path)
+        return protectionBadge(ProtectedPathInvariant.isOpen(path));
+    }
+
+    private static @NonNull EnumBadgeState protectionBadge(boolean open) {
+        return open
             ? new EnumBadgeState("open", HohenheimMicrocopy.PROTECTED_PATH.of("open_to_everyone"), null, "lock-open",
                 BadgeVariant.DESTRUCTIVE,
                 null, true)

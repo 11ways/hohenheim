@@ -131,17 +131,23 @@ final class AccessRuleSummaries {
     }
 
     /**
+     * How a list lets visitors in, read off its stored rules ({@link #wayOf(List)}).
+     *
+     * @return the way, or null for no list or one with no enabled rule, mixed kinds or nested groups
+     */
+    static @Nullable Way wayOf(@Nullable Integer listId) {
+        return listId == null ? null : wayOf(Models.get(AccessRuleModel.class).findForAccessList(listId));
+    }
+
+    /**
      * THE reading of which way into a protected path a list's rules make, the one every surface naming it asks: a
      * password for some people, a few networks, one sign-in provider or one signed link.
      *
+     * @param listRules every rule of one list, switched off ones included
      * @return the way, or null when the list has no enabled rule, mixes kinds or nests groups
      */
-    static @Nullable Way wayOf(@Nullable Integer listId) {
-        if (listId == null) {
-            return null;
-        }
-        List<Row> rules = Models.get(AccessRuleModel.class).find()
-            .where(AccessRuleModel.ACCESS_LIST_ID.eq(listId)).all().stream()
+    static @Nullable Way wayOf(@NonNull List<Row> listRules) {
+        List<Row> rules = listRules.stream()
             .filter(rule -> !Boolean.FALSE.equals(rule.get(AccessRuleModel.ENABLED))).toList();
         if (rules.isEmpty()) {
             return null;
@@ -184,18 +190,28 @@ final class AccessRuleSummaries {
      * @return the words, or null when the list mixes kinds or nests groups (the caller then names the list)
      */
     static @Nullable Microcopy protectionOf(@Nullable Integer listId) {
-        Way way = wayOf(listId);
+        return protectionOf(wayOf(listId));
+    }
+
+    /**
+     * The way's own label ({@link #wayInOf(Row)}'s words) with what it adds: how many people or networks, which
+     * provider.
+     *
+     * @return the words, or null for no way
+     */
+    static @Nullable Microcopy protectionOf(@Nullable Way way) {
         if (way == null) {
             return null;
         }
+        Microcopy label = CmsSupport.enumValueLabel(ProtectPath.METHOD, way.method());
         return switch (way.method()) {
             case ProtectPath.METHOD_PASSWORD -> HohenheimMicrocopy.ACCESS_RULE.of("protection_password")
-                .withArg("count", way.count());
+                .withArg("way", label).withArg("count", way.count());
             case ProtectPath.METHOD_NETWORK -> HohenheimMicrocopy.ACCESS_RULE.of("protection_network")
-                .withArg("count", way.count());
+                .withArg("way", label).withArg("count", way.count());
             case ProtectPath.METHOD_SIGN_IN -> HohenheimMicrocopy.ACCESS_RULE.of("protection_sign_in")
-                .withArg("provider", providerName(way.provider()));
-            default -> CmsSupport.enumValueLabel(ProtectPath.METHOD, way.method());
+                .withArg("way", label).withArg("provider", providerName(way.provider()));
+            default -> label;
         };
     }
 
@@ -205,13 +221,18 @@ final class AccessRuleSummaries {
      * where its list lets every visitor through.
      */
     static @NonNull Microcopy wayInOf(@NonNull Row path) {
-        if (ProtectedPathInvariant.isOpen(path)) {
+        return wayInOf(path, AccessListRules.ofPaths(List.of(path)));
+    }
+
+    /** {@link #wayInOf(Row)} of one path of a page, read off the page's lists and rules. */
+    static @NonNull Microcopy wayInOf(@NonNull Row path, @NonNull AccessListRules read) {
+        if (read.isOpen(path)) {
             return HohenheimMicrocopy.PROTECTED_PATH.of("open_to_everyone");
         }
         Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
-        Way way = wayOf(listId);
+        Way way = wayOf(read.rulesOf(listId));
         return way != null ? CmsSupport.enumValueLabel(ProtectPath.METHOD, way.method())
-            : HohenheimMicrocopy.APP_OVERVIEW.of("by_list").withArg("list", AppOverview.listName(listId));
+            : HohenheimMicrocopy.APP_OVERVIEW.of("by_list").withArg("list", read.nameOf(listId));
     }
 
     /**

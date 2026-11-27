@@ -12224,15 +12224,15 @@
     "scope": "access_rule"
   },
   "protection_password": {
-    "text": ".match {$count :integer}\none {{Password, 1 person}}\n* {{Password, {$count :integer} people}}",
+    "text": ".match {$count :integer}\none {{{$way}, 1 person}}\n* {{{$way}, {$count :integer} people}}",
     "scope": "access_rule"
   },
   "protection_network": {
-    "text": ".match {$count :integer}\none {{Network, 1 rule}}\n* {{Network, {$count :integer} rules}}",
+    "text": ".match {$count :integer}\none {{{$way}, 1 rule}}\n* {{{$way}, {$count :integer} rules}}",
     "scope": "access_rule"
   },
   "protection_sign_in": {
-    "text": "Sign-in with {$provider}",
+    "text": "{$way} with {$provider}",
     "scope": "access_rule"
   },
   "summary_basic_auth": {

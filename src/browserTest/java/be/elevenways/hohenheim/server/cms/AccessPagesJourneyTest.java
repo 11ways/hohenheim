@@ -55,7 +55,7 @@ class AccessPagesJourneyTest extends HohenheimHttpTestBase {
         // 1. The lists read by what they let in and how many places use them, in words.
         String lists = adminGet("/admin/access-lists?q=" + suffix).body();
         assertThat(lists).as("step 1: a lets-in column").contains("Lets in");
-        assertThat(lists).as("step 1: a password list says who it lets in").contains("Password, 2 people");
+        assertThat(lists).as("step 1: a password list says who it lets in").contains("With a password, 2 people");
         assertThat(lists).as("step 1: the list is used in two places").contains("2 places");
         assertThat(lists).as("step 1: a list nothing uses says so").contains("No rules yet")
             .contains("Nothing yet");

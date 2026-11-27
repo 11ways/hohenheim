@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.ports.StreamPort;
@@ -205,22 +206,32 @@ final class AppOverview {
             return null;
         }
         boolean prefix = served.size() > 1;
+        List<Integer> siteIds = new ArrayList<>();
+        for (Row site : served) {
+            siteIds.add(site.get(SiteModel.ID));
+        }
+        // Every served site's paths, their lists and rules: the same reads for one path as for many.
+        List<Row> allPaths = Models.get(ProtectedPathModel.class).find()
+            .where(ProtectedPathModel.SITE_ID.in(siteIds)).all();
+        AccessListRules read = AccessListRules.ofPaths(allPaths);
         List<AppProtection> rows = new ArrayList<>();
         for (Row site : served) {
             String lead = prefix ? site.get(SiteModel.NAME) + " " : "";
-            List<Row> paths = Models.get(ProtectedPathModel.class).find()
-                .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID))).all();
+            List<Row> paths = allPaths.stream()
+                .filter(path -> Objects.equals(path.get(ProtectedPathModel.SITE_ID), site.get(SiteModel.ID)))
+                .toList();
             for (Row path : paths) {
-                boolean open = ProtectedPathInvariant.isOpen(path);
+                boolean open = read.isOpen(path);
                 Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
                 // How visitors get in, in words, when the list is plain; otherwise the list it follows, by name.
-                Microcopy how = open ? null : AccessRuleSummaries.protectionOf(listId);
+                Microcopy how = open ? null
+                    : AccessRuleSummaries.protectionOf(AccessRuleSummaries.wayOf(read.rulesOf(listId)));
                 Integer pathId = path.get(ProtectedPathModel.ID);
                 rows.add(new AppProtection(lead + path.get(ProtectedPathModel.PATH),
                     opens(access, HohenheimSlugs.PROTECTED_PATHS, pathId, null)
                         ? CmsRoutes.detail(panelSlug, HohenheimSlugs.PROTECTED_PATHS, pathId).toUrl() : null,
                     (how != null ? how : HohenheimMicrocopy.APP_OVERVIEW.of(open ? "list_admits_everyone" : "by_list")
-                        .withArg("list", listName(listId)))
+                        .withArg("list", read.nameOf(listId)))
                         .resolve(locales, resolver),
                     open, true));
             }
@@ -421,7 +432,7 @@ final class AppOverview {
 
     // -- helpers ----------------------------------------------------------------------
 
-    static @NonNull String listName(@Nullable Integer accessListId) {
+    private static @NonNull String listName(@Nullable Integer accessListId) {
         Row list = Models.get(AccessListModel.class).findById(accessListId);
         return list == null ? "#" + accessListId : String.valueOf((Object) list.get(AccessListModel.NAME));
     }

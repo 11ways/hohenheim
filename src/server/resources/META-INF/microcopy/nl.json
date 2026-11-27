@@ -12224,15 +12224,15 @@
     "scope": "access_rule"
   },
   "protection_password": {
-    "text": ".match {$count :integer}\none {{Wachtwoord, 1 persoon}}\n* {{Wachtwoord, {$count :integer} personen}}",
+    "text": ".match {$count :integer}\none {{{$way}, 1 persoon}}\n* {{{$way}, {$count :integer} personen}}",
     "scope": "access_rule"
   },
   "protection_network": {
-    "text": ".match {$count :integer}\none {{Netwerk, 1 regel}}\n* {{Netwerk, {$count :integer} regels}}",
+    "text": ".match {$count :integer}\none {{{$way}, 1 regel}}\n* {{{$way}, {$count :integer} regels}}",
     "scope": "access_rule"
   },
   "protection_sign_in": {
-    "text": "Aanmelden met {$provider}",
+    "text": "{$way} met {$provider}",
     "scope": "access_rule"
   },
   "summary_basic_auth": {

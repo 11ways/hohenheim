@@ -11,9 +11,12 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimHttpTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.test.support.DatasourceProbe;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -21,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -128,7 +132,7 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             .contains("data-app-protection=\"Access list " + listName + "\"")
             .contains("href=\"" + rules + "\"");
         assertThat(band).as("step 1: how it lets visitors in, as protection")
-            .contains("Password, 1 person").contains("Protected").doesNotContain("data-app-protection-open");
+            .contains("With a password, 1 person").contains("Protected").doesNotContain("data-app-protection-open");
         assertThat(band).as("step 1: the card's door leads to who gets in").contains("Edit who gets in");
         assertThat(band).as("step 1: the list's name wears the link register, not the row's title colour")
             .doesNotContain("data-row-link");
@@ -152,7 +156,7 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         String overview = adminGet("/admin/sites/" + guardedId + "/page/overview").body();
         assertThat(overview).as("step 3: the whole-app row, named for what it covers")
             .contains("data-app-protection=\"Whole app\"")
-            .contains("Access list " + listName + ": Password, 1 person");
+            .contains("Access list " + listName + ": With a password, 1 person");
         assertThat(overview).as("step 3: THE ASSERTION -- linked to the list's rules")
             .contains("href=\"" + rules + "\"");
 
@@ -195,6 +199,71 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
             .as("step 7: the row names the rest beside the path")
             .contains("data-app-protection=\"Everything else\"")
             .contains("data-app-protection=\"/members\"");
+    }
+
+    /**
+     * The Protection tab and a site's Private paths read whether each path is open and how one gets in once for the
+     * page: the statements naming the lists, their rules and the paths are the same for 2 paths as for 20, each with
+     * a list of its own (password, network, or both mixed, read by the list's name).
+     */
+    @Test
+    void theProtectionTabAndThePrivatePathsReadFlatAsPathsAndListsGrow() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Row site = site("flat-paths-" + suffix);
+        Object siteId = site.get(SiteModel.ID);
+        String tab = protectionTab("admin", siteId);
+        String form = "/admin/sites/" + siteId;
+        guardedPaths(site, suffix, 0, 2);
+
+        // 1. Two paths: their ways in words on both pages.
+        Map<String, Integer> tabFew = statements(tab, "step 1", "With a password", "From a network");
+        Map<String, Integer> formFew = statements(form, "step 1", "With a password", "From a network");
+
+        // 2. Twenty paths, twenty lists, mixed ones read by the list's name: THE ASSERTION -- the same statements on
+        //    both pages.
+        guardedPaths(site, suffix, 2, 20);
+        assertThat(statements(tab, "step 2", "With a password", "From a network", "Access list flat-2-" + suffix))
+            .as("step 2: the Protection tab").isEqualTo(tabFew);
+        assertThat(statements(form, "step 2", "With a password", "From a network")).as("step 2: the Private paths")
+            .isEqualTo(formFew);
+    }
+
+    /** Protects paths {@code from} up to {@code to}, each with a list of its own: password, network or both mixed. */
+    private static void guardedPaths(Row site, String suffix, int from, int to) {
+        for (int index = from; index < to; index++) {
+            int list = list("flat-" + index + "-" + suffix, AccessListModel.SATISFY_ANY);
+            if (index % 3 != 1) {
+                rule(list, null, AccessRuleModel.TYPE_BASIC_AUTH,
+                    Map.of("username", "person" + index, "password", "correct horse"), true);
+            }
+            if (index % 3 != 0) {
+                rule(list, null, AccessRuleModel.TYPE_IP_ALLOW, Map.of("network", "10." + index + ".0.0/16"), true);
+            }
+            protect(site, "/flat-" + index, list);
+        }
+    }
+
+    /**
+     * Gets a page once to warm it, then again counting the statements that name the lists, the rules and the paths.
+     *
+     * @param said words the counted page must hold
+     */
+    private Map<String, Integer> statements(String path, String step, String... said) throws Exception {
+        assertThat(adminGet(path).statusCode()).as(step + ": " + path + " renders").isEqualTo(200);
+        DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
+        String body;
+        try (DatasourceProbe.Armed ignored = probe.recordStatements()) {
+            probe.reset();
+            body = adminGet(path).body();
+        }
+        assertThat(body).as(step + ": " + path + " says how one gets in").contains(said);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String table : List.of("access_lists", "access_rules", "protected_paths")) {
+            Pattern named = Pattern.compile("\\b" + table + "\\b");
+            counts.put(table, (int) probe.preparedStatements().stream().filter(sql -> named.matcher(sql).find())
+                .count());
+        }
+        return counts;
     }
 
     private static String protectionTab(String panel, Object siteId) {

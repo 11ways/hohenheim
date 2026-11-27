@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hawkeye.common.form.FormChanges;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -16,7 +18,9 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FormSection;
@@ -27,6 +31,8 @@ import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
 import be.elevenways.zenit.server.storage.Storages;
+import com.microsoft.playwright.Dialog;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import com.sun.net.httpserver.HttpServer;
@@ -47,6 +53,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -460,6 +468,145 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
         } finally {
             cleanUp.forEach(Runnable::run);
         }
+    }
+
+    /**
+     * The site's private paths as a person meets them: one quiet line on a site with none; "Protect a path" from the
+     * part, with unsaved changes in the site's form, posts only its own fields, makes the path and asks before the
+     * page leaves the unsaved form; the path then lists in one line with how one gets in; the Protection tab names the
+     * way in its column; a person who manages the site without being an administrator edits no kind settings on
+     * /manage, so meets the paths on its Protection tab there.
+     */
+    @Test
+    void privatePathsListInOneLineAndAreProtectedFromThePartAlone() {
+        String tag = HohenheimMcpTest.letters();
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Private paths " + tag, "private-" + tag,
+            new LinkedHashMap<>(Map.of("own_files", true)));
+        int siteId = site.get(SiteModel.ID);
+        String section = "pl-card.zf-form-section[data-section$='" + HohenheimFormSections.SHARING + "']";
+        String privatePaths = section + " pl-field[data-zf-related-list='" + SiteSharing.PRIVATE_PATHS + "']";
+        String protectButton = privatePaths + " [data-related-actions] pl-button";
+        String sheet = ".pl-sheet-panel[data-open]";
+        List<String> posted = new CopyOnWriteArrayList<>();
+        page.onRequest(request -> {
+            if ("POST".equals(request.method())) {
+                posted.add(request.url() + " " + request.postData());
+            }
+        });
+        List<Dialog> dialogs = new CopyOnWriteArrayList<>();
+        AtomicBoolean leave = new AtomicBoolean(false);
+        page.onDialog(dialog -> {
+            dialogs.add(dialog);
+            if (leave.get()) {
+                dialog.accept();
+            } else {
+                dialog.dismiss();
+            }
+        });
+
+        // 1. A site with no protected path: the part's label, one quiet line and the button, nothing else.
+        navigateToApp("/admin/sites/" + siteId);
+        waitForHydration();
+        page.click(section + " pl-collapsible-trigger button");
+        page.waitForSelector(privatePaths + " [data-related-empty]");
+        assertThat(page.locator(privatePaths + " [data-related-empty]").textContent().strip())
+            .as("step 1: one quiet line").isEqualTo("No private paths.");
+        assertThat(page.locator(privatePaths + " [data-related-row]").count()).as("step 1: no row").isZero();
+        assertThat(page.locator(protectButton).textContent().strip()).as("step 1: the button")
+            .isEqualTo("Protect a path");
+        page.locator(privatePaths).screenshot(new Locator.ScreenshotOptions()
+            .setPath(Path.of("build/site-sharing-private-paths-empty.png")));
+
+        // 2. With an unsaved name in the site's form, Protect a path opens its own sheet: the site's form is neither
+        //    submitted nor checked, and stays unsaved.
+        String form = "form.cms-form-layout";
+        String name = form + " pl-field[data-path='" + SiteModel.NAME.getName() + "'] input:not([type='hidden'])";
+        String unsavedName = "Renamed " + tag;
+        page.locator(name).fill(unsavedName);
+        page.waitForSelector(form + "[" + FormChanges.UNSAVED_ATTRIBUTE + "]");
+        String formUrl = page.url();
+        page.click(protectButton);
+        page.waitForSelector(sheet + " pl-field[data-path='" + ProtectPath.PATH.getName()
+            + "'] input:not([type='hidden'])");
+        assertThat(page.url()).as("step 2: the page stays").isEqualTo(formUrl);
+        assertThat(page.locator(form + "[" + FormChanges.UNSAVED_ATTRIBUTE + "]").count())
+            .as("step 2: the site's form is still unsaved").isOne();
+
+        // 3. The sheet posts its own fields alone: the path is made, and the page asks before leaving the unsaved
+        //    form for the path's page; staying keeps the typed name, which was never saved.
+        page.locator(sheet + " pl-field[data-path='" + ProtectPath.PATH.getName() + "'] input:not([type='hidden'])")
+            .fill("/private");
+        chooseOptionOf(sheet + " pl-field[data-path='" + ProtectPath.METHOD.getName() + "'] pl-select",
+            ProtectPath.METHOD_SIGNED_LINK);
+        page.click(sheet + " pl-button[data-cms-confirm-ok]");
+        page.waitForCondition(() -> Models.get(ProtectedPathModel.class).find()
+            .where(ProtectedPathModel.SITE_ID.eq(siteId)).first() != null);
+        page.waitForCondition(() -> !dialogs.isEmpty());
+        assertThat(dialogs.getFirst().type()).as("step 3: the usual question before leaving")
+            .isIn("confirm", "beforeunload");
+        waitForSettledFrames();
+        assertThat(page.url()).as("step 3: staying keeps the page").isEqualTo(formUrl);
+        assertThat(page.locator(name).inputValue()).as("step 3: and the typed name").isEqualTo(unsavedName);
+        assertThat((String) Models.get(SiteModel.class).findById(siteId).get(SiteModel.NAME))
+            .as("step 3: which was never saved").isEqualTo("Private paths " + tag);
+        assertThat(posted).as("step 3: the sheet posted").anyMatch(sent -> sent.contains("protect_path"));
+        assertThat(posted).as("step 3: THE ASSERTION -- nothing posted the site's form fields")
+            .noneMatch(sent -> sent.contains(unsavedName.replace(' ', '+'))
+                || sent.contains(unsavedName.replace(" ", "%20")) || sent.contains(unsavedName));
+
+        // 4. Leaving and opening the form again, the new path is one line: its path, how one gets in, Edit.
+        leave.set(true);
+        navigateToApp("/admin/sites/" + siteId);
+        waitForHydration();
+        page.click(section + " pl-collapsible-trigger button");
+        String row = privatePaths + " [data-related-row]";
+        page.waitForSelector(row);
+        assertThat(page.locator(row + " [data-column='path']").textContent().strip()).as("step 4: its path")
+            .isEqualTo("/private");
+        assertThat(page.locator(row + " [data-column='path'][data-code]").count()).as("step 4: as typed text")
+            .isOne();
+        assertThat(page.locator(row + " [data-column='" + ProtectedPathParts.WAY_COLUMN + "']").textContent().strip())
+            .as("step 4: how one gets in").isEqualTo("With a signed link");
+        assertThat(page.locator(row + " [data-related-opener]").textContent().strip()).as("step 4: Edit")
+            .isEqualTo("Edit");
+        Boolean oneLine = (Boolean) page.evaluate("row => { const boxes = [...document.querySelector(row).children]"
+            + ".map(child => child.getBoundingClientRect()); return Math.max(...boxes.map(box => box.top))"
+            + " < Math.min(...boxes.map(box => box.bottom)); }", row);
+        assertThat(oneLine).as("step 4: THE ASSERTION -- path, way and Edit on one line").isTrue();
+        page.locator(section).screenshot(new Locator.ScreenshotOptions()
+            .setPath(Path.of("build/site-sharing-section-private-path.png")));
+
+        // 5. The Protection tab says how one gets in, in its own column.
+        navigateToApp(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+            HohenheimSlugs.PROTECTED_PATHS).toUrl());
+        waitForHydration();
+        String paths = "[data-cms-child-list='" + HohenheimSlugs.PROTECTED_PATHS + "']";
+        page.waitForSelector(paths);
+        assertThat(page.locator(paths).textContent()).as("step 5: the column and the way")
+            .contains("How visitors get in").contains("/private").contains("With a signed link");
+        page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-protection-tab.png"))
+            .setFullPage(true));
+
+        // 6. A person managing the site, no administrator, edits no kind settings on /manage, so the site's form
+        //    draws no Sharing section for them; the site's Protection tab lists the path with how one gets in.
+        UUID managerId = ApiSupport.user("private-paths-" + tag + "@hohenheim.local", "Private Paths Manager");
+        RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
+            HohenheimCapabilities.MANAGE, true);
+        String managerSession = sessionFor(managerId).token();
+        navigateToAppAs("/" + HohenheimSlugs.MANAGE + "/sites/" + siteId, managerSession);
+        waitForHydration();
+        page.waitForSelector(name);
+        assertThat(page.locator(section).count()).as("step 6: no kind settings, so no Sharing section").isZero();
+        page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-form-manage.png"))
+            .setFullPage(true));
+        navigateToAppAs(CmsRoutes.subpage(HohenheimSlugs.MANAGE, HohenheimSlugs.SITES, siteId,
+            HohenheimSlugs.PROTECTED_PATHS).toUrl(), managerSession);
+        waitForHydration();
+        page.waitForSelector(paths);
+        assertThat(page.locator(paths).textContent()).as("step 6: the path and how one gets in")
+            .contains("/private").contains("With a signed link");
+        page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/site-protection-tab-manage.png"))
+            .setFullPage(true));
     }
 
     // -- plumbing -------------------------------------------------------------

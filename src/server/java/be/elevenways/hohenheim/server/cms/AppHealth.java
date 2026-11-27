@@ -805,10 +805,11 @@ final class AppHealth {
         return CertificateCoverage.terminates();
     }
 
-    /** @return the first of these paths whose protection admits everyone, null when none does */
+    /** @return the first of these paths whose protection admits everyone, null when none does; one read for them all */
     static @Nullable Row firstOpenPath(@NonNull List<Row> paths) {
+        AccessListRules read = AccessListRules.ofPaths(paths);
         for (Row path : paths) {
-            if (ProtectedPathInvariant.isOpen(path)) {
+            if (read.isOpen(path)) {
                 return path;
             }
         }
