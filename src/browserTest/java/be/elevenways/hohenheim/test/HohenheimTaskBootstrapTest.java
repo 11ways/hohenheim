@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -41,14 +42,19 @@ import be.elevenways.zenit.common.task.ScheduleKind;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
+import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.task.TaskBootstrap;
 import be.elevenways.zenit.server.task.TaskService;
+import be.elevenways.zenit.server.task.schedule.CronExpression;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -117,6 +123,12 @@ class HohenheimTaskBootstrapTest {
 
     private static TaskService service;
 
+    /** The second this suite's boot began: a run started before it belongs to another class sharing the database. */
+    private static Instant booted;
+
+    /** When the boot returned: a boot fire starts by then, give or take the few seconds a virtual thread takes. */
+    private static Instant bootReturned;
+
     @BeforeAll
     static void boot() throws Exception {
         // Role-gated declarations read the boot snapshot: every role defaults to on, the
@@ -126,7 +138,9 @@ class HohenheimTaskBootstrapTest {
         HohenheimEndpoints.init();
         // auto-discovery creates system_task + the M0xx tables
 
+        booted = Now.instant().truncatedTo(ChronoUnit.SECONDS);
         service = TaskBootstrap.start(HohenheimDatabase.datasource());
+        bootReturned = Now.instant();
     }
 
     @AfterAll
@@ -172,17 +186,34 @@ class HohenheimTaskBootstrapTest {
         }
     }
 
+    /**
+     * AIDEV-NOTE: a quiet task's run counts as a boot fire only inside this boot's window: from the boot's second
+     * until five seconds after the boot returned, or its own first cron fire if sooner. The history table is the
+     * JVM's shared database, so a run another class started before or well after this boot, or this task's own cron
+     * tick once its minute came round (under load the suite takes that long), is no boot fire; judging every row of
+     * the type failed beside other classes.
+     */
     @Test
     void tasksWithoutABootScheduleDoNotFireAtStartup() {
-        List<String> quietTypes = typesWithBootSchedule(false);
-        assertThat(quietTypes)
+        List<TaskDescriptor> quiet = descriptorsWithBootSchedule(false);
+        assertThat(quiet)
             .as("tasks that declare only cron schedules must exist for this test to mean anything")
             .isNotEmpty();
 
-        for (String type : quietTypes) {
-            assertThat(service.historyModel().findRecentForType(type, 5))
+        for (TaskDescriptor descriptor : quiet) {
+            String type = descriptor.typePath();
+            Instant firstTick = descriptor.defaultSchedules().stream()
+                .map(declared -> CronExpression.parse(declared.cron()).nextFireAfter(booted).orElse(Instant.MAX))
+                .min(Comparator.naturalOrder()).orElse(Instant.MAX);
+            // Boot fires start as the boot returns (async, as the boot test's 5 s poll allows for).
+            Instant windowEnd = firstTick.isBefore(bootReturned.plusSeconds(5)) ? firstTick
+                : bootReturned.plusSeconds(5);
+            assertThat(service.historyModel().findRecentForType(type, 50))
                 .as("task declaring no BOOT_AND_CRON schedule must NOT fire at boot: " + type)
-                .isEmpty();
+                .noneMatch(run -> {
+                    Instant started = run.get(SystemTaskHistoryModel.STARTED_AT);
+                    return started != null && !started.isBefore(booted) && started.isBefore(windowEnd);
+                });
         }
     }
 
@@ -209,12 +240,16 @@ class HohenheimTaskBootstrapTest {
      *                 declaring tasks that do not
      */
     private static List<String> typesWithBootSchedule(boolean withBoot) {
+        return descriptorsWithBootSchedule(withBoot).stream().map(TaskDescriptor::typePath).toList();
+    }
+
+    /** @return the declaring tasks with, or without, a BOOT_AND_CRON schedule of their own */
+    private static List<TaskDescriptor> descriptorsWithBootSchedule(boolean withBoot) {
         return discovered().stream()
             .filter(descriptor -> !descriptor.defaultSchedules().isEmpty())
             .filter(descriptor -> descriptor.defaultSchedules().stream()
                 .map(ScheduleDeclaration::kind)
                 .anyMatch(kind -> kind == ScheduleKind.BOOT_AND_CRON) == withBoot)
-            .map(TaskDescriptor::typePath)
             .toList();
     }
 }

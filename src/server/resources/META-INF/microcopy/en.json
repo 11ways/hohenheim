@@ -17008,7 +17008,7 @@
   "signed_link_no_account": {"text": "A signed link's secret is shown only to the account that made it, and no account stands behind this call.", "scope": "violations"},
   "signed_link_path_outside": {"text": "Give a path under {$prefix}.", "scope": "violations"},
   "signed_link_minutes_range": {"text": "A link works from 1 to {$longest} minutes.", "scope": "violations"},
-  "signed_link_path_help": {"text": "The path the link opens, under the protected path, as a visitor's browser asks it.", "scope": "help"},
+  "signed_link_path_help": {"text": "The file's path under the protected path, as the file is named (a space as a space) or percent-encoded: both give one link.", "scope": "help"},
   "signed_link_minutes_help": {"text": "How many minutes the link works, at most seven days.", "scope": "help"},
   "protected_path_signed_link": {"text": "True protects the path with a signed link: Hohenheim makes its secret, shown once to you on the path's Signed link tab in the panel.", "scope": "help"},
   "signed_link_path": {"text": "Path", "scope": "protected_path"},

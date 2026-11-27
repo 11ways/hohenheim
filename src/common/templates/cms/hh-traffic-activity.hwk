@@ -6,15 +6,16 @@
        request). The line, the figures and the picture's own words (its accessible name, every row with its figure)
        all come from the summary the picture hands over after the draw that shows them, so they say what the picture
        shows. In its place the picture is as tall as its rows fit; inside pl-kiosk, whose Full screen stages it over
-       the panel, it fills the screen. `tv` is the wall screen's look, staged in its look's dark answer (pl-kiosk
        tone): the server's name and the clock over the four figures, the bars of the last minute under the dots, the
        kiosk staged from the start, every size taken from the screen (its type grows with the shorter side, and the
-       picture draws its rows and dots from that type), and the picture filling what the screen leaves under the
-       figures. */
+       picture draws its rows and dots from that type), and the pictures filling what the screen leaves under the
+       figures, the requests and where the apps send side by side. Pause is one control for both pictures. */
     public required view: ActivityView
     attribute tv: Boolean = false
-    /* Where the apps send data, drawn under the requests; null for no such picture (the TV page). */
+    /* Where the apps send data, drawn under the requests (beside them on the wall screen); null for none. */
     public apps: Live<AppsSendingView> = null
+    /* The TV link's token the apps picture's re-reads present; null in the panel. */
+    public credential: String = null
 
     private summary: ActivitySummary
     private paused: Boolean = false
@@ -96,6 +97,12 @@
         pl-kiosk[data-staged] .hh-activity-pictures {
             flex: 1 1 auto;
             min-block-size: 0;
+        }
+
+        /* The wall screen draws the two pictures side by side, as the board does. */
+        &[tv] .hh-activity-pictures {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
         }
 
         .hh-activity-tv-top {
@@ -238,7 +245,8 @@
                 </pl-card-content>
             </pl-card>
             {% if apps != null %}
-            <hh-apps-sending part={% apps %}></hh-apps-sending>
+            <hh-apps-sending part={% apps %} paused={% paused{:} %} tv={% tv %}
+                             credential={% credential %}></hh-apps-sending>
             {% /if %}
             </div>
             <pl-live-region :ref={% regionEl %} data-hh-activity-spoken></pl-live-region>

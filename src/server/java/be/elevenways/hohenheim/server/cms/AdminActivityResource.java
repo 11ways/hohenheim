@@ -164,16 +164,19 @@ public final class AdminActivityResource {
         Conduit conduit = reader.conduit();
         LocaleChain locales = conduit == null ? LocaleChain.empty() : conduit.getLocales();
         MessageResolver resolver = conduit == null ? null : conduit.getMessageResolver();
-        List<WidgetItem> items = new ArrayList<>();
-        for (Row action : source.buildQuery(null, rules, ActionModel.CREATED_AT, SortOrder.DESC, locales, reader)
-                .where(ActionModel.ID.in(window)).limit(limit).all()) {
-            DataItem item = source.item(action, locales, reader);
+        List<Row> actions = source.buildQuery(null, rules, ActionModel.CREATED_AT, SortOrder.DESC, locales, reader)
+            .where(ActionModel.ID.in(window)).limit(limit).all();
+        // One batch for the page: the source words every action of it at once (its entries, their listed changes).
+        List<DataItem> described = source.items(actions, locales, reader);
+        List<WidgetItem> items = new ArrayList<>(actions.size());
+        for (int i = 0; i < actions.size(); i++) {
+            DataItem item = described.get(i);
             List<String> lines = new ArrayList<>();
             if (item.subtitle() != null && !item.subtitle().isBlank()) {
                 lines.add(item.subtitle());
             }
-            lines.add(ViewerFieldValueText.CELL.text(null, ActionModel.CREATED_AT, action.get(ActionModel.CREATED_AT),
-                reader.getReader(), resolver));
+            lines.add(ViewerFieldValueText.CELL.text(null, ActionModel.CREATED_AT,
+                actions.get(i).get(ActionModel.CREATED_AT), reader.getReader(), resolver));
             items.add(new WidgetItem(item.title() == null ? item.value() : item.title(), item.editUrl(), lines));
         }
         return items;

@@ -71,6 +71,8 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
     private static final Pattern ADDRESS = Pattern.compile("https?://\\S+/tv/(znsl_[A-Za-z0-9_-]+)");
     /** Every visitor of the test proxy calls from here: the address no TV page may carry. */
     private static final String VISITOR = "127.0.0.1";
+    /** The page's line once it counts the minute's requests. */
+    private static final Pattern LINED = Pattern.compile("(\\d+) requests? in the last minute");
 
     @Test
     @PristineBrowserContext
@@ -124,14 +126,24 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
             assertThat(tv.locator("hh-traffic-activity[tv] pl-kiosk[data-tone='dark']").count())
                 .as("step 2: a wall screen is dark, its look's dark answer").isEqualTo(1);
 
-            // 3. Three requests from one browser: once the picture drew them the clock is held, the dots in flight;
-            //    the visitor reads as "Visitor 1", never by address, in the words, the picture's name and the frames.
+            // 3. Three requests from one browser under a clock held BEFORE they are made, so the dots they birth stay
+            //    in flight however long their frames take to arrive under load: only the test's own small steps move
+            //    the picture's time, and it stops stepping once the picture drew all three. The visitor reads as
+            //    "Visitor 1", never by address, in the words, the picture's name and the frames.
+            context.clock().pauseAt(((Number) tv.evaluate("() => Date.now()")).longValue() + 250);
             fixture.request(fixture.siteA, "/ok", BROWSER);
             fixture.request(fixture.siteA, "/missing", BROWSER);
             fixture.request(fixture.siteB, "/other-site", BROWSER);
-            int counted = this.awaitLined(tv, 3);
-            context.clock().pauseAt(((Number) tv.evaluate("() => Date.now()")).longValue() + 250);
-            context.clock().runFor(1_000);
+            tv.waitForCondition(() -> List.of("/ok", "/missing", "/other-site").stream()
+                .allMatch(path -> frames.stream().anyMatch(frame -> frame.contains(path))),
+                new Page.WaitForConditionOptions().setTimeout(WAIT.toMillis()));
+            int counted = 0;
+            // At most 40 steps of a frame each: well inside a dot's flight (ActivityDriver.TRAVEL_MS).
+            for (int step = 0; step < 40 && counted < 3; step++) {
+                context.clock().runFor(16);
+                counted = this.linedNow(tv);
+            }
+            assertThat(counted).as("step 3: the held picture drew the three").isGreaterThanOrEqualTo(3);
             String picture = tv.locator(SURFACE).getAttribute("aria-label");
             assertThat(picture).as("step 3: the visitor by number").contains("Visitor 1");
             assertThat(((Number) tv.evaluate("() => document.querySelector('" + SURFACE + "').flyingDots3d"))
@@ -350,10 +362,15 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
         tv.waitForFunction("least => { const m = /(\\d+) requests? in the last minute/.exec(document.querySelector("
             + "'[data-hh-activity-line]').textContent); return m !== null && Number(m[1]) >= least; }", least,
             new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
-        Matcher counted = Pattern.compile("(\\d+) requests? in the last minute")
-            .matcher(tv.locator("[data-hh-activity-line]").textContent());
-        assertThat(counted.find()).as("the line counts the minute's requests").isTrue();
-        return Integer.parseInt(counted.group(1));
+        int counted = this.linedNow(tv);
+        assertThat(counted).as("the line counts the minute's requests").isPositive();
+        return counted;
+    }
+
+    /** @return the requests the page's line counts now, 0 while it counts none */
+    private int linedNow(Page tv) {
+        Matcher counted = LINED.matcher(tv.locator("[data-hh-activity-line]").textContent());
+        return counted.find() ? Integer.parseInt(counted.group(1)) : 0;
     }
 
     /** @return the TV picture's type size in CSS pixels */

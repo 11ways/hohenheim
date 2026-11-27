@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
 import be.elevenways.zenit.server.http.ExternalUrls;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -27,6 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -90,16 +92,33 @@ public final class TrafficTvLinkLevel {
 
     /** @return the live TV link a token opens, null for a wrong, ended or expired token, or another level's */
     public static @Nullable ShareLink open(@Nullable String token) {
-        LinkBearerPrincipal bearer = ShareLinks.resolve(token);
-        ShareLink link = bearer == null ? null : ShareLinks.linkOf(bearer);
-        return link != null && isTv(link) ? link : null;
+        return tvLinkOf(ShareLinks.resolve(token));
     }
 
     /** @return whether the stored link is still a live TV link */
     public static boolean live(@NonNull UUID linkId) {
-        LinkBearerPrincipal bearer = ShareLinks.bearer(linkId);
+        return tvLinkOf(ShareLinks.bearer(linkId)) != null;
+    }
+
+    /**
+     * @return what the TV link a reader reads as shows, null for any other reader (an account, another link's bearer,
+     *         a link ended or expired since)
+     */
+    public static @Nullable ActivityAsk showsTo(@NonNull AccessContext reader) {
+        ShareLink link = reader.principal() instanceof LinkBearerPrincipal bearer ? tvLinkOf(bearer) : null;
+        return link == null ? null : shows(link);
+    }
+
+    /** @return the reader a token's live TV link reads as, detached; null for a wrong, ended or expired token */
+    public static @Nullable AccessContext holderOf(@Nullable String token) {
+        LinkBearerPrincipal bearer = ShareLinks.resolve(token);
+        return tvLinkOf(bearer) == null ? null : AccessContext.detached(Objects.requireNonNull(bearer));
+    }
+
+    /** @return the live TV link a bearer holds, null for none, another level's, or one ended or expired */
+    private static @Nullable ShareLink tvLinkOf(@Nullable LinkBearerPrincipal bearer) {
         ShareLink link = bearer == null ? null : ShareLinks.linkOf(bearer);
-        return link != null && isTv(link);
+        return link != null && isTv(link) ? link : null;
     }
 
     /** @return what a TV link shows: every site or one, null for a scope no TV link is made with */

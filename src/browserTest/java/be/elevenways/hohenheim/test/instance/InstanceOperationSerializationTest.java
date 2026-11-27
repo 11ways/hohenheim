@@ -978,7 +978,12 @@ class InstanceOperationSerializationTest {
         }));
     }
 
-    /** Which databases of a page offer the old-engine action is one read, however many rows the page holds. */
+    /**
+     * Which databases of a page offer the old-engine action is one read, however many rows the page holds.
+     *
+     * AIDEV-NOTE: counted on this thread alone (measuringOnlyThisThread): the probe is the JVM's shared datasource's,
+     * and a scheduled task or another class reading instances meanwhile landed in the count under load.
+     */
     @Test
     void theOldEngineActionOfAPageIsDecidedInOneRead() {
         int firstLeftover = leftDestroying("destroy-page-old-engine-1");
@@ -993,27 +998,29 @@ class InstanceOperationSerializationTest {
             heldFor(firstLeftover, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ids.get(0), failingEnds);
             ids.add(databaseRecord("page-dedicated-1", null));
             DatasourceProbe probe = DatasourceProbe.on(datasource);
-            DatabaseInstances.holdOldEngines(page(ids));
-            List<Row> two = page(ids);
-            probe.reset();
-            assertThat(DatabaseInstances.holdOldEngines(two)).as("step 1: only the held one applies")
-                .containsExactly(true, false);
-            int instanceReads = probe.queriesAgainst(InstanceModel.MODEL_ID);
-            int roundTrips = probe.roundTrips();
+            try (DatasourceProbe.Armed ignored = probe.measuringOnlyThisThread()) {
+                DatabaseInstances.holdOldEngines(page(ids));
+                List<Row> two = page(ids);
+                probe.reset();
+                assertThat(DatabaseInstances.holdOldEngines(two)).as("step 1: only the held one applies")
+                    .containsExactly(true, false);
+                int instanceReads = probe.queriesAgainst(InstanceModel.MODEL_ID);
+                int roundTrips = probe.roundTrips();
 
-            // 2. Twice the rows, another held one and a shared one with no old engine among them: the same reads.
-            ids.add(databaseRecord("page-held-2", engine));
-            heldFor(secondLeftover, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ids.get(2), failingEnds);
-            ids.add(databaseRecord("page-clean", engine));
-            List<Row> four = page(ids);
-            // Counted warm, as step 1 was: the writes above emptied what a read caches, a cost no row adds.
-            DatabaseInstances.holdOldEngines(four);
-            probe.reset();
-            assertThat(DatabaseInstances.holdOldEngines(four)).as("step 2: each answered in order")
-                .containsExactly(true, false, true, false);
-            assertThat(probe.queriesAgainst(InstanceModel.MODEL_ID)).as("step 2: one instance read for any page")
-                .isEqualTo(instanceReads).isEqualTo(1);
-            assertThat(probe.roundTrips()).as("step 2: no round trip per row").isEqualTo(roundTrips);
+                // 2. Twice the rows, another held one and a shared one with no old engine among them: the same reads.
+                ids.add(databaseRecord("page-held-2", engine));
+                heldFor(secondLeftover, DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, ids.get(2), failingEnds);
+                ids.add(databaseRecord("page-clean", engine));
+                List<Row> four = page(ids);
+                // Counted warm, as step 1 was: the writes above emptied what a read caches, a cost no row adds.
+                DatabaseInstances.holdOldEngines(four);
+                probe.reset();
+                assertThat(DatabaseInstances.holdOldEngines(four)).as("step 2: each answered in order")
+                    .containsExactly(true, false, true, false);
+                assertThat(probe.queriesAgainst(InstanceModel.MODEL_ID)).as("step 2: one instance read for any page")
+                    .isEqualTo(instanceReads).isEqualTo(1);
+                assertThat(probe.roundTrips()).as("step 2: no round trip per row").isEqualTo(roundTrips);
+            }
             Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(ids)).delete();
         });
     }

@@ -4,8 +4,13 @@
        the last reading of the hosts' counters, with a mark travelling it paced by that rate. The reading is the live
        part (AppsSendingReads), re-read whenever the hosts are read again, once a minute; the line under the title
        says when it was read and over how long, and a screen reader is told one line per reading. Reduced motion: the
-       bands stand still over a bar per reading heard. */
+       bands stand still over a bar per reading heard. `paused` is the Activity tab's one Pause, the requests picture's
+       too: the picture stands, and a reading heard meanwhile is drawn on resume. `tv` is the wall screen's place
+       beside the requests (no card heading, as theirs), `credential` its link's token, which every re-read presents. */
     public required part: Live<AppsSendingView>
+    public paused: Boolean = false
+    public credential: String = null
+    attribute tv: Boolean = false
 
     private computed view: AppsSendingView = part{:}.value
     private told: AppsSendingTold = null
@@ -28,18 +33,46 @@
             font-size: var(--pl-font-size-sm);
         }
 
-        /* The picture's box: in its place as tall as its rows fit (the driver's --hh-apps-sending-fit). */
+        /* The picture's box: in its place exactly as tall as its rows fit (the driver's --hh-apps-sending-fit), so a
+           row keeps the board's height however few apps there are; no floor stretches the rows. */
         .hh-apps-sending-surface {
             display: block;
-            block-size: max(14rem, var(--hh-apps-sending-fit, 20rem));
+            block-size: var(--hh-apps-sending-fit, 14rem);
             font-size: var(--pl-font-size-sm);
             font-family: var(--pl-font-family);
+        }
+
+        /* On the wall screen the picture fills its half of what the screen leaves under the figures, in the
+           screen's type (hh-traffic-activity's tv). */
+        &[tv] {
+            display: flex;
+            flex-direction: column;
+            min-block-size: 0;
+        }
+
+        &[tv] [data-hh-apps-sending],
+        &[tv] [data-hh-apps-sending] pl-card-content {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-block-size: 0;
+        }
+
+        &[tv] .hh-apps-sending-surface {
+            flex: 1 1 auto;
+            block-size: auto;
+            min-block-size: 16rem;
+            font-size: 1em;
+        }
+
+        &[tv] .hh-apps-sending-line {
+            font-size: 1em;
         }
     }
 
     @mount
     function start() {
-        Live.follow(this, &part)
+        Live.follow(this, &part, credential)
         if surfaceEl != null {
             AppsSending.watch(this, surfaceEl, view, (heard: AppsSendingTold) => listen(heard))
         }
@@ -51,6 +84,12 @@
         AppsSending.offer(this, view)
     }
 
+    /* The one Pause: the bands and their marks stand as they are, or move again with the newest reading. */
+    @watch(paused, skipInitial: true)
+    function pausedChanged() {
+        AppsSending.pause(this, paused)
+    }
+
     function listen(heard: AppsSendingTold) {
         told = heard
         LiveRegion.announce(regionEl, heard.spoken)
@@ -58,10 +97,12 @@
 
     template {
         <pl-card data-hh-apps-sending>
+            {% if !tv %}
             <pl-card-header>
                 <pl-card-title>{{ t("apps_sending_title", scope: "traffic_screen") }}</pl-card-title>
                 <pl-card-description>{{ t("apps_sending_lead", scope: "traffic_screen") }}</pl-card-description>
             </pl-card-header>
+            {% /if %}
             <pl-card-content>
                 {% if view{:}.recording %}
                 <p class="hh-apps-sending-line" data-hh-apps-sending-line>{{ view{:}.at == null ? t("apps_sending_waiting", scope: "traffic_screen")

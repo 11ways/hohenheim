@@ -35,6 +35,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -311,6 +312,8 @@ class SignedLinkJourneyTest extends HohenheimHttpTestBase {
             Path files = storage.resolve(SiteFiles.prefixOf(siteId));
             Files.createDirectories(files.resolve("beta"));
             Files.writeString(files.resolve("beta/Tadoma Setup.exe"), "installer " + tag);
+            Files.writeString(files.resolve("beta/100% done.txt"), "percent " + tag);
+            Files.writeString(files.resolve("beta/Caf\u00e9.txt"), "accent " + tag);
             Files.writeString(files.resolve("beta/app.bin"), "app " + tag);
             Files.writeString(files.resolve("missing.html"), "missing page " + tag);
             proxy = ProxyTestSupport.startProxy();
@@ -428,6 +431,45 @@ class SignedLinkJourneyTest extends HohenheimHttpTestBase {
                 "path=%2Fpublic.txt");
             assertThat(outside.statusCode()).as("step 4: outside the path").isEqualTo(422);
             assertThat(outside.body()).as("step 4: named").contains("path");
+
+            // 4b. One rule for a path, by tool and by the API alike: as the file is named or percent-encoded, both
+            //     answer the same link (never a doubly encoded one); a '%' that starts no escape is a literal
+            //     character, and an accent is encoded as a browser asks it. Each link opens its file.
+            String pathCode = Objects.requireNonNull(RecordCodes.codeUnjudged(ProtectedPathModel.MODEL_ID,
+                String.valueOf(pathId)));
+            Map<String, String> spellings = new LinkedHashMap<>();
+            spellings.put("/beta/Tadoma Setup.exe", "/beta/Tadoma%20Setup.exe");
+            spellings.put("/beta/Tadoma%20Setup.exe", "/beta/Tadoma%20Setup.exe");
+            spellings.put("/beta/100% done.txt", "/beta/100%25%20done.txt");
+            spellings.put("/beta/100%25%20done.txt", "/beta/100%25%20done.txt");
+            spellings.put("/beta/Caf\u00e9.txt", "/beta/Caf%C3%A9.txt");
+            spellings.put("/beta/Caf%C3%A9.txt", "/beta/Caf%C3%A9.txt");
+            Map<String, String> opens = Map.of("/beta/Tadoma%20Setup.exe", "installer " + tag,
+                "/beta/100%25%20done.txt", "percent " + tag, "/beta/Caf%C3%A9.txt", "accent " + tag);
+            for (Map.Entry<String, String> spelling : spellings.entrySet()) {
+                McpHttpSession.Answer byTool = admin.call("site_link_make", Map.of("protected_path", pathCode,
+                    "path", spelling.getKey()));
+                Matcher toolLink = LINK.matcher(byTool.text());
+                assertThat(toolLink.find()).as("step 4b: a link by tool for " + spelling.getKey() + ": "
+                    + byTool.text()).isTrue();
+                assertThat(toolLink.group(2)).as("step 4b: by tool, " + spelling.getKey())
+                    .isEqualTo(spelling.getValue());
+                HttpResponse<String> byApi = keyPost(key, "/api/v1/protected-paths/" + pathId + "/links",
+                    "path=" + URLEncoder.encode(spelling.getKey(), StandardCharsets.UTF_8));
+                Matcher apiLink = LINK.matcher(byApi.body().replace("\\u0026", "&").replace("\\/", "/"));
+                assertThat(apiLink.find()).as("step 4b: a link by the API for " + spelling.getKey() + ": "
+                    + byApi.body()).isTrue();
+                assertThat(apiLink.group(2)).as("step 4b: by the API, " + spelling.getKey())
+                    .isEqualTo(spelling.getValue());
+                assertThat(ProxyTestSupport.rawRequest(port, host, apiLink.group(2) + "?expires=" + apiLink.group(3)
+                    + "&signature=" + apiLink.group(4))).as("step 4b: it opens, " + spelling.getKey())
+                    .startsWith("HTTP/1.1 200").contains(opens.get(spelling.getValue()));
+            }
+            McpHttpSession.Answer undecodable = admin.call("site_link_make", Map.of("protected_path", pathCode,
+                "path", "/beta/%FF.bin"));
+            assertThat(undecodable.error()).as("step 4b: an escape that is no text is refused: " + undecodable.text())
+                .isTrue();
+            assertThat(undecodable.text()).as("step 4b: named").contains("path");
 
             // 5. A list mixing ways in: a request passes when the list's own any or all is met, a valid signed link
             //    being one way among them.

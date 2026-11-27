@@ -16,8 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The "Apps sending" picture's driver: a reading's bands swell to its rates over the swell and no longer, a mark
- * travels each band, the page is told each reading once after the draw that shows it, and under reduced motion
- * nothing travels while the readings heard stand as bars under the rows.
+ * travels each band, the page is told each reading once after the draw that shows it, Pause holds the picture and a
+ * reading heard meanwhile until it resumes, and under reduced motion nothing travels while the readings heard stand
+ * as bars under the rows.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -86,15 +87,39 @@ class AppsSendingDriverTest {
             assertTrue(thinning > 1_000f && thinning < 3_000f, "step 3: thinning: " + thinning);
             assertEquals(2, told.size(), "step 3: the new reading told");
 
+            // 3b. Paused: the picture stands (no draw after the one that shows it paused, no new mark) and a reading
+            //     heard meanwhile waits; resumed, that reading is drawn and told.
+            surface.setFrameMs(7_000);
+            driver.frame(surface);
+            driver.pause(true);
+            driver.offer(reading(AT.plusSeconds(120), 500, 500));
+            surface.setFrameMs(7_100);
+            driver.frame(surface);
+            int frozen = driver.frames();
+            surface.setFrameMs(7_200);
+            driver.frame(surface);
+            surface.setFrameMs(9_000);
+            driver.frame(surface);
+            assertEquals(frozen, driver.frames(), "step 3b: paused, nothing is drawn again");
+            assertEquals(2, told.size(), "step 3b: the reading heard while paused waits");
+            assertEquals(1_000f, driver.rate("1", "a", surface), 0.01f, "step 3b: the band stands");
+            driver.pause(false);
+            surface.setFrameMs(9_100);
+            driver.frame(surface);
+            assertEquals(3, told.size(), "step 3b: resumed, the waiting reading told");
+            surface.setFrameMs(9_100 + AppsSendingDriver.SWELL_MS + 1);
+            driver.frame(surface);
+            assertEquals(500f, driver.rate("1", "a", surface), 0.01f, "step 3b: and swollen to");
+
             // 4. Reduced motion: no mark travels, the bands stand at the reading, the two readings heard stand as
             //    bars under the rows, the picture grown to fit them.
             float moving = fit[0];
             surface.setReducedMotion(true);
-            surface.setFrameMs(9_000);
+            surface.setFrameMs(12_000);
             driver.frame(surface);
             assertEquals(0, travelling[0], "step 4: nothing travels");
-            assertEquals(1_000f, driver.rate("1", "a", surface), 0.01f, "step 4: the band at its reading");
-            assertEquals(2, driver.readingsKept(), "step 4: one bar per reading heard");
+            assertEquals(500f, driver.rate("1", "a", surface), 0.01f, "step 4: the band at its reading");
+            assertEquals(3, driver.readingsKept(), "step 4: one bar per reading heard");
             assertEquals(moving / ActivityDriver.ROWS_SHARE, fit[0], 0.01f, "step 4: rows and bars");
         } finally {
             driver.detach();

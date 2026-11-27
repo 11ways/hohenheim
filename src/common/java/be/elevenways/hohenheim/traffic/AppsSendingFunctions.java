@@ -111,6 +111,27 @@ public final class AppsSendingFunctions {
         }
     }
 
+    /** Freezes the owner's picture as it stands, or lets it move again with the newest reading. */
+    @HawkeyeFunction(
+        name = "pause",
+        namespace = "AppsSending",
+        description = "Freeze the live picture of where apps send data as it stands, or let it move again",
+        returnType = Void.class,
+        returnsReference = false,
+        arguments = {
+            @Arg(name = "owner", required = true, type = CustomElement.class, expectsReference = false,
+                 description = "The element that owns the picture"),
+            @Arg(name = "paused", required = true, type = Boolean.class, expectsReference = false,
+                 description = "True to freeze the picture, false to let it move")
+        }
+    )
+    public static void pause(@Nullable CustomElement owner, @Nullable Boolean paused) {
+        AppsSendingDriver driver = owner == null ? null : owner.getAttachment(DRIVER);
+        if (driver != null) {
+            driver.pause(Boolean.TRUE.equals(paused));
+        }
+    }
+
     /** @return the theme's colours as they stand on the surface now, every rotating hue's series colour among them */
     private static AppsSendingDriver.@NonNull Colours colours(@NonNull DominoElement surface) {
         Map<String, Integer> hues = new HashMap<>();

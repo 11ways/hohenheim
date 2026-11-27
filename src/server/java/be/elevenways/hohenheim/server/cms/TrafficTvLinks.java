@@ -180,8 +180,8 @@ public final class TrafficTvLinks {
     public static void init() {
         HohenheimEndpoints.TV_PAGE.setHandler(conduit -> {
             String token = conduit.getParameter(HohenheimEndpoints.TV_TOKEN);
-            ShareLink link = TrafficTvLinkLevel.open(token);
-            ActivityAsk shows = link == null ? null : TrafficTvLinkLevel.shows(link);
+            AccessContext holder = TrafficTvLinkLevel.holderOf(token);
+            ActivityAsk shows = holder == null ? null : TrafficTvLinkLevel.showsTo(holder);
             if (shows == null) {
                 conduit.notFound();
                 return null;
@@ -190,6 +190,9 @@ public final class TrafficTvLinks {
             vars.put("title", HohenheimMicrocopy.TRAFFIC_SCREEN.of("tv_title").asString(conduit));
             vars.put("view", TrafficActivityPage.view(shows, ActivityAsk.tv(Objects.requireNonNull(token)).spelled(),
                 false, true));
+            vars.put("apps", AppsSendingReads.onTv(AccessContext.of(conduit), holder, shows));
+            // The link's token is the page's address already; the apps picture's re-reads present it.
+            vars.put("credential", token);
             return new RenderTemplateResult(HohenheimTemplateIds.TRAFFIC_TV, vars);
         });
     }

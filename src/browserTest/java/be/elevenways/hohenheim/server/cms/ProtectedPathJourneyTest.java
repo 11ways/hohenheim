@@ -14,6 +14,8 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.history.ActionModel;
+import be.elevenways.zenit.common.orm.history.ChangeModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.test.support.DatasourceProbe;
@@ -224,9 +226,9 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
      * the paths stay the same as paths grow, each with a list of its own (password, network, or both mixed, read by
      * the list's name).
      *
-     * AIDEV-NOTE: the overview is counted from 20 paths on: its Recent card lists the site's last six changes, each a
-     * path's creation here, so below six paths it reads fewer of them; past that it is bounded and the card's own
-     * reads are what grows, if anything.
+     * AIDEV-NOTE: the overview is counted from two paths on, its history reads too: its Recent card lists the site's
+     * last six changes, each a path's creation here, so at two paths it lists fewer of them than at forty, and the
+     * card words them in one batch (AdminActivityResource.recentFor), never one entry at a time.
      */
     @Test
     void theProtectionTabAndThePrivatePathsReadFlatAsPathsAndListsGrow() throws Exception {
@@ -241,6 +243,7 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         // 1. Two paths: their ways in words on both pages.
         Map<String, Integer> tabFew = statements(tab, "step 1", "With a password", "From a network");
         Map<String, Integer> formFew = statements(form, "step 1", "With a password", "From a network");
+        Map<String, Integer> overviewFew = statements(overview, HISTORY_TABLES, "step 1", "/flat-1");
 
         // 2. Twenty paths, twenty lists, mixed ones read by the list's name: THE ASSERTION -- the same statements on
         //    both pages.
@@ -250,11 +253,11 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         assertThat(statements(form, "step 2", "With a password", "From a network")).as("step 2: the Private paths")
             .isEqualTo(formFew);
 
-        // 3. The overview's Protection card, twenty paths and then forty, each with its door: the same statements.
-        Map<String, Integer> overviewTwenty = statements(overview, "step 3", "/flat-19");
+        // 3. The overview's Protection card and its Recent card, two paths and then forty, each with its door: the
+        //    same statements, the card's fewer recent entries and its six alike.
         guardedPaths(site, suffix, 20, 40);
-        assertThat(statements(overview, "step 3", "/flat-39")).as("step 3: the overview's Protection card")
-            .isEqualTo(overviewTwenty);
+        assertThat(statements(overview, HISTORY_TABLES, "step 3", "/flat-39"))
+            .as("step 3: the overview's Protection and Recent cards").isEqualTo(overviewFew);
     }
 
     /** Protects paths {@code from} up to {@code to}, each with a list of its own: password, network or both mixed. */
@@ -272,12 +275,25 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         }
     }
 
+    /** The tables a page's protection reads name. */
+    private static final List<String> GUARD_TABLES = List.of("access_lists", "access_rules", "protected_paths");
+
+    /** The protection's tables and the history's, which the overview's Recent card reads. */
+    private static final List<String> HISTORY_TABLES = List.of("access_lists", "access_rules", "protected_paths",
+        ActionModel.TABLE_NAME, ChangeModel.TABLE_NAME);
+
+    /** {@link #statements(String, List, String, String...)} of the protection's tables. */
+    private Map<String, Integer> statements(String path, String step, String... said) throws Exception {
+        return this.statements(path, GUARD_TABLES, step, said);
+    }
+
     /**
-     * Gets a page once to warm it, then again counting the statements that name the lists, the rules and the paths.
+     * Gets a page once to warm it, then again counting the statements that name each of the tables.
      *
      * @param said words the counted page must hold
      */
-    private Map<String, Integer> statements(String path, String step, String... said) throws Exception {
+    private Map<String, Integer> statements(String path, List<String> tables, String step, String... said)
+            throws Exception {
         assertThat(adminGet(path).statusCode()).as(step + ": " + path + " renders").isEqualTo(200);
         DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
         String body;
@@ -287,7 +303,7 @@ class ProtectedPathJourneyTest extends HohenheimHttpTestBase {
         }
         assertThat(body).as(step + ": " + path + " says how one gets in").contains(said);
         Map<String, Integer> counts = new LinkedHashMap<>();
-        for (String table : List.of("access_lists", "access_rules", "protected_paths")) {
+        for (String table : tables) {
             Pattern named = Pattern.compile("\\b" + table + "\\b");
             counts.put(table, (int) probe.preparedStatements().stream().filter(sql -> named.matcher(sql).find())
                 .count());

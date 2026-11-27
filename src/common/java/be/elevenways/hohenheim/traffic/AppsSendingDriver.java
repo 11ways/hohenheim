@@ -18,6 +18,7 @@ import be.elevenways.zenit3d.common.surface.SurfaceDriver;
 import be.elevenways.zenit3d.common.text.TextAnchor;
 import be.elevenways.zenit3d.common.text.TextStyle;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -63,7 +64,7 @@ public final class AppsSendingDriver implements SurfaceDriver {
     static final float LEAST_BAND = 2f;
 
     /** How strongly a band covers what stands under it. */
-    static final float BAND_ALPHA = 0.75f;
+    static final float BAND_ALPHA = 0.6f;
 
     /** The straight pieces a band's edges are drawn in. */
     static final int STEPS = ActivityDriver.GUIDE_STEPS;
@@ -149,6 +150,10 @@ public final class AppsSendingDriver implements SurfaceDriver {
     private float fit = -1f;
     private int frames;
     private boolean wordsPending;
+    private boolean paused;
+    private boolean drawnPaused;
+    /** The newest reading offered while paused, drawn on resume. */
+    private @Nullable AppsSendingView held;
 
     public AppsSendingDriver(TrafficLabels.@NonNull Words words, @NonNull Colours colours, @NonNull TextStyle style,
                              @NonNull Shown shown) {
@@ -160,9 +165,14 @@ public final class AppsSendingDriver implements SurfaceDriver {
         this.picture = new Picture(this.boxes, this.bands, this.bars, this.marks, this.labels.batch());
     }
 
-    /** Takes a reading at once; the picture swells to it and tells the page at the next draw. */
+    /** Takes a reading at once; the picture swells to it and tells the page at the next draw; paused, it waits. */
     public void offer(@NonNull AppsSendingView view) {
-        this.view = Objects.requireNonNull(view, "view cannot be null");
+        Objects.requireNonNull(view, "view cannot be null");
+        if (this.paused) {
+            this.held = view;
+            return;
+        }
+        this.view = view;
         this.nextMark = new double[view.flows().size()];
         this.revision++;
         Instant at = view.at();
@@ -181,6 +191,19 @@ public final class AppsSendingDriver implements SurfaceDriver {
         }
     }
 
+    /**
+     * Freezes the picture as it stands, or lets it move: a reading offered meanwhile waits, and resuming draws the
+     * newest one (the requests picture's Pause, one control for both).
+     */
+    public void pause(boolean paused) {
+        this.paused = paused;
+        AppsSendingView waiting = this.held;
+        this.held = null;
+        if (!paused && waiting != null) {
+            this.offer(waiting);
+        }
+    }
+
     /** @return how many frames this driver drew, for a test asking that it rests */
     public int frames() {
         return this.frames;
@@ -196,8 +219,15 @@ public final class AppsSendingDriver implements SurfaceDriver {
     public void frame(@NonNull Surface surface) {
         boolean still = surface.reducedMotion();
         boolean fresh = this.revision != this.drawnRevision;
-        boolean changed = this.frames == 0 || fresh || this.wordsPending || this.labels.painting();
-        boolean moving = !still && (!this.view.flows().isEmpty() || this.marks.moving() || this.swelling(surface));
+        boolean changed = this.frames == 0 || fresh || this.wordsPending || this.labels.painting()
+            || this.paused != this.drawnPaused;
+        boolean frozen = this.paused && this.drawnPaused && this.frames > 0;
+        if (frozen) {
+            // Paused: the last picture stands; only a new size or motion preference draws it again.
+            changed = false;
+        }
+        boolean moving = !frozen && !this.paused && !still
+            && (!this.view.flows().isEmpty() || this.marks.moving() || this.swelling(surface));
         if (!this.rest.drawOrRest(surface, moving, changed)) {
             return;
         }
@@ -237,6 +267,7 @@ public final class AppsSendingDriver implements SurfaceDriver {
             }
         }
         this.drawnRevision = this.revision;
+        this.drawnPaused = this.paused;
         this.shown.travelling(this.marks.flying());
     }
 
@@ -350,7 +381,7 @@ public final class AppsSendingDriver implements SurfaceDriver {
                 this.bottoms[step] = this.point[1] + t / 2;
             }
             this.bands.style(0f, Rgba.withAlpha(hue, BAND_ALPHA)).band(this.xs, this.tops, this.bottoms, STEPS + 1);
-            if (!still && i < this.nextMark.length && nowMs >= this.nextMark[i]) {
+            if (!still && !this.paused && i < this.nextMark.length && nowMs >= this.nextMark[i]) {
                 double share = widest > 0 ? (double) flow.perSecond() / widest : 0;
                 double travel = SLOWEST_MS - (SLOWEST_MS - FASTEST_MS) * share;
                 this.marks.style(GlslMath.clamp(t * 0.35f, 1.5f * u, 5f * u), this.colours.ink().box())

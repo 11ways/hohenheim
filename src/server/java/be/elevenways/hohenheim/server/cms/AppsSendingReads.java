@@ -54,8 +54,9 @@ import java.util.function.IntPredicate;
  * one app a site points at), heard on AppDestinations.TOPIC, which every listing announces, so an open page re-reads
  * once a minute through its viewer's own access: an account sees the apps it manages (an administrator every app).
  * A rate is a reading's bytes over the seconds since the reading before: never a second the counters were not read
- * for. Every refusal is the live read's one 404. The TV page draws no such picture yet: a signed-out page's re-read
- * presenting its link's token is answered 401 before any read runs (see the report of 2026-11-27).
+ * for. Every refusal is the live read's one 404. The TV page's holder reads as its link's bearer (the token is the
+ * re-read's credential, LiveCredentials), and only the ask its link shows: what the requests picture of that link
+ * shows, so the apps of the sites shown, named, and a destination named only when it is one of those apps or sites.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -74,7 +75,7 @@ public final class AppsSendingReads {
     /** The picture of what one ask shows, re-read whenever the hosts were read again. */
     public static final LiveRead<String, AppsSendingView> PART =
         LiveRead.of(HohenheimIds.id("apps_sending"), String.class, AppsSendingView.class)
-            .heard(asked -> List.of(LiveFeed.of(AppsSendingReads::mayWatch, AppDestinations.TOPIC)));
+            .heard(asked -> List.of(LiveFeed.of(access -> mayWatch(access, asked), AppDestinations.TOPIC)));
 
     /**
      * Who a read is for: the apps it may show, and whose names it may say.
@@ -89,6 +90,22 @@ public final class AppsSendingReads {
             boolean admin = HohenheimAccess.isAdmin(access);
             return new Reader(id -> admin || HohenheimAccess.hasInstanceCapability(access, id,
                 HohenheimCapabilities.MANAGE), DestinationNames.Viewer.of(access));
+        }
+
+        /**
+         * @return a TV link holder's read of what its link shows: the apps the ask shows, a destination named when it
+         *         is one of those apps or a site the link shows, never a database or anything else
+         */
+        static @NonNull Reader tv(@NonNull ActivityAsk shows) {
+            boolean every = shows.kind() == ActivityAsk.Kind.EVERY;
+            Integer site = every ? null : HohenheimTraffic.siteOf(Objects.requireNonNull(shows.value(),
+                "one site's ask names it"));
+            List<Integer> apps = new ArrayList<>();
+            if (!every) {
+                for (Row app : AppsSendingReads.apps(shows)) apps.add(app.get(InstanceModel.ID));
+            }
+            return new Reader(id -> true, (model, id) -> model.equals(InstanceModel.MODEL_ID)
+                ? every || apps.contains(id) : model.equals(SiteModel.MODEL_ID) && (every || Objects.equals(site, id)));
         }
     }
 
@@ -105,9 +122,25 @@ public final class AppsSendingReads {
         return LiveReads.at(viewer, PART, shows.spelled());
     }
 
-    /** @return whether the viewer may hear that the hosts were read again: an account */
-    static boolean mayWatch(@NonNull AccessContext access) {
-        return access.isAccount();
+    /**
+     * @return the part the TV page draws for what its link shows: read for the page's own viewer where the read admits
+     *         them, else for the link's holder, the rule every re-read of it is admitted by (LiveCredentials)
+     */
+    public static @NonNull Live<AppsSendingView> onTv(@NonNull AccessContext own, @NonNull AccessContext holder,
+                                                      @NonNull ActivityAsk shows) {
+        try {
+            return at(own, shows);
+        } catch (DomainRefusal refused) {
+            return at(holder, shows);
+        }
+    }
+
+    /**
+     * @return whether the viewer may hear that the hosts were read again for the ask: an account, or the holder of
+     *         a TV link showing exactly it
+     */
+    static boolean mayWatch(@NonNull AccessContext access, @NonNull String asked) {
+        return access.isAccount() || showsOnTv(access, asked);
     }
 
     /**
@@ -120,10 +153,19 @@ public final class AppsSendingReads {
         if (shows == null || shows.kind() == ActivityAsk.Kind.TV) {
             throw refused();
         }
-        if (!access.isAccount()) {
-            throw refused();
+        if (access.isAccount()) {
+            return view(shows, Reader.of(access));
         }
-        return view(shows, Reader.of(access));
+        if (showsOnTv(access, asked)) {
+            return view(shows, Reader.tv(shows));
+        }
+        throw refused();
+    }
+
+    /** @return whether the reader holds a live TV link showing exactly the asked spelling */
+    private static boolean showsOnTv(@NonNull AccessContext access, @NonNull String asked) {
+        ActivityAsk shown = TrafficTvLinkLevel.showsTo(access);
+        return shown != null && shown.spelled().equals(asked);
     }
 
     /** @return the picture of every fresh reading for what is shown, rows ranked and cut, destinations named */

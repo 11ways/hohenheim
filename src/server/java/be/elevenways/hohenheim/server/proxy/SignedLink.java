@@ -87,12 +87,23 @@ public final class SignedLink {
     }
 
     /**
-     * The raw path a browser asks for a typed one: each segment percent-encoded, its slashes kept.
+     * The raw path a browser asks for a path given as the file is named or already percent-encoded: both spellings
+     * answer the same raw path, each segment percent-encoded and its slashes kept.
+     *
+     * AIDEV-NOTE: an escape of two hex digits is decoded first, so "%20" and a space sign alike and a link never
+     * carries "%2520"; a '%' that starts no escape is a literal character (Uri.decodeComponent's rule). A file whose
+     * name holds an escape's spelling literally ("a%20b") is therefore read as the decoded name: the one ambiguity of
+     * accepting both spellings, which the path argument's help names by saying a percent-encoded path is read as one.
+     * An escape that decodes to no UTF-8 text ("%FF") is refused, never a link to a name nobody has.
      *
      * @return null when no request could ask it (a dot-segment, a control character)
      */
-    public static @Nullable String rawPathOf(@NonNull String typed) {
-        String path = typed.strip();
+    public static @Nullable String rawPathOf(@NonNull String given) {
+        String stripped = given.strip();
+        String path = Uri.decodeComponent(stripped);
+        if (path.indexOf('�') >= 0 && stripped.indexOf('�') < 0) {
+            return null;
+        }
         RequestPath parsed = RequestPath.parse(Uri.encodePath(path.startsWith("/") ? path : "/" + path));
         return parsed == null ? null : parsed.raw();
     }

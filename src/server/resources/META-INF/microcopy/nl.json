@@ -17008,7 +17008,7 @@
   "signed_link_no_account": {"text": "Het geheim van een ondertekende link wordt alleen getoond aan het account dat het maakte, en achter deze aanroep staat geen account.", "scope": "violations"},
   "signed_link_path_outside": {"text": "Geef een pad onder {$prefix}.", "scope": "violations"},
   "signed_link_minutes_range": {"text": "Een link werkt van 1 tot {$longest} minuten.", "scope": "violations"},
-  "signed_link_path_help": {"text": "Het pad dat de link opent, onder het beschermde pad, zoals de browser van een bezoeker het vraagt.", "scope": "help"},
+  "signed_link_path_help": {"text": "Het pad van het bestand onder het beschermde pad, zoals het bestand heet (een spatie als spatie) of procent-gecodeerd: beide geven een link.", "scope": "help"},
   "signed_link_minutes_help": {"text": "Hoeveel minuten de link werkt, hoogstens zeven dagen.", "scope": "help"},
   "protected_path_signed_link": {"text": "True beschermt het pad met een ondertekende link: Hohenheim maakt het geheim, dat u een keer ziet op het tabblad Ondertekende link van het pad in het paneel.", "scope": "help"},
   "signed_link_path": {"text": "Pad", "scope": "protected_path"},

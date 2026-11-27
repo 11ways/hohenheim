@@ -46,9 +46,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The Activity tab's "Apps sending" picture, from a fake of the host's counter listing read by the real reader: the
- * app and where it sent under the requests, a mark on each band, a new reading re-read by the open page, reduced
- * motion stilling it; a customer reads only his own app, a stranger nothing, and traffic_read names the destinations
- * as app_network_read does.
+ * app and where it sent under the requests, a mark on each band, the one Pause holding it while a new reading is
+ * re-read and Resume drawing that reading, nothing reloaded, reduced motion stilling it; the TV page, signed out,
+ * draws it beside the requests and re-reads it with the link's token; a customer reads only his own app, a stranger
+ * nothing, and traffic_read names the destinations as app_network_read does.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -128,16 +129,31 @@ class AppsSendingJourneyTest extends HohenheimTestBase {
                 + ", apps frames " + appsFrom + " to "
                 + page.evaluate("() => document.querySelector('" + APPS + "').frames3d"));
 
-            // 4. A new reading: the app sent 30 000 bytes more to the internet. The open page re-reads its part
-            //    and the picture says the new reading, nothing reloaded.
-            kernel.element(THROUGH, SENT, own, "172.31.1.2", "93.184.216.34", "tcp", 443, 60, 31_500);
-            assertThat(AppDestinations.readAll()).as("step 4: the reading that grew").isEqualTo(1);
+            // 4. Pause, one control for both pictures: the apps picture stands while the open page re-reads its part
+            //    for a new reading (the app sent 30 000 bytes more to the internet); Resume draws that reading,
+            //    nothing reloaded.
+            String pause = "[data-hh-activity-pause]";
+            page.locator(pause).click();
+            page.waitForFunction("p => document.querySelector(p).textContent.includes('Resume')", pause,
+                new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
+            page.evaluate("() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))");
+            Number held = (Number) page.evaluate("() => document.querySelector('" + APPS + "').frames3d");
+            page.waitForResponse(response -> response.url().contains("/zn/live/hohenheim.apps_sending/"), () -> {
+                kernel.element(THROUGH, SENT, own, "172.31.1.2", "93.184.216.34", "tcp", 443, 60, 31_500);
+                assertThat(AppDestinations.readAll()).as("step 4: the reading that grew").isEqualTo(1);
+            });
+            page.evaluate("() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))");
+            assertThat(((Number) page.evaluate("() => document.querySelector('" + APPS + "').frames3d")).intValue())
+                .as("step 4: paused, the picture is not drawn again, the reading heard too").isEqualTo(held.intValue());
             String before = picture;
+            assertThat(page.locator(APPS).getAttribute("aria-label")).as("step 4: paused, it says the old reading")
+                .isEqualTo(before);
+            page.locator(pause).click();
             page.waitForFunction("before => document.querySelector('" + APPS + "').getAttribute('aria-label')"
                 + " !== before", before, new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
             picture = page.locator(APPS).getAttribute("aria-label");
-            assertThat(picture).as("step 4: the new reading, to the internet alone").contains(sender + " sends")
-                .contains("93.184.216.34").doesNotContain("Hohenheim's proxy");
+            assertThat(picture).as("step 4: resumed, the new reading, to the internet alone")
+                .contains(sender + " sends").contains("93.184.216.34").doesNotContain("Hohenheim's proxy");
 
             // 5. Reduced motion: nothing travels; the bands stand over a bar per reading heard.
             page.emulateMedia(new Page.EmulateMediaOptions().setReducedMotion(ReducedMotion.REDUCE));
@@ -148,15 +164,36 @@ class AppsSendingJourneyTest extends HohenheimTestBase {
                 .setFullPage(true));
             page.emulateMedia(new Page.EmulateMediaOptions().setReducedMotion(ReducedMotion.NO_PREFERENCE));
 
-            // 6. The TV page draws no apps picture (its re-read could not present the link's token).
+            // 6. The TV page, signed out: the apps picture beside the requests, as the board draws it, every app of
+            //    the link's every-site ask by name; a new reading reaches it through its re-read presenting the
+            //    link's token, never refused for want of a sign-in.
             AccessContext operator = TenantConduits.operator();
             ShareLinks.Minted minted = ShareLinks.create(operator, TrafficTvLinkLevel.LEVEL,
                 ControllerIdentity.recordId(), null, ActivityAsk.every().spelled());
             cleanUp.push(() -> ShareLinks.revokeAt(operator, TrafficTvLinkLevel.LEVEL, ControllerIdentity.recordId(),
                 each -> each.id().equals(minted.link().id())));
+            page.navigate("about:blank");
+            page.context().clearCookies();
+            page.setViewportSize(1920, 1080);
             page.navigate(baseUrl() + "/tv/" + minted.token());
             page.waitForSelector(REQUESTS, new Page.WaitForSelectorOptions().setTimeout(WAIT.toMillis()));
-            assertThat(page.locator(APPS).count()).as("step 6: none on the TV page").isZero();
+            String onTv = this.awaitPicture(page, sender + " sends");
+            assertThat(onTv).as("step 6: the apps by name, where they sent").contains(neighbour)
+                .contains("93.184.216.34");
+            assertThat((Boolean) page.evaluate("() => { const r = document.querySelector('" + REQUESTS + "');"
+                + " const a = document.querySelector('" + APPS + "');"
+                + " return r.getBoundingClientRect().right <= a.getBoundingClientRect().left; }"))
+                .as("step 6: beside the requests, as the board's TV screen draws it").isTrue();
+            assertThat(page.locator("hh-apps-sending[tv] pl-card-title").count()).as("step 6: no card heading there")
+                .isZero();
+            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("build/traffic-tv-apps.png")));
+            page.waitForResponse(response -> response.url().contains("/zn/live/hohenheim.apps_sending/")
+                && response.status() == 200, () -> {
+                kernel.element(THROUGH, SENT, own, "172.31.1.2", "93.184.216.34", "tcp", 443, 90, 61_500);
+                assertThat(AppDestinations.readAll()).as("step 6: another reading").isEqualTo(1);
+            });
+            page.waitForFunction("before => document.querySelector('" + APPS + "').getAttribute('aria-label')"
+                + " !== before", onTv, new Page.WaitForFunctionOptions().setTimeout(WAIT.toMillis()));
         } finally {
             while (!cleanUp.isEmpty()) cleanUp.pop().run();
         }
