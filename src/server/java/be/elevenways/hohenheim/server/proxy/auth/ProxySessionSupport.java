@@ -37,6 +37,16 @@ public final class ProxySessionSupport {
      */
     private static final AttachmentKey<Session> ESTABLISHED = AttachmentKey.create(Session.class);
 
+    /**
+     * The session a gate accepted or established for THIS exchange: who passed the sign-in.
+     *
+     * AIDEV-NOTE: set only by {@link #acceptedSession} and {@link #establish}, the two ways any gate (a site's, an
+     * access-rule leaf, a protected path's) lets a signed-in person through, so the forwarding stage tells the app
+     * who signed in exactly when a gate vouched for that session on this request, and never for a cookie no gate
+     * judged.
+     */
+    private static final AttachmentKey<Session> PASSED = AttachmentKey.create(Session.class);
+
     public static @Nullable String readSessionCookie(HttpServerExchange exchange) {
         return cookieValue(exchange, ProxyAuthKeys.SESSION_COOKIE);
     }
@@ -128,7 +138,17 @@ public final class ProxySessionSupport {
                                                     @NonNull SessionStore store, int siteId,
                                                     @NonNull SessionAuthority authority) {
         Session session = authenticatedSession(exchange, store, siteId);
-        return session != null && authority.accepts(session) ? session : null;
+        if (session == null || !authority.accepts(session)) {
+            return null;
+        }
+        exchange.putAttachment(PASSED, session);
+        return session;
+    }
+
+    /** @return who passed a sign-in gate on this exchange, or null when no gate let a signed-in person through */
+    public static @Nullable SignedInIdentity signedIn(@NonNull HttpServerExchange exchange) {
+        Session passed = exchange.getAttachment(PASSED);
+        return passed != null ? SignedInIdentity.of(passed) : null;
     }
 
     /**
@@ -139,11 +159,14 @@ public final class ProxySessionSupport {
      * revoked rather than upgraded, so a token known before the login never authenticates after it.
      *
      * @param binding         the gate's {@link #binding} for this subject under its current config
+     * @param subject         the name the gate binds and logs the sign-in under (a handle, a user name)
+     * @param identity        who signed in, as the app is told on every request this session passes
      * @param permissionClaim the identity provider's permission claim, or null when it has none
      */
     public static @NonNull Session establish(@NonNull HttpServerExchange exchange, @NonNull SessionStore store,
                                              int siteId, @NonNull String providerSlug, int providerId,
                                              @NonNull String binding, @NonNull String subject,
+                                             @NonNull SignedInIdentity identity,
                                              @Nullable Object permissionClaim) {
         String presented = readSessionCookie(exchange);
         if (presented != null && !presented.isEmpty()) {
@@ -160,9 +183,11 @@ public final class ProxySessionSupport {
         session.set(ProxyAuthKeys.BINDING, binding);
         session.set(ProxyAuthKeys.SUBJECT, subject);
         session.set(ProxyAuthKeys.PERMISSION_CLAIM, permissionClaim);
+        identity.storeIn(session);
         store.save(session);
         writeSessionCookie(exchange, session);
         exchange.putAttachment(ESTABLISHED, session);
+        exchange.putAttachment(PASSED, session);
         SiteSignIns.record(exchange, siteId, providerId, subject);
         return session;
     }

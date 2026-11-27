@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.hohenheim.server.proxy.auth.SessionAuthority;
+import be.elevenways.hohenheim.server.proxy.auth.SignedInIdentity;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.server.HttpServerExchange;
@@ -85,7 +86,8 @@ public class BasicAuthGate implements SiteAuthGate, CredentialOwner, SessionAuth
             return challenge(exchange);
         }
 
-        ProxySessionSupport.establish(exchange, store, siteId, providerSlug, providerId, binding, username, null);
+        ProxySessionSupport.establish(exchange, store, siteId, providerSlug, providerId, binding, username,
+            SignedInIdentity.userOnly(username), null);
         return null;
     }
 

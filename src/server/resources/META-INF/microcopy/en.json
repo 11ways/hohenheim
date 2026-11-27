@@ -3403,7 +3403,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Optional identity provider visitors must authenticate with before reaching the site.",
+      "text": "Optional identity provider visitors must authenticate with before reaching the site. The app then learns who signed in from the headers X-Hohenheim-User (a stable id), X-Hohenheim-Email (only an address the provider vouched for) and X-Hohenheim-Name, percent-encoded. Hohenheim removes these headers from every other request, so make sure the app can only be reached through Hohenheim.",
       "scope": "help"
     },
     {
@@ -21031,7 +21031,7 @@
   "change_site_dev_namespace_description": {"text": "Changes the settings sent of a dev namespace through the panel's own save; every other setting stays as it is.", "scope": "hohenheim"},
   "site_thing_site_dev_namespace": {"text": "a dev namespace", "scope": "hohenheim"},
   "mcp_tool_site_dev_namespace_set": {"text": "Creates or changes a dev namespace: a wildcard address such as *.dev.example.com where dev machines register over the dev tunnel, each taking one label. hostname gets no certificate: order a wildcard one with certificate_order. A registration_token left out on create is made by Hohenheim and shown once to the account that made this call (the key's owner), on the site's Dev sessions tab in the panel, for 24 hours; regenerate_registration_token replaces a lost one the same way. Non-administrators change only name, enabled and description. A site of another kind given as code is refused unless change_kind is true. Answers the site's code and, when a token was made, who sees it where and until when; a change answers the settings written.", "scope": "hohenheim"},
-  "site_sign_in_provider": {"text": "The sign-in provider (SP3) every visitor must pass before reaching the site.", "scope": "help"},
+  "site_sign_in_provider": {"text": "The sign-in provider (SP3) every visitor must pass before reaching the site. The app receives who signed in as X-Hohenheim-User, X-Hohenheim-Email (only an address the provider vouched for) and X-Hohenheim-Name, percent-encoded; Hohenheim removes these headers from every other request, so the app must only be reachable through Hohenheim.", "scope": "help"},
   "create_protected_path": {"text": "Protect a path", "scope": "hohenheim"},
   "create_protected_path_description": {"text": "Protects a path of a site with a list picked or made from the people, networks or provider given, as the site's own Protect a path does.", "scope": "hohenheim"},
   "change_protected_path": {"text": "Change a protected path", "scope": "hohenheim"},
@@ -21090,7 +21090,7 @@
   "change_sign_in_provider": {"text": "Change a sign-in provider", "scope": "hohenheim"},
   "change_sign_in_provider_description": {"text": "Changes what is sent of a sign-in provider through its own form; a secret left out stays as stored.", "scope": "hohenheim"},
   "sign_in_provider_thing": {"text": "a sign-in provider", "scope": "hohenheim"},
-  "mcp_tool_sign_in_provider_set": {"text": "Creates or changes a sign-in provider that sites, protected paths and access rules can make visitors pass: built-in passwords (kind basic, HTTP basic sign-in against credentials) or a Proteus identity service (kind proteus), which admits only identities holding required_permission. For basic, credentials is the whole list: usernames left out are removed for good, and an empty password keeps the stored one. A Proteus provider without endpoint, realm_client and access_key refuses every visitor. Administrators only. Answers its code (SP3).", "scope": "hohenheim"},
+  "mcp_tool_sign_in_provider_set": {"text": "Creates or changes a sign-in provider that sites, protected paths and access rules can make visitors pass: built-in passwords (kind basic, HTTP basic sign-in against credentials) or a Proteus identity service (kind proteus), which admits only identities holding required_permission. For basic, credentials is the whole list: usernames left out are removed for good, and an empty password keeps the stored one. A Proteus provider without endpoint, realm_client and access_key refuses every visitor. Wherever it admits someone, the app is told who in the headers X-Hohenheim-User (the Proteus sub, or the basic username), X-Hohenheim-Email (proteus only, and only an address the realm vouched for) and X-Hohenheim-Name (proteus only), as percent-encoded UTF-8; Hohenheim removes these headers from every other request, so the app must only be reachable through Hohenheim. Administrators only. Answers its code (SP3).", "scope": "hohenheim"},
   "mcp_code_sign_in_provider_set": {"text": "The sign-in provider's code; leave out to create one.", "scope": "hohenheim"},
   "set_ban": [{"text": "Ban or lift an address", "scope": "hohenheim"}, {"text": "{$actor} set a ban", "scope": "hohenheim", "target": "happened"}],
   "set_ban_description": {"text": "Bans an address from web traffic for a while or for good, or lifts every ban of it in force, as the Bans page does.", "scope": "hohenheim"},

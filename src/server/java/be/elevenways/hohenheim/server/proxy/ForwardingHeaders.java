@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
+import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.server.http.TrustedProxies;
 import io.undertow.server.HttpServerExchange;
@@ -14,7 +15,7 @@ import java.util.List;
 
 /**
  * Canonicalizes the upstream request headers: custom operator rules, hop-by-hop hygiene,
- * and the four client-origin headers hohenheim owns.
+ * the four client-origin headers hohenheim owns, and who signed in ({@link IdentityHeader}).
  */
 final class ForwardingHeaders {
 
@@ -156,6 +157,10 @@ final class ForwardingHeaders {
         for (HttpString stripped : STRIPPED_FORWARDING_HEADERS) {
             requestHeaders.remove(stripped);
         }
+
+        // Who signed in: every identity header out, then set from what a gate vouched for on THIS request. After
+        // the hop-by-hop pass, so a visitor's Connection token cannot drop the headers once they are set.
+        IdentityHeader.apply(requestHeaders, ProxySessionSupport.signedIn(exchange));
 
         requestHeaders.put(X_FORWARDED_PROTO, ProxyScheme.effectiveScheme(exchange));
         requestHeaders.put(X_FORWARDED_HOST,

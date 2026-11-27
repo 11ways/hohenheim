@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.hohenheim.server.proxy.auth.SessionAuthority;
+import be.elevenways.hohenheim.server.proxy.auth.SignedInIdentity;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusPermissions;
@@ -130,7 +131,11 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
                     if (!permitted(result.permissions())) {
                         return SiteAuthDecision.deny(403, "Forbidden");
                     }
-                    establish(exchange, result.handle(), result.permissions());
+                    SignedInIdentity identity = identityOf(result);
+                    if (identity == null) {
+                        return SiteAuthDecision.deny(502, "Authentication returned no identity");
+                    }
+                    establish(exchange, result.handle(), identity, result.permissions());
                     return null;
                 }
                 ProxySessionSupport.clearPersistentCookie(exchange);  // stale -> drop and re-login
@@ -180,14 +185,15 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
         }
 
         String subject = result.handle();
-        if (subject == null || subject.isEmpty()) {
+        SignedInIdentity identity = identityOf(result);
+        if (subject == null || subject.isEmpty() || identity == null) {
             return SiteAuthDecision.deny(502, "Authentication returned no identity");
         }
         if (!permitted(result.permissions())) {
             return SiteAuthDecision.deny(403, "Forbidden");
         }
 
-        establish(exchange, subject, result.permissions());
+        establish(exchange, subject, identity, result.permissions());
         issuePersistentCookie(exchange, subject);
         return SiteAuthDecision.redirect(baseUrl(exchange));
     }
@@ -211,9 +217,23 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
         return SiteAuthDecision.redirect(ls.loginUrl());
     }
 
-    private void establish(HttpServerExchange exchange, String subject, @Nullable Object permissionClaim) {
-        ProxySessionSupport.establish(exchange, store, siteId, providerSlug, providerId, binding, subject,
+    private void establish(HttpServerExchange exchange, String subject, SignedInIdentity identity,
+                           @Nullable Object permissionClaim) {
+        ProxySessionSupport.establish(exchange, store, siteId, providerSlug, providerId, binding, subject, identity,
             permissionClaim);
+    }
+
+    /**
+     * The app is told the realm's {@code sub}, never the handle: a handle is a mnemonic the person may change.
+     *
+     * @return who the realm answered, or null when it named no {@code sub}
+     */
+    private static @Nullable SignedInIdentity identityOf(ProteusClient.LoginResult result) {
+        String sub = result.sub();
+        if (sub == null) {
+            return null;
+        }
+        return new SignedInIdentity(sub, result.vouchedEmail(), result.displayName());
     }
 
     /** Auto-register a persistent remember-me cookie. Best-effort: a failure never fails the login. */

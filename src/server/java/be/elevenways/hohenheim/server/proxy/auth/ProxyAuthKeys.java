@@ -74,5 +74,14 @@ public final class ProxyAuthKeys {
      */
     public static final IdentifierKey<Object> PERMISSION_CLAIM = IdentifierKey.of(NS, "permission_claim");
 
+    /** The signed-in person's stable id as the provider names them ({@link SignedInIdentity#user}). */
+    public static final IdentifierKey<String> IDENTITY_USER = IdentifierKey.of(NS, "identity_user");
+
+    /** The signed-in person's address, present only when the provider vouched for it. */
+    public static final IdentifierKey<String> IDENTITY_EMAIL = IdentifierKey.of(NS, "identity_email");
+
+    /** The signed-in person's name as the provider gave it. */
+    public static final IdentifierKey<String> IDENTITY_NAME = IdentifierKey.of(NS, "identity_name");
+
     private ProxyAuthKeys() {}
 }

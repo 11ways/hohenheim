@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -11,6 +12,8 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.proxy.IdentityHeader;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,12 +21,16 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.Headers;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -43,8 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The Proteus gate against a fake realm: the login round trip bound to the browser that started
  * it, no stored state before an identity is verified, session rotation, the remember-me path,
- * permissions re-checked per gate on the stored claim, and sessions bound to the realm they were
- * minted under.
+ * permissions re-checked per gate on the stored claim, sessions bound to the realm they were
+ * minted under, and the app told who signed in through headers no visitor can forge.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -84,6 +91,17 @@ class ProteusAuthGateTest {
     private static final Map<String, String> CODES = new ConcurrentHashMap<>();
     private static final AtomicInteger LOGIN_RESULT_POLLS = new AtomicInteger();
     private static final AtomicInteger LOGIN_SESSIONS_CREATED = new AtomicInteger();
+
+    /** The realm's sub of the identity the fake realm answers, as the app receives it. */
+    private static final String SUB = "0123456789abcdef01234567";
+    /** The identity the fake realm answers: a name outside ASCII, an address the realm vouched for. */
+    private static final String VOUCHED = "{\"handle\":\"bob\",\"sub\":\"" + SUB + "\",\"given_name\":\"Zo\\u00eb\","
+        + "\"family_name\":\"Lovelace\",\"email\":\"zoe@example.com\",\"email_verified\":true}";
+    /** The same identity with an address only an operator typed in. */
+    private static final String UNVOUCHED = VOUCHED.replace("\"email_verified\":true", "\"email_verified\":false");
+    private static final AtomicReference<String> IDENTITY = new AtomicReference<>(VOUCHED);
+    /** The request headers the upstream app received last. */
+    private static final AtomicReference<Headers> RECEIVED = new AtomicReference<>();
 
     @BeforeAll
     static void setup() throws Exception {
@@ -153,10 +171,10 @@ class ProteusAuthGateTest {
                 Matcher code = CODE.matcher(body);
                 boolean consumed = rlid.find() && code.find() && CODES.remove(rlid.group(1), code.group(1));
                 json = consumed
-                    ? "{\"success\":true,\"finished\":true,\"identity\":{\"handle\":\"bob\"}," + claims + "}"
+                    ? "{\"success\":true,\"finished\":true,\"identity\":" + IDENTITY.get() + "," + claims + "}"
                     : "{\"success\":false,\"finished\":true}";
             } else if (path.endsWith("persistent_cookie_login_result")) {
-                json = "{\"success\":true,\"finished\":true,\"identity\":{\"handle\":\"bob\"}," + claims + "}";
+                json = "{\"success\":true,\"finished\":true,\"identity\":" + IDENTITY.get() + "," + claims + "}";
             } else if (path.endsWith("register_persistent_cookie")) {
                 json = "{\"success\":true,\"proteus_cookie_id\":\"pc-1\"}";
             } else {
@@ -193,6 +211,11 @@ class ProteusAuthGateTest {
     }
 
     private static int gatedSite(String hostname, int providerId) {
+        return site(hostname, providerId);
+    }
+
+    /** A site forwarding to the upstream on {@code hostname}, behind {@code providerId} when it is not null. */
+    private static int site(String hostname, @Nullable Integer providerId) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Site " + hostname);
@@ -202,7 +225,9 @@ class ProteusAuthGateTest {
             "forward_port", upstream.getAddress().getPort()));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
-        site.set(SiteModel.AUTH_PROVIDER_ID, providerId);
+        if (providerId != null) {
+            site.set(SiteModel.AUTH_PROVIDER_ID, providerId);
+        }
         siteModel.save(site);
         int siteId = site.get(SiteModel.ID);
 
@@ -248,6 +273,7 @@ class ProteusAuthGateTest {
     void loginIsBoundToItsBrowserRotatesAndHonoursEveryGatesPermission() throws Exception {
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
+            RECEIVED.set(ex.getRequestHeaders());
             byte[] body = "upstream-ok".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, body.length);
             ex.getResponseBody().write(body);
@@ -261,6 +287,7 @@ class ProteusAuthGateTest {
         int gatedSite = gatedSite("gated.test", gatedProvider);
         guardWithProviderLeaf(gatedSite, "/admin", gatedProvider, ADMIN);
         gatedSite("denied.test", provider("Proteus denied", "rc", "hohenheim.site.elsewhere"));
+        site("open.test", null);
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
@@ -317,10 +344,20 @@ class ProteusAuthGateTest {
             .isEqualTo(pollsBefore + 1);
         String acpl = verified.cookie("acpl");
 
-        // 5. The session admits the site.
-        Response admitted = request("gated.test", "/", cookie("hh_site_session_id", session));
+        // 5. The session admits the site, and the app is told who signed in: the realm's sub, the address it
+        //    vouched for and the name, percent-encoded, in place of what the visitor claimed himself.
+        Response admitted = request("gated.test", "/", cookie("hh_site_session_id", session),
+            "X-Hohenheim-User: forged", "x-hohenheim-email: forged@example.com", "X-HOHENHEIM-NAME: Forged",
+            "Connection: X-Hohenheim-User, X-Hohenheim-Name");
         assertThat(admitted.status()).as("step 5: the session is forwarded").isEqualTo(200);
         assertThat(admitted.body()).as("step 5: to the upstream").contains("upstream-ok");
+        assertThat(identityHeaders()).as("step 5: the app receives who signed in, never the visitor's own claim")
+            .containsExactly(List.of(SUB), List.of("zoe%40example.com"), List.of("Zo%C3%AB%20Lovelace"));
+        RECEIVED.set(null);
+        assertThat(upgradeStatus("gated.test", cookie("hh_site_session_id", session)))
+            .as("step 5: a WebSocket upgrade is forwarded too").isEqualTo(200);
+        assertThat(identityHeaders()).as("step 5: and carries the same three headers")
+            .containsExactly(List.of(SUB), List.of("zoe%40example.com"), List.of("Zo%C3%AB%20Lovelace"));
 
         // 6. The SAME provider guards /admin with a leaf demanding a permission this identity was
         //    never granted: the site-level session must not satisfy it.
@@ -344,10 +381,14 @@ class ProteusAuthGateTest {
         assertThat(request("gated.test", "/", cookie("hh_site_session_id", session)).status())
             .as("step 7: the session presented at login was revoked").isEqualTo(302);
 
-        // 8. The remember-me cookie alone logs the visitor straight in.
+        // 8. The remember-me cookie alone logs the visitor straight in. This time the realm holds an address it
+        //    does not vouch for: the app is told who signed in, but never that address.
+        IDENTITY.set(UNVOUCHED);
         Response viaAcpl = request("gated.test", "/", cookie("acpl", acpl));
         assertThat(viaAcpl.status()).as("step 8: acpl establishes a session").isEqualTo(200);
         assertThat(viaAcpl.body()).as("step 8: and forwards").contains("upstream-ok");
+        assertThat(identityHeaders()).as("step 8: the user and the name, no unvouched address")
+            .containsExactly(List.of(SUB), null, List.of("Zo%C3%AB%20Lovelace"));
 
         // 9. An identity without the site's permission is refused at verify.
         Response deniedCold = request("denied.test", "/");
@@ -398,8 +439,58 @@ class ProteusAuthGateTest {
         assertThat(request("blank.test", "/", cookie("hh_site_session_id", blankVerified.cookie("hh_site_session_id")))
             .body()).as("step 12: and reaches the upstream").contains("upstream-ok");
 
+        // 13. A site without a sign-in: whatever identity a visitor claims never reaches its app.
+        Response open = request("open.test", "/", null,
+            "X-Hohenheim-User: " + SUB, "X-Hohenheim-Email: zoe@example.com", "X-Hohenheim-Name: Zoe",
+            "X_Hohenheim_User: " + SUB);
+        assertThat(open.body()).as("step 13: the open site is forwarded").contains("upstream-ok");
+        assertThat(RECEIVED.get().get("X_Hohenheim_User"))
+            .as("step 13: nor its underscore spelling, which CGI and PHP read as the same header").isNull();
+        assertThat(identityHeaders()).as("step 13: with none of the identity headers the visitor sent")
+            .containsExactly(null, null, null);
+
+        // 14. The sign-in protection's help, in the panel and the tools, English and Dutch, names every header.
+        for (String tag : List.of("en", "nl")) {
+            LocaleChain locales = LocaleChain.ofTags(tag);
+            for (String help : List.of(
+                    HohenheimMicrocopy.HELP.of("auth_provider").resolve(locales, Zenit.getMessageResolver()),
+                    HohenheimMicrocopy.HELP.of("site_sign_in_provider").resolve(locales, Zenit.getMessageResolver()),
+                    HohenheimMicrocopy.HOHENHEIM.of("mcp_tool_sign_in_provider_set")
+                        .resolve(locales, Zenit.getMessageResolver()))) {
+                for (IdentityHeader header : IdentityHeader.values()) {
+                    assertThat(help).as("step 14: the " + tag + " help names " + header.headerName())
+                        .contains(header.headerName());
+                }
+            }
+        }
+
         proxy.stop();
         proxy = null;
+    }
+
+    /** @return the values of every identity header the upstream received last, null for one it did not receive */
+    private static List<List<String>> identityHeaders() {
+        Headers received = RECEIVED.get();
+        assertThat(received).as("the upstream was reached").isNotNull();
+        List<List<String>> values = new ArrayList<>();
+        for (IdentityHeader header : IdentityHeader.values()) {
+            values.add(received.get(header.headerName()));
+        }
+        return values;
+    }
+
+    /** @return the status the proxy answers a WebSocket upgrade request with */
+    private int upgradeStatus(String host, String cookieHeader) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", httpPort)) {
+            socket.setSoTimeout(5000);
+            socket.getOutputStream().write(("GET / HTTP/1.1\r\nHost: " + host + "\r\nCookie: " + cookieHeader
+                + "\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                + "Sec-WebSocket-Version: 13\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            String statusLine = new BufferedReader(new InputStreamReader(socket.getInputStream(),
+                StandardCharsets.UTF_8)).readLine();
+            return Integer.parseInt(statusLine.split(" ")[1]);
+        }
     }
 
     private static String cookie(String name, String value) {
@@ -415,7 +506,7 @@ class ProteusAuthGateTest {
         return request(host, path, null);
     }
 
-    private Response request(String host, String path, String cookieHeader) throws Exception {
+    private Response request(String host, String path, String cookieHeader, String... headerLines) throws Exception {
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(5000);
             StringBuilder req = new StringBuilder("GET ").append(path)
@@ -423,7 +514,13 @@ class ProteusAuthGateTest {
             if (cookieHeader != null) {
                 req.append("Cookie: ").append(cookieHeader).append("\r\n");
             }
-            req.append("Connection: close\r\n\r\n");
+            // First, so Undertow (which reads only the first Connection value as a whole) closes after answering
+            // even when a line below names further Connection tokens.
+            req.append("Connection: close\r\n");
+            for (String line : headerLines) {
+                req.append(line).append("\r\n");
+            }
+            req.append("\r\n");
             socket.getOutputStream().write(req.toString().getBytes(StandardCharsets.UTF_8));
             socket.getOutputStream().flush();
 
