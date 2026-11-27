@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,6 +66,11 @@ public final class InstanceExposure {
      * teardown that has already happened: the record is soft-deleted by the time this
      * runs, so throwing would report a completed destroy as failed.
      *
+     * AIDEV-NOTE: the disable runs inside TenantWrites.inAuthorizedOperation: it is the
+     * destroy's own consequence, decided by its destroy gate, and the site in front of a
+     * tenant's app is often the operator's, which that tenant may not manage and so may not
+     * write on its own.
+     *
      * @return the names of the sites that were disabled
      */
     public static @NonNull List<String> disableForDestroyedInstance(int instanceId) {
@@ -73,8 +79,8 @@ public final class InstanceExposure {
             String name = String.valueOf((Object) site.get(SiteModel.NAME));
             try {
                 site.set(SiteModel.ENABLED, false);
-                Models.get(SiteModel.class).save(site, Change.fact(HohenheimActivityAction.DISABLED,
-                    Map.of(HohenheimActivityAction.STRANDED_KEY, true)));
+                TenantWrites.inAuthorizedOperation(() -> Models.get(SiteModel.class).save(site, Change.fact(
+                    HohenheimActivityAction.DISABLED, Map.of(HohenheimActivityAction.STRANDED_KEY, true))));
                 disabled.add(name);
             } catch (RuntimeException refused) {
                 Blast.log("INSTANCE: site", name, "still exposes destroyed instance",

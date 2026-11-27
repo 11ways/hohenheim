@@ -29,8 +29,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
- * A delegated tenant writes exactly what the /manage site surface offers -- name, enabled, description and the
- * settings its kind gives the site's manager -- on EVERY writer, and removes a domain row only of a site it manages.
+ * A delegated tenant writes, on a site it manages, exactly what the /manage site surface offers -- name, enabled,
+ * description and the settings its kind gives the site's manager -- on EVERY writer, nothing of a site it does not
+ * manage, and removes a domain row only of a site it manages.
  *
  * AIDEV-NOTE: before this, sites were the one tenant-writable model with no column
  * allow-list in TenantWrites: the /manage resource's field bindings were the only thing
@@ -84,11 +85,16 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
         return row.get(SiteDomainModel.ID);
     }
 
-    /** @return the first refusal key of a tenant write of one column, or null when it saved */
+    /** @return the first refusal key of a tenant write of one column of its own site, or null when it saved */
     private static String tenantWrite(Field<?, ?> field, Object value) {
+        return tenantWrite(ownSite, field, value);
+    }
+
+    /** @return the first refusal key of a tenant write of one column of the site, or null when it saved */
+    private static String tenantWrite(int siteId, Field<?, ?> field, Object value) {
         Violations refused = catchThrowableOfType(() -> TenantConduits.as(tenant, () -> {
             Model model = Models.get(SiteModel.class);
-            Row row = model.findById(ownSite);
+            Row row = model.findById(siteId);
             row.set(field.getName(), value);
             model.save(row);
         }), Violations.class);
@@ -170,6 +176,22 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
         assertThat(kept).as("step 5: THE ASSERTION -- only the manager's settings changed").isEqualTo(Map.of(
             StaticUpstreamKind.ROOT_PATH.getName(), "/tmp", SiteSharing.READABLE_BY, "any",
             StaticUpstreamKind.AUTOINDEX.getName(), false));
+
+        // 6. The delegated columns are the manager's: on a site the tenant does not manage, its name, switch and
+        //    description are refused by a direct write too, and the site stays as the operator left it.
+        Map<Field<?, ?>, Object> delegatedColumns = Map.of(
+            SiteModel.NAME, "Site Columns (seized)",
+            SiteModel.DESCRIPTION, "seized description",
+            SiteModel.ENABLED, false);
+        for (Map.Entry<Field<?, ?>, Object> column : delegatedColumns.entrySet()) {
+            Object before = model.findById(foreignSite).get(column.getKey().getName());
+            assertThat(tenantWrite(foreignSite, column.getKey(), column.getValue()))
+                .as("step 6: %s of a site it does not manage", column.getKey().getName())
+                .isEqualTo("tenant_site_not_managed");
+            Object after = model.findById(foreignSite).get(column.getKey().getName());
+            assertThat(after).as("step 6: %s stays as the operator left it", column.getKey().getName())
+                .isEqualTo(before);
+        }
     }
 
     @Test

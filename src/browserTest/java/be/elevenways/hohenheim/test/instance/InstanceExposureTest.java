@@ -3,6 +3,12 @@ package be.elevenways.hohenheim.test.instance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.RecordGrants;
+import java.util.UUID;
 import java.util.Objects;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -134,6 +140,20 @@ class InstanceExposureTest {
             assertThat(reloadDomain(shopDomain).get(SiteDomainModel.LIVE_ROUTE_KEY))
                 .as("step 6: the released hostname no longer holds a live route claim")
                 .isNull();
+
+            // 7. A tenant holding destroy on its app, behind a site the operator keeps (the tenant holds no grant on
+            //    it), destroys the app: that site is disabled all the same, as the destroy's consequence, though the
+            //    tenant may not write the site itself.
+            int tenantApp = instanceRecord("tenant-workload");
+            Row operatorFront = site("Operator front", "operator-front", tenantApp);
+            new InstanceService().deploy(tenantApp);
+            UUID tenantId = ApiSupport.user("exposure-tenant@hohenheim.local", "Exposure Tenant");
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, tenantApp,
+                HohenheimCapabilities.DESTROY, true);
+            TenantConduits.as(new UserPrincipal(tenantId, "Exposure Tenant"),
+                () -> new InstanceService().destroy(tenantApp));
+            assertThat(reload(operatorFront).get(SiteModel.ENABLED))
+                .as("step 7: the operator's site in front of it was disabled").isEqualTo(false);
             Models.get(ReleasedRouteClaimModel.class).find().delete();
         });
     }

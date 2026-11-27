@@ -251,9 +251,11 @@ public final class TenantWrites {
      * instance and not a running one -- an operation that does less than it claims.
      *
      * AIDEV-NOTE: this is a BYPASS primitive and the ONLY legitimate use is a nested step
-     * of an operation that already ran its own capability gate on the SAME record. It is
-     * deliberately a depth counter and deliberately restores in a finally: an unbalanced
-     * scope would leave the whole thread authorized. Never wrap a request handler in it.
+     * of an operation that already ran its own capability gate on the SAME record, or a
+     * consequence that gate mandates on a dependent record (DnsClaimReleases' credentials,
+     * InstanceExposure's stranded sites). It is deliberately a depth counter and
+     * deliberately restores in a finally: an unbalanced scope would leave the whole thread
+     * authorized. Never wrap a request handler in it.
      */
     public static void inAuthorizedOperation(@NonNull Runnable body) {
         AUTHORIZED_OPERATION.run(body);
@@ -761,11 +763,14 @@ public final class TenantWrites {
      * would refuse the same write anyway; the upstream judgement is the defence that survives a
      * later widening of the manager's settings, and it gives the precise refusal while both apply.
      *
-     * AIDEV-NOTE: the settings column joins the writable set only for an UPDATE that keeps the
-     * kind, of a site the tenant manages, and only when every key it changes is a setting the
-     * kind declares its manager changes ({@link SiteManagerSettings#firstHostKeyChanged}): a key
-     * no schema declares, and a kind this build does not know, stay frozen (fail closed). A create
-     * or a re-kinding keeps the whole map frozen.
+     * AIDEV-NOTE: every UPDATE needs {@code manage} on the stored site, whatever column it changes: the operation
+     * authorizers (SiteOperationHandlers.reachesSite) ask it of every request lane, and this is the home that also
+     * holds for a direct save. A consequence another operation's gate already decided (an instance destroy disabling
+     * the sites in front of it, InstanceExposure) runs inside {@link #inAuthorizedOperation}. The settings column
+     * joins the writable set only for an update that keeps the kind, and only when every key it changes is a setting
+     * the kind declares its manager changes ({@link SiteManagerSettings#firstHostKeyChanged}): a key no schema
+     * declares, and a kind this build does not know, stay frozen (fail closed). A create or a re-kinding keeps the
+     * whole map frozen.
      *
      * AIDEV-NOTE: {@code trusted_upstream} is deliberately NOT consulted here. It vouches
      * for the OPERATOR's upstream (TenantUpstreams.publicOnly reads it at dial time), never
@@ -793,13 +798,15 @@ public final class TenantWrites {
             refuseTenantUpstream(String.valueOf(kind), map);
         }
 
+        if (stored != null) {
+            requireManagedSite(stored.get(SiteModel.ID));
+        }
         Set<String> writable = SITE_TENANT_WRITABLE;
         if (kindKept && !Objects.equals(storedSettings, writtenSettings)) {
             if (hostKey != null) {
                 throw Violations.ofField(settingsKey(hostKey), writtenSettings.get(hostKey),
                     HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
             }
-            requireManagedSite(stored.get(SiteModel.ID));
             writable = new LinkedHashSet<>(SITE_TENANT_WRITABLE);
             writable.add(SiteModel.SETTINGS.getName());
         }
