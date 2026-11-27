@@ -230,11 +230,12 @@ public final class TrafficTvLinks {
     }
 
     /**
-     * The TV links of this server in force as the list tool lists them (list kind share_link): by code, titled by
-     * what each shows and who made it, with when it was made; never an address.
+     * The TV links of this server in force as the list tool lists them (list kind tv_link, their tools' word, never
+     * zenit-auth's share_link): by code, titled by what each shows and who made it, with when it was made; never an
+     * address.
      */
     public static RecordSource.@NonNull Builder<ShareLinkModel> listed() {
-        return RecordSource.of(ShareLinkModel.REF)
+        return RecordSource.of(ShareLinkModel.REF).assistantNoun("tv_link")
             .project(ShareLinkModel.CREATED_AT)
             .scopedBy(RowScope.within(() -> ShareLinkModel.ID.in(live().stream().map(ShareLink::id).toList())))
             .titles(TrafficTvLinks::titles);

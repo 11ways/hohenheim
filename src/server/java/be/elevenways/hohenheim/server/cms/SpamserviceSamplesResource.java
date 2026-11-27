@@ -228,7 +228,7 @@ public final class SpamserviceSamplesResource {
         return detail == null ? null : detail.summary();
     }
 
-    private static @NonNull Map<String, Object> values(@NonNull SampleSummary row) {
+    static @NonNull Map<String, Object> values(@NonNull SampleSummary row) {
         return Map.of("client_id", SpamserviceRemoteStore.uuidOrBlank(row.clientId()),
             "ip", Objects.requireNonNullElse(row.ip(), ""), "spam", row.spam(), "score", row.score(),
             "confirmed", row.confirmed(), "flags", Objects.requireNonNullElse(row.flags(), ""),

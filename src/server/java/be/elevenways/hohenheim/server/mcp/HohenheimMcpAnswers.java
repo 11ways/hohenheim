@@ -5,7 +5,9 @@ import be.elevenways.hohenheim.instance.InstanceLogOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.AddressWrites;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.GitConnectionWrites;
@@ -175,6 +177,19 @@ final class HohenheimMcpAnswers {
         Microcopy token = key == null ? null : SiteRegistrationTokens.waitingFor(context.access(), key);
         if (token != null) response.line(context.access().text(token));
         return response;
+    }
+
+    /**
+     * A new address's code, and what HTTPS gives it now in plain words: working, waiting to be issued, or none yet and
+     * why, with the call that orders one.
+     */
+    static @NonNull McpResponse addressMade(@NonNull McpToolContext context, @Nullable Integer key) {
+        McpResponse response = made(context, SiteDomainModel.MODEL_ID, key);
+        Row address = key == null ? null : Models.get(SiteDomainModel.class).findById(key);
+        if (address == null) return response;
+        String code = RecordCodes.code(SiteDomainModel.MODEL_ID, String.valueOf(key), context.access());
+        return response.line(context.text().words(AddressWrites.httpsSaid(address,
+            Objects.requireNonNullElse(code, String.valueOf(key)), context.access())));
     }
 
     /** @return an answer naming a new record by its code and kind ({@code GC3 (git connection)}); empty for none */

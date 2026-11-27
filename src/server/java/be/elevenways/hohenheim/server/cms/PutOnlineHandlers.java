@@ -984,9 +984,13 @@ final class PutOnlineHandlers {
      * reach pre-check and refusals included), HTTP-01 for the address or DNS-01 for its wildcard; the certificate
      * already held; or the upload, stored through the certificate form's own create (its key encrypted at rest).
      *
+     * AIDEV-NOTE: THE orderer of a new address's certificate: this wizard's certificate step and an address's own
+     * create (AddressWrites, its https choice) both come here, so a refusal is a note on both and never undoes the
+     * address the caller made.
+     *
      * @return what is left to do, or null when HTTPS is set up
      */
-    private static @Nullable Microcopy certificate(@NonNull String hostname, PutOnline.@NonNull HttpsAnswer answer,
+    static @Nullable Microcopy certificate(@NonNull String hostname, PutOnline.@NonNull HttpsAnswer answer,
                                                    @NonNull AccessContext access) {
         HttpsChoice choice = answer.choice();
         if (choice == null) {

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpResponse;
@@ -462,6 +463,48 @@ class SignedLinkJourneyTest extends HohenheimHttpTestBase {
                 .startsWith("HTTP/1.1 401").containsIgnoringCase("WWW-Authenticate");
             assertThat(ProxyTestSupport.rawRequest(port, host, app)).as("step 5: or opened by the link")
                 .startsWith("HTTP/1.1 200");
+
+            // 6. A site serving a folder on the host (not its own files) refuses the same way: an unsigned request
+            //    gets that site's own not-found answer for a path that does not exist, a valid link opens the file.
+            Path folder = Files.createTempDirectory("hh-signed-folder");
+            cleanUp.push(() -> {
+                for (Path each : List.of(folder.resolve("beta/app.bin"), folder.resolve("missing.html"),
+                        folder.resolve("beta"), folder)) {
+                    try {
+                        Files.deleteIfExists(each);
+                    } catch (IOException ignored) {
+                        // A left temp file harms no other run.
+                    }
+                }
+            });
+            Files.createDirectories(folder.resolve("beta"));
+            Files.writeString(folder.resolve("beta/app.bin"), "folder app " + tag);
+            Files.writeString(folder.resolve("missing.html"), "folder missing " + tag);
+            Row served = ProxyTestSupport.setupSite("hohenheim:static", "Signed folder " + tag, "signed-folder-" + tag,
+                new LinkedHashMap<String, Object>(Map.of("root_path", folder.toString(), "not_found_page",
+                    "missing.html")));
+            int servedId = served.get(SiteModel.ID);
+            cleanUp.push(() -> HardDeletes.byId(Models.get(SiteModel.class), servedId));
+            String folderHost = "folder-" + tag + ".signed.test";
+            ProxyTestSupport.addDomain(served, folderHost, "exact", null, false);
+            String servedCode = Objects.requireNonNull(RecordCodes.codeUnjudged(SiteModel.MODEL_ID,
+                String.valueOf(servedId)));
+            assertThat(admin.call("protected_path_set", Map.of("site", servedCode, "path", "/beta", "signed_link",
+                true)).error()).as("step 6: protected").isFalse();
+            Row folderPath = Objects.requireNonNull(Models.get(ProtectedPathModel.class).find()
+                .where(ProtectedPathModel.SITE_ID.eq(servedId)).first(), "step 6: the protected path");
+            cleanUp.push(() -> forget(folderPath));
+            String folderSecret = secretOf(ruleOf(folderPath));
+            proxy.getDispatcher().reloadRoutes();
+            String folderMissing = ProxyTestSupport.rawRequest(port, folderHost, "/nothing-" + tag + ".bin");
+            assertThat(folderMissing).as("step 6: the folder site's own not-found page").startsWith("HTTP/1.1 404")
+                .contains("folder missing " + tag);
+            String folderRefused = ProxyTestSupport.rawRequest(port, folderHost, "/beta/app.bin");
+            assertNotFound(folderRefused, "step 6: unsigned");
+            assertThat(bodyOf(folderRefused)).as("step 6: indistinguishable from a missing file")
+                .isEqualTo(bodyOf(folderMissing));
+            assertThat(ProxyTestSupport.rawRequest(port, folderHost, signed(folderSecret, "/beta/app.bin", soon)))
+                .as("step 6: a valid link opens it").startsWith("HTTP/1.1 200").contains("folder app " + tag);
         } finally {
             if (proxy != null) proxy.stop();
             cleanUp.forEach(Runnable::run);

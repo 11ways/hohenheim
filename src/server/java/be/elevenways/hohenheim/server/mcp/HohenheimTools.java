@@ -240,7 +240,7 @@ public final class HohenheimTools extends McpToolCollection {
             .build();
         McpHostTool address = McpCodeTool.builder("address_set", words("mcp_tool_address_set"), writes())
             .code(words("mcp_code_address"))
-            .creates(AddressWrites.CREATE, null,
+            .creates(AddressWrites.CREATE, HohenheimMcpAnswers::addressMade,
                 List.of(AddressWrites.SITE, SiteDomainModel.HOSTNAME.getInputName()),
                 words("address_thing"))
             .route(AddressWrites.CHANGE, HohenheimMcpAnswers::changed)

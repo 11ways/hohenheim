@@ -289,8 +289,8 @@ public final class SpamserviceClientsResource {
         return values;
     }
 
-    /** @return the client's settings a create or a change writes, as its form shows them */
-    private static @NonNull Map<String, Object> written(@NonNull ManagedClient row) {
+    /** @return the client's settings a create or a change writes, as its form shows them, and a read names them */
+    static @NonNull Map<String, Object> written(@NonNull ManagedClient row) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("name", Objects.requireNonNullElse(row.name(), ""));
         values.put("enabled", row.enabled());

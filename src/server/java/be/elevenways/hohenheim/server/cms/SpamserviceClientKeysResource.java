@@ -495,7 +495,7 @@ public final class SpamserviceClientKeysResource {
         return key.clientId() + "~" + key.id();
     }
 
-    private static @NonNull Map<String, Object> values(@NonNull ManagedClientKey row) {
+    static @NonNull Map<String, Object> values(@NonNull ManagedClientKey row) {
         return Map.of("client_id", UUID.fromString(row.clientId()), "name", row.name(), "key", "",
             "enabled", row.active(), "last_used", Objects.requireNonNullElse(row.lastUsed(), ""),
             "created_at", Objects.requireNonNullElse(row.createdAt(), ""));

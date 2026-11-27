@@ -141,6 +141,11 @@ public final class CertificateOperationHandlers {
         return verdicts;
     }
 
+    /** @return whether a certificate can be ordered for this one address, the request-for-address action's rule */
+    static boolean certifiable(@NonNull Row domain) {
+        return certifiable(List.of(domain)).get(0);
+    }
+
     private static boolean exactAndIncluded(@NonNull Row domain) {
         return SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))
             && !Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
@@ -471,29 +476,30 @@ public final class CertificateOperationHandlers {
     /** HTTP-01 needs each name to reach this proxy: refuse before an order a name that visibly points elsewhere. */
     private static void refuseUnreachable(@NonNull List<String> hostnames) {
         for (String hostname : hostnames) {
-            HostnameReach.Reach reach = HostnameReach.of(hostname);
-            switch (reach.verdict()) {
-                // Refused only where a public address is DECLARED, the basis this pre-check always had: a held one
-                // may sit behind a CDN or a floating address that still forwards the challenge (Reach#declared).
-                case POINTS_ELSEWHERE -> {
-                    if (reach.declared()) {
-                        throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("does_not_point_here")
-                            .withArg("hostname", hostname)
-                            .withArg("addresses", String.join(", ", reach.addresses())));
-                    }
-                }
-                case UNRESOLVED -> {
-                    if (reach.declared()) {
-                        throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("does_not_resolve")
-                            .withArg("hostname", hostname));
-                    }
-                }
-                // of() waits for the resolver, so CHECKING and NOT_CHECKED never come from it; nobody is refused on
-                // them either way.
-                case POINTS_HERE, UNKNOWN, CHECKING, NOT_CHECKED -> {
-                }
+            Microcopy unreachable = unreachable(hostname, HostnameReach.of(hostname));
+            if (unreachable != null) {
+                throw refused(unreachable);
             }
         }
+    }
+
+    /**
+     * THE rule of the HTTP-01 pre-check: why an order for the name is refused from where it points, null when it is
+     * not.
+     */
+    static @Nullable Microcopy unreachable(@NonNull String hostname, HostnameReach.@NonNull Reach reach) {
+        return switch (reach.verdict()) {
+            // Refused only where a public address is DECLARED, the basis this pre-check always had: a held one may
+            // sit behind a CDN or a floating address that still forwards the challenge (Reach#declared).
+            case POINTS_ELSEWHERE -> reach.declared() ? HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
+                .of("does_not_point_here").withArg("hostname", hostname)
+                .withArg("addresses", String.join(", ", reach.addresses())) : null;
+            case UNRESOLVED -> reach.declared() ? HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
+                .of("does_not_resolve").withArg("hostname", hostname) : null;
+            // of() waits for the resolver, so CHECKING and NOT_CHECKED never come from it; nobody is refused on
+            // them either way.
+            case POINTS_HERE, UNKNOWN, CHECKING, NOT_CHECKED -> null;
+        };
     }
 
     private static CertificateOperations.@NonNull Order require(CertificateOperations.@Nullable Order order) {

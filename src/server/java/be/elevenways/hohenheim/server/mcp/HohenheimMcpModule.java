@@ -104,6 +104,8 @@ public final class HohenheimMcpModule implements ZenitModule {
 
     @Override
     public void init() {
+        // The spam service's codes are read from it before the tools that name them are built.
+        SpamRecordCodes.declare();
         install();
         fillCodes();
     }

@@ -284,7 +284,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 String said = tool.description(reader);
                 assertThat(said).as("step 4: " + tool.name() + " in " + language).isNotBlank()
                     .isNotEqualTo(tool.name());
-                assertWorded(said, "step 4: " + tool.name() + " in " + language);
+                ToolTexts.assertWorded(said, "step 4: " + tool.name() + " in " + language);
                 if ("en".equals(language)) english.put(tool.name(), said);
                 else assertThat(said).as("step 4: " + tool.name() + " says it in Dutch")
                     .isNotEqualTo(english.get(tool.name()));
@@ -294,8 +294,8 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                     .asString().isNotBlank());
                 // Every text of the schema, a nested entry's and a flag's too: a key no catalog holds resolves to
                 // itself, which a blank check never sees (file_write's folder said "mcp_folder" on a real server).
-                for (String text : descriptions(tool.inputSchema(reader))) {
-                    assertWorded(text, "step 4: an argument of " + tool.name() + " in " + language);
+                for (String text : ToolTexts.descriptions(tool.inputSchema(reader))) {
+                    ToolTexts.assertWorded(text, "step 4: an argument of " + tool.name() + " in " + language);
                 }
                 if (!"en".equals(language)) continue;
                 // The owner's words: an app is never an instance or a workload, an address never a domain.
@@ -1560,10 +1560,16 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(admin.call("dns_zone_set", Map.of("origin", origin)).text())
                 .as("step 2: one zone per origin").contains("origin");
             String hostname = "shop." + origin;
+            // https later: step 3 orders this address's certificate itself, by a manual DNS challenge.
             McpHttpSession.Answer address = admin.call("address_set", Map.of("site", siteCode, "hostname",
-                hostname, "response_headers", List.of(Map.of("name", "X-Frame-Options", "value", "DENY"))));
+                hostname, "https", "later", "response_headers", List.of(Map.of("name", "X-Frame-Options", "value",
+                "DENY"))));
             assertThat(address.error()).as("step 2: " + address.text()).isFalse();
             String addressCode = found(Pattern.compile("D\\d+"), address.text(), "step 2: the address's code");
+            assertThat(address.text()).as("step 2: no certificate was ordered, and the call that orders one")
+                .contains("no certificate yet").contains("certificate_order address=" + addressCode);
+            assertThat(admin.call("address_set", Map.of("code", addressCode, "https", "automatic")).text())
+                .as("step 2: the certificate choice is a create's alone").contains("https");
             assertThat(admin.call("address_set", Map.of("code", addressCode, "site", siteCode)).text())
                 .as("step 2: the site is given only when creating").contains("site").contains("creating");
             McpHttpSession.Answer secured = admin.call("address_set", Map.of("code", addressCode, "hsts", true,
@@ -1597,7 +1603,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             // An address is deleted by the panel's own delete, offered by describe, answered by what was deleted.
             String spareHost = "spare." + origin;
             String spare = found(Pattern.compile("D\\d+"), admin.call("address_set", Map.of("site", siteCode,
-                "hostname", spareHost)).text(), "step 2: the spare address's code");
+                "hostname", spareHost, "https", "later")).text(), "step 2: the spare address's code");
             assertThat(admin.call("describe", Map.of("code", spare)).text()).as("step 2: describe offers its delete")
                 .contains("delete code=" + spare);
             McpHttpSession.Answer removed = admin.call("delete", Map.of("code", spare));
@@ -2279,24 +2285,5 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         row.set(SiteModel.SETTINGS, new LinkedHashMap<>(Map.of("root_path", "/tmp/" + name)));
         Models.get(SiteModel.class).save(row);
         return row.get(SiteModel.ID);
-    }
-
-    /** A text an assistant reads is words, never a bare microcopy key, which is what a key no catalog holds says. */
-    static void assertWorded(String text, String where) {
-        assertThat(text).as(where + " says words, not a key: " + text).doesNotMatch("[a-z][a-z0-9_.:-]*");
-    }
-
-    /** @return every description in an input schema, nested entries' and enum members' too */
-    static List<String> descriptions(Object schema) {
-        List<String> found = new ArrayList<>();
-        if (schema instanceof Map<?, ?> map) {
-            map.forEach((key, value) -> {
-                if ("description".equals(key) && value instanceof String text) found.add(text);
-                else found.addAll(descriptions(value));
-            });
-        } else if (schema instanceof List<?> list) {
-            for (Object item : list) found.addAll(descriptions(item));
-        }
-        return found;
     }
 }

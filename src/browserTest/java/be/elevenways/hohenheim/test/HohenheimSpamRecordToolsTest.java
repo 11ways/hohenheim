@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -169,6 +170,22 @@ class HohenheimSpamRecordToolsTest extends HohenheimHttpTestBase {
             McpHttpSession.Answer unknown = admin.call("spam_sample_set", Map.of("code", "SPS999", "verdict", "ham"));
             assertThat(unknown.text()).as("step 7: the usual not-found").contains("Nothing here is named SPS999");
 
+            // 7a. Read names each by its code, asking the service; the key's and the sample's client by its code; a
+            //     code the service does not hold is the usual not-found, and a person who is no administrator reads
+            //     none of them.
+            McpHttpSession.Answer read = admin.call("read", Map.of("codes", List.of(client, keyCode, first)));
+            assertThat(read.error()).as("step 7a: " + read.text()).isFalse();
+            assertThat(read.text()).as("step 7a: each under its kind").contains(client + " (spam_client)")
+                .contains("mail " + tag).contains(keyCode + " (spam_key)").contains("renamed")
+                .contains(first + " (spam_sample)").contains("203.0.113.7").contains("spam_client: " + client)
+                .doesNotContain(raw).doesNotContain("client_id");
+            assertThat(admin.call("read", Map.of("codes", List.of("SPC999"))).text()).as("step 7a: held nowhere")
+                .contains("Nothing here is named SPC999");
+            McpHttpSession outsider = HohenheimMcpTest.presetSession(server, endpoint,
+                user("mcp-spam-reader-" + tag + "@surface.test", "Mcp Spam Reader"), "Mcp Spam Reader");
+            assertThat(outsider.call("read", Map.of("codes", List.of(client))).error())
+                .as("step 7a: no administrator, nothing read").isTrue();
+
             // 8. A person who is no administrator changes none of them.
             McpHttpSession person = HohenheimMcpTest.presetSession(server, endpoint,
                 user("mcp-spam-records-" + tag + "@surface.test", "Mcp Spam Records"), "Mcp Spam Records");
@@ -186,6 +203,10 @@ class HohenheimSpamRecordToolsTest extends HohenheimHttpTestBase {
         assertThat(away.text()).as("step 9: not a missing record").doesNotContain("Nothing here is named");
         assertThat(admin.call("spam_client_set", Map.of("name", "late " + tag)).error()).as("step 9: no create")
             .isTrue();
+        McpHttpSession.Answer unread = admin.call("read", Map.of("codes", List.of("SPC1")));
+        assertThat(unread.error()).as("step 9: " + unread.text()).isTrue();
+        assertThat(unread.text()).as("step 9: the read too, never as a record naming nothing")
+            .doesNotContain("Nothing here is named");
     }
 
     /** @return the record the fake service holds under this code */
