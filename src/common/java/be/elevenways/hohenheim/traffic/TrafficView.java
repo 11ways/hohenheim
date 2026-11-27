@@ -26,6 +26,7 @@ import java.util.List;
  * @param figures     the headline figures
  * @param charts      the charts each across the screen
  * @param paired      the charts under them, two across
+ * @param wide        the top tables each across the screen, under the charts (the files fetched)
  * @param tables      the top tables, two across
  * @param empty       what the screen says while the span counted nothing, null while it counted something
  * @param note        the line under everything, null for none
@@ -35,7 +36,8 @@ import java.util.List;
 @HawkeyeClass
 public record TrafficView(@NonNull List<NavTab> periods, @NonNull Microcopy span, @NonNull String previousUrl,
                           @Nullable String nextUrl, @NonNull List<Figure> figures, @NonNull List<Chart> charts,
-                          @NonNull List<Chart> paired, @NonNull List<Table> tables, @Nullable Microcopy empty,
+                          @NonNull List<Chart> paired, @NonNull List<Table> wide, @NonNull List<Table> tables,
+                          @Nullable Microcopy empty,
                           @Nullable Microcopy note) {
 
     /**

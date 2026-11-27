@@ -158,6 +158,20 @@ public final class ProxyTestSupport {
         }
     }
 
+    /** @return the first value of a raw response's header, its name in any case, null when the answer has none */
+    public static String headerValue(String response, String name) {
+        for (String line : response.split("\r?\n")) {
+            if (line.isEmpty()) {
+                break;
+            }
+            int colon = line.indexOf(':');
+            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase(name)) {
+                return line.substring(colon + 1).trim();
+            }
+        }
+        return null;
+    }
+
     /** A response's status line and header lines, and how many body bytes followed them. */
     public record Counted(String head, long bodyBytes) {}
 

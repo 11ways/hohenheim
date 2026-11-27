@@ -464,6 +464,12 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
+        // --- A browser's advance question for a read another website makes: answered here, before any gate, since a
+        //     browser asks it without credentials; a site sharing nothing leaves it to the site (SharingAnswers). ---
+        if (entry.sharing.answerPreflight(exchange)) {
+            return;
+        }
+
         // --- Per-site auth provider gate (identity-level; coexists with the IP/basic access list,
         //     which still runs afterwards). The gate may block (Argon2 verify, Proteus HTTP), so
         //     run it -- and the rest of the forwarding pipeline -- on a worker thread, off the I/O
@@ -568,7 +574,7 @@ public class SiteDispatcher implements HttpHandler {
             exchange.getResponseHeaders().put(STRICT_TRANSPORT_SECURITY, hstsValue);
         }
 
-        dispatchToRoute(entry, exchange);
+        dispatchToRoute(entry, exchange, canonicalPath);
     }
 
     /**
@@ -631,8 +637,9 @@ public class SiteDispatcher implements HttpHandler {
         return RouteResolver.isSuspiciousRegexHostname(hostname);
     }
 
-    private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
-        exchange.addResponseCommitListener(ex -> ResponseMutations.apply(entry, ex));
+    /** @param publicPath the path the visitor asked, before strip_path, that the site's sharing is declared against */
+    private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange, String publicPath) {
+        exchange.addResponseCommitListener(ex -> ResponseMutations.apply(entry, ex, publicPath));
 
         ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
         int siteId = entry.siteId;

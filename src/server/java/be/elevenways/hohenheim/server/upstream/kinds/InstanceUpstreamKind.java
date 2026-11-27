@@ -73,6 +73,10 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
     public static final IntegerField IDLE_TIMEOUT = SETTINGS_SCHEMA.addField(UpstreamSettings.idleTimeout());
 
+    static {
+        SiteSharing.addTo(SETTINGS_SCHEMA);
+    }
+
     @Override public Identifier typeId() { return ID; }
 
     @Override public String getDisplayName() { return "Instance"; }

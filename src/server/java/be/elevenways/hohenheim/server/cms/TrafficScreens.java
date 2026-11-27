@@ -83,9 +83,9 @@ final class TrafficScreens {
     static final List<ParameterDefinition<?>> PARAMETERS = List.of(PERIOD, UNTIL);
 
     /** The tables a site's Traffic tab lists. */
-    static final Set<TrafficReads.Top> SITE_TABLES = Set.of(TrafficReads.Top.PAGES, TrafficReads.Top.REFERRERS,
-        TrafficReads.Top.REFUSED_PAGES, TrafficReads.Top.BROWSERS, TrafficReads.Top.STATUSES,
-        TrafficReads.Top.VISITORS);
+    static final Set<TrafficReads.Top> SITE_TABLES = Set.of(TrafficReads.Top.FILES, TrafficReads.Top.PAGES,
+        TrafficReads.Top.REFERRERS, TrafficReads.Top.REFUSED_PAGES, TrafficReads.Top.BROWSERS,
+        TrafficReads.Top.STATUSES, TrafficReads.Top.VISITORS);
 
     /** The tables the server's Traffic report lists. */
     static final Set<TrafficReads.Top> SERVER_TABLES = Set.of(TrafficReads.Top.SITES, TrafficReads.Top.PAGES,
@@ -210,6 +210,7 @@ final class TrafficScreens {
         List<TrafficView.Chart> charts = new ArrayList<>();
         List<TrafficView.Chart> paired = new ArrayList<>();
         List<TrafficView.Table> tables = new ArrayList<>();
+        List<TrafficView.Table> wide = new ArrayList<>();
         Microcopy empty = null;
         String step = query.granularity().storageKey();
         if (read.totals().requests() == 0) {
@@ -240,14 +241,20 @@ final class TrafficScreens {
             }
             for (Map.Entry<TrafficReads.Top, DataTable> listed : read.tables().entrySet()) {
                 if (listed.getKey() != TrafficReads.Top.OUTCOMES) {
-                    tables.add(table(listed.getKey(), reach, listed.getValue(), read.totals().requests(), links,
-                        reader, viewer.messageResolver()));
+                    TrafficView.Table drawn = table(listed.getKey(), reach, listed.getValue(),
+                        read.totals().requests(), links, reader, viewer.messageResolver());
+                    (wide(listed.getKey()) ? wide : tables).add(drawn);
                 }
             }
         }
         return new TrafficView(periods, HohenheimMicrocopy.TRAFFIC_SCREEN.of("span").withArg("from", query.from())
             .withArg("to", query.to()), at(base, asked.window(), query.from()), next,
-            zone ? zoneFigures(read) : figures(read, reach), charts, paired, tables, empty, note);
+            zone ? zoneFigures(read) : figures(read, reach), charts, paired, wide, tables, empty, note);
+    }
+
+    /** @return whether a table is drawn across the screen above the paired ones, as the board draws Files fetched */
+    private static boolean wide(TrafficReads.@NonNull Top top) {
+        return top == TrafficReads.Top.FILES;
     }
 
     /** @return the screen for a span of the window ending at a moment, null for now */
@@ -552,6 +559,8 @@ final class TrafficScreens {
                 : List.of(Shown.NAME, Shown.REQUESTS, Shown.MEDIAN, Shown.SLOWEST);
             case REFUSED_PAGES -> perSite ? List.of(Shown.SITE, Shown.NAME, Shown.REQUESTS)
                 : List.of(Shown.NAME, Shown.REQUESTS, Shown.SHARE, Shown.SENT);
+            case FILES -> perSite ? List.of(Shown.SITE, Shown.NAME, Shown.REQUESTS, Shown.SENT, Shown.LAST)
+                : List.of(Shown.NAME, Shown.REQUESTS, Shown.SENT, Shown.LAST);
             case REFERRERS, BROWSERS, STATUSES, RESOLVERS -> List.of(Shown.NAME, Shown.REQUESTS, Shown.SHARE);
             case VISITORS -> List.of(Shown.NAME, Shown.REQUESTS, Shown.SENT);
             case UNSERVED_NAMES -> List.of(Shown.NAME, Shown.REQUESTS, Shown.LAST);
@@ -566,7 +575,7 @@ final class TrafficScreens {
     private static @NonNull Microcopy head(@NonNull Shown shown, TrafficReads.@NonNull Top top) {
         return switch (shown) {
             case NAME -> switch (top) {
-                case PAGES, SLOWEST_PAGES, REFUSED_PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_path");
+                case PAGES, SLOWEST_PAGES, REFUSED_PAGES, FILES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_path");
                 case REFERRERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_referrer");
                 case BROWSERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_browser");
                 case STATUSES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_status");
@@ -579,13 +588,15 @@ final class TrafficScreens {
             };
             case SITE -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_site");
             case TYPE -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_type");
-            case REQUESTS -> top.listedOn(TrafficReads.Reach.ZONE) ? HohenheimMicrocopy.TRAFFIC_SCREEN.of(
-                "column_questions") : HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_requests");
+            case REQUESTS -> top == TrafficReads.Top.FILES ? HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_fetched")
+                : top.listedOn(TrafficReads.Reach.ZONE) ? HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_questions")
+                : HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_requests");
             case SHARE -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_share");
             case SENT -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_sent");
             case MEDIAN -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_median");
             case SLOWEST -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_slowest");
-            case LAST -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_last");
+            case LAST -> top == TrafficReads.Top.FILES ? HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_last_fetched")
+                : HohenheimMicrocopy.TRAFFIC_SCREEN.of("column_last");
         };
     }
 
@@ -604,7 +615,8 @@ final class TrafficScreens {
         DataTable.Group key = line.groups().getLast();
         boolean other = RecordFacet.MORE_SLUG.equals(key.key());
         String source = line.groups().size() > 1 ? line.groups().getFirst().key() : "";
-        boolean asked = top.table() == TrafficTable.PATHS || top.table() == TrafficTable.REFUSED_PATHS;
+        boolean asked = top.table() == TrafficTable.PATHS || top.table() == TrafficTable.REFUSED_PATHS
+            || top.table() == TrafficTable.FILES;
         boolean dns = top.listedOn(TrafficReads.Reach.ZONE);
         return switch (shown) {
             case NAME -> {
@@ -667,6 +679,7 @@ final class TrafficScreens {
     private static @Nullable Microcopy lead(TrafficReads.@NonNull Top top) {
         return switch (top) {
             case PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_pages_lead");
+            case FILES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_files_lead");
             case SLOWEST_PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_slowest_pages_lead")
                 .withArg("least", TrafficReads.SLOWEST_LEAST_REQUESTS);
             case REFERRERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_referrers_lead");

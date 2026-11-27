@@ -4,7 +4,8 @@
        says what the screen shows; then the headline figures against the span before, the charts (the first across
        the screen, the others two across), and the top tables two across, each row a name a person reads with its
        counts and, where the board draws one, its share of the span's requests as a bar; a group row (the bots among
-       the browsers) opens to its rows. A span that counted nothing says so in one line and draws no chart or table. */
+       the browsers) opens to its rows. A wide table (the files fetched) runs across the screen above the pairs. A span
+       that counted nothing says so in one line and draws no chart or table. */
     public required view: TrafficView
 
     style {
@@ -73,6 +74,51 @@
         {% /if %}
     }
 
+    /* One top table in its card. */
+    snippet tableCard(table: TrafficView.Table) {
+        <pl-card attr:data-hh-traffic-table={% table.key %}>
+            <pl-card-header>
+                <pl-card-title>{{ table.title }}</pl-card-title>
+                {% if table.lead != null %}<pl-card-description>{{ table.lead }}</pl-card-description>{% /if %}
+            </pl-card-header>
+            <pl-card-content>
+                {% if table.rows %}
+                <pl-table textSize="small" density="snug">
+                    <pl-table-header><pl-table-row>
+                        {% each table.columns as column %}
+                        {% if column.figure %}
+                        <pl-table-head columnWidth="fit" data-alignment="right">{{ column.label }}</pl-table-head>
+                        {% elseif column.share %}
+                        <pl-table-head columnWidth="xs">{{ column.label }}</pl-table-head>
+                        {% else %}
+                        <pl-table-head>{{ column.label }}</pl-table-head>
+                        {% /if %}
+                        {% /each %}
+                    </pl-table-row></pl-table-header>
+                    {% each table.rows as row key row.key %}
+                    <pl-table-body fold={% row.folded |> Array.length > 0 %}>
+                        <pl-table-row attr:data-hh-traffic-row={% row.key %}>
+                            {% each row.cells as cell %}
+                            {% render tableCell(cell, row.folded |> Array.length > 0) %}
+                            {% /each %}
+                        </pl-table-row>
+                        {% each row.folded as part key part.key %}
+                        <pl-table-row attr:data-hh-traffic-row={% part.key %}>
+                            {% each part.cells as cell %}
+                            {% render tableCell(cell, false) %}
+                            {% /each %}
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                    {% /each %}
+                </pl-table>
+                {% else %}
+                <p class="hh-traffic-span">{{ table.empty }}</p>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+    }
+
     template {
         <div class="hh-traffic-stack">
             <div class="hh-traffic-bar">
@@ -125,50 +171,14 @@
             </pl-grid>
             {% /if %}
 
+            {% each view.wide as table key table.key %}
+            {% render tableCard(table) %}
+            {% /each %}
+
             {% if view.tables %}
             <pl-grid size="xl">
                 {% each view.tables as table key table.key %}
-                <pl-card attr:data-hh-traffic-table={% table.key %}>
-                    <pl-card-header>
-                        <pl-card-title>{{ table.title }}</pl-card-title>
-                        {% if table.lead != null %}<pl-card-description>{{ table.lead }}</pl-card-description>{% /if %}
-                    </pl-card-header>
-                    <pl-card-content>
-                        {% if table.rows %}
-                        <pl-table textSize="small" density="snug">
-                            <pl-table-header><pl-table-row>
-                                {% each table.columns as column %}
-                                {% if column.figure %}
-                                <pl-table-head columnWidth="fit" data-alignment="right">{{ column.label }}</pl-table-head>
-                                {% elseif column.share %}
-                                <pl-table-head columnWidth="xs">{{ column.label }}</pl-table-head>
-                                {% else %}
-                                <pl-table-head>{{ column.label }}</pl-table-head>
-                                {% /if %}
-                                {% /each %}
-                            </pl-table-row></pl-table-header>
-                            {% each table.rows as row key row.key %}
-                            <pl-table-body fold={% row.folded |> Array.length > 0 %}>
-                                <pl-table-row attr:data-hh-traffic-row={% row.key %}>
-                                    {% each row.cells as cell %}
-                                    {% render tableCell(cell, row.folded |> Array.length > 0) %}
-                                    {% /each %}
-                                </pl-table-row>
-                                {% each row.folded as part key part.key %}
-                                <pl-table-row attr:data-hh-traffic-row={% part.key %}>
-                                    {% each part.cells as cell %}
-                                    {% render tableCell(cell, false) %}
-                                    {% /each %}
-                                </pl-table-row>
-                                {% /each %}
-                            </pl-table-body>
-                            {% /each %}
-                        </pl-table>
-                        {% else %}
-                        <p class="hh-traffic-span">{{ table.empty }}</p>
-                        {% /if %}
-                    </pl-card-content>
-                </pl-card>
+                {% render tableCard(table) %}
                 {% /each %}
             </pl-grid>
             {% /if %}

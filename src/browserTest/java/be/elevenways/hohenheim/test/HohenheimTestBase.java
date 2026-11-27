@@ -22,7 +22,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.http.SessionCookies;
+import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.Cookie;
+import com.microsoft.playwright.options.WaitForSelectorState;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -513,6 +515,27 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
                 .setPath("/")
         ));
         super.navigateToApp(path);
+    }
+
+    /** Picks one option of the pl-select named {@code name}, as {@link #chooseOptionOf} does. */
+    protected void chooseOption(String name, String value) {
+        this.chooseOptionOf("pl-select[name='" + name + "']", value);
+    }
+
+    /**
+     * Opens a pl-select and picks one option (the chevron is pointer-inert), then waits for the overlay to close: the
+     * popup is portalled and a click that lands while it is still open never reaches the button underneath.
+     *
+     * @param select the pl-select's selector, the first one it matches opened
+     */
+    protected void chooseOptionOf(String select, String value) {
+        page.locator(select + " .pl-select-field").first().click();
+        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
+        page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='" + value + "']");
+        page.waitForSelector("he-bottom .pl-select-popup[data-open]",
+            new Page.WaitForSelectorOptions().setState(WaitForSelectorState.DETACHED));
+        assertThat(page.locator(select + " .pl-select-value").first().textContent())
+            .as("the select shows the chosen option").isNotBlank();
     }
 
     /**

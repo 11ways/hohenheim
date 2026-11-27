@@ -21272,7 +21272,7 @@
   "mcp_code_dns_zone_queries": {"text": "De zone (Z7, of haar origin zoals example.com) waarvan de vragen gelezen worden.", "scope": "hohenheim"},
   "traffic_period": {"text": "De periode terug vanaf until: een uur per minuut, een dag per uur, een week of een maand per dag.", "scope": "help"},
   "traffic_until": {"text": "Wanneer de periode eindigt, in kantoortijd; weggelaten nu.", "scope": "help"},
-  "traffic_top_site": {"text": "Een tabel naast de totalen: pages (id's samengenomen als :id), refused_pages (beantwoord met 4xx), slowest_pages (minstens 50 verzoeken), referrers, browsers, statuses of visitors (adressen volledig); zonder site ook sites (gerangschikt op verzoeken en op verzonden bytes) of unserved_names.", "scope": "help"},
+  "traffic_top_site": {"text": "Een tabel naast de totalen: pages (id's samengenomen als :id), files (de bestanden beantwoord met hun bytes, elk met de keren opgehaald, verzonden bytes en laatste ophaling), refused_pages (beantwoord met 4xx), slowest_pages (minstens 50 verzoeken), referrers, browsers, statuses of visitors (adressen volledig); zonder site ook sites (gerangschikt op verzoeken en op verzonden bytes) of unserved_names.", "scope": "help"},
   "traffic_top_zone": {"text": "Een tabel naast de totalen: names (gevraagde namen met hun type), missing_names (naam bestaat niet of geweigerd), resolvers of outcomes.", "scope": "help"},
   "outside_log_rotation": [
     {"text": "Een ander programma roteert {$file} ook", "scope": "attention_title"},
@@ -21539,6 +21539,41 @@
   "site_files_full": {"text": "Deze upload zou de bestanden van de site over hun limiet van {$bytes :bytes} brengen; verwijder eerst bestanden", "scope": "violations"},
   "site_files_off": {"text": "Deze site serveert geen eigen bestanden; zet eerst Eigen bestanden serveren aan", "scope": "violations"},
   "site_files_storage_missing": {"text": "De opslag {$storage} waarin deze site haar bestanden bewaart is niet beschikbaar op deze server", "scope": "violations"},
+  "sharing": {"text": "Delen en downloads", "scope": "form_section"},
+  "sharing_description": {"text": "Hohenheim vertelt het de browsers zelf, en alleen bij antwoorden die gelukt zijn.", "scope": "form_section"},
+  "readable_by_websites": [
+    {"text": "Andere websites die dit mogen lezen", "scope": "hohenheim_field"},
+    {"text": "Welke andere websites de browser van een bezoeker de antwoorden van deze site laat lezen, zoals een pagina die hier een bestand ophaalt; standaard niemand.", "scope": "help"}
+  ],
+  "readable_by_nobody": {"text": "Niemand", "scope": "hohenheim_field"},
+  "readable_by_listed": {"text": "Deze websites", "scope": "hohenheim_field"},
+  "readable_by_any": {"text": "Elke website", "scope": "hohenheim_field"},
+  "reading_websites": [
+    {"text": "Websites", "scope": "hohenheim_field"},
+    {"text": "Volledige adressen zoals https://account.example.com, gebruikt zolang Deze websites gekozen is; een pad wordt geweigerd.", "scope": "help"}
+  ],
+  "browser_keep": [
+    {"text": "Hoe lang browsers bestanden mogen bewaren", "scope": "hohenheim_field"},
+    {"text": "Per pad, waarbij het langste dat past wint; voor elk ander pad beslist de browser zelf.", "scope": "help"}
+  ],
+  "browser_keep_path": [
+    {"text": "Pad", "scope": "hohenheim_field"},
+    {"text": "Een pad van de site dat met / begint, een bestand of een map zoals /releases/.", "scope": "help"}
+  ],
+  "browser_keep_choice": [
+    {"text": "Hoe lang", "scope": "hohenheim_field"},
+    {"text": "decide voegt niets toe, ask_again laat de browser voor elk gebruik controleren, year laat hem het bestand een jaar bewaren.", "scope": "help"}
+  ],
+  "browser_keep_decide": {"text": "Zelf laten beslissen", "scope": "hohenheim_field"},
+  "browser_keep_ask_again": {"text": "Altijd opnieuw vragen", "scope": "hohenheim_field"},
+  "browser_keep_year": {"text": "Een jaar bewaren", "scope": "hohenheim_field"},
+  "sharing_website_unreadable": {"text": "{$address} is geen adres van een website: schrijf het volledige adres, zoals https://account.example.com, zonder pad", "scope": "violations"},
+  "sharing_path_unrooted": {"text": "{$path} is geen pad van de site: begin het met /", "scope": "violations"},
+  "sharing_keep_unknown": {"text": "Kies hoe lang browsers {$path} mogen bewaren", "scope": "violations"},
+  "table_files": {"text": "Opgehaalde bestanden", "scope": "traffic_screen"},
+  "table_files_lead": {"text": "Verzoeken die met het bestand beantwoord werden.", "scope": "traffic_screen"},
+  "column_fetched": {"text": "Opgehaald", "scope": "traffic_screen"},
+  "column_last_fetched": {"text": "Laatst opgehaald", "scope": "traffic_screen"},
   "settings.hohenheim.files.site_files_directory.label": "Map met sitebestanden",
   "settings.hohenheim.files.site_files_directory.help": "De map op deze host met de bestanden van elke site die eigen bestanden serveert en geen andere opslag noemt.",
   "settings.hohenheim.files.max_site_files_mb.label": "Max. bestanden per site",

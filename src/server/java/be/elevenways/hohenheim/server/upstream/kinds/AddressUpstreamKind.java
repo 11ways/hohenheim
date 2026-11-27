@@ -114,6 +114,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.FORWARDING,
             List.of(WEBSOCKET_UPGRADE.getName(), REWRITE_LOCATION.getName(), IGNORE_CERTIFICATES.getName(),
                 REQUEST_TIMEOUT.getName(), IDLE_TIMEOUT.getName(), DELAY.getName(), UPSTREAM_PROTOCOL.getName())));
+        SiteSharing.addTo(SETTINGS_SCHEMA);
     }
 
     @Override

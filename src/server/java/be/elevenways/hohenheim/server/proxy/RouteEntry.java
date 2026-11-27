@@ -66,6 +66,9 @@ final class RouteEntry {
     final boolean ownsAuthorizationHeader;
     final boolean ownsPersistentCookie;
 
+    /** What the route tells browsers: which websites may read its answers, how long its files may be kept. */
+    final SharingAnswers sharing;
+
     /** One guarded prefix and the tree it enforces. */
     record PathGuard(String path, AccessRuleTree tree) {
 
@@ -103,6 +106,7 @@ final class RouteEntry {
         this.responseHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.RESPONSE_HEADERS) : null);
         this.listenOnAddresses = ListenerAddressMatcher.parse(
             domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
+        this.sharing = SharingAnswers.of(siteSettings);
 
         // AIDEV-NOTE: a NULL/blank satisfy column must never disable the list.
         // hasAccessList() used to be "satisfy != null", so one nullable column

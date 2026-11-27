@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static be.elevenways.hohenheim.test.ProxyTestSupport.headerValue;
 
 /**
  * Integration test for the per-site Basic auth gate: challenge, reject, admit, the
@@ -274,18 +275,5 @@ class ProxyAuthGateTest {
     private static String statusLine(String response) {
         int eol = response.indexOf("\r\n");
         return eol < 0 ? response : response.substring(0, eol);
-    }
-
-    private static String headerValue(String response, String name) {
-        for (String line : response.split("\r\n")) {
-            if (line.isEmpty()) {
-                break;
-            }
-            int colon = line.indexOf(':');
-            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase(name)) {
-                return line.substring(colon + 1).trim();
-            }
-        }
-        return null;
     }
 }

@@ -109,6 +109,11 @@ public final class TrafficReads {
         PAGES("pages", TrafficTable.PATHS, Reach.SITE, TopRead.Order.REQUESTS),
         /** The pages answered 4xx: refused or not found. */
         REFUSED_PAGES("refused_pages", TrafficTable.REFUSED_PATHS, Reach.SITE, TopRead.Order.REQUESTS),
+        /**
+         * The files answered with their bytes (a GET answered 200 or 206), each its times fetched, bytes sent and when
+         * last fetched; a resumed download counts once per range asked.
+         */
+        FILES("files", TrafficTable.FILES, Reach.SITE, TopRead.Order.REQUESTS),
         /** The pages of at least {@link #SLOWEST_LEAST_REQUESTS} requests, the slowest 5 percent first. */
         SLOWEST_PAGES("slowest_pages", TrafficTable.PATHS, Reach.SITE, TopRead.Order.SLOWEST),
         REFERRERS("referrers", TrafficTable.REFERRERS, Reach.SITE, TopRead.Order.REQUESTS),
@@ -156,6 +161,7 @@ public final class TrafficReads {
             return switch (this) {
                 case PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_pages");
                 case REFUSED_PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_refused_pages");
+                case FILES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_files");
                 case SLOWEST_PAGES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_slowest_pages");
                 case REFERRERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_referrers");
                 case BROWSERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_browsers");
@@ -179,7 +185,8 @@ public final class TrafficReads {
         /** @return whether every site's read lists it one row per site and key, as "top pages across sites" */
         public boolean perSite(@NonNull Reach read) {
             return read == Reach.SERVER
-                && (this.table == TrafficTable.PATHS || this.table == TrafficTable.REFUSED_PATHS);
+                && (this.table == TrafficTable.PATHS || this.table == TrafficTable.REFUSED_PATHS
+                    || this.table == TrafficTable.FILES);
         }
 
         /**

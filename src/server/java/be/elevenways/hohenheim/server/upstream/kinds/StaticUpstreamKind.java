@@ -99,6 +99,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
             List.of(AUTOINDEX.getName(), INDEXES.getName(), SHOW_HIDDEN_FILES.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.FORWARDING,
             List.of(DELAY.getName())));
+        SiteSharing.addTo(SETTINGS_SCHEMA);
     }
 
     @Override

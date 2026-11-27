@@ -12,7 +12,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
- * Rewrites the response just before its headers commit: domain response-header rules,
+ * Rewrites the response just before its headers commit: what the site tells browsers, domain response-header rules,
  * backend-leaking Location redirects, then the handler's own mutator.
  */
 final class ResponseMutations {
@@ -20,11 +20,17 @@ final class ResponseMutations {
     private ResponseMutations() {}
 
     /**
-     * Applied just before response headers commit: domain response-header rules, upstream
-     * Location rewrite, then the handler's optional {@link ResponseMutator} seam.
+     * Applied just before response headers commit: the site's sharing (SharingAnswers), domain response-header rules,
+     * upstream Location rewrite, then the handler's optional {@link ResponseMutator} seam.
+     *
+     * AIDEV-NOTE: the sharing goes first so a hand-written response header on the address replaces or removes what
+     * it stamped: the address's own rule always wins.
+     *
+     * @param publicPath the path the visitor asked, before strip_path
      */
-    static void apply(RouteEntry entry, HttpServerExchange exchange) {
+    static void apply(RouteEntry entry, HttpServerExchange exchange, String publicPath) {
         HeaderMap headers = exchange.getResponseHeaders();
+        entry.sharing.stamp(exchange, publicPath);
 
         for (HeaderRule rule : entry.responseHeaders) {
             HttpString name = new HttpString(rule.name());

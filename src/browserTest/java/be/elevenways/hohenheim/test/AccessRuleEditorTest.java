@@ -454,23 +454,6 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         waitForHydration();
     }
 
-    /**
-     * Open a pl-select by its field and pick one option (the chevron is pointer-inert), then
-     * wait for the overlay to close: the popup is portalled and a click that lands while it
-     * is still open never reaches the button underneath.
-     */
-    private void chooseOption(String name, String value) {
-        page.click("pl-select[name='" + name + "'] .pl-select-field");
-        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
-        page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='"
-            + value + "']");
-        page.waitForSelector("he-bottom .pl-select-popup[data-open]",
-            new com.microsoft.playwright.Page.WaitForSelectorOptions()
-                .setState(com.microsoft.playwright.options.WaitForSelectorState.DETACHED));
-        assertThat(page.locator("pl-select[name='" + name + "'] .pl-select-value").textContent())
-            .as("the select shows the chosen option").isNotBlank();
-    }
-
     private static String field(String path) {
         return "pl-field[data-path='" + path + "']";
     }

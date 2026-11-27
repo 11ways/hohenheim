@@ -54,6 +54,9 @@ public final class HohenheimFormSections {
     /** What a static site does with folders: index files, listings, hidden files. */
     public static final String LISTING = "listing";
 
+    /** What a site shares with browsers: the websites that may read it and how long its files may be kept. */
+    public static final String SHARING = "sharing";
+
     /** The values a workload reads from its environment, per lane (running, building, previews). */
     public static final String VARIABLES = "variables";
 

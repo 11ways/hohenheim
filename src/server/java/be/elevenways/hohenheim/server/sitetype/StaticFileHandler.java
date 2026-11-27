@@ -7,6 +7,9 @@ import be.elevenways.protoblast.common.i18n.wording.Wording;
 import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.server.http.AssetVersions;
+import be.elevenways.zenit.server.http.ConditionalRequest;
+import be.elevenways.zenit.server.http.HttpDate;
 import be.elevenways.zenit.server.http.RangeHeader;
 import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
@@ -27,6 +30,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -41,7 +45,10 @@ import java.util.List;
  * {@link RangeHeader}: 206, or 416, or the whole file for a range it cannot honour) and is streamed, never held whole:
  * a whole host file goes out zero-copy ({@link Sender#transferFrom}), anything else is copied through one buffer on a
  * worker thread, so a 500 MB download costs a buffer, not 500 MB. Every file carries nosniff, so a browser never
- * treats an uploaded file as another type than it is served as.
+ * treats an uploaded file as another type than it is served as. A file answered 200 carries its validators (an ETag
+ * of its size and modification time, as zenit's own files do, and Last-Modified) and answers 304 to a browser holding
+ * it, so a site telling browsers to ask again before every use (SiteSharing) costs a header, not the file; a range
+ * whose If-Range no longer matches is answered whole.
  */
 public class StaticFileHandler implements SiteRequestHandler {
 
@@ -148,7 +155,23 @@ public class StaticFileHandler implements SiteRequestHandler {
     private void serveFile(@NonNull HttpServerExchange exchange, @NonNull String target, int status)
             throws IOException {
         long size = this.files.size(target);
-        String asked = status == 200 ? exchange.getRequestHeaders().getFirst(Headers.RANGE) : null;
+        // A file answered 200 carries validators and answers a range or a 304; the not-found page answers whole.
+        boolean ranged = false;
+        if (status == 200) {
+            long modified = this.files.modifiedMillis(target);
+            String etag = "\"" + AssetVersions.validatorOf(size, modified) + "\"";
+            exchange.getResponseHeaders().put(Headers.ETAG, etag);
+            exchange.getResponseHeaders().put(Headers.LAST_MODIFIED, HttpDate.format(Instant.ofEpochMilli(modified)));
+            if (ConditionalRequest.isNotModified(exchange.getRequestHeaders().getFirst(Headers.IF_NONE_MATCH),
+                    exchange.getRequestHeaders().getFirst(Headers.IF_MODIFIED_SINCE), etag, modified)) {
+                exchange.setStatusCode(304);
+                exchange.endExchange();
+                return;
+            }
+            ranged = ConditionalRequest.rangeStillApplies(exchange.getRequestHeaders().getFirst(Headers.IF_RANGE),
+                etag, modified);
+        }
+        String asked = ranged ? exchange.getRequestHeaders().getFirst(Headers.RANGE) : null;
         RangeHeader.ResponsePlan plan = RangeHeader.resolve(asked, size).plan(size);
         String contentType = this.files.contentType(target);
         exchange.setStatusCode(plan.status() == 200 ? status : plan.status());
@@ -266,6 +289,9 @@ public class StaticFileHandler implements SiteRequestHandler {
 
         long size(@NonNull String path) throws IOException;
 
+        /** @return when the file last changed, in epoch milliseconds */
+        long modifiedMillis(@NonNull String path) throws IOException;
+
         @Nullable String contentType(@NonNull String path) throws IOException;
 
         /** @return whether the path resolves inside the top, links followed */
@@ -295,6 +321,11 @@ public class StaticFileHandler implements SiteRequestHandler {
         @Override
         public long size(@NonNull String path) throws IOException {
             return Files.size(this.resolve(path));
+        }
+
+        @Override
+        public long modifiedMillis(@NonNull String path) throws IOException {
+            return Files.getLastModifiedTime(this.resolve(path)).toMillis();
         }
 
         @Override
@@ -386,6 +417,11 @@ public class StaticFileHandler implements SiteRequestHandler {
         @Override
         public long size(@NonNull String path) throws IOException {
             return this.tree.stat("", treePath(path)).size();
+        }
+
+        @Override
+        public long modifiedMillis(@NonNull String path) throws IOException {
+            return this.tree.stat("", treePath(path)).modified() * 1000;
         }
 
         @Override

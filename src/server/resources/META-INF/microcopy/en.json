@@ -21272,7 +21272,7 @@
   "mcp_code_dns_zone_queries": {"text": "The zone (Z7, or its origin such as example.com) whose questions to read.", "scope": "hohenheim"},
   "traffic_period": {"text": "The span to read back from until: an hour per minute, a day per hour, a week or a month per day.", "scope": "help"},
   "traffic_until": {"text": "When the span ends, in office time; left out, now.", "scope": "help"},
-  "traffic_top_site": {"text": "One table beside the totals: pages (ids grouped as :id), refused_pages (answered 4xx), slowest_pages (at least 50 requests), referrers, browsers, statuses or visitors (addresses in full); with no site also sites (ranked by requests and by bytes sent) or unserved_names.", "scope": "help"},
+  "traffic_top_site": {"text": "One table beside the totals: pages (ids grouped as :id), files (the files answered with their bytes, each its fetches, bytes sent and last fetch), refused_pages (answered 4xx), slowest_pages (at least 50 requests), referrers, browsers, statuses or visitors (addresses in full); with no site also sites (ranked by requests and by bytes sent) or unserved_names.", "scope": "help"},
   "traffic_top_zone": {"text": "One table beside the totals: names asked with their type, missing_names (no such name or refused), resolvers or outcomes.", "scope": "help"},
   "outside_log_rotation": [
     {"text": "Another program also rotates {$file}", "scope": "attention_title"},
@@ -21539,6 +21539,41 @@
   "site_files_full": {"text": "This upload would take the site's files past their limit of {$bytes :bytes}; delete files first", "scope": "violations"},
   "site_files_off": {"text": "This site does not serve files of its own; turn on Serve its own files first", "scope": "violations"},
   "site_files_storage_missing": {"text": "The storage {$storage} this site keeps its files in is not available on this server", "scope": "violations"},
+  "sharing": {"text": "Sharing and downloads", "scope": "form_section"},
+  "sharing_description": {"text": "Hohenheim tells browsers itself, and only on answers that succeeded.", "scope": "form_section"},
+  "readable_by_websites": [
+    {"text": "Other websites that may read this", "scope": "hohenheim_field"},
+    {"text": "Which other websites a visitor's browser lets read this site's answers, such as a page fetching a file from here; nobody by default.", "scope": "help"}
+  ],
+  "readable_by_nobody": {"text": "Nobody", "scope": "hohenheim_field"},
+  "readable_by_listed": {"text": "These websites", "scope": "hohenheim_field"},
+  "readable_by_any": {"text": "Any website", "scope": "hohenheim_field"},
+  "reading_websites": [
+    {"text": "Websites", "scope": "hohenheim_field"},
+    {"text": "Full addresses such as https://account.example.com, used while These websites is chosen; a path is refused.", "scope": "help"}
+  ],
+  "browser_keep": [
+    {"text": "How long browsers may keep files", "scope": "hohenheim_field"},
+    {"text": "Per path, the longest one that matches winning; every other path the browser decides by itself.", "scope": "help"}
+  ],
+  "browser_keep_path": [
+    {"text": "Path", "scope": "hohenheim_field"},
+    {"text": "A path of the site starting with /, a file or a folder such as /releases/.", "scope": "help"}
+  ],
+  "browser_keep_choice": [
+    {"text": "How long", "scope": "hohenheim_field"},
+    {"text": "decide adds nothing, ask_again makes the browser check before every use, year lets it keep the file a year.", "scope": "help"}
+  ],
+  "browser_keep_decide": {"text": "Decide by itself", "scope": "hohenheim_field"},
+  "browser_keep_ask_again": {"text": "Always ask again", "scope": "hohenheim_field"},
+  "browser_keep_year": {"text": "Keep for a year", "scope": "hohenheim_field"},
+  "sharing_website_unreadable": {"text": "{$address} is no website address: write its full address, such as https://account.example.com, without a path", "scope": "violations"},
+  "sharing_path_unrooted": {"text": "{$path} is no path of the site: start it with /", "scope": "violations"},
+  "sharing_keep_unknown": {"text": "Choose how long browsers may keep {$path}", "scope": "violations"},
+  "table_files": {"text": "Files fetched", "scope": "traffic_screen"},
+  "table_files_lead": {"text": "Requests answered with the file.", "scope": "traffic_screen"},
+  "column_fetched": {"text": "Fetched", "scope": "traffic_screen"},
+  "column_last_fetched": {"text": "Last fetched", "scope": "traffic_screen"},
   "settings.hohenheim.files.site_files_directory.label": "Folder of site files",
   "settings.hohenheim.files.site_files_directory.help": "The folder on this host keeping the files of every site that serves its own files and names no other storage.",
   "settings.hohenheim.files.max_site_files_mb.label": "Max files per site",
