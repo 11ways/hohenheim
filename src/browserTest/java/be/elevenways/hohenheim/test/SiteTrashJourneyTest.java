@@ -128,9 +128,9 @@ class SiteTrashJourneyTest extends HohenheimHttpTestBase {
             .contains(PATH_ADD).as("step 5: and a remove per path").contains(pathDelete);
 
         // 6. Trashed, everything under the site is read-only: both tabs still render from the Trash, offer no add and
-        //    no remove, and the writes those affordances led to are refused. The Domains tab is the domain entry's
-        //    own child list, whose scope hides the hostnames of a trashed site as it does everywhere (DomainParts.ROWS:
-        //    a restore brings them back); the Protected paths tab still lists its row.
+        //    no remove, and the writes those affordances led to are refused. Each tab is its entry's own child list,
+        //    whose scope hides the children of a trashed site as it does everywhere (DomainParts.ROWS,
+        //    ProtectedPathParts.ROWS: a restore brings them back), so a hidden path's own writes find no record.
         delete(cedar);
         HttpResponse<String> trashedDomains = adminGet(domainsTab(cedar));
         assertThat(trashedDomains.statusCode()).as("step 6: the Domains tab of a trashed site renders").isEqualTo(200);
@@ -140,14 +140,13 @@ class SiteTrashJourneyTest extends HohenheimHttpTestBase {
             .as("step 6: and no remove").doesNotContain(domainDelete);
         HttpResponse<String> trashedPaths = adminGet(pathsTab(cedar));
         assertThat(trashedPaths.statusCode()).as("step 6: the Protected paths tab renders").isEqualTo(200);
-        assertThat(trashedPaths.body()).as("step 6: with its path").contains("/private")
+        assertThat(trashedPaths.body()).as("step 6: without its hidden path").doesNotContain("/private")
             .as("step 6: and no add").doesNotContain(PATH_ADD)
             .as("step 6: and no remove").doesNotContain(pathDelete);
-        // A write under a trashed record is core's ARCHIVED (422), never the plain 403.
         assertThat(adminPostForm("/admin/protected-paths/" + guard, "path=%2Felsewhere").statusCode())
-            .as("step 6: a path's update is refused").isEqualTo(422);
+            .as("step 6: a hidden path's update finds no record").isEqualTo(404);
         assertThat(adminPostForm(pathDelete, confirmed("")).statusCode())
-            .as("step 6: a path's delete is refused").isEqualTo(422);
+            .as("step 6: nor does its delete").isEqualTo(404);
         HttpResponse<String> newPath = adminPostForm("/admin/protected-paths/new",
             "site_id=" + cedar + "&access_list_id=" + list + "&path=%2Fnew");
         assertThat(newPath.statusCode())
