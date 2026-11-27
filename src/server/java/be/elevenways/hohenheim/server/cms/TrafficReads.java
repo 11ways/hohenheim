@@ -132,7 +132,9 @@ public final class TrafficReads {
         /** The questions per outcome: answered, no such name, refused. */
         OUTCOMES("outcomes", TrafficTable.STATUSES, Reach.ZONE, TopRead.Order.REQUESTS),
         /** Where an app's outgoing connections went, the most sent first. */
-        DESTINATIONS("destinations", TrafficTable.DESTINATIONS, Reach.APP, TopRead.Order.BYTES_SENT);
+        DESTINATIONS("destinations", TrafficTable.DESTINATIONS, Reach.APP, TopRead.Order.BYTES_SENT),
+        /** Where every app's outgoing connections went, one line per app and destination, the most sent first. */
+        APPS_SENDING("apps_sending", TrafficTable.DESTINATIONS, Reach.SERVER, TopRead.Order.BYTES_SENT);
 
         private final @NonNull String token;
         private final @Nullable TrafficTable table;
@@ -174,6 +176,7 @@ public final class TrafficReads {
                 case RESOLVERS -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_resolvers");
                 case OUTCOMES -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("table_outcomes");
                 case DESTINATIONS -> HohenheimMicrocopy.APP_NETWORK.of("app_network_destinations_title");
+                case APPS_SENDING -> HohenheimMicrocopy.TRAFFIC_SCREEN.of("apps_sending_title");
             };
         }
 
@@ -379,6 +382,11 @@ public final class TrafficReads {
         }
         Map<Top, DataTable> tables = new EnumMap<>(Top.class);
         for (Top each : asked) {
+            if (each == Top.APPS_SENDING) {
+                // An app's connections are the apps store's: its own read, its destinations named for the caller.
+                tables.put(each, AppsSendingReads.table(query, caller, chain, resolver));
+                continue;
+            }
             TrafficTable table = each.table;
             if (table == null) continue;
             // A screen groups the bots among the browsers, so it lists as many clients as one read may and cuts what

@@ -155,9 +155,13 @@ final class HohenheimTrafficTools {
             TrafficTable counted = Objects.requireNonNull(top.table(), "a listed table names its engine table");
             boolean timed = counted.timed();
             boolean last = counted == TrafficTable.HOSTS;
-            response.line("top " + top.token() + ", each its requests, bytes sent" + (timed ? ", median and slowest 5"
-                + " percent in ms" : "") + (last ? ", when last asked" : "") + ", then its site where it names one"
-                + " and its key; the last line holds every one not listed:");
+            response.line(top == TrafficReads.Top.APPS_SENDING
+                ? "top apps_sending, each its connections and bytes sent, then its app and where to: a record's name"
+                    + " where Hohenheim knows one you may view, else what it is, then address:port/protocol; the last"
+                    + " line holds every one not listed:"
+                : "top " + top.token() + ", each its requests, bytes sent" + (timed ? ", median and slowest 5"
+                    + " percent in ms" : "") + (last ? ", when last asked" : "") + ", then its site where it names"
+                    + " one and its key; the last line holds every one not listed:");
             List<String> rows = new ArrayList<>();
             for (DataTable.Line line : table.lines()) {
                 boolean other = RecordFacet.MORE_SLUG.equals(line.groups().getLast().key());

@@ -110,8 +110,10 @@ class AppDestinationsJourneyTest extends HohenheimHttpTestBase {
     /**
      * Counts the app's destinations through the real reader into the store: a fake kernel, a plan the sweep would
      * publish, one baseline reading and one that grew.
+     *
+     * @return the fake kernel, whose counters a caller may grow for a next reading
      */
-    static void counted(Deque<Runnable> cleanUp, int app, int neighbour) {
+    static DestinationKernel counted(Deque<Runnable> cleanUp, int app, int neighbour) {
         WorkloadNetwork own = new WorkloadNetwork("hohenheim-journey-" + app + "-net", "172.31.1.0/24", "172.31.1.1",
             "fd00:31:1::/64");
         WorkloadNetwork link = new WorkloadNetwork("hohenheim-journey-" + app + "-link-net", "172.31.9.0/24",
@@ -144,5 +146,6 @@ class AppDestinationsJourneyTest extends HohenheimHttpTestBase {
             .element(THROUGH, RECEIVED, linkKey, "172.31.9.2", "172.31.9.3", "tcp", 5432, 4, 800);
         assertThat(AppDestinations.readAll()).as("the reading that grew counts four destinations").isEqualTo(4);
         assertThat(FlowAccounting.parse(kernel.render()).counted()).hasSize(7);
+        return kernel;
     }
 }

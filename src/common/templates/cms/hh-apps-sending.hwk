@@ -1,0 +1,82 @@
+{% tag HhAppsSending {
+    /* The live "Apps sending" picture (AppsSending.watch over AppsSendingDriver): the viewer's apps on the left,
+       where they sent data on the right, each flow a band as wide as what the app sent a second to that place over
+       the last reading of the hosts' counters, with a mark travelling it paced by that rate. The reading is the live
+       part (AppsSendingReads), re-read whenever the hosts are read again, once a minute; the line under the title
+       says when it was read and over how long, and a screen reader is told one line per reading. Reduced motion: the
+       bands stand still over a bar per reading heard. */
+    public required part: Live<AppsSendingView>
+
+    private computed view: AppsSendingView = part{:}.value
+    private told: AppsSendingTold = null
+    private surfaceEl: DominoElement
+    private regionEl: DominoElement
+
+    style {
+        @use 'plumage/color-sets' as sets;
+
+        display: block;
+
+        /* Each categorical hue's series colour, the one a band of an app of that hue is drawn in. */
+        @each $i, $hue in sets.$color-sets {
+            --hh-apps-sending-#{$hue}: #{sets.series($hue)};
+        }
+
+        .hh-apps-sending-line {
+            margin: 0 0 var(--pl-space-sm);
+            color: var(--pl-color-text-muted);
+            font-size: var(--pl-font-size-sm);
+        }
+
+        /* The picture's box: in its place as tall as its rows fit (the driver's --hh-apps-sending-fit). */
+        .hh-apps-sending-surface {
+            display: block;
+            block-size: max(14rem, var(--hh-apps-sending-fit, 20rem));
+            font-size: var(--pl-font-size-sm);
+            font-family: var(--pl-font-family);
+        }
+    }
+
+    @mount
+    function start() {
+        Live.follow(this, &part)
+        if surfaceEl != null {
+            AppsSending.watch(this, surfaceEl, view, (heard: AppsSendingTold) => listen(heard))
+        }
+    }
+
+    /* A reading the part re-read: the bands swell to it. */
+    @watch(view, skipInitial: true)
+    function viewChanged() {
+        AppsSending.offer(this, view)
+    }
+
+    function listen(heard: AppsSendingTold) {
+        told = heard
+        LiveRegion.announce(regionEl, heard.spoken)
+    }
+
+    template {
+        <pl-card data-hh-apps-sending>
+            <pl-card-header>
+                <pl-card-title>{{ t("apps_sending_title", scope: "traffic_screen") }}</pl-card-title>
+                <pl-card-description>{{ t("apps_sending_lead", scope: "traffic_screen") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                {% if view{:}.recording %}
+                <p class="hh-apps-sending-line" data-hh-apps-sending-line>{{ view{:}.at == null ? t("apps_sending_waiting", scope: "traffic_screen")
+                    : t("apps_sending_line", scope: "traffic_screen", at: view{:}.at, seconds: view{:}.seconds) }}</p>
+                <z3d-surface class="hh-apps-sending-surface" :ref={% surfaceEl %} role="img"
+                             aria-label={% told{:} != null ? told{:}.picture : t("apps_sending_lead", scope: "traffic_screen") %}
+                             data-hh-apps-sending-surface></z3d-surface>
+                {% else %}
+                <pl-empty-state icon="route" plain data-hh-apps-sending-off>
+                    <pl-empty-state-title>{{ t("app_network_destinations_off", scope: "app_network") }}</pl-empty-state-title>
+                    <pl-empty-state-description>{{ t("app_network_destinations_off_hint", scope: "app_network") }}</pl-empty-state-description>
+                </pl-empty-state>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+        <pl-live-region :ref={% regionEl %} data-hh-apps-sending-spoken></pl-live-region>
+    }
+} %}

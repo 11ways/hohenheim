@@ -31,9 +31,7 @@ final class AppDestinationsCard {
             for (AppNetworkReads.Destination destination : destinations.listed()) {
                 AppDestinations.Destination where = destination.where();
                 DestinationKind kind = where.kind();
-                String name = destination.name();
-                rows.add(new AppDestinationsView.Row(where.key(),
-                    name != null ? Microcopy.literal(name) : kind.unnamed().withArg("address", where.address()),
+                rows.add(new AppDestinationsView.Row(where.key(), DestinationNames.shown(where, destination.name()),
                     kind.note(), kind.internal(), where.address(), where.port() + "/" + where.protocol(),
                     InstanceNetworkPage.size(destination.moved().bytesSent()),
                     InstanceNetworkPage.size(destination.moved().bytesReceived()),

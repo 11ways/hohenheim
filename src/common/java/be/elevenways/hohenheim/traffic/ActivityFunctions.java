@@ -160,8 +160,8 @@ public final class ActivityFunctions {
         }
     }
 
-    /** @return the picture's words, each resolved for the page's reader when drawn */
-    private static ActivityDriver.@NonNull Words words(@NonNull RenderContext context) {
+    /** @return the picture's words, each resolved for the page's reader when drawn; the apps picture's too */
+    static TrafficLabels.@NonNull Words words(@NonNull RenderContext context) {
         return copy -> copy.resolve(context);
     }
 
@@ -171,10 +171,7 @@ public final class ActivityFunctions {
         for (StatusClass statusClass : StatusClass.values()) {
             classes.add(ThemeColors.resolve(surface, ActivityPalette.colour(statusClass)));
         }
-        return new ActivityDriver.Colours(ThemeColors.resolve(surface, "var(--pl-color-surface-raised)"),
-            ThemeColors.resolve(surface, "var(--pl-color-border)"),
-            ThemeColors.resolve(surface, "var(--pl-color-border-muted)"),
-            ThemeColors.resolve(surface, "var(--pl-color-text)"),
-            ThemeColors.resolve(surface, "var(--pl-color-text-muted)"), classes);
+        PictureInk ink = PictureInk.of(surface);
+        return new ActivityDriver.Colours(ink.box(), ink.edge(), ink.guide(), ink.text(), ink.muted(), classes);
     }
 }

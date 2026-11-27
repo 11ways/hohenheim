@@ -13,6 +13,8 @@
        figures. */
     public required view: ActivityView
     attribute tv: Boolean = false
+    /* Where the apps send data, drawn under the requests; null for no such picture (the TV page). */
+    public apps: Live<AppsSendingView> = null
 
     private summary: ActivitySummary
     private paused: Boolean = false
@@ -82,6 +84,18 @@
             flex: 1 1 auto;
             block-size: auto;
             min-block-size: 16rem;
+        }
+
+        /* The two pictures, one under the other. */
+        .hh-activity-pictures {
+            display: flex;
+            flex-direction: column;
+            gap: var(--pl-space-md);
+        }
+
+        pl-kiosk[data-staged] .hh-activity-pictures {
+            flex: 1 1 auto;
+            min-block-size: 0;
         }
 
         .hh-activity-tv-top {
@@ -209,6 +223,7 @@
                 </pl-button>
                 {% /if %}
             </div>
+            <div class="hh-activity-pictures">
             <pl-card data-hh-activity-picture>
                 {% if !tv %}
                 <pl-card-header>
@@ -222,6 +237,10 @@
                                  data-hh-activity-surface></z3d-surface>
                 </pl-card-content>
             </pl-card>
+            {% if apps != null %}
+            <hh-apps-sending part={% apps %}></hh-apps-sending>
+            {% /if %}
+            </div>
             <pl-live-region :ref={% regionEl %} data-hh-activity-spoken></pl-live-region>
         </pl-kiosk>
     }

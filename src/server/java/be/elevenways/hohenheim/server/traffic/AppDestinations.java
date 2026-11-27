@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.traffic;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -11,11 +12,13 @@ import be.elevenways.hohenheim.server.sitetype.ServedStreams;
 import be.elevenways.hohenheim.server.sitetype.StreamTarget;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.field.StorageKeyed;
 import be.elevenways.zenit.traffic.common.TrafficFlow;
 import be.elevenways.zenit.traffic.common.TrafficTable;
 import be.elevenways.zenit.traffic.server.TrafficStore;
+import be.elevenways.zenit.server.live.LiveServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -54,6 +57,8 @@ import java.util.function.Supplier;
  * counts under no app. A destination is named here, once, from what the sweep found (DestinationKind), never by a
  * lookup: never a reverse DNS query. Listings run on the reader's task, never under the table lock and never in a
  * request; a listing that fails, or takes longer than {@link #SLOW}, is told on the dashboard (problems()).
+ * The latest reading of each host (readings()) is what the live "Apps sending" picture draws: every listing announces
+ * {@link #TOPIC}, its viewers re-read it, and a host whose listing stopped answering drops out after {@link #STALE}.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -65,6 +70,12 @@ public final class AppDestinations {
 
     /** What separates a destination key's parts; no address, protocol or port holds it. */
     private static final String SEPARATOR = "|";
+
+    /** Announced after every listing of the planned hosts: the live "Apps sending" picture's re-read. */
+    public static final Identifier TOPIC = HohenheimIds.id("app_destinations");
+
+    /** A host's reading older than this no longer stands for what its apps send: its listing stopped answering. */
+    public static final Duration STALE = Duration.ofMinutes(3);
 
     /**
      * Who an address on one of the host's networks belongs to.
@@ -164,14 +175,28 @@ public final class AppDestinations {
      */
     public record Problem(@NonNull String host, @NonNull Stage stage, @Nullable Duration took, @Nullable String why) {
     }
+    /**
+     * One host's latest reading: what each app sent each destination since the reading before.
+     *
+     * @param seconds how long since the reading before, at least one
+     * @param flows   one per app and destination that grew, stamped {@code at}
+     */
+    public record Reading(@NonNull Instant at, long seconds, @NonNull List<TrafficFlow> flows) {
 
-    /** A host's baselines: every element's counter at the last listing, and the sets that listing held. */
-    private record Baselines(@NonNull Map<String, Long> elements, @NonNull Set<String> sets) {
+        public Reading {
+            flows = List.copyOf(flows);
+        }
+    }
+
+
+    /** A host's baselines: every element's counter at the last listing, the sets it held, and when it was taken. */
+    private record Baselines(@NonNull Map<String, Long> elements, @NonNull Set<String> sets, @Nullable Instant at) {
     }
 
     private static final Map<Integer, Plan> PLANS = new ConcurrentHashMap<>();
     private static final Map<Integer, Baselines> BASELINES = new ConcurrentHashMap<>();
     private static final Map<Integer, Map<Stage, Problem>> PROBLEMS = new ConcurrentHashMap<>();
+    private static final Map<Integer, Reading> READINGS = new ConcurrentHashMap<>();
 
     private AppDestinations() {
     }
@@ -340,6 +365,18 @@ public final class AppDestinations {
         PLANS.keySet().retainAll(swept);
         BASELINES.keySet().retainAll(swept);
         PROBLEMS.keySet().retainAll(swept);
+        READINGS.keySet().retainAll(swept);
+    }
+
+    /** @return every host's latest reading that is still fresh, the most recent first */
+    public static @NonNull List<Reading> readings() {
+        Instant oldest = Now.instant().minus(STALE);
+        List<Reading> fresh = new ArrayList<>();
+        for (Reading reading : READINGS.values()) {
+            if (reading.at().isAfter(oldest)) fresh.add(reading);
+        }
+        fresh.sort(Comparator.comparing(Reading::at).reversed());
+        return fresh;
     }
 
     /**
@@ -349,6 +386,9 @@ public final class AppDestinations {
      */
     public static int readAll() {
         boolean recording = recording();
+        if (!recording) {
+            READINGS.clear();
+        }
         int counted = 0;
         for (Plan plan : List.copyOf(PLANS.values())) {
             if (!recording) {
@@ -361,6 +401,9 @@ public final class AppDestinations {
             } catch (RuntimeException unreachable) {
                 told(plan, Stage.LISTING, null, String.valueOf(unreachable.getMessage()));
             }
+        }
+        if (!PLANS.isEmpty()) {
+            LiveServer.INVALIDATIONS.changed(TOPIC);
         }
         return counted;
     }
@@ -419,7 +462,7 @@ public final class AppDestinations {
      */
     static @NonNull List<TrafficFlow> flows(@NonNull Plan plan, FlowAccounting.@NonNull Listing listing,
                                            @NonNull Instant now) {
-        Baselines before = BASELINES.getOrDefault(plan.serverId(), new Baselines(Map.of(), Set.of()));
+        Baselines before = BASELINES.getOrDefault(plan.serverId(), new Baselines(Map.of(), Set.of(), null));
         Map<String, Long> elements = new HashMap<>();
         Map<String, long[]> grown = new LinkedHashMap<>();
         for (FlowAccounting.Counted counted : listing.counted()) {
@@ -450,7 +493,7 @@ public final class AppDestinations {
             long[] sums = grown.computeIfAbsent(app + SEPARATOR + destination.key(), ignored -> new long[3]);
             sums[counted.counter().ordinal()] += growth;
         }
-        BASELINES.put(plan.serverId(), new Baselines(elements, listing.sets()));
+        BASELINES.put(plan.serverId(), new Baselines(elements, listing.sets(), now));
         List<TrafficFlow> flows = new ArrayList<>(grown.size());
         grown.forEach((appAndKey, sums) -> {
             int split = appAndKey.indexOf(SEPARATOR);
@@ -459,6 +502,10 @@ public final class AppDestinations {
                 sums[FlowAccounting.Counter.CONNECTIONS.ordinal()], sums[FlowAccounting.Counter.SENT.ordinal()],
                 sums[FlowAccounting.Counter.RECEIVED.ordinal()]));
         });
+        if (before.at() != null) {
+            READINGS.put(plan.serverId(), new Reading(now,
+                Math.max(1, Duration.between(before.at(), now).toSeconds()), flows));
+        }
         return flows;
     }
 
@@ -511,6 +558,7 @@ public final class AppDestinations {
         PLANS.clear();
         BASELINES.clear();
         PROBLEMS.clear();
+        READINGS.clear();
     }
 
     private static void told(@NonNull Plan plan, @NonNull Stage stage, @Nullable Duration took, @Nullable String why) {

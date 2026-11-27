@@ -18,13 +18,10 @@ import be.elevenways.zenit3d.common.shape.Picture;
 import be.elevenways.zenit3d.common.shape.RectBatch;
 import be.elevenways.zenit3d.common.shape.Rgba;
 import be.elevenways.zenit3d.common.shape.StrokeBatch;
-import be.elevenways.zenit3d.common.shape.TextBatch;
 import be.elevenways.zenit3d.common.surface.FrameRest;
 import be.elevenways.zenit3d.common.surface.Surface;
 import be.elevenways.zenit3d.common.surface.SurfaceDriver;
 import be.elevenways.zenit3d.common.text.TextAnchor;
-import be.elevenways.zenit3d.common.text.TextLabel;
-import be.elevenways.zenit3d.common.text.TextSheet;
 import be.elevenways.zenit3d.common.text.TextStyle;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -46,8 +43,8 @@ import java.util.Set;
  * {@link FrameRest} whenever no dot flies and nothing new arrived, so a quiet server costs a look every quarter second.
  * A frame's figures reach the page only through {@link Shown#minute}, after the draw that shows them, so the page's
  * line and the picture's rows are one count at every moment: a paused, hidden or resting picture holds both. The
- * words are the consumer's ({@link Words}, the page's microcopy for its reader), the colours the theme's resolved once
- * at mount ({@link Colours}); this class names neither a token nor a key's text.
+ * words are the consumer's ({@link TrafficLabels.Words}, the page's microcopy for its reader), the colours the
+ * theme's resolved once at mount ({@link Colours}); this class names neither a token nor a key's text.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -118,11 +115,6 @@ public final class ActivityDriver implements SurfaceDriver {
     private static final Microcopy PICTURE_ORIGIN = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_picture_origin");
     private static final Microcopy PICTURE_SITE = HohenheimMicrocopy.TRAFFIC_SCREEN.of("activity_picture_site");
 
-    /** The words a picture shows, worded for the page's reader; empty while its catalog is on its way. */
-    public interface Words {
-        @NonNull String word(@NonNull Microcopy copy);
-    }
-
     /** What the page hears of the picture as it is drawn. */
     public interface Shown {
 
@@ -163,7 +155,6 @@ public final class ActivityDriver implements SurfaceDriver {
     }
 
     private final @NonNull ActivityModel model;
-    private final @NonNull Words words;
     private final @NonNull Colours colours;
     private final @NonNull TextStyle style;
     private final @NonNull Map<String, String> names;
@@ -176,9 +167,8 @@ public final class ActivityDriver implements SurfaceDriver {
     private final StrokeBatch guides = new StrokeBatch();
     private final RectBatch bars = new RectBatch();
     private final DotBatch dots = new DotBatch(DOTS);
-    private final TextSheet sheet = new TextSheet(1);
-    private final TextBatch text = new TextBatch(this.sheet);
-    private final Picture picture = new Picture(this.boxes, this.guides, this.bars, this.dots, this.text);
+    private final @NonNull TrafficLabels labels;
+    private final @NonNull Picture picture;
     private final FrameRest rest = new FrameRest();
     private final Set<Long> guided = new HashSet<>();
     private final float[] point = new float[2];
@@ -203,8 +193,6 @@ public final class ActivityDriver implements SurfaceDriver {
     private float fit = -1f;
     /** Whether the last frame drew a glow or a fading path. */
     private boolean lit;
-    private TextLabel[] labels = new TextLabel[0];
-    private int used;
     private boolean paused;
     private boolean drawnPaused;
     private long drawnSecond = Long.MIN_VALUE;
@@ -217,13 +205,14 @@ public final class ActivityDriver implements SurfaceDriver {
      * @param names each source's name, for the sources the viewer may see
      * @param strip whether the last minute's bars stand under the flying dots too (a wall screen)
      */
-    public ActivityDriver(@NonNull ActivityModel model, @NonNull Words words, @NonNull Colours colours,
+    public ActivityDriver(@NonNull ActivityModel model, TrafficLabels.@NonNull Words words, @NonNull Colours colours,
                           @NonNull TextStyle style, @NonNull Map<String, String> names, boolean strip,
                           @NonNull Shown shown) {
         this.model = Objects.requireNonNull(model, "model cannot be null");
-        this.words = Objects.requireNonNull(words, "words cannot be null");
         this.colours = Objects.requireNonNull(colours, "colours cannot be null");
         this.style = Objects.requireNonNull(style, "style cannot be null");
+        this.labels = new TrafficLabels(words, style);
+        this.picture = new Picture(this.boxes, this.guides, this.bars, this.dots, this.labels.batch());
         this.names = Map.copyOf(names);
         this.strip = strip;
         this.unit = Math.max(1f, style.sizePx() / TYPE_PX);
@@ -266,7 +255,7 @@ public final class ActivityDriver implements SurfaceDriver {
     @Override
     public void attach(@NonNull Surface surface) {
         this.picture.attach(surface);
-        this.sheet.attach(surface);
+        this.labels.attach(surface);
     }
 
     @Override
@@ -274,7 +263,7 @@ public final class ActivityDriver implements SurfaceDriver {
         boolean still = surface.reducedMotion();
         boolean minute = this.frames == 0 || this.wordsPending || this.model.latest() != this.drawnSecond
             || this.model.revision() != this.drawnRevision;
-        boolean changed = minute || this.paused != this.drawnPaused || this.sheet.pending() > 0;
+        boolean changed = minute || this.paused != this.drawnPaused || this.labels.painting();
         if (this.paused && this.drawnPaused && this.frames > 0) {
             // Paused: the last picture stands; only a new size or motion preference draws it again.
             minute = false;
@@ -288,7 +277,7 @@ public final class ActivityDriver implements SurfaceDriver {
         }
         this.picture.begin(surface);
         this.dots.at(surface);
-        this.used = 0;
+        this.labels.begin();
         this.wordsPending = false;
         this.lit = false;
         float width = this.picture.width();
@@ -316,13 +305,14 @@ public final class ActivityDriver implements SurfaceDriver {
         }
         this.paths(surface, still);
         this.picture.render(surface);
+        this.wordsPending = this.labels.pending();
         this.frames++;
         this.drawnSecond = this.model.latest();
         this.drawnRevision = this.model.revision();
         this.drawnPaused = this.paused;
         this.rest.drawn(surface, true);
         if (minute) {
-            String described = this.words.word(this.described());
+            String described = this.labels.word(this.described());
             if (described.isEmpty()) {
                 // Its catalog is on its way: the next look draws and hands the page the minute then.
                 this.wordsPending = true;
@@ -339,7 +329,7 @@ public final class ActivityDriver implements SurfaceDriver {
 
     @Override
     public void detach() {
-        this.sheet.detach();
+        this.labels.detach();
         this.picture.detach();
     }
 
@@ -355,8 +345,8 @@ public final class ActivityDriver implements SurfaceDriver {
         float originWidth = clamp(width * 0.2f, 140f * u, 260f * u);
         this.siteWidth = clamp(width * 0.26f, 170f * u, 320f * u);
         float small = this.style.sizePx() * 0.85f;
-        this.label(HEAD_VISITORS, 0, (HEAD - 12) * u, TextAnchor.LEFT, this.colours.muted, small);
-        this.label(HEAD_SITES, width, (HEAD - 12) * u, TextAnchor.RIGHT, this.colours.muted, small);
+        this.labels.label(HEAD_VISITORS, 0, (HEAD - 12) * u, TextAnchor.LEFT, this.colours.muted, small);
+        this.labels.label(HEAD_SITES, width, (HEAD - 12) * u, TextAnchor.RIGHT, this.colours.muted, small);
         float scale = clamp((height - HEAD * u) / (this.natural() - HEAD * u), LEAST_SCALE, MOST_SCALE);
         this.rowPx = ROW * u * scale;
         this.gapPx = GAP * u * scale;
@@ -400,8 +390,8 @@ public final class ActivityDriver implements SurfaceDriver {
             Origin origin = origins.get(i);
             float y = this.rowTop(i);
             this.boxes.rect(0, y, originWidth, this.rowPx, 8 * u, this.colours.box, this.colours.edge, u);
-            this.rowWords(this.originName(origin), this.originSub(origin), 12 * u, y, this.rowPx,
-                originWidth - 24 * u);
+            this.labels.row(this.originName(origin), this.originSub(origin), 12 * u, y, this.rowPx,
+                originWidth - 24 * u, this.colours.text, this.colours.muted);
         }
         for (int i = 0; i < sites.size(); i++) {
             SiteRow row = sites.get(i);
@@ -415,8 +405,9 @@ public final class ActivityDriver implements SurfaceDriver {
                 this.boxes.rect(toX, y, this.siteWidth, this.rowPx, 8 * u,
                     Rgba.withAlpha(this.pulseColours[i], PULSE_ALPHA * glow));
             }
-            this.rowWords(this.siteName(row), null, toX + 12 * u, y, this.rowPx, this.siteWidth - 70 * u);
-            this.label(this.rate(row), width - 10 * u, y + this.rowPx / 2 + this.style.sizePx() * 0.35f,
+            this.labels.row(this.siteName(row), null, toX + 12 * u, y, this.rowPx, this.siteWidth - 70 * u,
+                this.colours.text, this.colours.muted);
+            this.labels.label(this.rate(row), width - 10 * u, y + this.rowPx / 2 + this.style.sizePx() * 0.35f,
                 TextAnchor.RIGHT, this.colours.muted, small);
         }
     }
@@ -522,9 +513,10 @@ public final class ActivityDriver implements SurfaceDriver {
             }
             if (path == null || path.isEmpty()) continue;
             float y = this.rowTop(i);
-            this.text.clip(this.toX - 10 * u - room, y, room, this.rowPx);
-            this.label(Microcopy.literal(path), this.toX - 10 * u, y + small + 2 * u, TextAnchor.RIGHT, tint, small);
-            this.text.unclipped();
+            this.labels.clip(this.toX - 10 * u - room, y, room, this.rowPx);
+            this.labels.label(Microcopy.literal(path), this.toX - 10 * u, y + small + 2 * u, TextAnchor.RIGHT, tint,
+                small);
+            this.labels.unclipped();
         }
     }
 
@@ -534,7 +526,7 @@ public final class ActivityDriver implements SurfaceDriver {
      */
     private void bars(float x, float y, float width, float height) {
         float small = this.style.sizePx() * 0.85f;
-        this.label(HEAD_SECONDS, x, y + 16 * this.unit, TextAnchor.LEFT, this.colours.muted, small);
+        this.labels.label(HEAD_SECONDS, x, y + 16 * this.unit, TextAnchor.LEFT, this.colours.muted, small);
         float top = y + 26 * this.unit;
         float plot = Math.max(1f, height - 26 * this.unit);
         List<long[]> seconds = this.model.perSecond();
@@ -565,19 +557,6 @@ public final class ActivityDriver implements SurfaceDriver {
                 this.bars.rect(left, base, bar, tall, 0, this.colours.of(statusClass));
             }
         }
-    }
-
-    /** A row's name, and its line under it when it has one, cut at {@code room} so they never reach its figure. */
-    private void rowWords(@NonNull Microcopy name, @Nullable Microcopy sub, float x, float y, float row, float room) {
-        this.text.clip(x, y, Math.max(0f, room), row);
-        if (sub == null) {
-            this.label(name, x, y + row / 2 + this.style.sizePx() * 0.35f, TextAnchor.LEFT, this.colours.text,
-                this.style.sizePx());
-        } else {
-            this.label(name, x, y + row * 0.45f, TextAnchor.LEFT, this.colours.text, this.style.sizePx());
-            this.label(sub, x, y + row * 0.8f, TextAnchor.LEFT, this.colours.muted, this.style.sizePx() * 0.8f);
-        }
-        this.text.unclipped();
     }
 
     /** @return the picture in words: every row as drawn, visitors then sites with their rates */
@@ -642,32 +621,6 @@ public final class ActivityDriver implements SurfaceDriver {
 
     private @NonNull Microcopy rate(@NonNull SiteRow row) {
         return RATE.withArg("count", this.model.requests(row));
-    }
-
-    /** Draws a label of the pool, made the first time it is needed and kept for every frame after. */
-    private void label(@NonNull Microcopy copy, float x, float baseline, @NonNull TextAnchor anchor, int rgba,
-                       float size) {
-        String words = this.words.word(copy);
-        if (words.isEmpty()) {
-            this.wordsPending = true;
-            return;
-        }
-        if (this.used == this.labels.length) {
-            TextLabel[] grown = new TextLabel[Math.max(16, this.labels.length * 2)];
-            System.arraycopy(this.labels, 0, grown, 0, this.labels.length);
-            this.labels = grown;
-        }
-        TextLabel label = this.labels[this.used];
-        if (label == null || label.style().sizePx() != size) {
-            if (label != null) {
-                this.sheet.release(label);
-            }
-            label = this.sheet.label(this.style.sized(size));
-            this.labels[this.used] = label;
-        }
-        this.used++;
-        label.set(words);
-        this.text.text(label, x, baseline, anchor, rgba);
     }
 
     /** @return the top of a row of either side, at this frame's row size */

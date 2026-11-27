@@ -72,6 +72,7 @@ public final class HohenheimHandlers {
         InstanceDeploymentsPage.registerPart();
         HostMediaTab.registerPart();
         SiteAccessLogPage.registerPart();
+        AppsSendingReads.registerPart();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();

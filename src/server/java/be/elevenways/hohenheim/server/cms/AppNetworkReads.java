@@ -5,16 +5,12 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.server.traffic.AppDestinations;
-import be.elevenways.hohenheim.server.traffic.DestinationKind;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.data.DataBuckets;
 import be.elevenways.zenit.common.data.DataTable;
 import be.elevenways.zenit.common.data.RecordFacet;
@@ -42,12 +38,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 
 /**
  * The read of an app's network use: what it received and sent over a span ending at a moment, against the span before,
@@ -228,75 +222,16 @@ public final class AppNetworkReads {
                 lines.add(line);
             }
         }
-        Map<String, String> names = names(wheres, caller);
+        Map<String, String> names = DestinationNames.of(wheres, DestinationNames.Viewer.of(caller));
         List<Destination> listed = new ArrayList<>(wheres.size());
         for (int at = 0; at < wheres.size(); at++) {
             AppDestinations.Destination where = wheres.get(at);
             DataTable.Value seen = lines.get(at).values().get("last_seen");
             Double millis = seen == null ? null : seen.number();
-            listed.add(new Destination(where, where.ref() == null ? null : names.get(nameKey(where)),
+            listed.add(new Destination(where, DestinationNames.nameOf(names, where),
                 moved(lines.get(at)), millis == null ? null : Instant.ofEpochMilli(Math.round(millis))));
         }
         return new Destinations(listed, other);
-    }
-
-    /** @return the name of every record the destinations name that the caller may view, by kind and id */
-    private static @NonNull Map<String, String> names(@NonNull List<AppDestinations.Destination> wheres,
-                                                      @Nullable AccessContext caller) {
-        Map<String, String> names = new HashMap<>();
-        if (caller == null) {
-            return names;
-        }
-        Map<Identifier, List<Integer>> wanted = new HashMap<>();
-        for (AppDestinations.Destination where : wheres) {
-            Identifier model = modelOf(where.kind());
-            if (model != null && where.ref() != null) {
-                wanted.computeIfAbsent(model, ignored -> new ArrayList<>()).add(where.ref());
-            }
-        }
-        for (Map.Entry<Identifier, List<Integer>> asked : wanted.entrySet()) {
-            Identifier model = asked.getKey();
-            List<Integer> ids = asked.getValue();
-            List<Row> rows;
-            Function<Row, Integer> idOf;
-            Function<Row, String> nameOf;
-            if (model.equals(InstanceModel.MODEL_ID)) {
-                rows = Models.get(InstanceModel.class).find().where(InstanceModel.ID.in(ids)).all();
-                idOf = row -> row.get(InstanceModel.ID);
-                nameOf = row -> row.get(InstanceModel.NAME);
-            } else if (model.equals(DatabaseModel.MODEL_ID)) {
-                rows = Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(ids)).all();
-                idOf = row -> row.get(DatabaseModel.ID);
-                nameOf = row -> row.get(DatabaseModel.NAME);
-            } else {
-                rows = Models.get(SiteModel.class).find().where(SiteModel.ID.in(ids)).all();
-                idOf = row -> row.get(SiteModel.ID);
-                nameOf = row -> row.get(SiteModel.NAME);
-            }
-            for (Row row : rows) {
-                Integer id = idOf.apply(row);
-                String name = nameOf.apply(row);
-                if (id != null && name != null && !name.isBlank()
-                        && HohenheimAccess.reachesRecord(caller, model, id, HohenheimCapabilities.VIEW)) {
-                    names.put(model + "#" + id, name);
-                }
-            }
-        }
-        return names;
-    }
-
-    /** @return the model a destination's reference names, null for a kind that names no record */
-    private static @Nullable Identifier modelOf(@NonNull DestinationKind kind) {
-        return switch (kind) {
-            case APP, OWN -> InstanceModel.MODEL_ID;
-            case DATABASE -> DatabaseModel.MODEL_ID;
-            case STREAM -> SiteModel.MODEL_ID;
-            case INTERNET, PROXY, SERVER -> null;
-        };
-    }
-
-    private static @NonNull String nameKey(AppDestinations.@NonNull Destination where) {
-        return modelOf(where.kind()) + "#" + where.ref();
     }
 
     private static @NonNull Moved moved(DataTable.@NonNull Line line) {

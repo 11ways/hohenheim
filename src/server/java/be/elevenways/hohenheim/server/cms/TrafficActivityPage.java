@@ -97,6 +97,7 @@ public final class TrafficActivityPage extends PanelPage {
         ActivityAsk every = ActivityAsk.every();
         ActivityView view = view(every, every.spelled(), true, false);
         vars.put("view", view);
+        vars.put("apps", AppsSendingReads.at(request.access(), every));
         vars.put("tv", TrafficTvLinks.card(request, this, view.names()));
         return new RenderTemplateResult(HohenheimTemplateIds.TRAFFIC_ACTIVITY, vars);
     }

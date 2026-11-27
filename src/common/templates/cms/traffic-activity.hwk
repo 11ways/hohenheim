@@ -1,11 +1,13 @@
 {#- The server's Traffic page, tab Activity (TrafficActivityPage): its header and its tabs, then the live picture of
-    every site's requests (hh-traffic-activity), then the TV page card: the links made, who made each and when, End link
-    on each, and the form that makes one, whose address is shown here once. -#}
+    every site's requests and, under it, where the apps send data (hh-traffic-activity), then the TV page card: the
+    links made, who made each and when, End link on each, and the form that makes one, whose address is shown here
+    once. -#}
 {% declare title: String %}
 {#- Named apart from the page-action form's own `lead` (a snippet), which a rendered form would otherwise read. -#}
 {% declare pageLead: Microcopy %}
 {% declare tabs: List<NavTab> %}
 {% declare view: ActivityView %}
+{% declare apps: Live<AppsSendingView> %}
 {% declare tv: TvLinksCard %}
 {% extend "zenitcms:shell" var:title=title %}
 
@@ -13,7 +15,7 @@
 <section class="cms-resource-list-page" data-hh-traffic-activity>
     {% render "zenitcms:page-header" var:title=title var:lead=pageLead %}
     <hh-traffic-tabs tabs={% tabs %}></hh-traffic-tabs>
-    <hh-traffic-activity view={% view %}></hh-traffic-activity>
+    <hh-traffic-activity view={% view %} apps={% apps %}></hh-traffic-activity>
     <pl-card id="tv-page" data-hh-tv-links>
         <pl-card-header>
             <pl-card-title>{{ t("tv_card", scope: "traffic_screen") }}</pl-card-title>
