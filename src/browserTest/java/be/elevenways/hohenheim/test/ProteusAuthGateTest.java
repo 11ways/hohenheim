@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.IdentityHeader;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.util.BlastLog;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -216,13 +218,17 @@ class ProteusAuthGateTest {
 
     /** A site forwarding to the upstream on {@code hostname}, behind {@code providerId} when it is not null. */
     private static int site(String hostname, @Nullable Integer providerId) {
+        return site(hostname, providerId, upstream.getAddress().getPort());
+    }
+
+    /** A site forwarding to {@code 127.0.0.1:port} on {@code hostname}, behind {@code providerId} when it is not null. */
+    private static int site(String hostname, @Nullable Integer providerId, int port) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Site " + hostname);
         site.set(SiteModel.SLUG, hostname.replace(".", "-"));
         site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
-        site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1",
-            "forward_port", upstream.getAddress().getPort()));
+        site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", port));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         if (providerId != null) {
@@ -288,6 +294,8 @@ class ProteusAuthGateTest {
         guardWithProviderLeaf(gatedSite, "/admin", gatedProvider, ADMIN);
         gatedSite("denied.test", provider("Proteus denied", "rc", "hohenheim.site.elsewhere"));
         site("open.test", null);
+        // This process's own panel published through the proxy, as an install publishes it (docs/deploy-native.md).
+        site("panel.test", null, APP.port());
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
@@ -439,15 +447,33 @@ class ProteusAuthGateTest {
         assertThat(request("blank.test", "/", cookie("hh_site_session_id", blankVerified.cookie("hh_site_session_id")))
             .body()).as("step 12: and reaches the upstream").contains("upstream-ok");
 
-        // 13. A site without a sign-in: whatever identity a visitor claims never reaches its app.
-        Response open = request("open.test", "/", null,
-            "X-Hohenheim-User: " + SUB, "X-Hohenheim-Email: zoe@example.com", "X-Hohenheim-Name: Zoe",
-            "X_Hohenheim_User: " + SUB);
-        assertThat(open.body()).as("step 13: the open site is forwarded").contains("upstream-ok");
-        assertThat(RECEIVED.get().get("X_Hohenheim_User"))
-            .as("step 13: nor its underscore spelling, which CGI and PHP read as the same header").isNull();
-        assertThat(identityHeaders()).as("step 13: with none of the identity headers the visitor sent")
-            .containsExactly(null, null, null);
+        // 13. A site without a sign-in: whatever identity a visitor claims never reaches its app, nor any other member
+        //     of Hohenheim's own family (one no code declares, a link key), and Hohenheim's log gets ONE line naming
+        //     the site, the visitor and the header names, never a value, however often.
+        List<String> logged = new CopyOnWriteArrayList<>();
+        BlastLog.LogSink previousSink = BlastLog.getLogSink();
+        BlastLog.setLogSink(args -> logged.add(String.valueOf(args[0])));
+        try {
+            String[] forged = {"X-Hohenheim-User: " + SUB, "X-Hohenheim-Email: zoe@example.com",
+                "X-Hohenheim-Name: Zoe", "X_Hohenheim_User: " + SUB, "X-Hohenheim-Whatever: " + SUB,
+                "X-Hohenheim-Link: some-link-key", "X-Hohenheim-Subjects: 7999"};
+            Response open = request("open.test", "/", null, forged);
+            assertThat(open.body()).as("step 13: the open site is forwarded").contains("upstream-ok");
+            assertThat(RECEIVED.get().get("X_Hohenheim_User"))
+                .as("step 13: nor its underscore spelling, which CGI and PHP read as the same header").isNull();
+            assertThat(identityHeaders()).as("step 13: with none of the identity headers the visitor sent")
+                .containsExactly(null, null, null);
+            for (String other : List.of("X-Hohenheim-Whatever", "X-Hohenheim-Link", "X-Hohenheim-Subjects")) {
+                assertThat(RECEIVED.get().get(other)).as("step 13: nor " + other).isNull();
+            }
+            request("open.test", "/", null, forged);
+            assertThat(logged).as("step 13: one line in Hohenheim's log, the second request within the minute none")
+                .filteredOn(line -> line.contains("'Site open.test'")).singleElement().asString()
+                .contains("127.0.0.1").contains("X-Hohenheim-Whatever").contains("X_Hohenheim_User")
+                .contains("X-Hohenheim-Link").doesNotContain(SUB).doesNotContain("some-link-key");
+        } finally {
+            BlastLog.setLogSink(previousSink);
+        }
 
         // 14. The sign-in protection's help, in the panel and the tools, English and Dutch, names every header.
         for (String tag : List.of("en", "nl")) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.net.OwnRequestHeaders;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
 import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -15,7 +16,8 @@ import java.util.List;
 
 /**
  * Canonicalizes the upstream request headers: custom operator rules, hop-by-hop hygiene,
- * the four client-origin headers hohenheim owns, and who signed in ({@link IdentityHeader}).
+ * the four client-origin headers hohenheim owns, its own {@code X-Hohenheim-*} family ({@link OwnHeaders}) and who
+ * signed in ({@link IdentityHeader}).
  */
 final class ForwardingHeaders {
 
@@ -107,12 +109,14 @@ final class ForwardingHeaders {
      * Rewrite the request headers for the upstream: Hohenheim's own credentials out first,
      * then operator rules, then the trust boundary, so an operator rule can never
      * re-introduce a spoofable client-origin header but may still set the upstream's own
-     * Authorization.
+     * Authorization. Hohenheim's own {@code X-Hohenheim-*} family is found first, before any header is touched
+     * ({@link OwnHeaders#scan}), and removed from every request.
      */
     static void applyRequestHeaders(HttpServerExchange exchange, RouteEntry entry,
                                     String instanceId, String hostname, String clientIp) {
 
         HeaderMap requestHeaders = exchange.getRequestHeaders();
+        List<String> own = OwnHeaders.scan(exchange);
         HeaderValues hops = requestHeaders.get(X_PROXIED_BY);
         String chain = hops == null || hops.isEmpty() ? "" : String.join(", ", hops);
         requestHeaders.put(X_PROXIED_BY, chain.isBlank() ? instanceId : chain + ", " + instanceId);
@@ -132,6 +136,10 @@ final class ForwardingHeaders {
         // --- Custom upstream request headers ---
         if (!entry.customHeaders.isEmpty()) {
             for (HeaderRule header : entry.customHeaders) {
+                // Saving such a rule is refused (SiteDomainModel); one stored before that never applies either.
+                if (OwnRequestHeaders.isOwn(header.name().strip())) {
+                    continue;
+                }
                 HttpString headerName = new HttpString(header.name());
                 if (header.value() == null || header.value().isBlank()) {
                     requestHeaders.remove(headerName);
@@ -158,8 +166,9 @@ final class ForwardingHeaders {
             requestHeaders.remove(stripped);
         }
 
-        // Who signed in: every identity header out, then set from what a gate vouched for on THIS request. After
-        // the hop-by-hop pass, so a visitor's Connection token cannot drop the headers once they are set.
+        // Hohenheim's own family out, then the identity headers set from what a gate vouched for on THIS request.
+        // After the hop-by-hop pass, so a visitor's Connection token cannot drop the headers once they are set.
+        OwnHeaders.remove(requestHeaders, own, entry, clientIp);
         IdentityHeader.apply(requestHeaders, ProxySessionSupport.signedIn(exchange));
 
         requestHeaders.put(X_FORWARDED_PROTO, ProxyScheme.effectiveScheme(exchange));

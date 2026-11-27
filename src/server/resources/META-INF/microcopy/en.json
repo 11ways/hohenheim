@@ -138,6 +138,10 @@
     "text": "TLS passthrough routes by SNI hostname and cannot inspect URL paths",
     "scope": "violations"
   },
+  "request_header_own": {
+    "text": "{$header} is one of Hohenheim's own headers: Hohenheim sets or removes it itself, so a header rule cannot name it",
+    "scope": "violations"
+  },
   "ssh_target_format": {
     "text": "SSH target must be a plain [user@]host[:port]",
     "scope": "violations"

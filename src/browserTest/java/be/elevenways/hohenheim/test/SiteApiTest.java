@@ -189,6 +189,14 @@ class SiteApiTest extends HohenheimHttpTestBase {
             .as("step 1: both rows hold a live route claim, the dispatcher's own truth")
             .doesNotContainNull().hasSize(2);
         assertThat(RouteClaims.isLive(proxySite)).as("step 1: the site routes").isTrue();
+        HttpResponse<String> ownHeader = keyPost(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains",
+            form("hostname", "own." + ZONE, "custom_headers.0.key", "x_hohenheim_whatever",
+                "custom_headers.0.value", "1"));
+        assertThat(ownHeader.statusCode())
+            .as("step 1: a rule naming one of Hohenheim's own headers is refused: " + ownHeader.body())
+            .isEqualTo(422);
+        assertThat(ownHeader.body()).as("step 1: the refusal names the header").contains("x_hohenheim_whatever");
+        assertThat(domainsOf(proxySiteId)).as("step 1: and no row lands").hasSize(2);
 
         // 2. The detail read answers with the rows the write lane made.
         HttpResponse<String> detail = keyGet(keyAdmin, "/api/v1/sites/" + proxySiteId);

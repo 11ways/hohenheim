@@ -138,6 +138,10 @@
     "text": "TLS-passthrough routeert op SNI-hostnaam en kan URL-paden niet inspecteren",
     "scope": "violations"
   },
+  "request_header_own": {
+    "text": "{$header} is een van de eigen headers van Hohenheim: Hohenheim zet of verwijdert die zelf, dus een headerregel kan die niet noemen",
+    "scope": "violations"
+  },
   "ssh_target_format": {
     "text": "SSH-doel moet een eenvoudige [user@]host[:poort] zijn",
     "scope": "violations"

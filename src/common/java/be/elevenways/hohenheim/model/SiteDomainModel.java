@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.behaviour.HistoryBehaviour;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.net.Hostnames;
+import be.elevenways.hohenheim.net.OwnRequestHeaders;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -350,6 +351,11 @@ public class SiteDomainModel extends Model {
                 // takeover. One write here makes every raw reader correct by construction.
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
+            // Hohenheim's own header family is never an operator's: refused on every lane that saves (form, API, MCP)
+            // when the write states the rules, so a write that leaves them alone (a route heal) never trips on old ones.
+            if (row.has(CUSTOM_HEADERS.getName())) {
+                refuseOwnRequestHeaders(row.get(CUSTOM_HEADERS.getName()));
+            }
             disarmOnExplicitChoice(row, stored);
             // AIDEV-NOTE: the write half of fixedTlsSwitches, THE home of a TLS passthrough site's HTTPS switches:
             // stored on every write of every lane (form, API, MCP, jobs), read off the written site_id. The create
@@ -425,6 +431,19 @@ public class SiteDomainModel extends Model {
 
     private static boolean hasValues(Object value) {
         return value instanceof java.util.Map<?, ?> map && !map.isEmpty();
+    }
+
+    /** @throws RuntimeException the violation naming the first rule that names one of Hohenheim's own headers */
+    private static void refuseOwnRequestHeaders(@Nullable Object headers) {
+        if (!(headers instanceof Map<?, ?> rules)) {
+            return;
+        }
+        for (Object name : rules.keySet()) {
+            if (name != null && OwnRequestHeaders.isOwn(String.valueOf(name).strip())) {
+                throw Violations.ofField("custom_headers", name, HohenheimMicrocopy.VIOLATIONS.of("request_header_own")
+                    .withArg("header", String.valueOf(name)));
+            }
+        }
     }
 
 

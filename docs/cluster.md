@@ -226,6 +226,10 @@ the master (an app password named "Robbedoes"). A silent server answers "Kuifje 
 changed"; a change sent without an answer says it may or may not have been made. After a carried change the master
 brings its record of that server in step before it answers.
 
+Every proxy removes the whole `X-Hohenheim-*` family from every HTTP request it forwards, whoever sends it and on
+every route, a linked server included (a TLS passthrough site's traffic is never read, so nothing is removed there);
+only a trusted front's `X-Hohenheim-Key` is read first, as that front's credential.
+
 ## Removing
 
 **Remove** asks the other server to forget the link (leave) and then forgets it here, whatever the answer:

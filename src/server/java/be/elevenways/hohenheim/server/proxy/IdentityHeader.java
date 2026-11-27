@@ -8,20 +8,18 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.function.Function;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * The request headers that tell an app who passed its site's sign-in: Hohenheim owns every one of them.
+ * The request headers that tell an app who passed its site's sign-in: members of Hohenheim's own header family.
  *
- * AIDEV-NOTE: the security half is the REMOVAL. {@link #apply} drops every member from every request the
- * forwarding stage passes on, signed-in or not, on every site and route, WebSocket upgrades included, and only
- * then sets them from what a gate vouched for on this request; without that a visitor could simply send
- * X-Hohenheim-User himself. Every spelling an app may read as the same header goes too: any case, and with an
- * underscore for a dash, which CGI, PHP and WSGI fold to the same variable. It runs after the operator's own header
- * rules, so no rule can set one either. Values are percent-encoded UTF-8 (RFC 3986 unreserved characters kept,
- * as {@link Uri#encodeComponent} writes them), so a name outside ASCII arrives intact and no value can carry a line
- * break into the request.
+ * AIDEV-NOTE: the security half is the REMOVAL, which is the family's ({@link OwnHeaders}): every member a visitor
+ * sent is gone from every request the forwarding stage passes on, signed-in or not, on every site and route,
+ * WebSocket upgrades included, a linked server's too; only then does {@link #apply} set these from what a gate
+ * vouched for on this request.
+ * Without that a visitor could simply send X-Hohenheim-User himself. It runs after the operator's own header rules,
+ * and a rule naming a member never applies, so no rule can set one either. Values are percent-encoded UTF-8
+ * (RFC 3986 unreserved characters kept, as {@link Uri#encodeComponent} writes them), so a name outside ASCII arrives
+ * intact and no value can carry a line break into the request.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.10.0
@@ -51,20 +49,11 @@ public enum IdentityHeader {
     }
 
     /**
-     * Remove every identity header the request carries, then set them for the person who signed in.
+     * Set these for the person who signed in, after the family's removal.
      *
      * @param identity who passed a sign-in gate on this request, or null when nobody did
      */
     static void apply(@NonNull HeaderMap headers, @Nullable SignedInIdentity identity) {
-        List<HttpString> spelled = new ArrayList<>();
-        for (HttpString name : headers.getHeaderNames()) {
-            if (of(name.toString()) != null) {
-                spelled.add(name);
-            }
-        }
-        for (HttpString name : spelled) {
-            headers.remove(name);
-        }
         if (identity == null) {
             return;
         }
@@ -74,16 +63,5 @@ public enum IdentityHeader {
                 headers.put(member.header, Uri.encodeComponent(value));
             }
         }
-    }
-
-    /** @return the member a request header name spells, in any case and with underscores for dashes, or null */
-    private static @Nullable IdentityHeader of(@NonNull String name) {
-        String folded = name.replace('_', '-');
-        for (IdentityHeader member : values()) {
-            if (member.headerName().equalsIgnoreCase(folded)) {
-                return member;
-            }
-        }
-        return null;
     }
 }
