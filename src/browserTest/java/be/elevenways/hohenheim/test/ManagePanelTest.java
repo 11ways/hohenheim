@@ -258,13 +258,25 @@ class ManagePanelTest extends HohenheimHttpTestBase {
             .doesNotContain("private-webhook-secret")
             .doesNotContain("name=\"settings.system_user_id\"");
 
-        HttpResponse<String> response = operatorPost("/manage/sites/" + siteAId,
+        // A forged post of the settings the form does not draw is refused whole (the sub-form's closed world), and
+        // writes nothing, not even the delegated columns beside them.
+        HttpResponse<String> forged = operatorPost("/manage/sites/" + siteAId,
             "name=Manage+Site+A+Edited&enabled=false&description=Delegated+description"
                 + "&upstream_kind=hohenheim%3Acommand"
                 + "&settings.root_path=%2Ftmp%2Fhijacked"
                 + "&settings.command=cat+%2Fetc%2Fshadow"
                 + "&settings.system_user_id=hohenheim%3Aroot"
                 + "&settings.environment_variables.DAEMON_SECRET=stolen"
+                + "&source_settings.repository_url=ssh%3A%2F%2Fattacker%2Frepo.git"
+                + "&source_settings.build_command=malicious&" + siteEditEnvelope(siteAId));
+        assertThat(forged.statusCode()).as("the forged settings are refused").isEqualTo(422);
+        assertThat((String) Models.get(SiteModel.class).findById(siteAId).get(SiteModel.NAME))
+            .as("and nothing of the forged post was written").isNotEqualTo("Manage Site A Edited");
+
+        // The kind and the source beside the delegated columns are not the form's to take: ignored, never written.
+        HttpResponse<String> response = operatorPost("/manage/sites/" + siteAId,
+            "name=Manage+Site+A+Edited&enabled=false&description=Delegated+description"
+                + "&upstream_kind=hohenheim%3Acommand"
                 + "&source_settings.repository_url=ssh%3A%2F%2Fattacker%2Frepo.git"
                 + "&source_settings.build_command=malicious&" + siteEditEnvelope(siteAId));
         assertThat(response.statusCode()).isIn(302, 303);
