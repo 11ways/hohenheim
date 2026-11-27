@@ -16,6 +16,7 @@ import be.elevenways.zenit.ai.server.mcp.host.McpListTool;
 import be.elevenways.zenit.ai.server.mcp.host.McpRecordTools;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolSet;
 import be.elevenways.zenit.ai.server.mcp.host.UploadTools;
+import be.elevenways.zenit.auth.model.ShareLinkModel;
 import be.elevenways.zenit.auth.server.mcp.AccountTools;
 import be.elevenways.zenit.auth.server.mcp.AuthMcp;
 import be.elevenways.zenit.auth.server.mcp.AuthTools;
@@ -92,7 +93,8 @@ public final class HohenheimMcpModule implements ZenitModule {
         DnsPeerModel.MODEL_ID, StackServiceModel.MODEL_ID, EnvironmentModel.MODEL_ID, GameDomainModel.MODEL_ID,
         InstanceFileModel.MODEL_ID, InstanceTemplateFileModel.MODEL_ID, StackFileModel.MODEL_ID,
         RecordScheduleModel.MODEL_ID, RecordScheduleRunModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID,
-        SystemTaskHistoryModel.MODEL_ID, DeliveryModel.MODEL_ID, NotificationInboxModel.MODEL_ID);
+        SystemTaskHistoryModel.MODEL_ID, DeliveryModel.MODEL_ID, NotificationInboxModel.MODEL_ID,
+        ShareLinkModel.MODEL_ID);
 
     @Override
     public @NonNull Set<String> initializesAfter() {
@@ -243,6 +245,8 @@ public final class HohenheimMcpModule implements ZenitModule {
             SystemTaskHistoryModel.STARTED_AT, SystemTaskHistoryModel.ENDED_AT,
             SystemTaskHistoryModel.STOP_REQUESTED_AT).search(SystemTaskHistoryModel.TASK_TYPE,
             SystemTaskHistoryModel.PROGRESS_MESSAGE));
+        // The TV page's links in force, which tv_link_set makes and tv_link_end ends by their codes; never an address.
+        made.put(ShareLinkModel.MODEL_ID, TrafficTvLinks.listed());
         made.forEach((model, builder) -> builder.permission(HohenheimSources.ADMIN_ACCESS));
         // The /manage Provisioning tab's own scope: an app's own variables, for whoever may view the app. A secret's
         // value is never projected (a source refuses it); its kind says it is one.

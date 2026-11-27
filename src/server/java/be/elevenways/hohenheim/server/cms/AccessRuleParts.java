@@ -253,7 +253,7 @@ public final class AccessRuleParts {
             .form(ResourceForm.<Row>of(FORM).build())
             // No create: a rule is born inside a tree, through ADD on the list's Rules tab or ADD_INSIDE on a group; a
             // generic create would produce a node belonging to no list and enforcing nothing.
-            .writes(ResourceMutations.rows().update().beforeSave(AccessRuleParts::hashPassword).delete(DELETE).build())
+            .writes(ResourceMutations.rows().update().beforeSave(AccessRuleParts::beforeSave).delete(DELETE).build())
             // Declared order is band order: a row's one inline button is a group's Add inside, else its switch; the
             // moves and the delete stay in the row's menu (ActionStateTranslator.INLINE_ROW_ACTION_CAP).
             .actions(Stream.concat(Stream.of(addInsideAction(), toggleAction()),
@@ -263,9 +263,16 @@ public final class AccessRuleParts {
                 .build());
     }
 
-    /** The rule form's typed password reaches the row hashed, through the one home the add operations use too. */
-    private static void hashPassword(@NonNull RowSave save) {
+    /**
+     * A rule only Hohenheim writes is never made or rewritten by the rule form; a typed password reaches the row
+     * hashed, through the one home the add operations use too.
+     */
+    private static void beforeSave(@NonNull RowSave save) {
         Row rule = save.row();
+        Row stored = Models.get(AccessRuleModel.class).find().noCache()
+            .where(AccessRuleModel.ID.eq(rule.get(AccessRuleModel.ID))).first();
+        AccessRuleNodes.refuseMadeByHohenheim(stored, String.valueOf((Object) rule.get(AccessRuleModel.TYPE)),
+            AccessRuleModel.dataOf(rule));
         Map<String, Object> data = AccessRuleModel.dataOf(rule);
         Map<String, Object> hashed = AccessRuleNodes.withHashedPassword(data);
         if (hashed != data) {

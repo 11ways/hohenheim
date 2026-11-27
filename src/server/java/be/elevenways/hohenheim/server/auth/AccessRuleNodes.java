@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -15,7 +16,8 @@ import java.util.Map;
 
 /**
  * THE birth of one node in an access list's rule tree, shared by the Rules tab's add operations and the automation API,
- * and THE hashing of a basic-auth password on its way into a rule, shared with the rule form's save.
+ * THE hashing of a basic-auth password on its way into a rule, shared with the rule form's save, and THE refusal of a
+ * generic writer touching a rule only Hohenheim writes.
  *
  * AIDEV-NOTE: the automation API's node is born EMPTY and, unless it is a group, SWITCHED OFF -- a leaf is
  * enforced per request, so a rule that counted the moment it appeared (before its network or its credential was
@@ -58,6 +60,7 @@ public final class AccessRuleNodes {
     /** @param data the type's own fields, null for a node born without any */
     private static @NonNull Row born(int listId, @Nullable Integer parentId, @NonNull String type,
                                      @Nullable Map<String, Object> data, boolean enabled) {
+        refuseMadeByHohenheim(null, type, data == null ? Map.of() : data);
         AccessRuleModel model = Models.get(AccessRuleModel.class);
         Row rule = model.createEmptyRow();
         rule.set(AccessRuleModel.ACCESS_LIST_ID, listId);
@@ -90,6 +93,27 @@ public final class AccessRuleNodes {
         Map<String, Object> hashed = new LinkedHashMap<>(data);
         hashed.put(key, BasicCredentials.hashIfNeeded(plain));
         return hashed;
+    }
+
+    /**
+     * Refuses a generic rule writer (a rule form, an add, access_rule_set, the automation API) making, retyping or
+     * rewriting a rule only Hohenheim writes (AccessRuleModel.madeByHohenheim); switching one on or off stays open.
+     *
+     * @param stored the rule as stored, null for a new one
+     * @param type   the type it is written with
+     * @param data   the data it is written with
+     * @throws Violations naming {@code type} when the write would make, retype or rewrite such a rule
+     */
+    public static void refuseMadeByHohenheim(@Nullable Row stored, @NonNull String type,
+                                             @NonNull Map<String, Object> data) {
+        String storedType = stored == null ? null : stored.get(AccessRuleModel.TYPE);
+        boolean storedGuarded = stored != null && AccessRuleModel.madeByHohenheim(storedType);
+        // A new type outside the vocabulary is the model's own refusal to answer, unless it retypes a guarded rule.
+        boolean writtenGuarded = AccessRuleModel.TYPE.isValidValue(type) && AccessRuleModel.madeByHohenheim(type);
+        if (!storedGuarded && !writtenGuarded) return;
+        if (stored != null && type.equals(storedType) && data.equals(AccessRuleModel.dataOf(stored))) return;
+        throw Violations.ofField(AccessRuleModel.TYPE.getName(), type,
+            HohenheimMicrocopy.VIOLATIONS.of("access_rule_made_by_hohenheim"));
     }
 
     /**

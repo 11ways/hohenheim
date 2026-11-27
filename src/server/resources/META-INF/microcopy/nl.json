@@ -17037,7 +17037,7 @@
   "signed_link_until": {"text": "{$until :datetime}", "scope": "protected_path"},
   "signed_link_how_card": {"text": "Hoe een link gemaakt wordt", "scope": "protected_path"},
   "signed_link_how_lead": {"text": "Een verzoek zonder geldige, niet verlopen handtekening krijgt de gewone pagina niet gevonden.", "scope": "protected_path"},
-  "signed_link_how": {"text": "{$address}<path>?expires=<expires>&signature=<signature>\n\nexpires    Unix-tijd in seconden; de link werkt tot dan, hoogstens 7 dagen vooruit\nsignature  hex in kleine letters van HMAC-SHA256 over \"<path>\\\\n<expires>\" met het geheim\n\nVoorbeeld: \"{$example_path}\\\\n{$example_expires}\" geeft\n{$example_link}", "scope": "protected_path"},
+  "signed_link_how": {"text": "{$address}<path>?expires=<expires>&signature=<signature>\n\npath       het pad precies zoals het in het adres staat, zonder wat na het vraagteken komt: een spatie is %20\nexpires    Unix-tijd in seconden; de link werkt tot dan, hoogstens 7 dagen vooruit\nsignature  hex in kleine letters van HMAC-SHA256 over \"<path>\\\\n<expires>\" met het geheim\n\nVoorbeeld: \"{$example_path}\\\\n{$example_expires}\" geeft\n{$example_link}", "scope": "protected_path"},
   "signed_link_made_link": {"text": "De link, deze ene keer getoond", "scope": "protected_path"},
   "signed_link_works_until": {"text": "Hij werkt tot {$until :datetime}.", "scope": "protected_path"},
   "replace_signed_link_secret_description": {"text": "Maakt een nieuw geheim voor een pad dat beschermd is met een ondertekende link, een keer aan u getoond; links ondertekend met het huidige blijven zeven dagen werken.", "scope": "hohenheim"},
@@ -17050,6 +17050,8 @@
   "mcp_code_site_link_make": {"text": "De code van het beschermde pad (PP7); het moet beschermd zijn met een ondertekende link.", "scope": "hohenheim"},
   "mcp_signed_link_secret": {"text": "replace maakt een nieuw geheim, een keer getoond in het paneel, het oude werkt nog 7 dagen; end_old stopt het oude nu.", "scope": "hohenheim"},
   "mcp_signed_link_made": {"text": "De link, werkt tot {$until :datetime}: {$link}", "scope": "hohenheim"},
+  "access_rule_made_by_hohenheim": {"text": "Een ondertekende link maakt u door er een pad mee te beveiligen (Een pad beveiligen, of protected_path_set signed_link), en de geheimen wijzigen alleen op het tabblad Ondertekende link van dat pad.", "scope": "violations"},
+  "tv_link_listed": {"text": "{$shows}, gemaakt door {$person}", "scope": "traffic_screen"},
   "protect_path_nobody": {
     "text": "Voeg minstens een persoon toe met een gebruikersnaam en een wachtwoord.",
     "scope": "violations"

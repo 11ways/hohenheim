@@ -90,9 +90,12 @@ public final class AccessWrites {
         .settings(List.of(AccessListModel.SHARED))
         .build();
 
-    /** A rule's kind-shaped data, by the argument giving each field: a provider named by its code. */
+    /**
+     * A rule's kind-shaped data, by the argument giving each field: a provider named by its code. A kind only Hohenheim
+     * writes (a signed link's secrets) gives none: no caller sets its fields.
+     */
     private static final Map<String, Field<?, ?>> RULE_DATA = arguments(AccessRuleModel.DATA,
-        AccessRuleModel.PROVIDER_ID);
+        AccessRuleModel.writableDataSchemas(), AccessRuleModel.PROVIDER_ID);
 
     /** Each rule entry's stored path to the argument naming it, for the refusals of a rule's save. */
     private static final Map<String, String> RULE_NAMED = named(AccessRuleModel.DATA, RULE_DATA,
@@ -130,7 +133,8 @@ public final class AccessWrites {
         .register();
 
     /** A provider's kind-shaped config, by the argument giving each field. */
-    private static final Map<String, Field<?, ?>> PROVIDER_CONFIG = arguments(SiteAuthProviderModel.CONFIG, null);
+    private static final Map<String, Field<?, ?>> PROVIDER_CONFIG = arguments(SiteAuthProviderModel.CONFIG,
+        SiteAuthProviderModel.CONFIG.possibleSchemas(), null);
 
     /** Each provider entry's stored path to the argument naming it, for the refusals of its save. */
     private static final Map<String, String> PROVIDER_NAMED = named(SiteAuthProviderModel.CONFIG, PROVIDER_CONFIG,
@@ -213,15 +217,17 @@ public final class AccessWrites {
     }
 
     /**
+     * @param schemas  the kinds' schemas whose fields become arguments
      * @param provider the field naming a sign-in provider, given by its code under {@code sign_in_provider}; null for
      *                 none
-     * @return every field any kind's schema declares inside the map, by the argument giving it, each once
+     * @return every field the schemas declare inside the map, by the argument giving it, each once
      * @throws IllegalStateException when the map's kinds are not registered yet
      */
     private static @NonNull Map<String, Field<?, ?>> arguments(@NonNull SchemaField container,
+                                                             @NonNull List<Schema> schemas,
                                                              @Nullable Field<?, ?> provider) {
         Map<String, Field<?, ?>> arguments = new LinkedHashMap<>();
-        for (Schema schema : container.possibleSchemas()) {
+        for (Schema schema : schemas) {
             for (Field<?, ?> field : schema.getFields().values()) {
                 String argument = field == provider ? SitePartWrites.SIGN_IN_PROVIDER : field.getInputName();
                 arguments.putIfAbsent(argument, field);
@@ -385,6 +391,12 @@ public final class AccessWrites {
         dataSent.retainAll(RULE_DATA.keySet());
         Map<String, Object> data = laid(AccessRuleModel.DATA, Objects.requireNonNull(type), RULE_DATA, input,
             dataSent, base);
+        // Asked of the rule as it stands, before this write touches it.
+        String kind = Objects.requireNonNull(type);
+        KindSettingsWrites.speaking(() -> {
+            AccessRuleNodes.refuseMadeByHohenheim(rule, kind, data);
+            return null;
+        }, RULE_NAMED);
         rule.set(AccessRuleModel.TYPE, type);
         rule.set(AccessRuleModel.DATA, AccessRuleNodes.withHashedPassword(data));
         String enabled = AccessRuleModel.ENABLED.getInputName();

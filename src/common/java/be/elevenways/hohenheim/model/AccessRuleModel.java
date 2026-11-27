@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -375,6 +376,30 @@ public class AccessRuleModel extends Model {
             case TYPE_BASIC_AUTH, TYPE_AUTH_PROVIDER, TYPE_SIGNED_LINK -> true;
             default -> true;
         };
+    }
+
+    /**
+     * Whether only Hohenheim writes a rule of this type, its data being secrets it made and shows once (the signed
+     * link's, SignedLinkSecrets), so no generic rule writer may make, retype or rewrite one.
+     *
+     * @return true for an unknown type too: a rule this build cannot read is never written blind
+     */
+    public static boolean madeByHohenheim(@Nullable String type) {
+        return switch (type == null ? "" : type) {
+            case TYPE_GROUP, TYPE_BASIC_AUTH, TYPE_IP_ALLOW, TYPE_IP_DENY, TYPE_AUTH_PROVIDER -> false;
+            case TYPE_SIGNED_LINK -> true;
+            default -> true;
+        };
+    }
+
+    /** @return the data schemas of the types a generic rule writer may write, each once */
+    public static @NonNull List<Schema> writableDataSchemas() {
+        List<Schema> schemas = new ArrayList<>();
+        for (EnumField.EnumValue type : TYPE.getValues().values()) {
+            Schema schema = type.getSchema();
+            if (schema != null && !madeByHohenheim(type.getKey()) && !schemas.contains(schema)) schemas.add(schema);
+        }
+        return schemas;
     }
 
     /** @return the stored provider reference as a usable record id, or null */

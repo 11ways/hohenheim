@@ -12,7 +12,9 @@ import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.traffic.HohenheimTraffic;
 import be.elevenways.hohenheim.traffic.ActivityAsk;
 import be.elevenways.hohenheim.traffic.TvLinksCard;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.TextOutput;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.ShareLinkModel;
@@ -27,7 +29,10 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.cms.server.page.PageActions;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -197,10 +202,7 @@ public final class TrafficTvLinks {
                                      @NonNull Map<String, String> names) {
         AccessContext viewer = request.access();
         int server = ControllerIdentity.recordId();
-        List<ShareLink> links = new ArrayList<>();
-        for (ShareLink link : ShareLinks.listAt(TrafficTvLinkLevel.LEVEL, server)) {
-            if (link.isLive(Now.instant())) links.add(link);
-        }
+        List<ShareLink> links = live();
         // One read of every maker's name and one of every code, whatever the number of links.
         People.Page people = People.page(viewer);
         List<String> keys = new ArrayList<>();
@@ -227,15 +229,78 @@ public final class TrafficTvLinks {
         return new TvLinksCard(form(request, page, MAKE_ACTION, Map.of()), listed, String.join("\n", addresses));
     }
 
+    /**
+     * The TV links of this server in force as the list tool lists them (list kind share_link): by code, titled by
+     * what each shows and who made it, with when it was made; never an address.
+     */
+    public static RecordSource.@NonNull Builder<ShareLinkModel> listed() {
+        return RecordSource.of(ShareLinkModel.REF)
+            .project(ShareLinkModel.CREATED_AT)
+            .scopedBy(RowScope.within(() -> ShareLinkModel.ID.in(live().stream().map(ShareLink::id).toList())))
+            .titles(TrafficTvLinks::titles);
+    }
+
+    /** @return this server's TV links in force, newest first */
+    private static @NonNull List<ShareLink> live() {
+        List<ShareLink> links = new ArrayList<>();
+        for (ShareLink link : ShareLinks.listAt(TrafficTvLinkLevel.LEVEL, ControllerIdentity.recordId())) {
+            if (link.isLive(Now.instant())) links.add(link);
+        }
+        return links;
+    }
+
+    /** @return each listed link's title, what it shows and who made it, its sites and makers read once a page */
+    private static @NonNull List<@Nullable String> titles(@NonNull List<Row> rows, @Nullable LocaleChain chain,
+                                                          @Nullable AccessContext reader) {
+        LocaleChain locales = chain != null ? chain : reader != null ? reader.locales() : null;
+        List<String> titles = new ArrayList<>();
+        if (locales == null || reader == null) {
+            for (Row row : rows) titles.add(null);
+            return titles;
+        }
+        Map<String, String> names = new HashMap<>();
+        for (Row site : Models.get(SiteModel.class).find().all()) {
+            names.put(HohenheimTraffic.sourceOf(site.get(SiteModel.ID)), site.get(SiteModel.NAME));
+        }
+        People.Page people = People.page(reader);
+        for (Row row : rows) {
+            UUID by = row.get(ShareLinkModel.CREATED_BY);
+            if (by != null) people.ask(PrincipalRef.account(by));
+        }
+        for (Row row : rows) {
+            UUID by = row.get(ShareLinkModel.CREATED_BY);
+            ShownPerson maker = by == null ? ShownPerson.withheld() : people.shown(PrincipalRef.account(by));
+            Microcopy title = HohenheimMicrocopy.TRAFFIC_SCREEN.of("tv_link_listed")
+                .withArg("shows", shows(TrafficTvLinkLevel.shows(row.get(ShareLinkModel.SCOPE)), names)
+                    .resolve(locales, Zenit.getMessageResolver()))
+                .withArg("person", maker.words(ListedText.TITLE).resolve(locales, Zenit.getMessageResolver()));
+            titles.add(title.resolve(locales, Zenit.getMessageResolver()));
+        }
+        return titles;
+    }
+
+    /**
+     * The one place a TV link's maker leaves as plain text: the list tool's title of the link.
+     *
+     * AIDEV-NOTE: a TextOutput is the inventory of places a drawn person is flattened (protoblast TextOutput); an
+     * assistant's list has no chip to draw.
+     */
+    private enum ListedText implements TextOutput {
+        TITLE
+    }
+
     /** @return what a listed link shows, in the viewer's words: every site, a site's name, or a site gone */
     private static @NonNull String shows(@NonNull ShareLink link, @NonNull Map<String, String> names,
                                          @NonNull Conduit conduit) {
-        ActivityAsk shows = TrafficTvLinkLevel.shows(link);
-        Microcopy words = shows == null || shows.kind() != ActivityAsk.Kind.SITE
+        return shows(TrafficTvLinkLevel.shows(link), names).asString(conduit);
+    }
+
+    /** @return what a link showing this ask shows: every site, a site's name, or a site gone */
+    private static @NonNull Microcopy shows(@Nullable ActivityAsk shows, @NonNull Map<String, String> names) {
+        return shows == null || shows.kind() != ActivityAsk.Kind.SITE
             ? HohenheimMicrocopy.TRAFFIC_SCREEN.of("tv_link_every_site")
             : names.containsKey(shows.value()) ? Microcopy.literal(names.get(shows.value()))
             : HohenheimMicrocopy.TRAFFIC_SCREEN.of("traffic_removed_site");
-        return words.asString(conduit);
     }
 
     /** @return the page action's form, null when the operation withholds it from the viewer */

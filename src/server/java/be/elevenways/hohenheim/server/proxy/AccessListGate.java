@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.net.Hostnames;
+import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -13,8 +14,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the leaf that could still flip a PENDING verdict, and this class only turns that into a
  * response. See {@link AccessRuleTree} for the semantics, including why a refusal that no
  * credential could change answers 403 without ever emitting a challenge.
- * A tree holding a signed-link leaf answers that refusal with the ordinary not-found page instead
- * ({@link AccessRuleTree#refusesAsNotFound}).
+ * A tree holding a signed-link leaf answers that refusal as the site answers a path that does not exist instead: its
+ * own not-found answer when it has one ({@link SiteRequestHandler#answerMissing}), else Hohenheim's not-found page
+ * ({@link AccessRuleTree#refusesAsNotFound}); never the request passed on to an app.
  */
 final class AccessListGate {
 
@@ -25,15 +27,18 @@ final class AccessListGate {
      * When blocked, the response (401, 403 or a provider redirect) is already sent.
      */
     static boolean allows(HttpServerExchange exchange, RouteEntry entry) {
-        return allows(exchange, entry.accessTree);
+        return allows(exchange, entry.accessTree, entry.handler);
     }
 
     /**
      * The same gate over ONE compiled tree: the site-level list and every protected-path
      * guard answer through this single evaluation, so a guarded folder can never behave
      * differently from a guarded site.
+     *
+     * @param site the route's handler, which answers a refusal of a signed path as its own missing path
      */
-    static boolean allows(HttpServerExchange exchange, @Nullable AccessRuleTree tree) {
+    static boolean allows(HttpServerExchange exchange, @Nullable AccessRuleTree tree,
+                          @Nullable SiteRequestHandler site) {
         if (tree == null) {
             return true;
         }
@@ -49,9 +54,11 @@ final class AccessListGate {
                 return true;
             }
             if (tree.refusesAsNotFound() && result.verdict() == AccessRuleTree.Verdict.FAIL) {
-                // A signed path refused looks like no path at all: the site's ordinary not-found page.
-                ErrorPages.send404(exchange, Hostnames.fromHostHeader(
-                    exchange.getRequestHeaders().getFirst(Headers.HOST)));
+                // A signed path refused looks like no path at all: what the site answers for a missing one.
+                if (site == null || !site.answerMissing(exchange)) {
+                    ErrorPages.send404(exchange, Hostnames.fromHostHeader(
+                        exchange.getRequestHeaders().getFirst(Headers.HOST)));
+                }
                 return false;
             }
             SiteAuthDecision refusal = result.refusal(exchange);

@@ -17,7 +17,9 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -179,10 +181,8 @@ public final class AccessListApi {
             return ApiConduits.refusal(conduit, Violations.ofField("type", type,
                 HohenheimMicrocopy.ACCESS_RULE.of("unknown_type")));
         }
-        Row rule = AccessRuleNodes.add(listId,
-            AccessRuleNodes.parentIn(HandlerSupport.submittedString(form, "parent_id"), listId), type);
         // Only the rule form's own entries travel on: parent_id is a tree fact the birth
-        // above consumed, and ResourceWrites refuses a key the form does not declare.
+        // below consumed, and ResourceWrites refuses a key the form does not declare.
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(AccessRuleModel.TYPE.getName(), type);
         if (form.get(AccessRuleModel.DATA.getName()) != null) {
@@ -192,7 +192,11 @@ public final class AccessListApi {
             values.put(AccessRuleModel.ENABLED.getName(),
                 form.get(AccessRuleModel.ENABLED.getName()));
         }
+        Row rule;
         try {
+            // The birth refuses a kind only Hohenheim writes (a signed link) before anything is written.
+            rule = AccessRuleNodes.add(listId,
+                AccessRuleNodes.parentIn(HandlerSupport.submittedString(form, "parent_id"), listId), type);
             ResourceWrites.update(panelFor(ctx), rules, rule.get(AccessRuleModel.ID), rule,
                 ApiConduits.formValues(rules, values), ctx);
         } catch (Violations refused) {
@@ -287,20 +291,25 @@ public final class AccessListApi {
     /**
      * THE enumerated view of a rule row.
      *
-     * AIDEV-NOTE: the stored basic-auth password is absent BY NAME. It is an argon2 hash
-     * rather than a secret, but a hash is still credential material, and the API's promise
-     * is that a value written as a credential has no representation afterwards.
+     * AIDEV-NOTE: a secret of the rule's kind (a signed link's, and the stored basic-auth password) is absent BY ITS
+     * FIELD, and so is a key the kind does not declare. A password is an argon2 hash rather than a secret, but a hash
+     * is still credential material, and the API's promise is that a value written as a credential has no
+     * representation afterwards.
      */
     private static @NonNull Map<String, Object> ruleProjection(@NonNull Row rule) {
         Map<String, Object> entry = new LinkedHashMap<>();
+        String type = String.valueOf((Object) rule.get(AccessRuleModel.TYPE));
         entry.put("id", rule.get(AccessRuleModel.ID));
         entry.put("access_list_id", rule.get(AccessRuleModel.ACCESS_LIST_ID));
         entry.put("parent_id", rule.get(AccessRuleModel.PARENT_ID));
-        entry.put("type", String.valueOf((Object) rule.get(AccessRuleModel.TYPE)));
+        entry.put("type", type);
         entry.put("enabled", Boolean.TRUE.equals(rule.get(AccessRuleModel.ENABLED)));
+        Schema schema = AccessRuleModel.TYPE.getSchemaForValue(type);
         Map<String, Object> data = new LinkedHashMap<>();
         for (Map.Entry<String, Object> value : AccessRuleModel.dataOf(rule).entrySet()) {
-            if (!AccessRuleModel.BASIC_AUTH_PASSWORD.getName().equals(value.getKey())) {
+            Field<?, ?> field = schema == null ? null : schema.getFields().get(value.getKey());
+            if (field != null && !field.isSecret()
+                    && !AccessRuleModel.BASIC_AUTH_PASSWORD.getName().equals(value.getKey())) {
                 data.put(value.getKey(), value.getValue());
             }
         }

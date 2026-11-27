@@ -78,6 +78,7 @@ public final class PaasApi {
         initEnvironmentVariables();
         SiteApi.init();
         AccessListApi.init();
+        ProtectedPathApi.init();
     }
 
     // -- projects -------------------------------------------------------------

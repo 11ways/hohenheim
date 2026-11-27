@@ -103,6 +103,17 @@ public class StaticFileHandler implements SiteRequestHandler {
         this.serve(exchange);
     }
 
+    /** A refused path answers what a missing one does: the fallback file, the not-found page, or a plain 404. */
+    @Override
+    public boolean answerMissing(HttpServerExchange exchange) {
+        if (exchange.isInIoThread()) {
+            exchange.dispatch(() -> this.answer(exchange, null));
+        } else {
+            this.answer(exchange, null);
+        }
+        return true;
+    }
+
     private void serve(@NonNull HttpServerExchange exchange) {
         String target = normalize(exchange.getRelativePath());
         if (target == null || (!this.showHidden && hidden(target))) {
@@ -120,9 +131,22 @@ public class StaticFileHandler implements SiteRequestHandler {
                     return;
                 }
             }
+            this.answer(exchange, this.files.kindOf(target) == Kind.FILE ? target : null);
+        } catch (IOException e) {
+            failed(exchange);
+        }
+    }
 
+    /**
+     * The asked file, or for none what a path naming no file answers: the fallback (200), else the not-found page.
+     *
+     * @param found the file asked for, null when the path names none
+     */
+    private void answer(@NonNull HttpServerExchange exchange, @Nullable String found) {
+        try {
+            String target = found;
             int status = 200;
-            if (this.files.kindOf(target) != Kind.FILE && this.fallbackFile != null && !this.fallbackFile.isBlank()) {
+            if (target == null && this.fallbackFile != null && !this.fallbackFile.isBlank()) {
                 target = normalize(this.fallbackFile);
             }
             if (target == null || this.files.kindOf(target) != Kind.FILE) {
@@ -143,11 +167,16 @@ public class StaticFileHandler implements SiteRequestHandler {
             }
             this.serveFile(exchange, target, status);
         } catch (IOException e) {
-            if (!exchange.isResponseStarted()) {
-                plain(exchange, 500, "Read error");
-            } else {
-                exchange.endExchange();
-            }
+            failed(exchange);
+        }
+    }
+
+    /** A read that failed: 500 before the answer started, else the exchange ends where it is. */
+    private static void failed(@NonNull HttpServerExchange exchange) {
+        if (!exchange.isResponseStarted()) {
+            plain(exchange, 500, "Read error");
+        } else {
+            exchange.endExchange();
         }
     }
 

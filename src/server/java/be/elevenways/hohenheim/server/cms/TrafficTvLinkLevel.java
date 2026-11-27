@@ -104,7 +104,12 @@ public final class TrafficTvLinkLevel {
 
     /** @return what a TV link shows: every site or one, null for a scope no TV link is made with */
     public static @Nullable ActivityAsk shows(@NonNull ShareLink link) {
-        ActivityAsk shows = ActivityAsk.parse(link.scope());
+        return shows(link.scope());
+    }
+
+    /** @return what a TV link of this stored scope shows: every site or one, null for one no TV link is made with */
+    public static @Nullable ActivityAsk shows(@Nullable String scope) {
+        ActivityAsk shows = scope == null ? null : ActivityAsk.parse(scope);
         return shows == null || shows.kind() == ActivityAsk.Kind.TV ? null : shows;
     }
 

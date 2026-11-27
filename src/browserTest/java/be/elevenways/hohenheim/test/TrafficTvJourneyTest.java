@@ -302,6 +302,16 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
             HttpResponse<String> tab = adminGet(activity);
             assertThat(ADDRESS.matcher(tab.body()).find()).as("step 2: the address on the tab").isTrue();
             assertThat(ADDRESS.matcher(adminGet(activity).body()).find()).as("step 2: once").isFalse();
+            // The list names the link by its code, what it shows and who made it; neither it nor the read says the
+            // address.
+            String siteName = String.valueOf((Object) Objects.requireNonNull(Models.get(SiteModel.class)
+                .findById(fixture.siteA)).get(SiteModel.NAME));
+            String listed = admin.call("list", Map.of("kind", "share_link")).text();
+            assertThat(listed).as("step 2: listed").contains(code).contains(siteName + ", made by")
+                .doesNotContain("znsl_").doesNotContain("/tv/");
+            String read = admin.call("read", Map.of("codes", List.of(code))).text();
+            assertThat(read).as("step 2: read").contains(code).contains(siteName)
+                .doesNotContain("znsl_").doesNotContain("/tv/");
 
             // 3. A wrong call is refused by the argument it names.
             McpHttpSession.Answer nowhere = admin.call("tv_link_set", Map.of("site", "S999999"));
@@ -326,6 +336,8 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
             assertThat(ended.error()).as("step 5: " + ended.text()).isFalse();
             assertThat(ShareLinks.bearer(linkId)).as("step 5: ended").isNull();
             assertThat(admin.call("tv_link_end", Map.of("code", code)).error()).as("step 5: once").isTrue();
+            assertThat(admin.call("list", Map.of("kind", "share_link")).text()).as("step 5: no longer listed")
+                .doesNotContain(code);
         } finally {
             while (!cleanUp.isEmpty()) cleanUp.pop().run();
         }

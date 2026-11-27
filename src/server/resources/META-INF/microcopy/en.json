@@ -17037,7 +17037,7 @@
   "signed_link_until": {"text": "{$until :datetime}", "scope": "protected_path"},
   "signed_link_how_card": {"text": "How a link is made", "scope": "protected_path"},
   "signed_link_how_lead": {"text": "A request without a valid, unexpired signature gets the ordinary not-found page.", "scope": "protected_path"},
-  "signed_link_how": {"text": "{$address}<path>?expires=<expires>&signature=<signature>\n\nexpires    Unix time in seconds; the link works until then, at most 7 days ahead\nsignature  lowercase hex of HMAC-SHA256 over \"<path>\\\\n<expires>\" with the secret\n\nExample: \"{$example_path}\\\\n{$example_expires}\" gives\n{$example_link}", "scope": "protected_path"},
+  "signed_link_how": {"text": "{$address}<path>?expires=<expires>&signature=<signature>\n\npath       the path exactly as it appears in the address, without the query: a space is %20\nexpires    Unix time in seconds; the link works until then, at most 7 days ahead\nsignature  lowercase hex of HMAC-SHA256 over \"<path>\\\\n<expires>\" with the secret\n\nExample: \"{$example_path}\\\\n{$example_expires}\" gives\n{$example_link}", "scope": "protected_path"},
   "signed_link_made_link": {"text": "The link, shown this once", "scope": "protected_path"},
   "signed_link_works_until": {"text": "It works until {$until :datetime}.", "scope": "protected_path"},
   "replace_signed_link_secret_description": {"text": "Makes a new secret for a path protected with a signed link, shown once to you; links signed with the current one keep working for seven days.", "scope": "hohenheim"},
@@ -17050,6 +17050,8 @@
   "mcp_code_site_link_make": {"text": "The protected path's code (PP7); it must be protected with a signed link.", "scope": "hohenheim"},
   "mcp_signed_link_secret": {"text": "replace makes a new secret, shown once in the panel, the old one working 7 more days; end_old ends the old one now.", "scope": "hohenheim"},
   "mcp_signed_link_made": {"text": "The link, working until {$until :datetime}: {$link}", "scope": "hohenheim"},
+  "access_rule_made_by_hohenheim": {"text": "A signed link is made by protecting a path with one (Protect a path, or protected_path_set signed_link), and its secrets change only on that path's Signed link tab.", "scope": "violations"},
+  "tv_link_listed": {"text": "{$shows}, made by {$person}", "scope": "traffic_screen"},
   "protect_path_nobody": {
     "text": "Add at least one person with a username and a password.",
     "scope": "violations"

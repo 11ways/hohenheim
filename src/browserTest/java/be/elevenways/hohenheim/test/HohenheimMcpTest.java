@@ -283,7 +283,8 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 if (!declared.contains(tool.name())) continue;
                 String said = tool.description(reader);
                 assertThat(said).as("step 4: " + tool.name() + " in " + language).isNotBlank()
-                    .doesNotStartWith("mcp_").isNotEqualTo(tool.name());
+                    .isNotEqualTo(tool.name());
+                assertWorded(said, "step 4: " + tool.name() + " in " + language);
                 if ("en".equals(language)) english.put(tool.name(), said);
                 else assertThat(said).as("step 4: " + tool.name() + " says it in Dutch")
                     .isNotEqualTo(english.get(tool.name()));
@@ -291,6 +292,11 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
                 properties.forEach((argument, shape) -> assertThat(((Map<?, ?>) shape).get("description"))
                     .as("step 4: " + tool.name() + "." + argument + " in " + language).isInstanceOf(String.class)
                     .asString().isNotBlank());
+                // Every text of the schema, a nested entry's and a flag's too: a key no catalog holds resolves to
+                // itself, which a blank check never sees (file_write's folder said "mcp_folder" on a real server).
+                for (String text : descriptions(tool.inputSchema(reader))) {
+                    assertWorded(text, "step 4: an argument of " + tool.name() + " in " + language);
+                }
                 if (!"en".equals(language)) continue;
                 // The owner's words: an app is never an instance or a workload, an address never a domain.
                 List<String> texts = new ArrayList<>(List.of(said));
@@ -2273,5 +2279,24 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         row.set(SiteModel.SETTINGS, new LinkedHashMap<>(Map.of("root_path", "/tmp/" + name)));
         Models.get(SiteModel.class).save(row);
         return row.get(SiteModel.ID);
+    }
+
+    /** A text an assistant reads is words, never a bare microcopy key, which is what a key no catalog holds says. */
+    static void assertWorded(String text, String where) {
+        assertThat(text).as(where + " says words, not a key: " + text).doesNotMatch("[a-z][a-z0-9_.:-]*");
+    }
+
+    /** @return every description in an input schema, nested entries' and enum members' too */
+    static List<String> descriptions(Object schema) {
+        List<String> found = new ArrayList<>();
+        if (schema instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> {
+                if ("description".equals(key) && value instanceof String text) found.add(text);
+                else found.addAll(descriptions(value));
+            });
+        } else if (schema instanceof List<?> list) {
+            for (Object item : list) found.addAll(descriptions(item));
+        }
+        return found;
     }
 }

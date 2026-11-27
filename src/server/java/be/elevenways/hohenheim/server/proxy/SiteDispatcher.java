@@ -531,7 +531,7 @@ public class SiteDispatcher implements HttpHandler {
         String canonicalPath = path != null ? path.canonical() : exchange.getRelativePath();
         for (RouteEntry.PathGuard guard : entry.pathGuards) {
             if (guard.covers(canonicalPath)
-                    && !AccessListGate.allows(exchange, guard.tree())) {
+                    && !AccessListGate.allows(exchange, guard.tree(), entry.handler)) {
                 return;
             }
         }

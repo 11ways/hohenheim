@@ -39,6 +39,17 @@ public interface SiteRequestHandler {
     }
 
     /**
+     * Answers this request as the site answers a path that does not exist, so a refused private path looks like a
+     * missing one.
+     *
+     * @return false when the site has no not-found answer of its own Hohenheim may give without passing the request
+     *         on (an app behind it); the caller then answers Hohenheim's not-found page
+     */
+    default boolean answerMissing(HttpServerExchange exchange) {
+        return false;
+    }
+
+    /**
      * Clean up resources (kill processes, close connections, etc.).
      */
     default void destroy() {}

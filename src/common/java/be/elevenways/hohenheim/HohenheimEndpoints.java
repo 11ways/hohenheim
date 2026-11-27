@@ -298,6 +298,12 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    /** The protected path an automation API request makes a signed link to. */
+    public static final ParameterDefinition<Integer> PROTECTED_PATH_ID = ParameterDefinition.builder(Integer.class)
+        .name("protectedPathId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---
     public static final Endpoint<Object> DNS_ZONE_IMPORT = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("dns_zone_import"))
@@ -953,6 +959,21 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
             .addDelimiter().addStatic("rules").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /**
+     * One signed link to a file under a path protected with one, for a customer's own script holding an API key.
+     * csrfExempt is safe: the handler refuses non-API-key principals.
+     */
+    public static final Endpoint<Object> API_V1_PROTECTED_PATH_LINK = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("api_v1_protected_path_link"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("protected-paths").addDelimiter().addParameter(PROTECTED_PATH_ID)
+            .addDelimiter().addStatic("links").build())
         .requiresLogin()
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)
