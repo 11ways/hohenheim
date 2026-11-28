@@ -51,9 +51,9 @@ import java.util.Map;
  * names. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
  *
  * AIDEV-NOTE: "tool" is the one call that speaks for a person, so it answers this server's master alone, as
- * generations and rows do (401, then 403 for a server this one manages); who the person is and what they may do is
- * ClusterToolCalls'. A body that cannot be read is 400, an assistant connection this build does not serve 404, a
- * person nobody here may be named as 422 with the refusal's token, and scopes not admitting the connection 403.
+ * generations and rows do (401, then 403 for a server this one manages); the call runs on the master's word as the
+ * person it names (ClusterToolCalls). A body that cannot be read is 400, an assistant connection this build does not
+ * serve 404, and scopes not admitting the connection 403.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -248,17 +248,14 @@ public final class ClusterHandlers {
         }
         ClusterToolCalls.Ran ran;
         try {
-            ran = ClusterToolCalls.runHere(row, asked, conduit);
+            ran = ClusterToolCalls.runHere(row, Reader.READER.principal(row.get(LinkedServerModel.ID),
+                String.valueOf((Object) row.get(LinkedServerModel.NAME))), Reader.READER, asked, conduit);
         } catch (DomainRefusal refused) {
             return refusal(conduit, refused.reason());
         }
         return switch (ran) {
             case ClusterToolCalls.Answered answered ->
                 new JsonResult<>(Map.of("answer", ClusterToolCalls.wireOf(answered.response())));
-            case ClusterToolCalls.Refused refused -> {
-                conduit.setResponseStatus(422);
-                yield new JsonResult<>(Map.of("refusal", refused.refusal().token()));
-            }
             case ClusterToolCalls.Unknown unknown -> {
                 conduit.setResponseStatus(404);
                 yield new JsonResult<>(Map.of("error", "unknown server"));

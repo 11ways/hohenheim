@@ -33,14 +33,11 @@ public enum CarriedCallRefusal {
     /** The server holding the thing is no longer linked to this one. */
     GONE("gone"),
 
-    /** The caller is no person signed in here with the Proteus realm this server signs people in with. */
-    NO_SHARED_SIGN_IN("no_shared_sign_in"),
-
-    /** The server signs people in with another Proteus realm, or with none: nobody can be named to it from here. */
-    OTHER_REALM("other_realm"),
-
-    /** The person has no enabled account on the server. */
-    NO_ACCOUNT("no_account");
+    /**
+     * The caller is no administrator of this server: until grants follow the master, nobody else may act on a
+     * managed server from here. Nothing is sent.
+     */
+    NOT_ADMINISTRATOR("not_administrator");
 
     private final String token;
 
@@ -53,11 +50,13 @@ public enum CarriedCallRefusal {
         return this.token;
     }
 
-    /** @return whether the managed server answers this refusal itself, as its token on the wire */
+    /**
+     * @return whether the managed server answers this refusal itself, as its token on the wire: none does since a
+     *         server runs a call on its master's word and refuses nobody the master speaks for
+     */
     public boolean answeredByTheServer() {
         return switch (this) {
-            case OTHER_REALM, NO_ACCOUNT -> true;
-            case NOT_ANSWERING, MAY_HAVE_ARRIVED, REFUSED, OTHER_VERSION, GONE, NO_SHARED_SIGN_IN -> false;
+            case NOT_ANSWERING, MAY_HAVE_ARRIVED, REFUSED, OTHER_VERSION, GONE, NOT_ADMINISTRATOR -> false;
         };
     }
 

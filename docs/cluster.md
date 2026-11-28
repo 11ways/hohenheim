@@ -81,12 +81,13 @@ answers 401; a server this one manages, presenting its own valid key, answers 40
 server this one manages (codes also the server a valid ticket names) and 403 to its master. A refusal names its
 reason's code alone.
 
-A tool body carries `realm` and `subjects` (who asks, see "Assistants"), `server` (the assistant connection's name),
-`tool`, `arguments` as the assistant sent them and `scopes` (those of the caller's key on the master); the master's
+A tool body carries `person` and `name` (the person as the master knows them), the master's word (core `MasterWord`):
+`permissions` (the declared permissions the caller holds there, see "Assistants"), `capabilities` (per model, the
+record capabilities the caller's key covers there) and `scopes` (those of the caller's key on the master),
+`server` (the assistant connection's name), `tool` and `arguments` as the assistant sent them; the master's
 `Accept-Language` carries the caller's languages. Tool answers only this server's master (401, then 403 as
-generations); a body it cannot read is 400, a connection this build does not serve 404, a person it cannot name
-422 with `refusal` `other_realm` or `no_account`, and scopes not admitting the connection 403. A tool call may take
-up to three minutes (a command run in an app answers within two).
+generations); a body it cannot read is 400, a connection this build does not serve 404, and scopes not admitting the
+connection 403. A tool call may take up to three minutes (a command run in an app answers within two).
 
 ## Checking each other
 
@@ -176,6 +177,14 @@ left out of the kept counts. Its generation lives in the owning server's process
 so a restart only moves it forward. A master reads every server's apps' state with two statements: its links and
 the kept state of all of them. A silent server's state stays as it last told it.
 
+The master's Apps list draws its own apps and, for an administrator, every linked server's apps from that state
+with its own cell code (`AppDirectory.everyServer`): a Server column and filter exist only while it manages a
+server, a linked server's row says it has no page here yet and opens nothing, and a silent server's rows recede,
+draw no state glyph (`HealthTone.SILENT`), say when it last answered and are named by the list's notice. Who sees
+them is decided by permission alone today: an app's owners and grants are the linked server's own rows, so a person
+who is no administrator sees none of them until grants follow the master. The sidebar badge and the dashboard count
+this server's own apps only.
+
 ## One code per thing
 
 A code (`AP12`, `S14`) names one thing in the whole cluster, the same on every server, with no server letter in it.
@@ -220,22 +229,21 @@ nothing; codes of one linked server are carried to it (tool) and its answer come
 servers, or of the master and a linked server, are refused with "The records this call names are kept on different
 servers". `list` and every call naming no code run on the master.
 
-A carried call runs on the linked server as the same person's own account there, with that account's rights,
-narrowed by the scopes of the key the assistant used on the master. Both servers name the person by the Proteus
-sign-in they share: the realm (the Proteus endpoint and realm client, compared on both sides) and the person's
-subjects in it, never an e-mail address. Refused, with nothing read or written on the linked server:
+A carried call runs on the linked server on the master's word: the master is the one place of accounts and rights,
+and the linked server needs no account for the person and decides nothing of their rights. The master sends the
+person's id and name as it knows them and its word: the permissions it says they hold (every declared permission the
+caller holds there, already narrowed by the scopes of the key the assistant used), the record capabilities that key
+covers there and its scopes; the linked server runs the call as a person spoken for (`SpokenForPrincipal`) holding
+exactly that word, and anything the word leaves out is refused there. Until grants follow the master, only an
+administrator of the master is carried; anyone else is refused on the master before anything is sent: "Only an
+administrator of this server can act on Kuifje from here for now; nothing was changed".
 
-- a caller with no Proteus sign-in on the master (a password-only account, a key of no person): "Acting on Kuifje
-  from here needs a person who signs in with Proteus, here and on Kuifje";
-- a person with no enabled account on the linked server: "You have no account on Kuifje. Sign in there with Proteus
-  once";
-- a linked server signing people in with another realm, or with none.
-
-A master's administrator is nothing on a linked server without an own account there, and a linked server's key
-speaks for nobody on its master. The linked server's history credits the person, through a credential named after
-the master (an app password named "Robbedoes"). A silent server answers "Kuifje does not answer; nothing was
-changed"; a change sent without an answer says it may or may not have been made. After a carried change the master
-brings its record of that server in step before it answers.
+The linked server's history names the person by the name the master gave, alone ("Ada", never after a kind), kept
+there as a record of the master (`PeerRecords.keep`, kind `zenit:spoken_for`), through the master. A linked server's
+key speaks for nobody on its
+master. A silent server answers "Kuifje does not answer; nothing was changed"; a change sent without an answer says it
+may or may not have been made. After a carried change the master brings its record of that server in step before it
+answers.
 
 Every proxy removes the whole `X-Hohenheim-*` family from every HTTP request it forwards, whoever sends it and on
 every route, a linked server included (a TLS passthrough site's traffic is never read, so nothing is removed there);

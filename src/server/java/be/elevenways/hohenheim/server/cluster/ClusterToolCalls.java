@@ -5,20 +5,23 @@ import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.LinkedServerModel;
-import be.elevenways.hohenheim.server.auth.ProteusSignIn;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpResponse;
 import be.elevenways.zenit.ai.server.mcp.host.McpToolCarrier;
-import be.elevenways.zenit.auth.model.HostCredentialPrincipal;
-import be.elevenways.zenit.auth.model.ScopedAccountPrincipal;
-import be.elevenways.zenit.auth.server.HostCredentialPrincipals;
+import be.elevenways.zenit.auth.model.ScopedPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.peer.LinkedInstallPrincipal;
+import be.elevenways.zenit.common.peer.MasterWord;
+import be.elevenways.zenit.common.peer.SharedRowsReader;
+import be.elevenways.zenit.common.peer.SpokenForPrincipal;
 import be.elevenways.zenit.common.result.ReaderFact;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.peer.PeerRecords;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -30,19 +33,20 @@ import java.util.UUID;
 
 /**
  * A tool call about a thing another server owns, both ways: the master carries it ({@link #carry}) to the server it
- * manages that owns the thing, which runs it as the person's own account there ({@link #runHere}).
+ * manages that owns the thing, which runs it on the master's word as the person the master names ({@link #runHere}).
  *
  * AIDEV-NOTE: who may speak for a person. Only a master, and only on a server it manages: {@link #runHere} is reached
  * only through ClusterHandlers' tool handler, which answers the linked server whose key it is and whose row says it is
  * THIS server's master (a server this one manages, presenting its own valid key, is refused before anything is read).
- * The master names the person by the Proteus sign-in both servers share (SharedSignIn: realm and subjects, never an
- * address); this server finds its own enabled account linked to those subjects and runs the call as that account
- * (HostCredentialPrincipal, the master's name as the credential every write is credited through), narrowed to the
- * scopes the caller's credential carries on the master, through its own MCP server's one choke point
- * ({@link McpHostServer#carriedHere}), which never carries a call on. No administrator of the master is anything
- * here without an own account, and a caller that is no person signed in with Proteus is refused on the master
- * before anything is sent.
- *
+ * The master is the one place of accounts and rights: it sends the person's id and name as it knows them and its word
+ * (MasterWord): every declared permission the caller holds through its credential there, every record capability that
+ * credential covers there, and its scopes. The managed server needs no account for the person and decides nothing of
+ * their rights: it runs the call as a SpokenForPrincipal holding exactly that word, through its own MCP server's one
+ * choke point
+ * ({@link McpHostServer#carriedHere}), which never carries a call on, and its history names the person by the name the
+ * master gave, kept as a record of the master (PeerRecords.keep), through the master.
+ * AIDEV-NOTE: until grants follow the master, only an administrator of the master is carried; anyone else is refused
+ * on the master before anything is sent (NOT_ADMINISTRATOR), so no word widens what a person may see or do.
  * AIDEV-NOTE: a refusal or failure answers the tool in words naming the server, never the master's record of it and
  * never a write here; a call that may change something and got no usable answer says it may or may not have been
  * carried out. After a carried change the master brings its record of that server in step before it answers.
@@ -82,21 +86,17 @@ final class ClusterToolCalls implements McpToolCarrier {
         if (LinkState.of(server, LinkedServers.ownVersion()) == LinkState.OTHER_VERSION) {
             return refused(caller, CarriedCallRefusal.OTHER_VERSION, name);
         }
-        String realm = ProteusSignIn.realm();
-        if (realm == null || !(caller.principal() instanceof ScopedAccountPrincipal person)) {
-            return refused(caller, CarriedCallRefusal.NO_SHARED_SIGN_IN, name);
-        }
-        List<String> subjects = SharedSignIn.subjectsOf(person.reference().id(), realm);
-        if (subjects.isEmpty()) {
-            return refused(caller, CarriedCallRefusal.NO_SHARED_SIGN_IN, name);
+        if (!HohenheimAccess.isAdmin(caller) || !(caller.principal() instanceof ScopedPrincipal person)
+                || person.reference() == null || !person.reference().kind().account()) {
+            return refused(caller, CarriedCallRefusal.NOT_ADMINISTRATOR, name);
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("realm", realm);
-        body.put("subjects", subjects);
+        body.put("person", String.valueOf(person.reference().id()));
+        body.put("name", person.displayName());
+        body.putAll(MasterWord.of(caller, person.scopes()).wire());
         body.put("server", call.server());
         body.put("tool", call.tool());
         body.put("arguments", call.arguments());
-        body.put("scopes", person.scopes());
         LinkCalls.Answer answer = LinkCalls.tool(server.get(LinkedServerModel.BASE_URL),
             server.get(LinkedServerModel.LINK_KEY), body, caller.locales().tags());
         CarriedCallRefusal unsure = call.writes() ? CarriedCallRefusal.MAY_HAVE_ARRIVED
@@ -129,42 +129,38 @@ final class ClusterToolCalls implements McpToolCarrier {
     }
 
     /**
-     * What a master asked of this server: who asks, by the sign-in both share, and the call as its caller sent it.
+     * What a master asked of this server: whom it speaks for, with what word, and the call as its caller sent it.
      *
-     * @param realm     the master's Proteus realm
-     * @param subjects  the person's subjects in that realm
+     * @param person    the person's id on the master
+     * @param name      the person's name, as the master names them
+     * @param word      what the master says the person may do
      * @param server    the MCP server the call came to
      * @param tool      the tool's name
      * @param arguments the arguments as sent
-     * @param scopes    the scopes the caller's credential carries on the master
      */
-    record Asked(@NonNull String realm, @NonNull List<String> subjects, @NonNull String server, @NonNull String tool,
-                 @NonNull Map<String, Object> arguments, @NonNull List<String> scopes) {
+    record Asked(@NonNull UUID person, @NonNull String name, @NonNull MasterWord word, @NonNull String server,
+                 @NonNull String tool, @NonNull Map<String, Object> arguments) {
     }
 
     /** @return what the body asks, null for a body that cannot be read as a carried call */
     @SuppressWarnings("unchecked")
     static @Nullable Asked asked(@NonNull Map<String, Object> body) {
-        List<String> subjects = texts(body.get("subjects"));
-        List<String> scopes = texts(body.get("scopes"));
-        if (!(body.get("realm") instanceof String realm) || subjects == null || subjects.isEmpty() || scopes == null
+        MasterWord word = MasterWord.read(body);
+        UUID person = body.get("person") instanceof String id ? Uuids.canonical(id) : null;
+        if (person == null || !(body.get("name") instanceof String name) || name.isBlank() || word == null
                 || !(body.get("server") instanceof String server) || !(body.get("tool") instanceof String tool)
                 || !(body.get("arguments") instanceof Map<?, ?> arguments)) {
             return null;
         }
-        return new Asked(realm, subjects, server, tool, (Map<String, Object>) arguments, scopes);
+        return new Asked(person, name, word, server, tool, (Map<String, Object>) arguments);
     }
 
     /** What running a carried call here came to. */
-    sealed interface Ran permits Answered, Refused, Unknown {
+    sealed interface Ran permits Answered, Unknown {
     }
 
-    /** The tool answered, as the person's account here. */
+    /** The tool answered, as the person the master speaks for. */
     record Answered(@NonNull McpResponse response) implements Ran {
-    }
-
-    /** Nobody here may be named by what the master sent; nothing was read or written. */
-    record Refused(@NonNull CarriedCallRefusal refusal) implements Ran {
     }
 
     /** This build serves no assistant connection of that name. */
@@ -172,28 +168,24 @@ final class ClusterToolCalls implements McpToolCarrier {
     }
 
     /**
-     * Runs a call this server's master carried, as the person's own account here.
+     * Runs a call this server's master carried, on the master's word, as the person it names.
      *
      * @param master  this server's master, whose key the call presented
+     * @param speaker the principal that master acts as here, minted by {@code reader}
+     * @param reader  the one reader of shared rows, which alone speaks for a master's people
      * @param conduit the call's request: it carries the caller's languages, and the person's principal from here on
      * @throws be.elevenways.zenit.common.refusal.DomainRefusal FORBIDDEN when the scopes do not admit the server
      */
-    static @NonNull Ran runHere(@NonNull Row master, @NonNull Asked asked, @NonNull Conduit conduit) {
-        String realm = ProteusSignIn.realm();
-        if (realm == null || !realm.equals(asked.realm())) {
-            return new Refused(CarriedCallRefusal.OTHER_REALM);
-        }
+    static @NonNull Ran runHere(@NonNull Row master, @NonNull LinkedInstallPrincipal speaker,
+                                @NonNull SharedRowsReader reader, @NonNull Asked asked, @NonNull Conduit conduit) {
         McpHostServer server = McpHostServers.routed(asked.server());
         if (server == null) {
             return new Unknown();
         }
-        UUID account = SharedSignIn.accountOf(asked.subjects(), realm);
-        // The master's name as this server calls it is the credential: what every write is credited through.
-        HostCredentialPrincipal person = account == null ? null : HostCredentialPrincipals.forAccount(account,
-            String.valueOf((Object) master.get(LinkedServerModel.NAME)), asked.scopes());
-        if (person == null) {
-            return new Refused(CarriedCallRefusal.NO_ACCOUNT);
-        }
+        // The person is kept as a record of the master, so history names them by the master's name for them.
+        UUID kept = PeerRecords.keep(ClusterRecords.peerKey(master), SpokenForPrincipal.KEPT_AS,
+            asked.person().toString(), asked.name(), "{}");
+        SpokenForPrincipal person = reader.spokenFor(speaker, kept, asked.name(), asked.word());
         ReaderFact.installForRequest(conduit, person);
         return new Answered(server.carriedHere(AccessContext.of(conduit)).call(asked.tool(), asked.arguments()));
     }
@@ -243,20 +235,5 @@ final class ClusterToolCalls implements McpToolCarrier {
             Blast.log("CLUSTER: a carried tool call to", name, "may or may not have been carried out");
         }
         return McpResponse.error(caller.text(refusal.message(name)));
-    }
-
-    /** @return the texts a list holds, null for anything that is no list of texts */
-    private static @Nullable List<String> texts(@Nullable Object value) {
-        if (!(value instanceof List<?> list)) {
-            return null;
-        }
-        List<String> texts = new ArrayList<>(list.size());
-        for (Object item : list) {
-            if (!(item instanceof String text)) {
-                return null;
-            }
-            texts.add(text);
-        }
-        return texts;
     }
 }
