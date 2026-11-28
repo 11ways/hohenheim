@@ -21715,5 +21715,15 @@
   "settings.hohenheim.files.site_files_directory.label": "Map met sitebestanden",
   "settings.hohenheim.files.site_files_directory.help": "De map op deze host met de bestanden van elke site die eigen bestanden serveert en geen andere opslag noemt.",
   "settings.hohenheim.files.max_site_files_mb.label": "Max. bestanden per site",
-  "settings.hohenheim.files.max_site_files_mb.help": "Het meeste dat de eigen bestanden van een site samen mogen bevatten; een upload die dat zou overschrijden wordt geheel geweigerd."
+  "settings.hohenheim.files.max_site_files_mb.help": "Het meeste dat de eigen bestanden van een site samen mogen bevatten; een upload die dat zou overschrijden wordt geheel geweigerd.",
+  "server_column": {"text": "Server", "scope": "app_list"},
+  "held_last_seen": {"text": "Laatst gezien {$at :datetime}", "scope": "app_list"},
+  "held_never_seen": {"text": "Nooit geantwoord", "scope": "app_list"},
+  "held_silent": {"text": "{$server} antwoordt niet", "scope": "app_list"},
+  "held_no_page": {"text": "Hier nog geen pagina", "scope": "app_list"},
+  "held_band": {"text": "{$server} antwoordt niet sinds {$since :datetime}. Zijn apps staan er zoals hij ze had toen hij het laatst antwoordde.", "scope": "app_list"},
+  "held_note_column": {"text": "Opent op deze server", "scope": "app_list"},
+  "held_unreadable": {"text": "Deze server kan niet lezen wat {$server} over deze app vertelde; werk deze server bij", "scope": "app_list"},
+  "server_all": {"text": "Alle servers", "scope": "app_list"},
+  "server_silent_option": {"text": "{$server}, antwoordt niet", "scope": "app_list"}
 }

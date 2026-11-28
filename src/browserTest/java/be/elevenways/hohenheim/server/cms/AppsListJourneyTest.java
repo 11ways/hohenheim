@@ -127,16 +127,16 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                 null, CertCoverage.NONE, "/admin/sites/" + redirect.get(SiteModel.ID) + "/page/overview", "step 3");
             assertRow(apps.get(PREFIX + "static"), Source.WEBSITE, "Static files", "static.apps-journey.test",
                 null, CertCoverage.ERROR, "/admin/sites/" + files.get(SiteModel.ID) + "/page/overview", "step 3");
-            assertThat(apps.get(PREFIX + "static").health().tone())
+            assertThat(apps.get(PREFIX + "static").cells().health().tone())
                 .as("step 3: a name forced to HTTPS without a certificate is the broken verdict the site page shows")
                 .isEqualTo(HealthTone.BROKEN);
             // The HTTPS column is the main address's HTTPS, never the app's verdict: the Addresses list's own words.
-            StateLineCell staticHttps = apps.get(PREFIX + "static").https();
+            StateLineCell staticHttps = apps.get(PREFIX + "static").cells().https();
             assertThat(say(staticHttps.label())).as("step 3: the forced name reads as the Addresses list says it")
                 .isEqualTo("Not working").isNotEqualTo("Error page");
             assertThat(say(staticHttps.detail())).as("step 3: with the Addresses list's reason beside it")
                 .isEqualTo(say(DomainParts.httpsDetail(domainOf(files), CertCoverage.ERROR, null)));
-            assertThat(say(apps.get(PREFIX + "proxy").https().label()))
+            assertThat(say(apps.get(PREFIX + "proxy").cells().https().label()))
                 .as("step 3: an unforced name without a certificate says so in the same words")
                 .isEqualTo(say(CertCoverage.NONE.label()));
             assertRow(apps.get(PREFIX + "passthrough"), Source.WEBSITE, "TLS passthrough",
@@ -148,33 +148,38 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             App dockerApp = apps.get(PREFIX + "docker");
             assertRow(dockerApp, Source.WORKLOAD, "Docker container", "docker.apps-journey.test", host,
                 CertCoverage.NONE, "/admin/instances/" + docker.get(InstanceModel.ID) + "/page/overview", "step 4");
-            assertThat(dockerApp.address().moreCount()).as("step 4: the second name of its site counts as one more")
+            assertThat(dockerApp.cells().address().moreCount())
+                .as("step 4: the second name of its site counts as one more")
                 .isEqualTo(1);
             assertRow(apps.get(PREFIX + "lxc"), Source.WORKLOAD, "System container (LXC)", null, incusHost,
                 null, "/admin/instances/" + lxc.get(InstanceModel.ID) + "/page/overview", "step 4");
             App vmApp = apps.get(PREFIX + "vm");
-            assertThat(vmApp.addressText()).as("step 4: a machine no site serves is reached at the port it publishes")
+            assertThat(vmApp.cells().addressText())
+                .as("step 4: a machine no site serves is reached at the port it publishes")
                 .endsWith(":25588");
-            assertRow(vmApp, Source.WORKLOAD, "Virtual machine", vmApp.addressText(), incusHost, null,
+            assertRow(vmApp, Source.WORKLOAD, "Virtual machine", vmApp.cells().addressText(), incusHost, null,
                 "/admin/instances/" + vm.get(InstanceModel.ID) + "/page/overview", "step 4");
 
             // 5. A stack: one row naming its members, on its host, opening its services.
             assertRow(apps.get(PREFIX + "stack"), Source.STACK, "Stack with 2 services", null, host, null,
                 "/admin/stacks/" + stack.get(StackModel.ID) + "/page/services", "step 5");
-            assertThat(apps.get(PREFIX + "stack").health().tone()).as("step 5: an active stack is working")
+            assertThat(apps.get(PREFIX + "stack").cells().health().tone()).as("step 5: an active stack is working")
                 .isEqualTo(HealthTone.OK);
 
             // 6. The list page draws them: each row links to its record page, carries its verdict's glyph, and names
-            //    nothing that is not an app.
-            String list = adminGet("/admin/apps?_search=apps-journey").body();
+            //    nothing that is not an app. An install that manages no other server has no Server column.
+            String list = adminGet("/admin/apps?text=apps-journey").body();
+            assertThat(list).as("step 6: no Server column without a linked server")
+                .doesNotContain("data-column=\"server\"");
             for (App app : apps.values()) {
                 int link = list.indexOf("href=\"" + app.target().toUrl());
-                assertThat(link).as("step 6: the list links " + app.name() + " to its record page").isNotNegative();
+                assertThat(link).as("step 6: the list links " + app.cells().name() + " to its record page")
+                    .isNotNegative();
                 // The leading health glyph is no title: the record link is the app's NAME.
                 assertThat(list.substring(list.lastIndexOf("<a", link), list.indexOf("</a>", link)))
-                    .as("step 6: the link of " + app.name() + " is its name, not the health glyph")
+                    .as("step 6: the link of " + app.cells().name() + " is its name, not the health glyph")
                     .contains("cms-row-link")
-                    .contains(app.name())
+                    .contains(app.cells().name())
                     .doesNotContain("data-cms-health");
             }
             assertThat(list).as("step 6: the broken static site carries the broken glyph")
@@ -190,11 +195,11 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                 .doesNotContain(PREFIX + "engine");
 
             // 7. The state and kind filters narrow the same rows.
-            String broken = adminGet("/admin/apps?_search=apps-journey&filter.state=broken").body();
+            String broken = adminGet("/admin/apps?text=apps-journey&filter.state=broken").body();
             assertThat(broken).as("step 7: the state filter keeps the broken app")
                 .contains(PREFIX + "static")
                 .doesNotContain(PREFIX + "redirect");
-            String stacks = adminGet("/admin/apps?_search=apps-journey&filter.type=stack").body();
+            String stacks = adminGet("/admin/apps?text=apps-journey&filter.type=stack").body();
             assertThat(stacks).as("step 7: the kind filter keeps the stack alone")
                 .contains(PREFIX + "stack")
                 .doesNotContain(PREFIX + "proxy");
@@ -222,17 +227,17 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             App stackSiteApp = journeyApps().get(PREFIX + "stack-site");
             assertThat(stackSiteApp).as("step 9: the site serving a stack's service is a website of its own")
                 .isNotNull();
-            assertThat(stackSiteApp.source()).as("step 9: read from the site").isEqualTo(Source.WEBSITE);
-            assertThat(stackSiteApp.host()).as("step 9: on the host its instance runs on").isEqualTo(host);
-            assertThat(journeyApps().get(PREFIX + "redirect").host()).as("step 9: a redirect runs on no host")
+            assertThat(stackSiteApp.cells().source()).as("step 9: read from the site").isEqualTo(Source.WEBSITE);
+            assertThat(stackSiteApp.cells().host()).as("step 9: on the host its instance runs on").isEqualTo(host);
+            assertThat(journeyApps().get(PREFIX + "redirect").cells().host()).as("step 9: a redirect runs on no host")
                 .isNull();
-            String redirectRow = adminGet("/admin/apps?_search=" + PREFIX + "redirect").body();
+            String redirectRow = adminGet("/admin/apps?text=" + PREFIX + "redirect").body();
             assertThat(redirectRow).as("step 9: the list draws its host cell as a dash")
                 .contains("class=\"cms-cell-absent\" aria-label=\"-\"").contains(">-</pb-microcopy></span>")
                 .as("step 9: never as None").doesNotContain(">None<");
             // The list is one live part (zenit-cms 814dddb2), so its cells carry reactive markers: the text is judged,
             // as the host cell draws it, whatever wrappers the list lays around its words (its floor and its clamp).
-            String stackSiteRow = adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body();
+            String stackSiteRow = adminGet("/admin/apps?text=" + PREFIX + "stack-site").body();
             assertThat(TestStrings.withoutReactiveMarkers(stackSiteRow))
                 .as("step 9: the served website's row names the host")
                 .containsPattern("data-column=\"host\"[^>]*>(?:\\s*<div class=\"cms-cell-[a-z]+\"[^>]*>)+\\s*"
@@ -248,22 +253,23 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
             pattern.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_WILDCARD);
             names.save(pattern);
             App catchApp = journeyApps().get(PREFIX + "catch-all");
-            assertThat(catchApp.health().tone()).as("step 10: the catch-all serves its visitors")
+            assertThat(catchApp.cells().health().tone()).as("step 10: the catch-all serves its visitors")
                 .isEqualTo(HealthTone.OK);
-            assertThat(say(catchApp.health().headline())).as("step 10: saying what it catches")
+            assertThat(say(catchApp.cells().health().headline())).as("step 10: saying what it catches")
                 .isEqualTo("Answers every address matching *.catch.apps-journey.test");
-            assertThat(catchApp.health().headline().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+            assertThat(catchApp.cells().health().headline()
+                    .resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 10: in Dutch too").isEqualTo("Beantwoordt elk adres dat past op *.catch.apps-journey.test");
             assertThat(adminGet("/admin/sites/" + catchAll.get(SiteModel.ID) + "/page/overview").body())
                 .as("step 10: its page never says it is live at the pattern").doesNotContain("Live at *.")
                 .contains("Answers every address matching *.catch.apps-journey.test");
             // Its HTTPS state is said too, never an empty cell (a catch-all's dashboard row once was): a pattern
             // answers many names, so HTTPS works per name a certificate covers.
-            assertThat(catchApp.https()).as("step 10: the catch-all's HTTPS cell exists").isNotNull();
-            assertThat(catchApp.https().state()).as("step 10: as the pattern state")
+            assertThat(catchApp.cells().https()).as("step 10: the catch-all's HTTPS cell exists").isNotNull();
+            assertThat(catchApp.cells().https().state()).as("step 10: as the pattern state")
                 .isEqualTo(CertCoverage.PATTERN.token());
-            assertThat(say(catchApp.https().label())).as("step 10: in words").isEqualTo("Per name");
-            assertThat(say(catchApp.https().detail())).as("step 10: saying what that means")
+            assertThat(say(catchApp.cells().https().label())).as("step 10: in words").isEqualTo("Per name");
+            assertThat(say(catchApp.cells().https().detail())).as("step 10: saying what that means")
                 .isEqualTo("A pattern answers many names; HTTPS works for each one a certificate covers.");
 
             // 11. One app, one name: a site serving a workload is that workload's app, so every surface that names the
@@ -300,11 +306,12 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                 held.get(InstanceModel.ID));
             domain(heldSite, "forced-workload.apps-journey.test", true);
             App heldApp = journeyApps().get(PREFIX + "forced-workload");
-            assertThat(heldApp.https().state()).as("step 13: its HTTPS badge says not working")
+            assertThat(heldApp.cells().https().state()).as("step 13: its HTTPS badge says not working")
                 .isEqualTo(CertCoverage.ERROR.token());
-            assertThat(heldApp.health().tone()).as("step 13: and its glyph says broken, never only 'not running'")
+            assertThat(heldApp.cells().health().tone())
+                .as("step 13: and its glyph says broken, never only 'not running'")
                 .isEqualTo(HealthTone.BROKEN);
-            assertThat(say(heldApp.health().headline())).as("step 13: in visitors' words")
+            assertThat(say(heldApp.cells().health().headline())).as("step 13: in visitors' words")
                 .isEqualTo("Visitors get an error page");
             assertThat(fixCellOf(PREFIX + "forced-workload", Source.WORKLOAD, held.get(InstanceModel.ID)))
                 .as("step 13: offering its site's fix")
@@ -328,14 +335,14 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
                 CertificateModel.DOMAIN_NAMES_TEXT.getName(), "certified.apps-journey.test",
                 CertificateModel.EXPIRES_ON.getName(),
                 Now.instant().plus(Duration.ofDays(35)).plus(Duration.ofHours(1))));
-            StateLineCell certifiedHttps = journeyApps().get(PREFIX + "certified").https();
+            StateLineCell certifiedHttps = journeyApps().get(PREFIX + "certified").cells().https();
             assertThat(say(certifiedHttps.note())).as("step 14: the HTTPS cell counts whole days")
                 .isEqualTo("Expires in 35 days");
             assertThat(certifiedHttps.note().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 14: in Dutch too").isEqualTo("Verloopt over 35 dagen");
             assertThat(say(CertificateParts.stateCell(certificates.findById(certificate.get(CertificateModel.ID)))
                 .detail())).as("step 14: the Certificates list says the same").isEqualTo("Expires in 35 days");
-            assertThat(adminGet("/admin/apps?_search=" + PREFIX + "certified").body())
+            assertThat(adminGet("/admin/apps?text=" + PREFIX + "certified").body())
                 .as("step 14: the list draws it, never the browser's relative time")
                 .contains("Expires in 35 days").doesNotContain("pl-relative-time");
             assertThat(say(CertificateExpiry.of(Now.instant().plus(Duration.ofHours(25)))))
@@ -359,8 +366,8 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
         Map<String, App> apps = new LinkedHashMap<>();
         for (App app : AppDirectory.read(Objects.requireNonNull(PanelRegistry.getBySlug("admin")),
                 TenantConduits.operator())) {
-            if (app.name().startsWith(PREFIX)) {
-                apps.put(app.name(), app);
+            if (app.cells().name().startsWith(PREFIX)) {
+                apps.put(app.cells().name(), app);
             }
         }
         return apps;
@@ -371,7 +378,7 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
      *         cell to the row's end; null when its row offers no fix
      */
     private String fixCellOf(String name, Source source, int id) throws Exception {
-        String list = adminGet("/admin/apps?_search=" + name).body();
+        String list = adminGet("/admin/apps?text=" + name).body();
         int row = list.indexOf("data-row-key=\"" + source.token() + "-" + id + "\"");
         assertThat(row).as(name + " is listed").isNotNegative();
         String markup = list.substring(row, list.indexOf("</pl-table-row>", row));
@@ -382,13 +389,14 @@ class AppsListJourneyTest extends HohenheimHttpTestBase {
     private static void assertRow(App app, Source source, String kind, String address, String host,
                                   CertCoverage https, String target, String step) {
         assertThat(app).as(step + ": the app is listed").isNotNull();
-        assertThat(app.source()).as(step + ": " + app.name() + " is read from its record").isEqualTo(source);
-        assertThat(app.kind()).as(step + ": " + app.name() + "'s kind").isEqualTo(kind);
-        assertThat(app.addressText()).as(step + ": " + app.name() + "'s address").isEqualTo(address);
-        assertThat(app.host()).as(step + ": " + app.name() + "'s host").isEqualTo(host);
-        assertThat(app.https() == null ? null : app.https().state()).as(step + ": " + app.name() + "'s HTTPS state")
-            .isEqualTo(https == null ? null : https.token());
-        assertThat(app.target().toUrl()).as(step + ": " + app.name() + " opens its record page").isEqualTo(target);
+        AppDirectory.Cells cells = app.cells();
+        assertThat(cells.source()).as(step + ": " + cells.name() + " is read from its record").isEqualTo(source);
+        assertThat(cells.kind()).as(step + ": " + cells.name() + "'s kind").isEqualTo(kind);
+        assertThat(cells.addressText()).as(step + ": " + cells.name() + "'s address").isEqualTo(address);
+        assertThat(cells.host()).as(step + ": " + cells.name() + "'s host").isEqualTo(host);
+        assertThat(cells.https() == null ? null : cells.https().state()).as(step + ": " + cells.name()
+            + "'s HTTPS state").isEqualTo(https == null ? null : https.token());
+        assertThat(app.target().toUrl()).as(step + ": " + cells.name() + " opens its record page").isEqualTo(target);
     }
 
     /** @return the one name stored for this site */

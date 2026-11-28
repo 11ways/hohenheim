@@ -539,10 +539,13 @@ final class AppHealth {
             && kind != null && kind.releaseManaged() && ApplicationReleases.deploying(instance.get(InstanceModel.ID));
     }
 
-    /** Whether a background run on this never-deployed record (the put-online run that made it) is still open. */
+    /**
+     * Whether a background run on this never-deployed record (the put-online run that made it) is still open: a fact
+     * of the record, the same for every reader, so what this server tells its master equals an administrator's list.
+     */
     private static boolean firstStartUnderWay(@NonNull Row instance, @Nullable AccessContext viewer) {
-        return viewer != null && OperationRuns.openFor(InstanceOperations.INSTANCE,
-            String.valueOf((Object) instance.get(InstanceModel.ID)), viewer) != null;
+        return viewer != null && OperationRuns.anyOpenOn(InstanceOperations.INSTANCE,
+            String.valueOf((Object) instance.get(InstanceModel.ID)));
     }
 
     /**

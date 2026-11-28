@@ -52,13 +52,17 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
         return this.source.token() + "-" + this.id;
     }
 
-    /** @return the facts as the state document a linked server tells its master */
+    /**
+     * @return the facts as the state document a linked server tells its master: JSON, each piece of copy in it as its
+     *         own DRY text ({@link #wired}), so it revives as copy, a composed one with its parts ({@link #of}); a
+     *         JSON tree carries no type, and a Microcopy written into it as a map no reader could revive
+     */
     @NonNull String document() {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("source", this.source.token());
         document.put("id", this.id);
         document.put("name", this.name);
-        document.put("kind", this.kind);
+        document.put("kind", wired(this.kind));
         if (this.address != null) {
             Map<String, Object> address = new LinkedHashMap<>();
             address.put("primary", this.address.primary());
@@ -70,30 +74,33 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
             Map<String, Object> https = new LinkedHashMap<>();
             https.put("state", this.https.state());
             https.put("variant", this.https.variant().token());
-            https.put("label", this.https.label());
-            https.put("detail", this.https.detail());
-            https.put("note", this.https.note());
+            https.put("label", wired(this.https.label()));
+            https.put("detail", wired(this.https.detail()));
+            https.put("note", wired(this.https.note()));
             document.put("https", https);
         }
         Map<String, Object> health = new LinkedHashMap<>();
         health.put("tone", this.health.tone().token());
-        health.put("headline", this.health.headline());
-        health.put("detail", this.health.detail());
+        health.put("headline", wired(this.health.headline()));
+        health.put("detail", wired(this.health.detail()));
         document.put("health", health);
         return Zenit.DRY.toJson(document);
     }
 
     /**
      * @return the facts a state document holds, null for one this build cannot read (a source, tone or variant it
-     *         does not know): such an app is left out rather than drawn from a guess
+     *         does not know, copy that did not revive): {@link AppStates#held} lists such an app as unreadable, never
+     *         leaves it out
      */
     static @Nullable AppFacts of(@NonNull String document) {
-        if (!(Zenit.DRY.parse(document) instanceof Map<?, ?> facts)
+        Microcopy kind;
+        Microcopy headline;
+        if (!(Zenit.DRY.parseJsonTree(document) instanceof Map<?, ?> facts)
                 || !(facts.get("source") instanceof String sourceToken)
                 || !(facts.get("id") instanceof Number id) || !(facts.get("name") instanceof String name)
-                || !(facts.get("kind") instanceof Microcopy kind)
+                || (kind = copyOf(facts.get("kind"))) == null
                 || !(facts.get("health") instanceof Map<?, ?> health)
-                || !(health.get("headline") instanceof Microcopy headline)) {
+                || (headline = copyOf(health.get("headline"))) == null) {
             return null;
         }
         Source source = sourceOf(sourceToken);
@@ -110,8 +117,8 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
         if (facts.get("https") instanceof Map<?, ?> told) {
             BadgeVariant variant = told.get("variant") instanceof String token
                 ? AttributeToken.find(BadgeVariant.values(), token) : null;
-            if (!(told.get("state") instanceof String state) || variant == null
-                    || !(told.get("label") instanceof Microcopy label)) {
+            Microcopy label = copyOf(told.get("label"));
+            if (!(told.get("state") instanceof String state) || variant == null || label == null) {
                 return null;
             }
             https = new StateLineCell(state, variant, label, copyOf(told.get("detail")), null, null,
@@ -122,8 +129,21 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
             new RecordHealth(tone, headline, copyOf(health.get("detail")), List.of(), null));
     }
 
+    /** @return the copy as its DRY text, null for none */
+    private static @Nullable String wired(@Nullable Microcopy copy) {
+        return copy == null ? null : Zenit.DRY.stringify(copy);
+    }
+
+    /** @return the copy a DRY text holds, null for none or for a text that holds no copy this build can read */
     private static @Nullable Microcopy copyOf(@Nullable Object value) {
-        return value instanceof Microcopy copy ? copy : null;
+        if (!(value instanceof String text)) {
+            return null;
+        }
+        try {
+            return Zenit.DRY.parse(text) instanceof Microcopy copy ? copy : null;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     private static @Nullable Source sourceOf(@NonNull String token) {

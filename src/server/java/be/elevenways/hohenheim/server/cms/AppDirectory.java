@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.*;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
@@ -28,6 +30,7 @@ import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -97,54 +100,103 @@ final class AppDirectory {
     }
 
     /**
-     * One app as the list draws it, worded for the viewer it was read for.
+     * One app as a list draws it: this server's, opening its record page ({@link App}), or a linked server's as that
+     * server last told it, opening nothing here yet ({@link HeldApp}).
+     */
+    sealed interface Listed permits App, HeldApp {
+
+        /** @return its cells, worded for the viewer it was read for */
+        @NonNull Cells cells();
+    }
+
+    /**
+     * The cells of one app, worded for the viewer it was read for.
      *
      * @param key         unique over the list: the source's token and the record's id, behind the linked server's
      *                    key for an app of another server
+     * @param source      the kind of record it is read from, null for a linked server's app this build cannot read
      * @param kind        what it is, in the words its own record page uses
      * @param addressText the address cell as plain text, for the list's search; null when it has none
      * @param host        the host it runs on (a website's: the host of the instance serving it), null without one and
      *                    on the delegated panel
      * @param https       what HTTPS gives its main address (the one the address cell shows), in the Addresses list's
      *                    words; null without an exact address
-     * @param health      the verdict its own record page leads with, its fixes offered on the record it speaks for
-     * @param target      its record page's front door, null for an app of another server, which has no page here yet
-     * @param held        the linked server it lives on, null for an app of this server
+     * @param health      the verdict its own record page leads with; an app of this server's offers its fixes on the
+     *                    record it speaks for, a told one carries none
      */
-    record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
-               @Nullable SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @Nullable StateLineCell https, @NonNull RecordHealth health, @Nullable RouteTarget target,
-               @Nullable Held held) {
+    record Cells(@NonNull String key, @Nullable Source source, int id, @NonNull String name, @NonNull String kind,
+                 @Nullable SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
+                 @Nullable StateLineCell https, @NonNull RecordHealth health) {
 
-        // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of the
-        // site a workload's verdict already speaks for), never of the Apps entry: ResourceHealth.fixColumn() offers
-        // them on that record exactly as its band does ("Get a certificate"). A told verdict carries no fixes.
-        App {
-            if (held == null && health.fixesOn() == null) {
-                health = health.on(source.entrySlug, id);
-            }
+        private static @NonNull Cells of(@NonNull String key, @NonNull AppFacts facts, @Nullable StateLineCell https,
+                                         @NonNull RecordHealth health, @NonNull Wording words) {
+            return new Cells(key, facts.source(), facts.id(), facts.name(), words.say(facts.kind()), facts.address(),
+                facts.address() == null ? null : facts.address().primary(), facts.host(), https, health);
         }
+    }
+
+    /**
+     * One app of this server.
+     *
+     * @param target its record page's front door
+     */
+    record App(@NonNull Cells cells, @NonNull RouteTarget target) implements Listed {
 
         /** @return this server's app drawn from its facts, opening its record page */
         static @NonNull App of(@NonNull AppFacts facts, @NonNull RouteTarget target, @NonNull Wording words) {
-            return drawn(facts.key(), facts, target, null, words);
-        }
-
-        /** @return a linked server's app drawn from the facts that server told, opening nothing */
-        static @NonNull App held(@NonNull AppFacts facts, @NonNull Held held, @NonNull Wording words) {
-            return drawn(held.peer() + "-" + facts.key(), facts, null, held, words);
-        }
-
-        private static @NonNull App drawn(@NonNull String key, @NonNull AppFacts facts, @Nullable RouteTarget target,
-                                          @Nullable Held held, @NonNull Wording words) {
-            return new App(key, facts.source(), facts.id(), facts.name(), words.say(facts.kind()), facts.address(),
-                facts.address() == null ? null : facts.address().primary(), facts.host(), facts.https(),
-                facts.health(), target, held);
+            // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of
+            // the site a workload's verdict already speaks for), never of the Apps entry: ResourceHealth.fixColumn()
+            // offers them on that record exactly as its band does ("Get a certificate").
+            RecordHealth health = facts.health().fixesOn() == null
+                ? facts.health().on(facts.source().entrySlug, facts.id()) : facts.health();
+            return new App(Cells.of(facts.key(), facts, facts.https(), health, words), target);
         }
 
         /** @return how the dashboard and the sidebar count this app, by the verdict its record page leads with */
         @NonNull Count count() {
-            return Count.of(this.health.tone());
+            return Count.of(this.cells.health().tone());
+        }
+    }
+
+    /**
+     * One app of a linked server, drawn by this server's own cell code from the facts that server last told.
+     *
+     * @param held the linked server it lives on
+     * @param note the plain line under its name saying it opens nothing here yet, in the viewer's words
+     */
+    record HeldApp(@NonNull Cells cells, @NonNull Held held, @NonNull String note) implements Listed {
+
+        /**
+         * @return a linked server's app; a silent server's keeps what it told of the app itself, while its verdict and
+         *         HTTPS, no longer current, say only when the server last answered
+         */
+        static @NonNull HeldApp of(@NonNull AppFacts facts, @NonNull Held held, @NonNull Wording words) {
+            String key = held.peer() + "-" + facts.key();
+            String note = words.say(HohenheimMicrocopy.APP_LIST.of("held_no_page"));
+            if (!held.silent()) {
+                return new HeldApp(Cells.of(key, facts, facts.https(), facts.health(), words), held, note);
+            }
+            Microcopy lastSeen = held.lastSeen() == null ? HohenheimMicrocopy.APP_LIST.of("held_never_seen")
+                : HohenheimMicrocopy.APP_LIST.of("held_last_seen").withArg("at", held.lastSeen());
+            StateLineCell https = new StateLineCell(HealthTone.SILENT.token(), BadgeVariant.SECONDARY, lastSeen, null,
+                null, null, null);
+            RecordHealth silent = RecordHealth.silent(HohenheimMicrocopy.APP_LIST.of("held_silent")
+                .withArg("server", held.server()));
+            return new HeldApp(Cells.of(key, facts, https, silent, words), held, note);
+        }
+
+        /**
+         * @return a linked server's app whose told state this build cannot read (told by a newer build, or damaged):
+         *         listed under the name its record is kept by, saying so, so it never vanishes from the list unseen
+         * @param recordKey the key its state is kept under on its server
+         * @param title     the name its state is kept by
+         */
+        static @NonNull HeldApp unreadable(@NonNull String recordKey, @NonNull String title, @NonNull Held held,
+                                           @NonNull Wording words) {
+            RecordHealth unread = new RecordHealth(HealthTone.UNKNOWN, HohenheimMicrocopy.APP_LIST.of("held_unreadable")
+                .withArg("server", held.server()), null, List.of(), null);
+            Cells cells = new Cells(held.peer() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread);
+            return new HeldApp(cells, held, words.say(HohenheimMicrocopy.APP_LIST.of("held_no_page")));
         }
     }
 
@@ -174,7 +226,7 @@ final class AppDirectory {
             return switch (tone) {
                 case OK -> LIVE;
                 case ATTENTION, BROKEN -> PROBLEM;
-                case UNKNOWN, OFF -> NEITHER;
+                case UNKNOWN, OFF, SILENT -> NEITHER;
                 case RETIRED -> RETIRED;
             };
         }
@@ -255,14 +307,55 @@ final class AppDirectory {
         for (Located located : located(records, delegated, access, panel.slug())) {
             apps.add(App.of(located.facts(), located.target(), words));
         }
-        apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
+        apps.sort(Comparator.comparing((App app) -> app.cells().name().toLowerCase(Locale.ROOT))
+            .thenComparing(app -> app.cells().key()));
         return List.copyOf(apps);
+    }
+
+    /**
+     * The apps the Apps list of this panel shows this viewer: this server's ({@link #read}) and, on the operator's
+     * panel for an administrator, every linked server's as it last told them ({@link AppStates#held}), by name; read
+     * once per request.
+     *
+     * AIDEV-NOTE: the master decides who sees a linked server's apps, and today it can decide that only by
+     * permission: an app's owners and grants are the linked server's own rows (RecordOwners over zenit-auth grants,
+     * no shared kind), so a viewer who is no administrator sees none of them until grants follow the master. Never
+     * widen this with a rule of its own.
+     */
+    static @NonNull List<Listed> everyServer(@NonNull Panel panel, @NonNull AccessContext access) {
+        Supplier<List<Listed>> read = () -> {
+            List<Listed> apps = new ArrayList<>(read(panel, access));
+            if (showsLinkedServers(panel, access)) {
+                apps.addAll(AppStates.held(Wording.of(access)));
+                apps.sort(Comparator.comparing((Listed app) -> app.cells().name().toLowerCase(Locale.ROOT))
+                    .thenComparing(app -> app.cells().key()));
+            }
+            return List.copyOf(apps);
+        };
+        Conduit conduit = access.conduit();
+        return conduit == null ? read.get()
+            : conduit.memo(IdentifierKey.of("hohenheim", "app_directory_all_" + panel.slug()), read);
+    }
+
+    /**
+     * @return whether this panel's Apps list shows this viewer the apps of the servers this one manages: the
+     *         operator's panel, an administrator, and a server to manage
+     */
+    static boolean showsLinkedServers(@NonNull Panel panel, @NonNull AccessContext access) {
+        return HohenheimSlugs.ADMIN.equals(panel.slug()) && HohenheimAccess.isAdmin(access)
+            && LinkedServers.managesAny();
     }
 
     /**
      * The facts of every app of this installation as the operator's Apps list holds them, read without a viewer from
      * the rows the operator's entries hold (as {@link InstallationCounts} counts them): what this server tells its
      * master ({@link AppStates}). A fixed number of reads whatever the installation holds.
+     *
+     * AIDEV-NOTE: read as nobody (the request-less anonymous context, which widens nothing), yet equal to what an
+     * administrator's own list holds: on the operator's face every fact a state document carries is the record's,
+     * never the reader's (a verdict's "deploying" reads whether any run is open, OperationRuns.anyOpenOn; a placement
+     * refusal is the gate's own words there). The one reader-dependent part, an HTTPS cell's certificate name and
+     * link, is never told (AppFacts.document). A new fact read for the viewer breaks this: read it for nobody.
      */
     static @NonNull List<AppFacts> operatorFacts() {
         Members records = Members.of(Models.get(SiteModel.class).find().noCache().all(),

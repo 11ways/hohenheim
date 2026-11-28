@@ -209,7 +209,7 @@ class StreamPortsJourneyTest extends HohenheimTestBase {
         }
 
         // 8. The Apps list shows the mail server as one row naming every port, the emptied stream nowhere.
-        String apps = adminGet("/admin/" + HohenheimSlugs.APPS + "?_search=r5-mail").body();
+        String apps = adminGet("/admin/" + HohenheimSlugs.APPS + "?text=r5-mail").body();
         assertThat(rows(apps, "website-" + mailId)).as("step 8: one row for the mail server").isEqualTo(1);
         assertThat(rows(apps, "website-" + secondId)).as("step 8: none for the emptied stream").isZero();
         assertThat(apps).as("step 8: THE ASSERTION, its ports summed up in the row")

@@ -971,9 +971,10 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
         }
         List<StateLineCell> https = new ArrayList<>();
         for (Row site : sites) {
-            AppDirectory.App app = apps.stream().filter(listed -> listed.source() == AppDirectory.Source.WEBSITE
-                && listed.id() == (int) site.get(SiteModel.ID)).findFirst().orElseThrow();
-            https.add(Objects.requireNonNull(app.https(), "a named website has an HTTPS cell"));
+            AppDirectory.App app = apps.stream().filter(listed -> listed.cells().source()
+                    == AppDirectory.Source.WEBSITE
+                && listed.cells().id() == (int) site.get(SiteModel.ID)).findFirst().orElseThrow();
+            https.add(Objects.requireNonNull(app.cells().https(), "a named website has an HTTPS cell"));
         }
         Pattern candidates = Pattern.compile("\\bcertificates\\b[\\s\\S]*\\bprovider\"? IS NULL");
         int candidateReads = (int) probe.preparedStatements().stream()

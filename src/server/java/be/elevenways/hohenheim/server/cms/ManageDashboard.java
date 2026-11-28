@@ -115,14 +115,15 @@ public final class ManageDashboard extends PanelDashboard {
     static @NonNull List<AttentionItem> attention(@NonNull List<AppDirectory.App> apps) {
         List<AttentionItem> items = new ArrayList<>();
         for (AppDirectory.App app : apps) {
-            RecordHealth health = app.health();
+            RecordHealth health = app.cells().health();
             AttentionSeverity severity = AttentionSeverity.ofTone(health.tone());
             if (severity == null) {
                 continue;
             }
             items.add(new AttentionItem(severity, severity == AttentionSeverity.ERROR ? "circle-xmark"
-                    : "triangle-exclamation", AppHealth.titleOf(health, app.name()), health.detail(), app.target(),
-                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", app.name())));
+                    : "triangle-exclamation", AppHealth.titleOf(health, app.cells().name()), health.detail(),
+                app.target(),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", app.cells().name())));
         }
         return items;
     }

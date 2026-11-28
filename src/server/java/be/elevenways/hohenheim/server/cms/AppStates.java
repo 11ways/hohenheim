@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.cluster.ClusterRecords;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
-import be.elevenways.hohenheim.server.cms.AppDirectory.App;
+import be.elevenways.hohenheim.server.cms.AppDirectory.HeldApp;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Held;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -63,11 +63,11 @@ public final class AppStates {
 
     /**
      * The apps of every server this one manages, as each server last told them: a silent server's as it had them when
-     * it last answered. A told app this build cannot read is left out.
+     * it last answered. A told app this build cannot read is listed as such ({@link HeldApp#unreadable}).
      *
      * @return the apps in the order kept (by server key, then app key), worded for the viewer
      */
-    static @NonNull List<App> held(@NonNull Wording words) {
+    static @NonNull List<HeldApp> held(@NonNull Wording words) {
         Map<String, Held> servers = new HashMap<>();
         String version = LinkedServers.ownVersion();
         for (Row server : LinkedServers.all()) {
@@ -78,16 +78,18 @@ public final class AppStates {
                     server.get(LinkedServerModel.LAST_SEEN_AT)));
             }
         }
-        List<App> apps = new ArrayList<>();
+        List<HeldApp> apps = new ArrayList<>();
         if (servers.isEmpty()) {
             return apps;
         }
         for (PeerRecords.PeerKept kept : PeerRecords.everyPeer(KIND)) {
             Held held = servers.get(kept.peer());
-            AppFacts facts = held == null ? null : AppFacts.of(kept.record().document());
-            if (facts != null) {
-                apps.add(App.held(facts, held, words));
+            if (held == null) {
+                continue;
             }
+            AppFacts facts = AppFacts.of(kept.record().document());
+            apps.add(facts == null ? HeldApp.unreadable(kept.record().key(), kept.record().title(), held, words)
+                : HeldApp.of(facts, held, words));
         }
         return apps;
     }

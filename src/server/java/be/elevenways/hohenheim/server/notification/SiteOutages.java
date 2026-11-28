@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -204,8 +205,9 @@ public final class SiteOutages {
         if (won == 0) {
             return;
         }
-        // The app's verdict on its master's Apps list turned with it: tell the master now, not at its minute check.
-        SharedStates.changed(AppStates.KIND);
+        // The app's verdict on its master's Apps list turned with it: tell the master once this commits, not at its
+        // minute check.
+        SharedStates.changed(AppStates.KIND, outages());
         String name = nameOf(application);
         Microcopy subject = named
             ? HohenheimMicrocopy.ALERT.of("site_recovered_subject_at").withArg("name", name)
@@ -223,7 +225,7 @@ public final class SiteOutages {
         if (won == 0) {
             return;
         }
-        SharedStates.changed(AppStates.KIND);
+        SharedStates.changed(AppStates.KIND, outages());
         int applicationId = application.get(InstanceModel.ID);
         Microcopy detail = ApplicationUpstreams.resolve(applicationId).upstream() == null
             ? HohenheimMicrocopy.ALERT.of("site_down_nothing_serving")
@@ -275,6 +277,11 @@ public final class SiteOutages {
     /** {@link #write} of an outage that is not alerted, so a stale reading never clears an alerted one. */
     private static @NonNull QueryBuilder<Row> unalerted(@NonNull Row outage) {
         return write(outage).and(SiteOutageModel.DOWN_ALERTED_AT.isNull());
+    }
+
+    /** @return the datasource the outage latches are written in, whose commit tells the master of the turn */
+    private static @NonNull Datasource outages() {
+        return Models.get(SiteOutageModel.class).getResolvedDatasource();
     }
 
     /**

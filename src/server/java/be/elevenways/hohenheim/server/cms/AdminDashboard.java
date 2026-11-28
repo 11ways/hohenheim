@@ -165,12 +165,13 @@ public final class AdminDashboard extends PanelDashboard {
                                       @NonNull AccessContext access) {
         List<AppSummary> summaries = new ArrayList<>(apps.size());
         for (AppDirectory.App app : apps) {
-            String detail = app.addressText() == null || app.addressText().isBlank()
-                ? app.kind() : app.kind() + " · " + app.addressText();
-            boolean httpsIsTheCause = app.https() != null && app.https().is(CertCoverage.ERROR);
+            AppDirectory.Cells cells = app.cells();
+            String detail = cells.addressText() == null || cells.addressText().isBlank()
+                ? cells.kind() : cells.kind() + " · " + cells.addressText();
+            boolean httpsIsTheCause = cells.https() != null && cells.https().is(CertCoverage.ERROR);
             boolean verdict = app.count() == AppDirectory.Count.PROBLEM && !httpsIsTheCause;
-            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), verdict ? null : app.https(),
-                HealthCellState.of(app.health(), access), verdict));
+            summaries.add(new AppSummary(cells.name(), detail, app.target().toUrl(), verdict ? null : cells.https(),
+                HealthCellState.of(cells.health(), access), verdict));
         }
         return new AppsBand(heading, summaries);
     }

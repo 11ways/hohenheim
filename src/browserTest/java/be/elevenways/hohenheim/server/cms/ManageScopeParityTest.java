@@ -173,8 +173,8 @@ class ManageScopeParityTest extends HohenheimTestBase {
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         Set<String> apps = new LinkedHashSet<>();
         for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
-            if (app.name().startsWith(PREFIX)) {
-                apps.add(app.key());
+            if (app.cells().name().startsWith(PREFIX)) {
+                apps.add(app.cells().key());
             }
         }
         Set<Object> liveSites = resourceIds(Projection.of(SiteParts.manage()), tenant);
@@ -182,14 +182,14 @@ class ManageScopeParityTest extends HohenheimTestBase {
             .as("step 4: the tenant's apps are its authored instance and the live site it manages")
             .containsExactlyInAnyOrder("workload-" + authoredInstanceId, "website-" + liveSites.iterator().next());
         for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
-            assertThat(app.host()).as("step 4: the delegated panel names no host").isNull();
+            assertThat(app.cells().host()).as("step 4: the delegated panel names no host").isNull();
         }
 
         // 5. The tenant's workload is reached through a site the tenant holds no grant on: its row still names that
         //    site's address (what its visitors type), while the site record itself stays out of the tenant's lists.
         AppDirectory.App workload = AppDirectory.read(manage, tenant).stream()
-            .filter(app -> app.key().equals("workload-" + authoredInstanceId)).findFirst().orElseThrow();
-        assertThat(workload.addressText())
+            .filter(app -> app.cells().key().equals("workload-" + authoredInstanceId)).findFirst().orElseThrow();
+        assertThat(workload.cells().addressText())
             .as("step 5: the workload row names the address of the site serving it")
             .isEqualTo(PREFIX + "served.parity.test");
         assertThat(resourceIds(Projection.of(SiteParts.manage()), tenant))

@@ -59,14 +59,14 @@ public enum AttentionSeverity {
     }
 
     /**
-     * @return the severity a verdict of this tone raises, null for one that raises nothing (fine, not known yet, or
-     *         retired on purpose)
+     * @return the severity a verdict of this tone raises, null for one that raises nothing (fine, not known yet,
+     *         retired on purpose, or told by a server that does not answer now)
      */
     public static @Nullable AttentionSeverity ofTone(@NonNull HealthTone tone) {
         return switch (tone) {
             case BROKEN -> ERROR;
             case ATTENTION -> WARNING;
-            case OK, UNKNOWN, RETIRED, OFF -> null;
+            case OK, UNKNOWN, RETIRED, OFF, SILENT -> null;
         };
     }
 
