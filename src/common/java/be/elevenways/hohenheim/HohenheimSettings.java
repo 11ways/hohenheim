@@ -824,6 +824,27 @@ public class HohenheimSettings {
                 .references(BackupTargetModel.MODEL_ID, BackupTargetModel.NAME)
                 .build();
 
+        /**
+         * Whether the recovery archive is sealed with {@link #CONTROL_PLANE_PASSPHRASE} before it leaves this server
+         * (Jelle: optional, off by default). Off, whoever can read the storage reads every secret in the archive.
+         */
+        public static final SettingDefinition<Boolean> CONTROL_PLANE_PASSPHRASE_ON =
+            GROUP.buildSetting("control_plane_passphrase_on", Boolean.class)
+                .defaultValue(false)
+                .description("Seal the control-plane recovery archive with the passphrase below before it is"
+                    + " uploaded; a restore then asks for it")
+                .build();
+
+        /**
+         * The passphrase the recovery archive is sealed with while {@link #CONTROL_PLANE_PASSPHRASE_ON}: the operator
+         * keeps it elsewhere, since a restore after a loss cannot read it from here.
+         */
+        public static final SettingDefinition<String> CONTROL_PLANE_PASSPHRASE =
+            GROUP.buildSetting("control_plane_passphrase", String.class)
+                .description("The passphrase the control-plane recovery archive is sealed with; never shown again")
+                .secret()
+                .build();
+
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
             .byteSize(ByteUnit.MEGABYTE)

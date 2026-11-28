@@ -9,10 +9,12 @@ import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.orm.backup.RecoveryArchive;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.io.Console;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 /**
  * Break-glass: restore a control-plane recovery archive over this host's database and
@@ -28,12 +30,18 @@ import java.nio.file.Path;
  * then restores the local copy; until 2026-09-23 it restored with the pool still open.
  * Total loss is covered by copying the artifact down by hand and restoring it by PATH.
  *
+ * AIDEV-NOTE: an archive sealed with the operator's passphrase is opened with one asked on the console, never taken
+ * from an argument a process listing shows; without a console, {@link #PASSPHRASE_FILE} names a file holding it.
+ *
  * @author Jelle De Loecker
  * @since 0.7.0
  */
 public final class RestoreControlPlaneCommand implements OfflineCommand {
 
     public static final String FLAG = "--restore-control-plane";
+
+    /** Names a file holding the passphrase of a sealed archive, for a restore run without a console. */
+    public static final String PASSPHRASE_FILE = "--passphrase-file";
 
     @Override
     public @NonNull String flag() {
@@ -42,8 +50,9 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
 
     @Override
     public @NonNull String describe() {
-        return "<path|archive key>  restore a control-plane archive over this host's database"
-            + " and keyring (offline only, verified before anything is replaced)";
+        return "<path|archive key> [--passphrase-file=<path>]  restore a control-plane archive over this host's"
+            + " database and keyring (offline only, verified before anything is replaced; a sealed archive asks its"
+            + " passphrase)";
     }
 
     @Override
@@ -52,7 +61,7 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
 
         if (isLocalFile(pointer)) {
             HohenheimDatabase.closeDatasource();
-            report(context, ControlPlaneBackups.restore(Path.of(pointer)), ControlPlaneBackups.keyringFile());
+            report(context, restore(context, Path.of(pointer)), ControlPlaneBackups.keyringFile());
             return;
         }
 
@@ -65,7 +74,7 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
         }
         try {
             HohenheimDatabase.closeDatasource();
-            report(context, ControlPlaneBackups.restore(fetched), ControlPlaneBackups.keyringFile());
+            report(context, restore(context, fetched), ControlPlaneBackups.keyringFile());
         } finally {
             try {
                 ControlPlaneBackups.deleteFetched(fetched);
@@ -74,6 +83,47 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
                     + leftover.getMessage());
             }
         }
+    }
+
+    /**
+     * Restores the archive, asking for its passphrase when it is sealed.
+     *
+     * @throws OfflineCommandException in plain words for a sealed archive without a passphrase, or a wrong one
+     */
+    private static RecoveryArchive.@NonNull Restored restore(@NonNull OfflineCommandContext context,
+                                                            @NonNull Path archive) {
+        char[] passphrase = null;
+        try {
+            if (ControlPlaneBackups.isSealed(archive)) {
+                passphrase = passphrase(context);
+            }
+            return ControlPlaneBackups.restore(archive, passphrase);
+        } catch (IOException unreadable) {
+            throw new OfflineCommandException("The recovery archive cannot be read: " + unreadable.getMessage());
+        } catch (IllegalStateException refused) {
+            throw new OfflineCommandException(refused.getMessage());
+        } finally {
+            if (passphrase != null) {
+                Arrays.fill(passphrase, '\0');
+            }
+        }
+    }
+
+    /** @return the passphrase from {@link #PASSPHRASE_FILE}, else asked on the console */
+    private static char @NonNull [] passphrase(@NonNull OfflineCommandContext context) throws IOException {
+        String file = context.option(PASSPHRASE_FILE);
+        if (file != null) {
+            // Only the file's line end goes: the passphrase is the setting's value exactly, spaces included.
+            return Files.readString(Path.of(file)).replaceFirst("\\r?\\n$", "").toCharArray();
+        }
+        Console console = System.console();
+        char[] typed = console == null ? null : console.readPassword("Passphrase of the recovery archive: ");
+        if (typed == null || typed.length == 0) {
+            throw new OfflineCommandException("This recovery archive is sealed with a passphrase: run the restore"
+                + " on a console to type it, or name a file holding it with " + PASSPHRASE_FILE + "=<path>."
+                + " Nothing was restored.");
+        }
+        return typed;
     }
 
     /** A pointer that is not a readable local file is treated as a key on the target. */

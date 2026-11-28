@@ -26,11 +26,13 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.crypto.KeyringGuard;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.security.PassphraseSeal;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -39,6 +41,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The control-plane wiring over zenit's RecoveryArchive: one archive carrying hohenheim's own
@@ -129,6 +132,21 @@ class ControlPlaneBackupTest {
             .containsExactlyInAnyOrder(
                 "control-plane/control-plane-20200102-000000.zrec", archive.key());
 
+        // 2b. With the operator's passphrase the archive leaves sealed: the storage holds no SQLite page and no key
+        //     of the keyring, only the seal's header and its segments. (Another storage: an archive's key names its
+        //     second, so one made in the same second on the same storage would replace the one above.)
+        char[] passphrase = "a passphrase kept elsewhere".toCharArray();
+        Path sealedRoot = Files.createDirectories(workspace.resolve("sealed-elsewhere"));
+        StorageAdapter sealedTarget = new LocalDiskStorageAdapter(sealedRoot);
+        ControlPlaneBackups.Archive sealed =
+            ControlPlaneBackups.backupNow(datasource, keyring, sealedTarget, staging, 2, "sealed-target", passphrase);
+        byte[] stored = Files.readAllBytes(sealedRoot.resolve(sealed.key()));
+        assertThat(PassphraseSeal.isSealed(stored)).as("step 2b: sealed").isTrue();
+        assertThat(new String(stored, StandardCharsets.ISO_8859_1)).as("step 2b: nothing in the clear")
+            .doesNotContain("SQLite format").doesNotContain(keyring.activeKeyId());
+        assertThat(sealedTarget.storedSha256(sealed.key())).as("step 2b: verified by the storage too")
+            .isEqualTo(sealed.sha256());
+
         // 3. THE POINT: nothing of the archive is on the local disk. A local copy would die in
         //    the very failure this backup exists for.
         assertThat(archivesUnder(staging))
@@ -159,11 +177,18 @@ class ControlPlaneBackupTest {
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
-            BackupStorages.retrieve(target, archive.key(), fetched);
-            RecoveryArchive.Restored restored = ControlPlaneBackups.restore(fetched);
+            BackupStorages.retrieve(sealedTarget, sealed.key(), fetched);
+            // A sealed archive asks its passphrase, and a wrong one is refused plainly with nothing replaced.
+            assertThat(catchThrowable(() -> ControlPlaneBackups.restore(fetched)))
+                .as("step 5: asked for its passphrase").hasMessageContaining("sealed with a passphrase");
+            assertThat(catchThrowable(() -> ControlPlaneBackups.restore(fetched, "not it".toCharArray())))
+                .as("step 5: a wrong one").hasMessage("The passphrase does not open this recovery archive."
+                    + " Nothing was restored.");
+            assertThat(Files.exists(keyringFile)).as("step 5: nothing replaced").isFalse();
+            RecoveryArchive.Restored restored = ControlPlaneBackups.restore(fetched, passphrase);
             assertThat(restored.manifest().activeKeyId())
                 .as("step 5: the restored archive names the key it was made under")
-                .isEqualTo(archive.manifest().activeKeyId());
+                .isEqualTo(sealed.manifest().activeKeyId());
             assertThat(restored.keyringOwnerOnly())
                 .as("step 5: on a filesystem that keeps POSIX permissions the restore reports the keyring owner-only")
                 .isTrue();

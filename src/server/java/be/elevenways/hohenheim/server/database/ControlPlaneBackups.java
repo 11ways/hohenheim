@@ -11,17 +11,21 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.server.orm.backup.RecoveryArchive;
 import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
+import be.elevenways.zenit.server.security.PassphraseSeal;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -43,11 +47,14 @@ import java.util.List;
  * worse than none. An unset or unreachable destination fails the nightly task loudly (which
  * surfaces as a dashboard attention item) instead of quietly writing locally.
  *
- * NOT FIXED, ON PURPOSE, AND YOU MUST KNOW IT: the archive contains the field-encryption MASTER
+ * NOT FIXED BY DEFAULT, AND YOU MUST KNOW IT: the archive contains the field-encryption MASTER
  * KEYS IN THE CLEAR and its manifest is UNSIGNED. Off-host therefore means "the destination host
  * can decrypt every secret in this database and could substitute an archive we would restore".
  * The transport is authenticated (the target's host record is pinned and operator-confirmed) but
- * the artifact at rest is not. Treat the destination like the keyring file itself.
+ * the artifact at rest is not. Treat the destination like the keyring file itself -- unless the
+ * operator turned on the passphrase ({@code database.control_plane_passphrase_on}, off by
+ * Jelle's ruling): the archive is then sealed with it ({@link PassphraseSeal}) before it leaves
+ * this server, and a restore asks for it.
  *
  * @author Jelle De Loecker
  * @since 0.7.0
@@ -77,7 +84,36 @@ public final class ControlPlaneBackups {
         String name = destinationName();
         int retention = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
         return backupNow(HohenheimDatabase.datasource(), FieldEncryption.requireKeyring(),
-            requireDestination(), stagingDirectory(), retention, name);
+            requireDestination(), stagingDirectory(), retention, name, configuredPassphrase());
+    }
+
+    /**
+     * @return the passphrase the archive is sealed with, or null while the switch is off
+     * @throws IllegalStateException when the switch is on and no passphrase is set: refused loudly, never an
+     *         archive in the clear the operator believes sealed
+     */
+    static char @Nullable [] configuredPassphrase() {
+        SettingDefinition<Boolean> on = HohenheimSettings.Database.CONTROL_PLANE_PASSPHRASE_ON;
+        SettingDefinition<String> held = HohenheimSettings.Database.CONTROL_PLANE_PASSPHRASE;
+        if (!Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(on))) {
+            return null;
+        }
+        String passphrase = Zenit.SETTINGS_VALUES.getValue(held);
+        if (passphrase == null || passphrase.isEmpty()) {
+            throw new IllegalStateException("Setting " + on.getPath() + " is on but " + held.getPath()
+                + " is empty: set the passphrase, or turn the switch off; no archive was made");
+        }
+        return passphrase.toCharArray();
+    }
+
+    /** {@link #backupNow(Datasource, EncryptionKeyring, StorageAdapter, Path, int, String, char[])} in the clear. */
+    public static @NonNull Archive backupNow(@NonNull Datasource datasource,
+                                             @NonNull EncryptionKeyring keyring,
+                                             @NonNull StorageAdapter target,
+                                             @NonNull Path stagingDirectory,
+                                             int retention,
+                                             @NonNull String destinationName) throws IOException {
+        return backupNow(datasource, keyring, target, stagingDirectory, retention, destinationName, null);
     }
 
     /**
@@ -87,7 +123,8 @@ public final class ControlPlaneBackups {
      * first and the keyring read second, so the archived keyring is never older than the
      * archived database.
      *
-     * @param retention how many archives to keep on the target; 0 or less keeps everything
+     * @param retention  how many archives to keep on the target; 0 or less keeps everything
+     * @param passphrase what the archive is sealed with before it is uploaded, null to upload it in the clear
      * @return the created archive, re-hashed by the target before this returns
      */
     public static @NonNull Archive backupNow(@NonNull Datasource datasource,
@@ -95,7 +132,8 @@ public final class ControlPlaneBackups {
                                              @NonNull StorageAdapter target,
                                              @NonNull Path stagingDirectory,
                                              int retention,
-                                             @NonNull String destinationName) throws IOException {
+                                             @NonNull String destinationName,
+                                             char @Nullable [] passphrase) throws IOException {
         // Before the snapshot: a storage that fails at store time already spent the capture.
         BackupStorages.requireUsable(target);
 
@@ -106,14 +144,24 @@ public final class ControlPlaneBackups {
 
         RecoveryArchive.Manifest manifest;
         String localSha;
+        Path sealed = stagingDirectory.resolve(fileName + ".sealed");
         try {
             manifest = RecoveryArchive.create(datasource, keyring, staged);
-            localSha = SecureTokens.sha256Hex(staged);
-            BackupStorages.store(target, key, staged);
+            Path upload = staged;
+            if (passphrase != null) {
+                try (InputStream in = Files.newInputStream(staged);
+                     OutputStream out = Files.newOutputStream(sealed)) {
+                    PassphraseSeal.seal(passphrase, in, out);
+                }
+                upload = sealed;
+            }
+            localSha = SecureTokens.sha256Hex(upload);
+            BackupStorages.store(target, key, upload);
         } finally {
             // Always: a surviving local .zrec is indistinguishable from a real backup while
             // being the one thing this class exists to stop producing.
             Files.deleteIfExists(staged);
+            Files.deleteIfExists(sealed);
         }
 
         String remoteSha = BackupStorages.storedSha256(target, key);
@@ -273,15 +321,76 @@ public final class ControlPlaneBackups {
      *         caller must tell the operator that the master keys are readable by others
      */
     public static RecoveryArchive.@NonNull Restored restore(@NonNull Path archive) {
+        return restore(archive, null);
+    }
+
+    /** @return whether the archive is sealed with a passphrase, so its restore asks for one */
+    public static boolean isSealed(@NonNull Path archive) throws IOException {
+        try (InputStream in = Files.newInputStream(archive)) {
+            return PassphraseSeal.isSealed(in.readNBytes(PassphraseSeal.magicLength()));
+        }
+    }
+
+    /**
+     * {@link #restore(Path)} of an archive that may be sealed: opened with the passphrase into a private file beside
+     * it, which is removed whatever happens, before anything is replaced.
+     *
+     * @param passphrase what the archive was sealed with; null for an archive in the clear
+     * @throws IllegalStateException in plain words when the archive is sealed and no passphrase or a wrong one was
+     *         given, or it cannot be opened; nothing is replaced then
+     */
+    public static RecoveryArchive.@NonNull Restored restore(@NonNull Path archive, char @Nullable [] passphrase) {
         Path database = databaseFile();
         Path keyring = keyringFile();
-        RecoveryArchive.Restored restored = RecoveryArchive.restore(archive, database, keyring);
+        Path opened = null;
+        Path source = archive;
+        try {
+            if (isSealed(archive)) {
+                if (passphrase == null) {
+                    throw new IllegalStateException("This recovery archive is sealed with a passphrase: give it to"
+                        + " restore. Nothing was restored.");
+                }
+                opened = Files.createTempFile(archive.toAbsolutePath().getParent(), "opened-", ".zrec");
+                try (InputStream in = Files.newInputStream(archive);
+                     OutputStream out = Files.newOutputStream(opened)) {
+                    PassphraseSeal.open(passphrase, in, out);
+                } catch (PassphraseSeal.WrongPassphraseException wrong) {
+                    throw new IllegalStateException("The passphrase does not open this recovery archive."
+                        + " Nothing was restored.");
+                }
+                source = opened;
+            }
+        } catch (IOException unreadable) {
+            deleteQuietly(opened);
+            throw new IllegalStateException("The recovery archive cannot be opened: " + unreadable.getMessage()
+                + ". Nothing was restored.", unreadable);
+        } catch (RuntimeException refused) {
+            deleteQuietly(opened);
+            throw refused;
+        }
+        RecoveryArchive.Restored restored;
+        try {
+            restored = RecoveryArchive.restore(source, database, keyring);
+        } finally {
+            deleteQuietly(opened);
+        }
         RecoveryArchive.Manifest manifest = restored.manifest();
         Blast.log("Restored control-plane recovery archive", archive.toString(),
             "-> database", database.toString(), "+ keyring", keyring.toString(),
             "(created", manifest.created() + ", keys", String.join(",", manifest.keyIds())
                 + ", keyring owner-only", restored.keyringOwnerOnly() + ")");
         return restored;
+    }
+
+    private static void deleteQuietly(@Nullable Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException leftover) {
+            Blast.log("Could not remove the opened recovery archive", file.toString(), leftover.getMessage());
+        }
     }
 
     /**
