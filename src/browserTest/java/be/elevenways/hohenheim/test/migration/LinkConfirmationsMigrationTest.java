@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.util.List;
 
-import static be.elevenways.hohenheim.test.migration.InstallsAt.withIntegrityMode;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -49,14 +48,9 @@ class LinkConfirmationsMigrationTest {
 
             // 2. The upgrade, under the strict integrity posture the hosts run, applies M007 and what came after it;
             //    those later ones are rolled back, so the steps below read the schema M007 leaves.
-            List<MigrationKey> later = InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
-                .filter(migration -> migration.getVersion().compareTo(version) > 0).map(MigrationKey::of).toList();
-            withIntegrityMode("fail", () -> assertThat(new MigrationRunner(datasource).migrate().requireSuccess()
-                .getAppliedCount()).as("step 2: the upgrade applies M007 and its successors")
-                .isEqualTo(1 + later.size()));
-            if (!later.isEmpty()) {
-                new MigrationRunner(datasource).rollback(later).requireSuccess();
-            }
+            InstallsAt.Upgrade upgrade = InstallsAt.upgradeTo(datasource, version);
+            assertThat(upgrade.applied()).as("step 2: the upgrade applies M007 and its successors")
+                .isEqualTo(1 + upgrade.later());
 
             // 3. Every link is confirmed: at the moment it was made, or at the upgrade when it recorded none.
             assertThat(columnsOf(datasource)).as("step 3: the column exists").contains("confirmed_at")

@@ -17,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.test.migration.InstallsAt.withIntegrityMode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
@@ -68,9 +67,11 @@ class StreamPortListsMigrationTest {
             datasource.rawUpdate("INSERT INTO sites (id, name, slug, upstream_kind, enabled, settings) VALUES (6,"
                 + " 'shop', 'shop', 'hohenheim:static', 1, '{\"root_path\":\"/srv/shop\"}')");
 
-            // 2. The upgrade, under the strict integrity posture the hosts run, applies M008 alone.
-            withIntegrityMode("fail", () -> assertThat(new MigrationRunner(datasource).migrate().requireSuccess()
-                .getAppliedCount()).as("step 2: the upgrade applies M008 alone").isEqualTo(1));
+            // 2. The upgrade, under the strict integrity posture the hosts run, applies M008 and what came after it;
+            //    those later ones are rolled back, so the steps below read the schema M008 leaves.
+            InstallsAt.Upgrade upgrade = InstallsAt.upgradeTo(datasource, version);
+            assertThat(upgrade.applied()).as("step 2: the upgrade applies M008 and its successors")
+                .isEqualTo(1 + upgrade.later());
 
             // 3. Five sites still, each a list of one: its public port, where it goes and how, unchanged; what every
             //    port shares stays on the site, and the website is untouched.
@@ -105,7 +106,7 @@ class StreamPortListsMigrationTest {
             }
 
             // 5. Upgraded again, a stream that came to forward two ports keeps the rollback from guessing a split.
-            withIntegrityMode("fail", () -> new MigrationRunner(datasource).migrate().requireSuccess());
+            InstallsAt.upgradeTo(datasource, version);
             datasource.rawUpdate("UPDATE sites SET settings = '{\"forward_host\":\"127.0.0.1\",\"ports\":"
                 + "{\"25\":\"2525/tcp proxy-v2\",\"465\":\"4465/tcp proxy-v2\"}}' WHERE id = 1");
             Throwable refused = catchThrowable(() -> new MigrationRunner(datasource)

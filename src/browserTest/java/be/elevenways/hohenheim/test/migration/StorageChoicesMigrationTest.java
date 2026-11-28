@@ -14,7 +14,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import static be.elevenways.hohenheim.test.migration.InstallsAt.withIntegrityMode;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -81,13 +80,9 @@ class StorageChoicesMigrationTest {
 
         // 2. The upgrade, under the strict integrity posture the hosts run, applies M009 and what came after it;
         //    those later ones are rolled back, so the steps below read the schema M009 leaves.
-        List<MigrationKey> applied = fromM009(datasource);
-        withIntegrityMode("fail", () -> assertThat(new MigrationRunner(datasource).migrate().requireSuccess()
-            .getAppliedCount()).as("step 2: the upgrade applies M009 and its successors").isEqualTo(applied.size()));
-        List<MigrationKey> later = new ArrayList<>(applied.subList(1, applied.size()));
-        if (!later.isEmpty()) {
-            new MigrationRunner(datasource).rollback(later).requireSuccess();
-        }
+        InstallsAt.Upgrade upgrade = InstallsAt.upgradeTo(datasource, new M009_StorageChoices().getVersion());
+        assertThat(upgrade.applied()).as("step 2: the upgrade applies M009 and its successors")
+            .isEqualTo(1 + upgrade.later());
 
         // 3. The operator's storage keeps reaching private addresses; neither customer's ever does. None is shared,
         //    who added them is not known, and a database chooses no storage and number of its own until someone does.
@@ -116,13 +111,6 @@ class StorageChoicesMigrationTest {
             .containsExactlyInAnyOrderElementsOf(databasesBefore);
         assertThat(((Number) datasource.rawQuery("SELECT COUNT(*) AS c FROM backup_targets").get(0).get("c"))
             .longValue()).as("step 4: the storages survive").isEqualTo(3L);
-    }
-
-    /** @return M009 and every later migration of Hohenheim's stream, M009 first */
-    private static List<MigrationKey> fromM009(SqlDatasource datasource) {
-        String version = new M009_StorageChoices().getVersion();
-        return InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
-            .filter(migration -> migration.getVersion().compareTo(version) >= 0).map(MigrationKey::of).toList();
     }
 
     private static List<String> columnsOf(SqlDatasource datasource, String table) {

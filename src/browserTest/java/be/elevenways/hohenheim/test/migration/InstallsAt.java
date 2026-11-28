@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.migration.HohenheimMigration;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -83,6 +84,31 @@ public final class InstallsAt {
         }
         own.sort(Comparator.comparing(Migration::getVersion));
         return own;
+    }
+
+    /**
+     * Upgrade the datasource under the strict integrity posture the hosts run, then roll back every Hohenheim
+     * migration after {@code version}, so the caller reads the schema that version leaves whatever came after it.
+     *
+     * @return how many migrations the upgrade applied, and how many of those were the version's successors
+     */
+    public static @NonNull Upgrade upgradeTo(@NonNull SqlDatasource datasource, @NonNull String version) {
+        List<MigrationKey> later = hohenheimMigrations(datasource.getDatasourceIdentifier()).stream()
+            .filter(migration -> migration.getVersion().compareTo(version) > 0).map(MigrationKey::of).toList();
+        int[] applied = new int[1];
+        withIntegrityMode("fail", () -> applied[0] = new MigrationRunner(datasource).migrate().requireSuccess()
+            .getAppliedCount());
+        if (!later.isEmpty()) {
+            new MigrationRunner(datasource).rollback(later).requireSuccess();
+        }
+        return new Upgrade(applied[0], later.size());
+    }
+
+    /**
+     * @param applied how many migrations the upgrade applied
+     * @param later   how many of them came after the version it was asked for, rolled back since
+     */
+    public record Upgrade(int applied, int later) {
     }
 
     /** Run a body under a temporary {@code database.migration_integrity} mode, restoring the previous one. */
