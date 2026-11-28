@@ -50,9 +50,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -66,8 +68,8 @@ import java.util.function.Predicate;
  * read by the directory, or told by its server); the kind and state filters are the directory's closed {@link Source}
  * set and the framework's {@link HealthTone}, each derived from its home.
  * AIDEV-NOTE: a linked server's row is drawn by this server's cell code from the state it holds and opens nothing yet
- * (its page is the next step of the unified panel): no link, and a plain line saying so. A silent server's rows recede,
- * draw no state glyph and say when it last answered, and the list's notice says it does not answer.
+ * (its page is the next step of the unified panel): the row simply has no link. A silent server's rows recede, draw no
+ * state glyph and say when it last answered, and the list's notice over its rows says it does not answer.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -84,8 +86,6 @@ public final class AppParts {
         .build();
     private static final StringField SERVER = StringField.builder("server")
         .label(HohenheimMicrocopy.APP_LIST.of("server_column")).build();
-    private static final StringField HELD_NOTE = StringField.builder("held_note")
-        .label(HohenheimMicrocopy.APP_LIST.of("held_note_column")).build();
     private static final EnumField TYPE = typeField();
     private static final EnumField STATE = stateField();
 
@@ -166,7 +166,7 @@ public final class AppParts {
         StorePages<Listed> pages = new StorePages<>() {
             @Override
             public @NonNull List<Field<?, ?>> fields() {
-                return withHost ? List.of(NAME, ADDRESS_TEXT, KIND, HOST, SERVER, HELD_NOTE, TYPE, STATE)
+                return withHost ? List.of(NAME, ADDRESS_TEXT, KIND, HOST, SERVER, TYPE, STATE)
                     : List.of(NAME, ADDRESS_TEXT, KIND, TYPE, STATE);
             }
 
@@ -190,13 +190,24 @@ public final class AppParts {
                     ? HohenheimMicrocopy.APP_LIST.of("server_silent_option").withArg("server", held.held().server())
                     : null;
             }
+
+            @Override
+            public int facetRank(@NonNull FilterSpec facet, @NonNull Listed app) {
+                // This server's choice first, as the board offers it; the servers it manages after it.
+                return switch (app) {
+                    case App local -> 0;
+                    case HeldApp held -> 1;
+                };
+            }
         };
         ResourceList.Builder<Listed> list = ResourceList.store(table(withHost), pages, APPS_FEED)
-            .chrome(ListChrome.MINIMAL)
+            // The notice about a silent server stands over the rows it speaks of (board FO119).
+            .chrome(ListChrome.MINIMAL.withNoticeOverRows(true))
             .emptyDescription(HohenheimMicrocopy.APP_LIST.of("empty"));
         if (withHost) {
             list.search(NAME.getName(), ADDRESS_TEXT.getName(), HOST.getName());
             list.notice(access -> silentServers(panelSlug, access));
+            list.toolNote(access -> counted(panelSlug, access));
         } else {
             list.search(NAME.getName(), ADDRESS_TEXT.getName());
         }
@@ -232,6 +243,24 @@ public final class AppParts {
     }
 
     /**
+     * The list's count line while it holds other servers' apps, in the board's words ("24 apps on 2 servers"); null
+     * while it holds this server's alone.
+     */
+    private static @Nullable Microcopy counted(@NonNull String panelSlug, @NonNull AccessContext access) {
+        if (!showsServers(access)) {
+            return null;
+        }
+        List<Listed> apps = apps(panelSlug, access);
+        Set<String> servers = new HashSet<>();
+        for (Listed app : apps) {
+            servers.add(serverOf(app));
+        }
+        return HohenheimMicrocopy.APP_LIST.of("list_apps_on_servers")
+            .withArg("apps", HohenheimMicrocopy.APP_LIST.of("list_app_count").withArg("count", apps.size()))
+            .withArg("servers", HohenheimMicrocopy.APP_LIST.of("list_server_count").withArg("count", servers.size()));
+    }
+
+    /**
      * The list's notice while a server it shows apps of does not answer, in the board's words, one sentence per
      * silent server; null while every one answers.
      */
@@ -246,7 +275,8 @@ public final class AppParts {
         for (Held server : silent.values()) {
             sentences.add(server.lastSeen() == null ? HohenheimMicrocopy.APP_LIST.of("held_silent")
                 .withArg("server", server.server()) : HohenheimMicrocopy.APP_LIST.of("held_band")
-                .withArg("server", server.server()).withArg("since", server.lastSeen()));
+                .withArg("server", server.server()).withArg("since", server.lastSeen())
+                .withArg("day", AppDirectory.recentDay(access.getReader(), server.lastSeen())));
         }
         return sentences.isEmpty() ? null : sentences.size() == 1 ? sentences.getFirst()
             : Microcopy.concat(joined(sentences));
@@ -265,14 +295,13 @@ public final class AppParts {
     }
 
     /**
-     * The table: state glyph, app (with its held line under the name), address, kind, host and server (operator only;
-     * the server while one is linked), HTTPS, fix; the filter columns stay hidden.
+     * The table: state glyph, app, address, kind, host and server (operator only; the server while one is linked),
+     * HTTPS, fix; the filter columns stay hidden.
      */
     private static @NonNull TableSpec<Listed> table(boolean withHost) {
         TableSpec.Builder<Listed> table = TableSpec.<Listed>builder()
             .column(ResourceHealth.column())
-            .column(withHost ? ColumnSpec.fromField(NAME).sortable().subtext(HELD_NOTE.getName()).build()
-                : ColumnSpec.fromField(NAME).sortable().build())
+            .column(ColumnSpec.fromField(NAME).sortable().build())
             .column(ColumnSpec.virtual(ADDRESS_COLUMN, HohenheimMicrocopy.APP_LIST.of("address"))
                 .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
             .column(ColumnSpec.fromField(ADDRESS_TEXT).hidden().build())
@@ -282,7 +311,6 @@ public final class AppParts {
             table.column(ColumnSpec.fromField(HOST).sortable().absent(HohenheimMicrocopy.APP_LIST.of("host_none"))
                 .build());
             table.column(ColumnSpec.fromField(SERVER).sortable().shownWhen(AppParts::showsServers).build());
-            table.column(ColumnSpec.fromField(HELD_NOTE).hidden().shownWhen(AppParts::showsServers).build());
         }
         // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict; then the
         // framework's fix cell ("Get a certificate"), offered as the app's record's band offers it.
@@ -300,11 +328,15 @@ public final class AppParts {
         if (withHost) {
             table.filter(FilterSpec.leaf(HOST, CoreTypes.CONTAINS).label(HohenheimMicrocopy.APP_LIST.of("host"))
                 .build());
-            table.filter(FilterSpec.forValues(SERVER).label(HohenheimMicrocopy.APP_LIST.of("server_column"))
-                .emptyLabel(HohenheimMicrocopy.APP_LIST.of("server_all")).shownWhen(AppParts::showsServers).build());
         }
-        return table.filter(FilterSpec.leaf(STATE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("state"))
-            .build()).build();
+        table.filter(FilterSpec.leaf(STATE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("state")).build());
+        if (withHost) {
+            // The board's order: Kind, Host, State, Server; the servers named, never counted, this one first.
+            table.filter(FilterSpec.forValues(SERVER).label(HohenheimMicrocopy.APP_LIST.of("server_column"))
+                .emptyLabel(HohenheimMicrocopy.APP_LIST.of("server_all")).uncounted()
+                .shownWhen(AppParts::showsServers).build());
+        }
+        return table.build();
     }
 
     /** @return whether this viewer's Apps list holds other servers' apps, so it names each app's server */
@@ -325,14 +357,16 @@ public final class AppParts {
         values.put(HTTPS_COLUMN, cells.https());
         values.put(TYPE.getName(), cells.source() == null ? null : cells.source().token());
         values.put(STATE.getName(), cells.health().tone().token());
-        switch (app) {
-            case App local -> values.put(SERVER.getName(), LinkedServers.ownName());
-            case HeldApp held -> {
-                values.put(SERVER.getName(), held.held().server());
-                values.put(HELD_NOTE.getName(), held.note());
-            }
-        }
+        values.put(SERVER.getName(), serverOf(app));
         return values;
+    }
+
+    /** @return the name of the server the app lives on */
+    private static @NonNull String serverOf(@NonNull Listed app) {
+        return switch (app) {
+            case App local -> LinkedServers.ownName();
+            case HeldApp held -> held.held().server();
+        };
     }
 
     /** @return the apps the named panel lists for this viewer; none for a panel this node does not register */

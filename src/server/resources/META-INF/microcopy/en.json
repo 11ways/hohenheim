@@ -21715,13 +21715,14 @@
   "settings.hohenheim.files.max_site_files_mb.label": "Max files per site",
   "settings.hohenheim.files.max_site_files_mb.help": "The most one site's own files may hold together; an upload that would pass it is refused whole.",
   "server_column": {"text": "Server", "scope": "app_list"},
-  "held_last_seen": {"text": "Last seen {$at :datetime}", "scope": "app_list"},
+  "held_last_seen": {"text": ".match {$day :string}\ntoday {{Last seen {$at :time}}}\n* {{Last seen {$at :datetime}}}", "scope": "app_list"},
   "held_never_seen": {"text": "Never answered", "scope": "app_list"},
   "held_silent": {"text": "{$server} does not answer", "scope": "app_list"},
-  "held_no_page": {"text": "No page here yet", "scope": "app_list"},
-  "held_band": {"text": "{$server} does not answer since {$since :datetime}. Its apps are shown as it had them when it last answered.", "scope": "app_list"},
-  "held_note_column": {"text": "Opens on this server", "scope": "app_list"},
+  "held_band": {"text": ".match {$day :string}\ntoday {{{$server} does not answer since {$since :time}. Its apps are shown as it had them when it last answered.}}\n* {{{$server} does not answer since {$since :datetime}. Its apps are shown as it had them when it last answered.}}", "scope": "app_list"},
   "held_unreadable": {"text": "This server cannot read what {$server} told of this app; update this server", "scope": "app_list"},
   "server_all": {"text": "All servers", "scope": "app_list"},
-  "server_silent_option": {"text": "{$server}, does not answer", "scope": "app_list"}
+  "server_silent_option": {"text": "{$server}, does not answer", "scope": "app_list"},
+  "list_apps_on_servers": {"text": "{$apps} on {$servers}", "scope": "app_list"},
+  "list_app_count": {"text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "app_list"},
+  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"}
 }

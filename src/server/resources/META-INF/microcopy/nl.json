@@ -21715,13 +21715,14 @@
   "settings.hohenheim.files.max_site_files_mb.label": "Max. bestanden per site",
   "settings.hohenheim.files.max_site_files_mb.help": "Het meeste dat de eigen bestanden van een site samen mogen bevatten; een upload die dat zou overschrijden wordt geheel geweigerd.",
   "server_column": {"text": "Server", "scope": "app_list"},
-  "held_last_seen": {"text": "Laatst gezien {$at :datetime}", "scope": "app_list"},
+  "held_last_seen": {"text": ".match {$day :string}\ntoday {{Laatst gezien {$at :time}}}\n* {{Laatst gezien {$at :datetime}}}", "scope": "app_list"},
   "held_never_seen": {"text": "Nooit geantwoord", "scope": "app_list"},
   "held_silent": {"text": "{$server} antwoordt niet", "scope": "app_list"},
-  "held_no_page": {"text": "Hier nog geen pagina", "scope": "app_list"},
-  "held_band": {"text": "{$server} antwoordt niet sinds {$since :datetime}. Zijn apps staan er zoals hij ze had toen hij het laatst antwoordde.", "scope": "app_list"},
-  "held_note_column": {"text": "Opent op deze server", "scope": "app_list"},
+  "held_band": {"text": ".match {$day :string}\ntoday {{{$server} antwoordt niet sinds {$since :time}. Zijn apps staan er zoals hij ze had toen hij het laatst antwoordde.}}\n* {{{$server} antwoordt niet sinds {$since :datetime}. Zijn apps staan er zoals hij ze had toen hij het laatst antwoordde.}}", "scope": "app_list"},
   "held_unreadable": {"text": "Deze server kan niet lezen wat {$server} over deze app vertelde; werk deze server bij", "scope": "app_list"},
   "server_all": {"text": "Alle servers", "scope": "app_list"},
-  "server_silent_option": {"text": "{$server}, antwoordt niet", "scope": "app_list"}
+  "server_silent_option": {"text": "{$server}, antwoordt niet", "scope": "app_list"},
+  "list_apps_on_servers": {"text": "{$apps} op {$servers}", "scope": "app_list"},
+  "list_app_count": {"text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "app_list"},
+  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"}
 }

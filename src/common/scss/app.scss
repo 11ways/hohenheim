@@ -190,6 +190,11 @@
         margin-inline-start: var(--pl-space-xs);
     }
 
+    // A state said as its line alone (StateLineCell.line) starts the cell, where a badge would stand.
+    .cms-resource-list-table .hh-state-line > .hh-state-line-detail:first-child {
+        margin-inline-start: 0;
+    }
+
     // AIDEV-NOTE: the sentence explaining a state is not DRAWN in a list row. Drawn, it counts in its column's
     // max-content ("No certificate covers this name, so visitors get plain HTTP"), and the auto table layout then
     // shrinks every column in proportion: the app "devbox" read "dev..." beside 300 px of empty card. A screen reader

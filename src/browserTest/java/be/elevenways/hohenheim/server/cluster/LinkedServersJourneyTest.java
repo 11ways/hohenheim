@@ -110,7 +110,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -275,14 +274,13 @@ class LinkedServersJourneyTest {
             assertThat(told.get("source")).as("step 2: a website").isEqualTo("website");
             assertThat(((Map<?, ?>) told.get("health")).get("tone")).as("step 2: with Kuifje's verdict").isNotNull();
             //    The master's Apps list draws it itself from that state, its copy revived from the state's typed
-            //    wire: a row under Kuifje's name in the Server column that exists now a server is linked, saying its
-            //    page comes next and opening nothing; the Server filter offers both servers.
+            //    wire: a row under Kuifje's name in the Server column that exists now a server is linked, opening
+            //    nothing; the Server filter offers both servers.
             String listed = masterApps("later-site");
             assertThat(listed).as("step 2: the master's list names the server").contains("data-column=\"server\"")
                 .contains("\"filter.server\"");
             String laterRow = rowOf(listed, "later-site");
-            assertThat(laterRow).as("step 2: the row names Kuifje and says its page comes next").contains("Kuifje")
-                .contains("No page here yet");
+            assertThat(laterRow).as("step 2: the row names Kuifje").contains("Kuifje");
             assertThat(laterRow).as("step 2: a linked server's row opens nothing here")
                 .doesNotContain("cms-row-link").doesNotContain("data-cms-row-opener");
             assertThat(titled(listed, OWN_SITE)).as("step 2: the search narrows the list to Kuifje's app").isNull();
@@ -785,13 +783,18 @@ class LinkedServersJourneyTest {
 
     /** @return the table row of a list page whose title cell reads {@code name}, null when none is */
     private static String titled(String page, String name) {
-        Pattern title = Pattern.compile("cms-cell-primary\">\\s*" + Pattern.quote(name) + "\\s*<");
+        String title = ">" + name + "<";
         int start = page.indexOf("<pl-table-row");
         while (start >= 0) {
             int end = page.indexOf("</pl-table-row>", start);
             String row = page.substring(start, end < 0 ? page.length() : end);
-            if (title.matcher(row).find()) {
-                return row;
+            int cell = row.indexOf("data-column=\"name\"");
+            if (cell >= 0) {
+                int close = row.indexOf("</pl-table-cell>", cell);
+                if (row.substring(cell, close < 0 ? row.length() : close).replaceAll(">\\s+", ">")
+                        .replaceAll("\\s+<", "<").contains(title)) {
+                    return row;
+                }
             }
             start = page.indexOf("<pl-table-row", start + 1);
         }

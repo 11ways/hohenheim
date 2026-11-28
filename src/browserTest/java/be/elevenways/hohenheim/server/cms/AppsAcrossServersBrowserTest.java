@@ -35,13 +35,14 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The master's Apps list in the browser with two linked servers, one answering and one silent: every server's apps
- * in one list under a Server column, the silent server's receding with when it was last seen, and the Server filter
- * offering every server, the silent one in the board's words.
+ * The master's Apps list in the browser with linked servers, one answering and two silent: every server's apps in one
+ * list under a Server column and a count line, the silent servers' receding with when they were last seen (the time
+ * alone today, the day with it before) under the notice over the rows, and the Server filter offering every server,
+ * this one first, uncounted, a silent one in the board's words.
  *
- * AIDEV-NOTE: it writes the list with the Server filter open to build/apps-across-servers-screenshots, the evidence a
- * landing compares with board FO119's Apps screen. The linked servers' told states are the master's own app's facts
- * under other names, kept as the master's sync keeps them, so every cell is drawn from real copy.
+ * AIDEV-NOTE: it writes the list, then the list with its Server filter open, to build/apps-across-servers-screenshots:
+ * the evidence a landing compares with board FO119's Apps screens. The linked servers' told states are the master's own
+ * app's facts under other names, kept as the master's sync keeps them, so every cell is drawn from real copy.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -59,16 +60,20 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         List<UUID> servers = new ArrayList<>();
         Row site = ownSite("robbedoes-blog");
         try {
-            // 1. Kuifje answers and told two apps; Gaston last answered two hours ago and told one.
+            // 1. Kuifje answers and told two apps; Gaston stopped answering a moment ago and told one; Haddock last
+            //    answered three days ago and told one.
             UUID kuifje = server("Kuifje", Now.instant(), null);
-            UUID gaston = server("Gaston", Now.instant().minus(Duration.ofHours(2)), LinkFailure.UNREACHABLE);
+            UUID gaston = server("Gaston", Now.instant().minusSeconds(60), LinkFailure.UNREACHABLE);
+            UUID haddock = server("Haddock", Now.instant().minus(Duration.ofDays(3)), LinkFailure.UNREACHABLE);
             servers.add(kuifje);
             servers.add(gaston);
+            servers.add(haddock);
             AppFacts own = AppDirectory.operatorFacts().stream().filter(facts -> "robbedoes-blog".equals(facts.name()))
                 .findFirst().orElseThrow();
             told(kuifje, own, 101, "kuifje-shop");
             told(kuifje, own, 102, "kuifje-wiki");
             told(gaston, own, 201, "gaston-forum");
+            told(haddock, own, 301, "haddock-docs");
 
             // 2. One list: the master's app and both servers' apps, each under its server's name.
             navigateToApp("/admin/" + HohenheimSlugs.APPS);
@@ -82,15 +87,38 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                     .as("step 2: %s under its server", app[0]).isEqualTo(app[1]);
             }
 
-            // 3. Gaston's app recedes with when Gaston was last seen; Kuifje's does not.
+            // 3. The silent servers' apps recede with when their server was last seen, as a plain line: the time alone
+            //    today, the day with it before; an answering server's do not.
             Locator silent = rows.filter(new Locator.FilterOptions().setHasText("gaston-forum"));
             assertThat(silent.getAttribute("inactive")).as("step 3: the silent server's row recedes").isNotNull();
-            assertThat(silent.textContent()).as("step 3: when it was last seen").contains("Last seen");
+            Locator seen = silent.locator("pl-table-cell[data-column='https']");
+            assertThat(seen.textContent().trim()).as("step 3: seen today, the time alone")
+                .matches("Last seen \\d{1,2}:\\d{2}( [AP]M)?");
+            assertThat(seen.locator("pl-badge").count()).as("step 3: a plain line, no badge").isZero();
+            assertThat(rows.filter(new Locator.FilterOptions().setHasText("haddock-docs"))
+                .locator("pl-table-cell[data-column='https']").textContent().trim())
+                .as("step 3: seen before today, the day with the time").startsWith("Last seen ")
+                .doesNotMatch("Last seen \\d{1,2}:\\d{2}( [AP]M)?");
             assertThat(rows.filter(new Locator.FilterOptions().setHasText("kuifje-shop")).getAttribute("inactive"))
                 .as("step 3: an answering server's row does not").isNull();
 
-            // 4. The Server filter offers every server, the silent one as the board words it.
+            // 4. The notice stands over the rows, not above the heading, and the count line says what the list holds.
+            assertThat(page.locator("[data-cms-list-card-notice]").textContent())
+                .as("step 4: the notice over the rows").containsPattern("Gaston does not answer since \\d{1,2}:\\d{2}")
+                .contains("Haddock does not answer since");
+            assertThat(page.locator("[data-cms-list-notice]").textContent().trim()).as("step 4: none above the heading")
+                .isEmpty();
+            assertThat(page.locator("[data-cms-list-tool-note]").textContent().trim()).as("step 4: the count line")
+                .matches("\\d+ apps on 4 servers");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("apps-across-servers.png"))
+                .setFullPage(true));
+
+            // 5. The Server filter, after the others, offers every server uncounted, this one first, a silent one as
+            //    the board words it.
             click("[data-cms-filter-toggle]");
+            assertThat(page.locator("[data-cms-filter-bar] .cms-filter-field[data-filter-name]").evaluateAll(
+                "fields => fields.map(field => field.dataset.filterName)")).as("step 5: Kind, Host, State, Server")
+                .isEqualTo(List.of("type", "host", "state", "server"));
             Locator filter = page.locator("[data-cms-filter-bar] [data-filter-name='server'] pl-select");
             BoundedAssertions.assertThat(filter).isVisible();
             waitForReactiveIdle();
@@ -98,8 +126,9 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             Locator options = page.getByRole(AriaRole.OPTION);
             BoundedAssertions.assertThat(options.filter(new Locator.FilterOptions()
                 .setHasText("Gaston, does not answer"))).isVisible();
-            assertThat(options.allTextContents()).as("step 4: every server").anyMatch(text -> text.contains("Kuifje"))
-                .anyMatch(text -> text.contains("Robbedoes"));
+            assertThat(options.allTextContents().stream().map(String::trim).toList()).as("step 5: every server")
+                .containsExactly("All servers", "Robbedoes", "Gaston, does not answer", "Haddock, does not answer",
+                    "Kuifje");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("apps-server-filter.png"))
                 .setFullPage(true));
         } finally {

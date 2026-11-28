@@ -14,6 +14,8 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.wording.Reader;
+import be.elevenways.protoblast.common.i18n.wording.Wording.RecentDay;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -30,7 +32,6 @@ import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -162,27 +163,25 @@ final class AppDirectory {
      * One app of a linked server, drawn by this server's own cell code from the facts that server last told.
      *
      * @param held the linked server it lives on
-     * @param note the plain line under its name saying it opens nothing here yet, in the viewer's words
      */
-    record HeldApp(@NonNull Cells cells, @NonNull Held held, @NonNull String note) implements Listed {
+    record HeldApp(@NonNull Cells cells, @NonNull Held held) implements Listed {
 
         /**
          * @return a linked server's app; a silent server's keeps what it told of the app itself, while its verdict and
-         *         HTTPS, no longer current, say only when the server last answered
+         *         HTTPS, no longer current, say only when the server last answered, as a plain line
          */
         static @NonNull HeldApp of(@NonNull AppFacts facts, @NonNull Held held, @NonNull Wording words) {
             String key = held.peer() + "-" + facts.key();
-            String note = words.say(HohenheimMicrocopy.APP_LIST.of("held_no_page"));
             if (!held.silent()) {
-                return new HeldApp(Cells.of(key, facts, facts.https(), facts.health(), words), held, note);
+                return new HeldApp(Cells.of(key, facts, facts.https(), facts.health(), words), held);
             }
             Microcopy lastSeen = held.lastSeen() == null ? HohenheimMicrocopy.APP_LIST.of("held_never_seen")
-                : HohenheimMicrocopy.APP_LIST.of("held_last_seen").withArg("at", held.lastSeen());
-            StateLineCell https = new StateLineCell(HealthTone.SILENT.token(), BadgeVariant.SECONDARY, lastSeen, null,
-                null, null, null);
+                : HohenheimMicrocopy.APP_LIST.of("held_last_seen").withArg("at", held.lastSeen())
+                    .withArg("day", recentDay(words.reader(), held.lastSeen()));
+            StateLineCell https = StateLineCell.line(HealthTone.SILENT.token(), lastSeen);
             RecordHealth silent = RecordHealth.silent(HohenheimMicrocopy.APP_LIST.of("held_silent")
                 .withArg("server", held.server()));
-            return new HeldApp(Cells.of(key, facts, https, silent, words), held, note);
+            return new HeldApp(Cells.of(key, facts, https, silent, words), held);
         }
 
         /**
@@ -196,7 +195,7 @@ final class AppDirectory {
             RecordHealth unread = new RecordHealth(HealthTone.UNKNOWN, HohenheimMicrocopy.APP_LIST.of("held_unreadable")
                 .withArg("server", held.server()), null, List.of(), null);
             Cells cells = new Cells(held.peer() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread);
-            return new HeldApp(cells, held, words.say(HohenheimMicrocopy.APP_LIST.of("held_no_page")));
+            return new HeldApp(cells, held);
         }
     }
 
@@ -607,15 +606,27 @@ final class AppDirectory {
         return new SiteHostnamesCell(first.address() + ":" + first.port(), endpoints.size() - 1);
     }
 
-    /** The viewer's language, for the words a row carries as text (so the list sorts and searches what it shows). */
-    record Wording(@NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+    /**
+     * @return where the moment's day stands on the reader's calendar, as a message selects on it ({@code today},
+     *         {@code yesterday}, {@code older}): the time alone today ("14:02"), else the day with it
+     */
+    static @NonNull String recentDay(@NonNull Reader reader, @NonNull Instant at) {
+        return RecentDay.of(reader, at).name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * The viewer's language, for the words a row carries as text (so the list sorts and searches what it shows).
+     *
+     * @param reader the viewer as a message's moments are worded for, on their calendar
+     */
+    record Wording(@NonNull LocaleChain locales, @Nullable MessageResolver resolver, @NonNull Reader reader) {
 
         static @NonNull Wording of(@NonNull AccessContext access) {
             Conduit conduit = access.conduit();
             LocaleChain locales = conduit != null ? conduit.getLocales() : null;
             // A conduit that negotiated no language (a detached or test conduit) words the rows in the default one.
-            return locales != null ? new Wording(locales, conduit.getMessageResolver())
-                : new Wording(LocaleChain.ofTags("en"), MessageResolvers.getDefault());
+            return locales != null ? new Wording(locales, conduit.getMessageResolver(), access.getReader())
+                : new Wording(LocaleChain.ofTags("en"), MessageResolvers.getDefault(), access.getReader());
         }
 
         @NonNull String say(@NonNull Microcopy copy) {

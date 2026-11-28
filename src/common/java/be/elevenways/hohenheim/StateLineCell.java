@@ -16,7 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * @param state   the state's token, rendered as {@code data-state}
  * @param variant the state's badge variant
- * @param label   the short answer on the badge
+ * @param label   the short answer on the badge, null for a state with no answer of its own, said in its note alone
  * @param detail  the line under it, null when the answer needs none
  * @param link    a line linking to what stands behind the state (an address's certificate), null when there is none
  * @param url     where {@code link} leads, null when {@code link} is
@@ -28,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public record StateLineCell(
     @NonNull String state,
     @NonNull BadgeVariant variant,
-    @NonNull Microcopy label,
+    @Nullable Microcopy label,
     @Nullable Microcopy detail,
     @Nullable String link,
     @Nullable String url,
@@ -44,6 +44,14 @@ public record StateLineCell(
     public static @NonNull StateLineCell of(@NonNull StateBadge state, @NonNull Microcopy label,
                                             @Nullable Microcopy detail) {
         return new StateLineCell(state.token(), state.variant(), label, detail, null, null, null);
+    }
+
+    /**
+     * @return the cell of a state with no answer of its own, said as one plain line and no badge (a silent server's
+     *         app: "Last seen 14:02")
+     */
+    public static @NonNull StateLineCell line(@NonNull String state, @NonNull Microcopy line) {
+        return new StateLineCell(state, BadgeVariant.SECONDARY, null, null, null, null, line);
     }
 
     /** @return whether this cell shows {@code state}, so a reader of the cell compares members, never tokens */
