@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.refusal.StoredRefusalWords;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -47,24 +48,12 @@ final class ToldFacts {
         return copy == null ? null : Zenit.DRY.stringify(copy);
     }
 
-    /** @return the copy a DRY text holds, null for none or for a text that holds no copy this build can read */
-    static @Nullable Microcopy copyOf(@Nullable Object value) {
-        if (!(value instanceof String text)) {
-            return null;
-        }
-        try {
-            return Zenit.DRY.parse(text) instanceof Microcopy copy ? copy : null;
-        } catch (RuntimeException unreadable) {
-            return null;
-        }
-    }
-
     /** @return the copy a DRY text holds, null for none; one present but unreadable is {@link Unreadable} */
     static @Nullable Microcopy readCopy(@Nullable Object value, @NonNull String fact) {
         if (value == null) {
             return null;
         }
-        Microcopy copy = copyOf(value);
+        Microcopy copy = value instanceof String text ? StoredRefusalWords.read(text) : null;
         if (copy == null) {
             throw new Unreadable(fact);
         }
