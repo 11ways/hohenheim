@@ -74,7 +74,7 @@ public final class InstanceOperations {
         .verb(HohenheimVerbs.START)
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
-        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(POWER_FACET)
         .register();
 
@@ -100,7 +100,7 @@ public final class InstanceOperations {
         .one(INSTANCE)
         .verb(HohenheimVerbs.DEPLOY)
         .gate(gate(HohenheimCapabilities.POWER))
-        .facts(OperationFact.REACHES_OUTSIDE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(COMMAND_FACET)
         .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
         .background(OperationSteps.of(
@@ -116,7 +116,8 @@ public final class InstanceOperations {
         .verb(HohenheimVerbs.STOP)
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
-        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT, OperationFact.DESTRUCTIVE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT, OperationFact.DESTRUCTIVE,
+            OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(POWER_FACET)
         .register();
 
@@ -131,7 +132,7 @@ public final class InstanceOperations {
             .gate(gate(HohenheimCapabilities.POWER))
             .result(PowerResult.class)
             .command(COMMAND_FACET)
-            .facts(OperationFact.REACHES_OUTSIDE)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
             .register();
 
     public static final Operation<Row, Void, Integer> BACKUP = Operation.declare(HohenheimIds.id("backup_instance"))
@@ -272,7 +273,7 @@ public final class InstanceOperations {
             .verb(HohenheimVerbs.ROLL_BACK)
             .gate(gate(HohenheimCapabilities.POWER))
             .command(COMMAND_FACET)
-            .facts(OperationFact.REACHES_OUTSIDE)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
             .rateLimit(HohenheimEndpoints.DEPLOY_LIMIT)
             .background(OperationSteps.of(
                 OperationSteps.step("switch", HohenheimMicrocopy.DEPLOYMENTS.of("rollback_step"))))

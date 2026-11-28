@@ -102,6 +102,14 @@ final class ClusterCalls implements PeerCalls.Carrier {
     }
 
     @Override
+    public boolean answers(@NonNull String install) {
+        UUID id = Uuids.canonical(install);
+        Row server = id == null ? null : LinkedServers.byId(id);
+        return server != null && LinkedServers.roleOf(server) == LinkRole.MANAGES
+            && LinkState.of(server, LinkedServers.ownVersion()) != LinkState.NOT_ANSWERING;
+    }
+
+    @Override
     public PeerCalls.@NonNull Answer carry(@NonNull String install, PeerCalls.@NonNull Call call) {
         AccessContext caller = call.caller();
         UUID id = Uuids.canonical(install);

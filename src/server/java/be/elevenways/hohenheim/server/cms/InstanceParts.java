@@ -48,6 +48,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -152,6 +153,19 @@ public final class InstanceParts {
         .group(InstanceModel.BASICS_GROUP)
         .build();
 
+    /**
+     * The workloads of the servers this one manages, as it keeps them, opened on this page for an administrator.
+     *
+     * AIDEV-NOTE: a held workload's page shows only the overview (InstanceOverview.tab's held surface) and the
+     * operations that run where their subject lives (InstanceOperations); no other tab, form or verb reads this
+     * process under its id, which names another server's instance (zenit-cms RecordTab.servesHeld, fail closed).
+     */
+    private static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("instance"),
+            access -> List.copyOf(ClusterLists.rows(Models.get(InstanceModel.class), InstanceModel.MODEL_ID)),
+            "held_band", "list_app_count")
+        .health(instance -> AppOverview.heldHealth(instance, AppDirectory.Source.WORKLOAD))
+        .build();
+
     private InstanceParts() {
     }
 
@@ -200,6 +214,9 @@ public final class InstanceParts {
             // entry over a grantable model (RecordAccessPage.ridesEveryEntry), so the instance page shows an Access
             // tab anyway; InstanceSurfacesBrowserTest pins it on both record cases.
             .tabs(ResourceTabs.of(adminTabs()).withHistory().historyInStrip())
+            // A linked server's workload opens on this same page, its overview drawn from what that server told and
+            // its power verbs run there (they run where their subject lives); every other tab waits.
+            .opensHeld(HELD)
             // The instance tier's sibling catalogs, demoted out of the sidebar: where backups are written, who may
             // run how many instances, which public names route to which workload, and the build/release history.
             //

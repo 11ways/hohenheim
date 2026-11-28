@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.peer.HeldRow;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -296,6 +297,10 @@ public final class OwnedInstances {
      */
     public static @Nullable Microcopy placementReasonOf(@NonNull Row instance, boolean delegated,
                                                         @Nullable AccessContext viewer) {
+        // A workload another server holds is placed there: that server judges its placement when the call arrives.
+        if (instance instanceof HeldRow) {
+            return null;
+        }
         Microcopy refusal = placementRefusal(instance);
         return refusal == null ? null : placementReason(refusal, delegated, viewer);
     }

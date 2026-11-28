@@ -95,11 +95,15 @@ public final class InstanceOverview {
     private InstanceOverview() {
     }
 
-    /** The tab both instance entries declare; loading it reads the stored evidence afresh. */
+    /**
+     * The tab both instance entries declare; loading it reads the stored evidence afresh. A linked server's workload
+     * opens it too, drawn from what that server told ({@link AppOverview#heldWidgets}).
+     */
     static @NonNull RecordOverview<Row> tab() {
         return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
             .withoutFields()
-            .widgets(InstanceOverview::widgets);
+            .widgets(InstanceOverview::widgets)
+            .servesHeld((instance, access) -> AppOverview.heldWidgets(instance, AppDirectory.Source.WORKLOAD, access));
     }
 
     private static @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {

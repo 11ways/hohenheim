@@ -8,10 +8,13 @@ import be.elevenways.hohenheim.app.AppAddress;
 import be.elevenways.hohenheim.app.AppProtection;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
-import be.elevenways.hohenheim.server.cms.AppDirectory.App;
+import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
+import be.elevenways.hohenheim.server.cms.AppDirectory.Wording;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Cells;
 import be.elevenways.hohenheim.server.cms.AppDirectory.HeldApp;
-import be.elevenways.hohenheim.server.cms.AppDirectory.Listed;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
@@ -85,11 +88,15 @@ final class AppOverview {
     private AppOverview() {
     }
 
-    /** The site's front door: the app composition over the site alone. */
+    /**
+     * The site's front door: the app composition over the site alone; a linked server's website opens it too, drawn
+     * from what that server told ({@link #heldWidgets}).
+     */
     static @NonNull RecordOverview<Row> siteTab() {
         return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
             .withoutFields()
-            .widgets(AppOverview::siteWidgets);
+            .widgets(AppOverview::siteWidgets)
+            .servesHeld((site, access) -> heldWidgets(site, Source.WEBSITE, access));
     }
 
     private static @NonNull WidgetTree siteWidgets(@NonNull Row site, @NonNull AccessContext access) {
@@ -483,21 +490,31 @@ final class AppOverview {
     }
 
     /**
-     * The overview of the Apps list's own page ({@link AppParts}), which opens for a linked server's app: the same
-     * composition, drawn from what that server told alone.
+     * What a linked server's app made of a record the master keeps of it draws on that record's own page: the same
+     * composition as a local app's, drawn from what that server told alone ({@link AppStates}), never this server's
+     * process read under the kept record's id, which names another server's record.
+     *
+     * @param kept   the kept row of the app's record (a workload's instance, a website's site)
+     * @param source the kind of record it is
      */
-    static @NonNull RecordOverview<Listed> listedTab() {
-        return RecordOverview.<Listed>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
-            .withoutFields()
-            .widgets(AppOverview::listedWidgets);
+    static @NonNull WidgetTree heldWidgets(@NonNull Row kept, @NonNull Source source, @NonNull AccessContext access) {
+        return heldWidgets(toldApp(kept, source, Wording.of(access)), access);
     }
 
-    private static @NonNull WidgetTree listedWidgets(@NonNull Listed app, @NonNull AccessContext access) {
-        return switch (app) {
-            case App local -> compose(List.of(), List.of(), List.of(details(identity(local.cells(), null, null,
-                access))));
-            case HeldApp held -> heldWidgets(held, access);
-        };
+    /** @return the verdict a linked server's app made of a kept record leads its page with, as that server told it */
+    static @NonNull RecordHealth heldHealth(@NonNull Row kept, @NonNull Source source) {
+        return toldApp(kept, source, Wording.of(AccessContext.anonymous())).cells().health();
+    }
+
+    /**
+     * @return the app a kept record makes, as its server last told it; one whose state that server did not tell (not
+     *         an app of its own, or not told yet) or this build cannot read is the unreadable app under its kept name
+     */
+    private static @NonNull HeldApp toldApp(@NonNull Row kept, @NonNull Source source, @NonNull Wording words) {
+        KeptRow row = (KeptRow) kept;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(row), "a held app's server");
+        HeldApp told = AppStates.held(row.peer() + "-" + source.token() + "-" + row.key(), words);
+        return told != null ? told : HeldApp.unreadable(row.key(), row.title(), server, words);
     }
 
     private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull AccessContext access) {

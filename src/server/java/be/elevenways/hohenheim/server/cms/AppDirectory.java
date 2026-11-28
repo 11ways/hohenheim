@@ -34,7 +34,6 @@ import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -104,22 +103,15 @@ final class AppDirectory {
     }
 
     /**
-     * An app as the Apps list and its page name it: by its list key, a linked server's behind that server's key.
-     *
-     * AIDEV-NOTE: its subjects without a viewer (OperationHandlers.loader) are the linked servers' apps alone, worded
-     * in the default language: the operations on an app are carried to the server it lives on (AppParts.carried), and
-     * this server's own app is the subject of its record's own operations, never of this type's.
+     * An app as the Apps list names it: by its list key, a linked server's behind that server's key. No operation
+     * takes it: an app's verbs are its record's (a linked server's run where it lives, on its record's own page).
      */
     static final SubjectType<Listed> APP = SubjectType.of(HohenheimIds.id("app"), Listed.class,
         app -> app.cells().key());
 
-    static {
-        OperationHandlers.loader(APP, key -> AppStates.held(key, Wording.of(AccessContext.anonymous())));
-    }
-
     /**
      * One app as a list draws it: this server's, opening its record page ({@link App}), or a linked server's as that
-     * server last told it, opening nothing here yet ({@link HeldApp}).
+     * server last told it, opening its record's own page here under the key it is kept by ({@link HeldApp}).
      */
     sealed interface Listed permits App, HeldApp {
 

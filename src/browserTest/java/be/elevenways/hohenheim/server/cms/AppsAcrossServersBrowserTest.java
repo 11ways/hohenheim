@@ -92,6 +92,10 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                 InstanceModel.KIND.getValues().get("hohenheim:docker_container").getLabel(), own.address(), "kuifje",
                 own.https(), own.health(), Now.instant().minus(Duration.ofHours(2)));
             keep(kuifje, workload);
+            // The records the apps are made of, as the master keeps them: each app's page opens on them.
+            heldWorkload(kuifje, 103, "kuifje-api");
+            heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test");
+            heldEstate(gaston, 201, "gaston-forum", "forum.gaston.test");
 
             // 2. One list: the master's app and both servers' apps, each under its server's name.
             navigateToApp("/admin/" + HohenheimSlugs.APPS);
@@ -150,19 +154,38 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("apps-server-filter.png"))
                 .setFullPage(true));
 
-            // 6. A linked server's workload opens the master's own page of it, drawn from what its server told: its
-            //    name, kind, host and server, the waiting tabs said in words, and that server's verbs offered.
-            navigateToApp("/admin/" + HohenheimSlugs.APPS + "/" + peerOf(kuifje) + "-" + workload.key() + "/page/"
-                + RecordOverview.SLUG);
+            // 6. A linked server's workload opens the SAME page a workload of this server opens, under the key the
+            //    master keeps it by, drawn from what its server told: its name, kind, host and server, the waiting
+            //    tabs said in words, its power verbs (they run where it lives), and no other tab.
+            String heldWorkloadPage = "/admin/" + HohenheimSlugs.INSTANCES + "/" + peerOf(kuifje) + "-103";
+            navigateToApp(heldWorkloadPage + "/page/" + RecordOverview.SLUG);
             waitForHydration();
             String held = page.locator("body").textContent();
             assertThat(held).as("step 6: Kuifje's workload by its told facts").contains("kuifje-api")
-                .contains("Kuifje").contains("kuifje").contains("Deploy").contains("Restart")
+                .contains("Kuifje").contains("kuifje").contains("Restart")
                 .contains("Logs, console, files, stats, backups, volumes, databases and history wait");
+            assertThat(page.locator("a[href*='" + heldWorkloadPage + "/page/']").evaluateAll(
+                    "links => [...new Set(links.map(link => link.getAttribute('href').split('/page/')[1]"
+                        + ".split(/[?#]/)[0]))]"))
+                .as("step 6: no tab beside the overview (a strip of one is not drawn)")
+                .isSubsetOf(List.of(RecordOverview.SLUG));
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-page.png")).setFullPage(true));
+            //    A linked server's website opens the page this server's website opens, and this server's own beside it.
+            navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(kuifje) + "-101/page/" + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.locator("body").textContent()).as("step 6: Kuifje's website").contains("kuifje-shop")
+                .contains("Kuifje");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-page.png"))
+                .setFullPage(true));
+            navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + site.get(SiteModel.ID) + "/page/"
+                + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.locator("body").textContent()).as("step 6: this server's website").contains("robbedoes-blog");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("local-website-page.png"))
+                .setFullPage(true));
 
             // 7. A silent server's app page says since when it does not answer and offers nothing to do.
-            navigateToApp("/admin/" + HohenheimSlugs.APPS + "/" + peerOf(gaston) + "-website-201/page/"
+            navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(gaston) + "-201/page/"
                 + RecordOverview.SLUG);
             waitForHydration();
             assertThat(page.locator("body").textContent()).as("step 7: the silent server's app page")
@@ -174,8 +197,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             // 8. The Sites, Addresses and Certificates lists hold Kuifje's and Gaston's beside this server's, drawn by
             //    this server's cells from their records and told state, under their server's name; Gaston's recede
             //    with when it was last seen, under the list's notice in its own words; none draws a selection box.
-            heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test");
-            heldEstate(gaston, 201, "gaston-forum", "forum.gaston.test");
+            //    (Kuifje's kuifje-shop and Gaston's gaston-forum, kept in step 1.)
             String[][] lists = {{HohenheimSlugs.SITES, "name", "kuifje-shop", "gaston-forum", "Its sites are shown"},
                 {HohenheimSlugs.DOMAINS, "hostname", "shop.kuifje.test", "forum.gaston.test",
                     "Its addresses are shown"},
@@ -302,6 +324,17 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         row.set(PeerRecordModel.FIRST_SEEN, Now.instant());
         row.set(PeerRecordModel.LAST_CHANGED, Now.instant());
         Models.get(PeerRecordModel.class).insert(row, Change.PLAIN);
+    }
+
+    /** Keeps one workload of a linked server as its sync keeps it: the portable document of a row never stored here. */
+    private static void heldWorkload(UUID server, int id, String name) {
+        InstanceModel instances = Models.get(InstanceModel.class);
+        Row instance = instances.createEmptyRow();
+        instance.set(InstanceModel.ID, id);
+        instance.set(InstanceModel.NAME, name);
+        instance.set(InstanceModel.KIND, "hohenheim:docker_container");
+        instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+        keep(server, InstanceModel.MODEL_ID, String.valueOf(id), name, portable(instances, instance));
     }
 
     /**

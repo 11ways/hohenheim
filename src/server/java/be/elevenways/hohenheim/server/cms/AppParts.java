@@ -7,7 +7,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
-import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Cells;
@@ -19,8 +18,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -36,7 +33,6 @@ import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
-import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.StorePages;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -47,11 +43,9 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.live.LiveFeed;
-import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.operation.CarriedOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -73,15 +67,12 @@ import java.util.function.Predicate;
  * are counted in hundreds. The health column is the verdict each row's own record page leads with ({@link AppHealth},
  * read by the directory, or told by its server); the kind and state filters are the directory's closed {@link Source}
  * set and the framework's {@link HealthTone}, each derived from its home.
- * AIDEV-NOTE: a linked server's row is drawn by this server's cell code from the state it holds and opens this list's
- * own page of it, the app overview drawn from that state alone (AppOverview.listedTab); this server's own row opens its
- * record's page, whose overview leads with the same facts. A silent server's rows recede, draw no state glyph and say
- * when it last answered, and the list's notice over its rows says it does not answer.
- * AIDEV-NOTE: the page of a linked server's app offers Deploy, Restart, Stop and Start as the operations of its own
- * server, carried there (CarriedOperations.over): they run there as the person through that server's own pipeline,
- * never here. Only a workload has them, only while its server answers. Its record's other tabs (logs, console,
- * files, stats, backups, volumes, databases, history) are not offered here: they show what runs on that server and
- * wait for the stream relay; the overview says so in words.
+ * AIDEV-NOTE: every row opens its app's record page, a linked server's too: a workload on the Instances page, a website
+ * on the Sites page, under the key the master keeps it by (its server's key, then its own), where that page draws it
+ * from what its server told and offers the operations that run where their subject lives (zenit-cms opensHeld,
+ * RecordTab.servesHeld). A linked server's stack opens nothing yet: its page declares no held surface. A silent
+ * server's rows recede, draw no state glyph and say when it last answered, and the list's notice over its rows says it
+ * does not answer.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -115,89 +106,8 @@ public final class AppParts {
      */
     static @NonNull PanelResource<Listed> admin(@NonNull List<String> related, @NonNull List<String> shown,
                                              @Nullable String putOnline) {
-        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, shown, putOnline, null,
-            carriedVerbs())
-            .tabs(ResourceTabs.<Listed>of(List.of(AppOverview.listedTab())))
+        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, shown, putOnline, null)
             .build();
-    }
-
-    /** Who may ask a linked server's app to do something from here: an administrator of this server. */
-    private static final OperationGate ADMINISTRATOR = OperationGate.permission(HohenheimPanel.ACCESS);
-
-    /** Start, carried to the server the app lives on. */
-    static final Operation<Listed, Void, Void> START = CarriedOperations.over(InstanceOperations.START,
-        HohenheimIds.id("held_app_start"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
-
-    /** Stop, carried to the server the app lives on. */
-    static final Operation<Listed, Void, Void> STOP = CarriedOperations.over(InstanceOperations.STOP,
-        HohenheimIds.id("held_app_stop"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
-
-    /** Restart, carried to the server the app lives on. */
-    static final Operation<Listed, Void, Void> RESTART = CarriedOperations.over(InstanceOperations.RESTART,
-        HohenheimIds.id("held_app_restart"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
-
-    /** Deploy, carried to the server the app lives on: its run there is followed by this server's own run. */
-    static final Operation<Listed, Void, Void> DEPLOY = CarriedOperations.over(InstanceOperations.DEPLOY,
-        HohenheimIds.id("held_app_deploy"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
-
-    /** Roll back, carried to the server the app lives on, which decides whether it has a release to go back to. */
-    static final Operation<Listed, Void, Void> ROLLBACK = CarriedOperations.over(InstanceOperations.ROLLBACK,
-        HohenheimIds.id("held_app_rollback"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
-
-    /** @return where a linked server's workload lives, null for this server's apps and what is no workload */
-    private static CarriedOperations.@Nullable Located where(@NonNull Listed app) {
-        return app instanceof HeldApp held && held.cells().source() == Source.WORKLOAD
-            ? new CarriedOperations.Located(held.held().key(), String.valueOf(held.cells().id())) : null;
-    }
-
-    /** @return whether the app is a linked server's workload whose server answers, so its verbs are carried */
-    private static boolean carries(@NonNull Listed app) {
-        return where(app) != null && !((HeldApp) app).held().silent();
-    }
-
-    /**
-     * The verbs a linked server's workload offers on its page here, in the board's order: Deploy, Roll back, Restart,
-     * Stop, then Start.
-     */
-    private static @NonNull List<PanelAction<Listed>> carriedVerbs() {
-        return List.of(
-            PanelAction.<Listed, Void>placesRun(DEPLOY, ActionPlacement.ROW)
-                .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
-                .hiddenWhen(app -> !carries(app))
-                .build(),
-            PanelAction.<Listed, Void>placesRun(ROLLBACK, ActionPlacement.ROW)
-                .label(HohenheimMicrocopy.INSTANCE.of("rollback"))
-                .inlineInRow(false)
-                .hiddenWhen(app -> !carries(app))
-                .build(),
-            PanelAction.<Listed, Void>places(RESTART, ActionPlacement.ROW, (request, result) ->
-                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("restarted_toast")
-                        .withArg("name", request.subject().cells().name())))
-                .label(HohenheimMicrocopy.INSTANCE.of("restart"))
-                .icon(Icon.of("rotate-right"))
-                .inlineInRow(false)
-                .hiddenWhen(app -> !carries(app))
-                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("restart"),
-                    HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))
-                .build(),
-            PanelAction.<Listed, Void>places(STOP, ActionPlacement.ROW, (request, result) ->
-                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("stopped_toast")
-                        .withArg("name", request.subject().cells().name())))
-                .label(HohenheimMicrocopy.INSTANCE.of("stop"))
-                .icon(Icon.of("stop"))
-                .inlineInRow(false)
-                .style(ActionStyle.DESTRUCTIVE)
-                .hiddenWhen(app -> !carries(app))
-                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("stop"),
-                    HohenheimMicrocopy.INSTANCE.of("stop_confirm"), ActionStyle.DESTRUCTIVE))
-                .build(),
-            PanelAction.<Listed, Void>places(START, ActionPlacement.ROW, (request, result) ->
-                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.HELD_APP.of("held_app_started_toast")
-                        .withArg("name", request.subject().cells().name())))
-                .icon(Icon.of("play"))
-                .inlineInRow(false)
-                .hiddenWhen(app -> !carries(app))
-                .build());
     }
 
     /**
@@ -213,7 +123,7 @@ public final class AppParts {
                                               @Nullable String putOnline) {
         // A tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
         return ManageTwin.listed(onward(entry(ManageTwin.id("app"), HohenheimSlugs.MANAGE, false), related, shown,
-                    putOnline, InstanceTemplateParts::offersTenantCatalog, List.of()),
+                    putOnline, InstanceTemplateParts::offersTenantCatalog),
                 access -> HohenheimAccess.managesAnySite(access)
                     || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .build();
@@ -224,27 +134,20 @@ public final class AppParts {
      * instance's record trails "Apps / record", never through its own list.
      *
      * @param offered who is offered the primary verb, null for everyone the panel admits
-     * @param verbs   the record verbs the page offers beside the primary verb
      */
     private static PanelResource.@NonNull Builder<Listed> onward(PanelResource.@NonNull Builder<Listed> builder,
                                                               @NonNull List<String> related,
                                                               @NonNull List<String> shown,
                                                               @Nullable String putOnline,
-                                                              @Nullable Predicate<AccessContext> offered,
-                                                              @NonNull List<PanelAction<Listed>> verbs) {
+                                                              @Nullable Predicate<AccessContext> offered) {
         builder.navGroup(NavGroup.DEFAULT).navOrder(20).showsRowsOf(shown.toArray(String[]::new));
         List<RelatedPage> pages = new ArrayList<>();
         for (String slug : related) {
             pages.add(RelatedPage.toPeer(slug));
         }
         builder.relatedPages(pages.toArray(RelatedPage[]::new));
-        List<PanelAction<Listed>> actions = new ArrayList<>();
         if (putOnline != null) {
-            actions.add(putOnlineAction(putOnline, offered));
-        }
-        actions.addAll(verbs);
-        if (!actions.isEmpty()) {
-            builder.actions(actions);
+            builder.actions(List.of(putOnlineAction(putOnline, offered)));
         }
         return builder;
     }
@@ -314,24 +217,34 @@ public final class AppParts {
             .health(ResourceHealth.of((app, access) -> app.cells().health()))
             .list(list.rowLink((app, request) -> switch (app) {
                 case App local -> local.target();
-                // A linked server's app opens this list's own page of it, drawn here from what that server told.
-                case HeldApp linked -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.APPS, linked.cells().key(),
-                    RecordOverview.SLUG);
+                // A linked server's app opens its record's own page here, under the key the master keeps it by.
+                case HeldApp linked -> heldTarget(linked, panelSlug);
             }).build())
-            // The list's own page is a linked server's app's; this server's app opens its record's page, so its key
-            // names nothing here. Read from the request's one read of the held apps, so a page of rows whose verbs
-            // each load their app reads nothing more per row.
+            // Every app opens its record's own page, so the list has no page of its own: no key loads one.
             .reads(ResourceReads.<Listed>typed(app -> app.cells().key())
-                .load((key, access) -> held == null ? null : held.records(access).stream()
-                    .filter(app -> app.cells().key().equals(key)).findFirst().orElse(null))
+                .load((key, access) -> null)
                 .values(AppParts::values)
                 .build()
                 .title(app -> Microcopy.literalOrNull(app.cells().name())));
     }
 
     /**
+     * @return a linked server's app's record page: a workload's or a website's opens on this panel's Instances or
+     *         Sites page under its server's key and its own; a stack's, or one this build cannot read, opens nothing
+     */
+    private static @Nullable RouteTarget heldTarget(@NonNull HeldApp app, @NonNull String panelSlug) {
+        Source source = app.cells().source();
+        String key = app.held().key() + "-" + app.cells().id();
+        return source == null ? null : switch (source) {
+            case WORKLOAD -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.INSTANCES, key, RecordOverview.SLUG);
+            case WEBSITE -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, key, RecordOverview.SLUG);
+            case STACK -> null;
+        };
+    }
+
+    /**
      * The operator's Apps list's declaration of every linked server's apps: as they last told them, drawn by this
-     * server's own cells, in the list's own order by name; their verbs are carried to their server (carriedVerbs).
+     * server's own cells, in the list's own order by name; each opens its record's own page here (rowLink).
      */
     private static @NonNull HeldRecords<Listed> held() {
         return ClusterLists.<Listed>declare(HohenheimIds.id("app"),
@@ -342,7 +255,7 @@ public final class AppParts {
             .health(app -> app.cells().health())
             .order(Comparator.comparing((Listed app) -> app.cells().name().toLowerCase(Locale.ROOT))
                 .thenComparing(app -> app.cells().key()))
-            .actsOnHeld()
+            .opens((app, request) -> app instanceof HeldApp linked ? heldTarget(linked, request.panelSlug()) : null)
             .build();
     }
 

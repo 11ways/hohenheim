@@ -253,6 +253,14 @@ master. A silent server answers "Kuifje does not answer; nothing was changed"; a
 may or may not have been made. After a carried change the master brings its record of that server in step before it
 answers.
 
+A linked server's app opens on the master's SAME record page as a local one: a workload at
+`/admin/instances/<server key>-<id>/page/overview`, a website at `/admin/sites/<server key>-<id>/...`, the record
+being the master's kept row of it (zenit `KeptRow`, a `HeldRow`). Only the overview opens (`servesHeld`, drawn from
+what that server told); every other tab, the form and every verb that does not declare
+`OperationFact.RUNS_WHERE_SUBJECT_LIVES` are absent. Start, Deploy, Stop, Restart and Roll back declare it, so the
+same buttons a local app shows carry the same operation to that server (`/api/cluster/call`), and a silent server's
+app offers none. A linked server's stack opens nothing yet.
+
 Every proxy removes the whole `X-Hohenheim-*` family from every HTTP request it forwards, whoever sends it and on
 every route, a linked server included (a TLS passthrough site's traffic is never read, so nothing is removed there);
 only a trusted front's `X-Hohenheim-Key` is read first, as that front's credential.
