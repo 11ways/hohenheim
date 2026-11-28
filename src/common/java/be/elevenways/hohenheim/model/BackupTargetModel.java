@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,16 +20,21 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
+import be.elevenways.zenit.common.storage.StorageKindRegistry;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
 
 /**
- * A configured destination for instance backup exports (the target seam's data half):
- * kind (filesystem or ssh now) plus per-kind settings via the registry-driven
- * type-enum pattern. Whether a target is genuinely OFF-HOST is a deployment fact the
- * operator owns -- a filesystem target on the controller host is not.
+ * A storage a person declared (board FO128 "Hohenheim: storages"): its name, its kind and that kind's settings, the
+ * record Hohenheim's declared-storage source hands the storage layer. The table keeps its first name.
+ *
+ * AIDEV-NOTE: the kind and its settings are the storage layer's own fields ({@link StorageKindRegistry}): Hohenheim
+ * names no kind and no setting, so a storage module adds a kind here with no change. Rows written before (kinds
+ * {@code hohenheim:filesystem} and {@code hohenheim:ssh}) resolve to the framework's kinds through
+ * {@link be.elevenways.hohenheim.HohenheimStoredIds} and are never rewritten. Who owns a storage is who holds its
+ * {@code manage} grant (the ProjectModel rule: no owner column); none is the operator.
  */
 public class BackupTargetModel extends Model {
 
@@ -55,18 +59,14 @@ public class BackupTargetModel extends Model {
         .help(HohenheimMicrocopy.HELP.of("backup_target_name"))
         .build());
 
-    public static final EnumField KIND = SCHEMA.addField(
-        RegistryMemberField.builder("kind")
-            .registry(BackupTargetRegistry.REGISTRY)
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
-            .help(HohenheimMicrocopy.HELP.of("backup_target_kind"))
-            .build());
+    public static final EnumField KIND = SCHEMA.addField(StorageKindRegistry.kindField("kind")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
+        .help(HohenheimMicrocopy.HELP.of("backup_target_kind"))
+        .build());
 
-    public static final SchemaField SETTINGS = SCHEMA.addField(
-        SchemaField.builder("settings")
-            .schemaFrom("kind")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
-            .build());
+    public static final SchemaField SETTINGS = SCHEMA.addField(StorageKindRegistry.settingsField("settings", "kind")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
+        .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());

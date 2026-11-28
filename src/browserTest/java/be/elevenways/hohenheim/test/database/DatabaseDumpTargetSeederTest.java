@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DatabaseDumpTargetSeeder;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -105,13 +105,13 @@ class DatabaseDumpTargetSeederTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backups.toString());
         DumpTargetFixture.databaseRow("upgradeshop", DatabaseModel.ENGINE_POSTGRES);
         try {
-            // 1. The upgrade's boot creates the filesystem target at the backup path, and the setting names it.
+            // 1. The upgrade's boot creates a folder storage at the backup path, and the setting names it.
             upgradeBoot();
             Row target = seededTarget();
             assertThat(target).as("step 1: the target exists").isNotNull();
-            assertThat((String) target.get(BackupTargetModel.KIND)).as("step 1: a filesystem target")
-                .isEqualTo(FilesystemTargetKind.ID.toString());
-            assertThat(((Map<?, ?>) target.get(BackupTargetModel.SETTINGS)).get(FilesystemTargetKind.PATH.getName()))
+            assertThat((String) target.get(BackupTargetModel.KIND)).as("step 1: a folder storage")
+                .isEqualTo(LocalFolderStorageKind.ID.toString());
+            assertThat(((Map<?, ?>) target.get(BackupTargetModel.SETTINGS)).get(LocalFolderStorageKind.FOLDER.getName()))
                 .as("step 1: at the backup path").isEqualTo(backups.toAbsolutePath().normalize().toString());
             assertThat(DatabaseBackups.configuredTargetName()).as("step 1: the setting names it")
                 .isEqualTo(DatabaseDumpTargetSeeder.TARGET_NAME);

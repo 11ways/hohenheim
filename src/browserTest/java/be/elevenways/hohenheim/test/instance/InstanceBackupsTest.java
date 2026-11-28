@@ -18,8 +18,8 @@ import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
@@ -114,7 +114,7 @@ class InstanceBackupsTest {
     private static int hostId;
     private static Path targetRoot;
     private static int targetId;
-    private static BackupTarget target;
+    private static StorageAdapter target;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -192,12 +192,12 @@ class InstanceBackupsTest {
             assertThat((String) survivor.get(InstanceBackupModel.STATUS))
                 .as("step 2: and it is COMPLETE").isEqualTo(InstanceBackupModel.STATUS_COMPLETE);
             try {
-                assertThat(target.exists(newerKey))
+                assertThat(BackupStorages.exists(target, newerKey))
                     .as("step 2: THE POINT -- the surviving row's artifact is still on the"
                         + " target after the prune; a COMPLETE row whose payload the prune"
                         + " destroyed is a backup that cannot be restored")
                     .isTrue();
-                assertThat(target.storedSha256(newerKey))
+                assertThat(BackupStorages.storedSha256(target, newerKey))
                     .as("step 2: and it is byte-identical to what the row recorded")
                     .isEqualTo(survivor.get(InstanceBackupModel.SHA256));
             } catch (IOException unreadable) {
@@ -1320,7 +1320,7 @@ class InstanceBackupsTest {
             //    target is genuinely gone fails at use, by name -- this is what used to
             //    happen to COMPLETE rows.
             assertThat(violationKeys(catchThrowable(() ->
-                    BackupTargetKinds.targetFor(guardTargetId))))
+                    BackupStorages.forTarget(guardTargetId))))
                 .as("step 6: resolving the deleted target fails at use, which is exactly"
                     + " the late failure the refusal moves to the point of decision")
                 .isEqualTo("backup_target_missing ");

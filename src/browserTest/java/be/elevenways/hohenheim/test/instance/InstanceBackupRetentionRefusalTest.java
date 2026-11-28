@@ -5,7 +5,7 @@ import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -47,7 +47,7 @@ class InstanceBackupRetentionRefusalTest {
     private static int hostId;
     private static Path targetRoot;
     private static int targetId;
-    private static BackupTarget target;
+    private static StorageAdapter target;
 
     @BeforeAll
     static void setUp() throws Exception {

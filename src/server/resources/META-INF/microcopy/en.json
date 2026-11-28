@@ -7026,12 +7026,20 @@
     "text": "Backup target {$name} receives this server's own recovery archives; pick another target for them in Settings, under Backups, first",
     "scope": "violations"
   },
-  "backup_target_kind_unknown": {
-    "text": "Unknown backup target kind '{$kind}'",
-    "scope": "violations"
-  },
   "backup_target_invalid": {
     "text": "Backup target {$name} is misconfigured: {$reason}",
+    "scope": "violations"
+  },
+  "backup_target_name_taken": {
+    "text": "The name {$name} is taken by a storage of this server's settings; choose another",
+    "scope": "violations"
+  },
+  "backup_target_confirm": {
+    "text": "{$question} The server presented {$presented}: compare it with the fingerprint its owner gives you, then save it as the server's key to confirm it",
+    "scope": "violations"
+  },
+  "backup_target_unusable": {
+    "text": "{$name} was not saved: {$reason} ({$diagnostic})",
     "scope": "violations"
   },
   "backup_target_unhealthy": {
@@ -7246,25 +7254,7 @@
       "scope": "git_provider"
     }
   ],
-  "filesystem": [
-    {
-      "text": "Filesystem directory",
-      "scope": "backup_target_kind"
-    },
-    {
-      "text": "A directory on this controller; it is off-host only when the directory itself is replicated or mounted from another host",
-      "scope": "backup_target_kind_description"
-    }
-  ],
   "ssh": [
-    {
-      "text": "SSH host",
-      "scope": "backup_target_kind"
-    },
-    {
-      "text": "A directory on another host over ssh; safe from this host's loss when that host fails apart from it",
-      "scope": "backup_target_kind_description"
-    },
     {
       "text": "SSH",
       "scope": "host_mode"
@@ -7370,18 +7360,6 @@
   },
   "backup_target_kind": {
     "text": "Where backup exports are written; whether it survives the loss of this host is a deployment fact you own",
-    "scope": "help"
-  },
-  "backup_target_path": {
-    "text": "Directory for backup archives. A local directory on this host is NOT off-host; point it at replicated or mounted remote storage",
-    "scope": "help"
-  },
-  "backup_ssh_server": {
-    "text": "The enrolled host the backups land on; its confirmed host key is the only pin, and a quarantined host is refused",
-    "scope": "help"
-  },
-  "backup_ssh_path": {
-    "text": "Absolute directory on the backup host",
     "scope": "help"
   },
   "variable_wrong_carrier": {
@@ -20844,7 +20822,7 @@
   "mcp_code_database_engine_set": {"text": "The engine's code; leave out to create one.", "scope": "hohenheim"},
   "mcp_tool_app_database_set": {"text": "Attaches a managed database to an app, which then sees its connection as variables under a prefix: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL, and the app's first attached database also gives DATABASE_URL. Only an app on a Docker host can take one, on the same host as the database. A change can only set the prefix. The variables reach the app at its next deploy. Detaching is delete DL2, which leaves the database and its data alone. Answers the attachment's code (DL2).", "scope": "hohenheim"},
   "mcp_code_app_database_set": {"text": "The attachment's code; leave out to create one.", "scope": "hohenheim"},
-  "mcp_tool_backup_target_set": {"text": "Creates or changes a backup target: where app backups and database dumps are written. Kind filesystem is a folder on this installation's own machine, which is not off-host unless the folder is mounted remote storage; kind ssh is a folder on another enrolled host, reached over SSH with its confirmed host key (a quarantined or unconfirmed host is refused when used). A change sends only what changes. Check it with test BT1. Administrators only. Answers the target's code (BT1).", "scope": "hohenheim"},
+  "mcp_tool_backup_target_set": {"text": "Creates or changes a storage: where app backups, database dumps and site files are kept. Its kind is one of the storage kinds this installation offers (storage_local_folder, a folder on this machine, which is not off-host; storage_s3, an S3-compatible store; storage_sftp, an SFTP server), and its settings are that kind's settings by name. A save tests the storage first and is refused when it cannot be reached and written. A change sends only what changes. Check it with test BT1. Administrators only. Answers the storage's code (BT1).", "scope": "hohenheim"},
   "mcp_code_backup_target_set": {"text": "The target's code; leave out to create one.", "scope": "hohenheim"},
   "mcp_tool_backup_restore": {"text": "Restores an app backup, in the background. By default into a new app while the app it came from keeps running; an administrator may pick the host (left out, a host with room is picked), anyone else gets the source app's own host. With in_place the backup replaces the data of the app it came from, after a fresh backup of that app is taken first; the data as it was before survives only in that fresh backup. A backup that is not complete is refused. Answers a RUN code: follow it with run_read.", "scope": "hohenheim"},
   "mcp_code_backup_restore": {"text": "The backup to restore (BK7).", "scope": "hohenheim"},
@@ -20855,9 +20833,9 @@
   "database_engine_host_code": {"text": "The host (SR1) the engine runs on; left out, this machine. It cannot change later.", "scope": "help"},
   "database_link_app": {"text": "The app (AP12) to attach the database to, on a Docker host.", "scope": "help"},
   "database_link_database": {"text": "The managed database (DB12) to attach, on the app's own host.", "scope": "help"},
-  "backup_target_host": {"text": "The enrolled host (SR1) an SSH target writes to; only an SSH target takes it.", "scope": "help"},
   "backup_restore_host": {"text": "The host (SR1) the new app lands on; left out, a host with room is picked. Administrators only.", "scope": "help"},
   "backup_target_name": {"text": "The name the target is listed and picked by; no two targets share one.", "scope": "help"},
+  "backup_target_settings": {"text": "The storage kind's settings by name, as its form holds them (a folder storage takes folder; an S3 store address, bucket, access_key, secret_key; an SFTP server host, user, password or private_key, host_key). A change sends only the settings that change.", "scope": "help"},
   "database_password_twice": {"text": "Give a password or ask for a generated one, not both.", "scope": "violations"},
   "restore_new_description": {"text": "Restores the backup as a new app, on the host you pick or one with room; the backup's own app keeps running.", "scope": "instance_backup"},
   "restore_in_place_description": {"text": "Takes a fresh backup of the backup's app, then replaces that app's volumes with the backup's; its settings, variables and config files stay.", "scope": "instance_backup"},

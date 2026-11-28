@@ -11,8 +11,9 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -101,15 +102,19 @@ class ControlPlaneBackupTest {
             channels.save(channel);
         });
 
-        // 2. The archive is UPLOADED to the target, and the target's own re-hash is what
-        //    "verified" means. Two older archives are already there, so retention has
-        //    something to prune -- ON THE TARGET, which is the only place they exist.
-        BackupTarget target = new FilesystemBackupTarget(targetRoot);
+        // 2. The archive is UPLOADED to the storage, and the storage's own re-hash is what
+        //    "verified" means. Two older archives are already there, written as the folder target
+        //    of before laid them out, so retention has something to prune -- ON THE STORAGE, which
+        //    is the only place they exist; an interrupted SSH-era upload's staged name beside them
+        //    is no archive and is neither counted nor pruned.
+        StorageAdapter target = new LocalDiskStorageAdapter(targetRoot);
         Files.createDirectories(targetRoot.resolve("control-plane"));
         Files.writeString(targetRoot.resolve("control-plane/control-plane-20200101-000000.zrec"),
             "old-1");
         Files.writeString(targetRoot.resolve("control-plane/control-plane-20200102-000000.zrec"),
             "old-2");
+        Files.writeString(targetRoot.resolve("control-plane/control-plane-20200103-000000.zrec.part"),
+            "half an upload");
 
         ControlPlaneBackups.Archive archive =
             ControlPlaneBackups.backupNow(datasource, keyring, target, staging, 2, "test-target");
@@ -119,7 +124,7 @@ class ControlPlaneBackupTest {
         assertThat(target.storedSha256(archive.key()))
             .as("step 2: and the bytes the TARGET holds hash to what was recorded")
             .isEqualTo(archive.sha256());
-        assertThat(target.list(ControlPlaneBackups.KEY_PREFIX))
+        assertThat(BackupStorages.list(target, ControlPlaneBackups.KEY_PREFIX))
             .as("step 2: retention keeps the newest 2 archives ON THE TARGET")
             .containsExactlyInAnyOrder(
                 "control-plane/control-plane-20200102-000000.zrec", archive.key());
@@ -154,7 +159,7 @@ class ControlPlaneBackupTest {
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
-            target.retrieve(archive.key(), fetched);
+            BackupStorages.retrieve(target, archive.key(), fetched);
             RecoveryArchive.Restored restored = ControlPlaneBackups.restore(fetched);
             assertThat(restored.manifest().activeKeyId())
                 .as("step 5: the restored archive names the key it was made under")

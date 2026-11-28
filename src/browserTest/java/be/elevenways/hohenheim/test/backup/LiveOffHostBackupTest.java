@@ -11,8 +11,8 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
@@ -179,9 +179,9 @@ class LiveOffHostBackupTest {
                 .as("step 1: the destination is a STORAGE host -- never admitted for"
                     + " placement, and it does not need to be")
                 .isEqualTo(HostModel.ADMISSION_BLOCKED);
-            BackupTarget target = BackupTargetKinds.targetOf(targetRow);
+            StorageAdapter target = BackupStorages.of(targetRow);
             run(() -> {
-                target.healthCheck();
+                BackupStorages.requireUsable(target);
                 return null;
             });
             assertThat(run(() -> shell.exec("test -d " + HostShell.quote(remoteBase)
@@ -272,11 +272,11 @@ class LiveOffHostBackupTest {
                 destination.set(HostModel.HOST_KEY, run(
                     LiveOffHostBackupTest::foreignHostKeyLine));
                 serverModel.save(destination);
-                assertThat(catchThrowable(() -> target.exists(key)))
+                // The pin change released the storage opened on the old one; resolving again reads the new pin.
+                assertThat(catchThrowable(() -> BackupStorages.exists(BackupStorages.of(targetRow), key)))
                     .as("step 7: a pin the real host contradicts RAISES, never 'absent'")
                     .isInstanceOfSatisfying(IOException.class, failure ->
-                        assertThat(failure.getMessage())
-                            .contains("Host key verification failed"));
+                        assertThat(failure.getMessage()).contains("does not pin"));
 
                 // 7b. QUARANTINE, against the real machine: with the true pin back in
                 //     place but an offered key on record, the destination is refused by
@@ -284,7 +284,7 @@ class LiveOffHostBackupTest {
                 destination.set(HostModel.HOST_KEY, realPin);
                 destination.set(HostModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
                 serverModel.save(destination);
-                assertThat(catchThrowable(() -> target.exists(key)))
+                assertThat(catchThrowable(() -> BackupStorages.of(targetRow)))
                     .as("step 7b: a quarantined destination host is refused by name")
                     .isInstanceOfSatisfying(Violations.class, violations ->
                         assertThat(violations.all()).anySatisfy(violation ->
@@ -294,14 +294,14 @@ class LiveOffHostBackupTest {
 
                 // 8. exists() answers about the REMOTE, and delete really removes it
                 //    there -- a retention sweep acts on this answer.
-                assertThat(run(() -> target.exists(key)))
+                assertThat(run(() -> BackupStorages.exists(BackupStorages.of(targetRow), key)))
                     .as("step 8: the target reports the remote artifact present").isTrue();
                 backups.delete(backupId);
                 assertThat(run(() -> shell.exec("test -f " + HostShell.quote(remoteFile)
                     + " && echo YES || echo NO")))
                     .as("step 8: and deleting the backup removed it FROM THE REMOTE")
                     .isEqualTo("NO");
-                assertThat(run(() -> target.exists(key)))
+                assertThat(run(() -> BackupStorages.exists(BackupStorages.of(targetRow), key)))
                     .as("step 8: which the target now reports as absent").isFalse();
             } finally {
                 destroyQuietly(service, id);

@@ -176,6 +176,11 @@ dependencies {
     // SFTP to app files: zenit-sftp's server over this host's InstanceSftpRealm.
     serverImplementation libs.zenit.sftp.server
 
+    // Storages a person declares (board FO128): every kind on the classpath is offered with no code here, so these
+    // two lines are the whole of Hohenheim's S3 and SFTP support.
+    serverImplementation libs.zenit.storage.s3.server
+    serverImplementation libs.zenit.storage.sftp.server
+
     // The assistants' MCP server, derived from the operations and record sources (HohenheimMcpModule).
     // Server-only: no browser code touches it.
     serverImplementation libs.zenit.ai.server
@@ -206,6 +211,9 @@ dependencies {
     browserTestImplementation libs.zenit.auth.test.support
     // zenit-ai's MCP HTTP session: the assistant journey talks to the hohenheim server over real HTTP.
     browserTestImplementation libs.zenit.ai.test.support
+    // The storages journeys: an SFTP server and a Garage store started in the test, as the storage modules prove.
+    browserTestImplementation libs.zenit.storage.sftp.test.support
+    browserTestImplementation libs.zenit.storage.s3.test.support
 }
 
 // The runtime-image build contexts ride the SERVER resources, so a host that has to

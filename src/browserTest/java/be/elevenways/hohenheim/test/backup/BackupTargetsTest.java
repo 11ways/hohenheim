@@ -8,8 +8,12 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.hohenheim.server.backup.HohenheimStorages;
+import be.elevenways.zenit.server.storage.StorageAdapter;
+import be.elevenways.zenit.server.storage.StorageKinds;
+import be.elevenways.zenit.storage.sftp.server.SftpStorageKind;
+import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
 import be.elevenways.hohenheim.server.docker.HostService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.host.Sshd;
@@ -40,20 +44,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The target seam's contract against a REAL SSH DESTINATION: a real sshd on loopback
- * (real transport, simulated failure domain -- one machine cannot prove two;
- * LiveOffHostBackupTest is where the second machine is real). Staging-then-commit is the
- * load-bearing behavior: nothing under the committed key until every byte landed.
+ * A backup target stored before storages, kind {@code hohenheim:ssh} naming a host record, read as the SFTP storage
+ * it is now, against a REAL SSH DESTINATION: a real sshd on loopback serving SFTP (real transport, simulated failure
+ * domain; LiveOffHostBackupTest is where the second machine is real).
  *
- * The journey doubles as the trust proof, because an ssh target addresses a HOST RECORD
- * and inherits its ceremony: one fixture is walked through unpinned,
- * pinned-but-unconfirmed, healthy, quarantined and host-key-changed, so every refusal
- * has the working case standing beside it.
+ * The journey doubles as the trust proof, because such a storage addresses a HOST RECORD and inherits its ceremony:
+ * one fixture is walked through unpinned, pinned-but-unconfirmed, healthy, quarantined and host-key-changed, so
+ * every refusal has the working case standing beside it.
  *
- * AIDEV-NOTE: the filesystem half of this class moved to FilesystemBackupTargetTest on
- * 2026-08-13. @Tag("slow") is a CLASS property, so the sshd this journey needs was
- * evicting a temp-directory check from the default lane for nothing. Add a hermetic
- * target assertion THERE, not here.
+ * AIDEV-NOTE: @Tag("slow") is a CLASS property and this journey needs OpenSSH's sshd; add hermetic storage
+ * assertions to DatabaseDumpTargetTest, never here.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupTargetsTest {
@@ -120,224 +120,143 @@ class BackupTargetsTest {
     }
 
     /**
-     * One fixture, every trust state: the ssh target refuses an unpinned host, refuses
-     * an unconfirmed pin, WORKS end to end once the ceremony is walked, refuses a
-     * quarantined host, and fails closed when the real host key changes underneath it.
+     * One fixture, every trust state: the storage refuses an unpinned host, refuses an unconfirmed pin, WORKS end to
+     * end over SFTP once the ceremony is walked, with the host record's account, key and pin and the stored base
+     * path, refuses a quarantined host, and fails closed when the real host key changes underneath it.
      */
     @Test
-    void sshTargetInheritsItsHostRecordsPinnedIdentity() throws IOException {
+    void anSshTargetIsTheSftpStorageOfItsHostRecordsPinnedIdentity() throws Exception {
         LiveLane.require(LiveLane.Need.SSH_TOOLS, sshd != null,
             "no OpenSSH binaries: the ssh target lane is not exercised here");
         Path remoteBase = tmp.resolve("remote");
         Path file = payload("ssh-artifact");
 
-        Db.run(datasource, () -> {
-            HostService servers = new HostService();
-            servers.add("backup-host", sshd.target());
-            HostModel model = Models.get(HostModel.class);
-            Row host = model.findByName("backup-host");
-            HostKeys.ensureIdentity(host);
-            String publicKey = host.get(HostModel.IDENTITY_PUBLIC_KEY);
-            run(() -> {
-                sshd.authorize(publicKey);
-                return null;
-            });
+        try (PrivateNetworkBootFixture ignored = new PrivateNetworkBootFixture()) {
+            // The sshd listens on loopback: an operator's storage may reach it only where the boot allows it.
+            PrivateNetworkBootFixture.declare(StorageKinds.PRIVATE_NETWORKS, true);
+            Db.run(datasource, () -> {
+                HostService servers = new HostService();
+                servers.add("backup-host", sshd.target());
+                HostModel model = Models.get(HostModel.class);
+                Row host = model.findByName("backup-host");
+                HostKeys.ensureIdentity(host);
+                String publicKey = host.get(HostModel.IDENTITY_PUBLIC_KEY);
+                run(() -> {
+                    sshd.authorize(publicKey);
+                    return null;
+                });
 
-            Row targetRow = Models.get(BackupTargetModel.class).createEmptyRow();
-            targetRow.set(BackupTargetModel.NAME, "sshbox");
-            targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
-            targetRow.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", HostModel.registryKeyOf(host.get(HostModel.ID)),
-                "path", remoteBase.toString()));
-            Models.get(BackupTargetModel.class).save(targetRow);
-
-            // 1. An UNPINNED host cannot be a backup destination: the refusal lands at
-            //    resolution, before an argv exists, let alone a connection.
-            assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(targetRow)))
-                .as("step 1: an unpinned destination host is refused outright")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(keysOf(violations)).contains("host_key_unverified"));
-
-            // 2. A pin alone is not enough -- a scan pins UNVERIFIED, and an operator
-            //    who never compared digests has verified nothing.
-            HostKeys.scanAndPin(host);
-            Row pinned = model.findByName("backup-host");
-            assertThat((String) pinned.get(HostModel.HOST_KEY_FINGERPRINT))
-                .as("step 2: the pin is the running sshd's real key")
-                .isEqualTo(sshd.hostKeyFingerprint());
-            assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(targetRow)))
-                .as("step 2: an unconfirmed pin is still refused")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(keysOf(violations)).contains("host_key_unverified"));
-
-            // 3. THE POSITIVE ANCHOR: the operator confirms out of band, and the very
-            //    same target now speaks the whole seam over the real ssh transport.
-            HostKeys.confirm(pinned);
-            BackupTarget target = BackupTargetKinds.targetOf(targetRow);
-            run(() -> {
-                target.healthCheck();
-                return null;
-            });
-            assertThat(Files.isDirectory(remoteBase))
-                .as("step 3: the health check created the remote base directory").isTrue();
-            run(() -> {
-                target.store("instance-9/b.hib", file);
-                return null;
-            });
-            assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
-                .as("step 3: the committed artifact exists on the remote filesystem").isTrue();
-            assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib.part")))
-                .as("step 3: with no staging debris after a clean store").isFalse();
-            assertThat(run(() -> target.storedSha256("instance-9/b.hib")))
-                .as("step 3: and its sha comes from the REMOTE side")
-                .isEqualTo(run(() -> BackupArchive.sha256Of(
-                    remoteBase.resolve("instance-9/b.hib"))));
-            Path back = tmp.resolve("ssh-back.bin");
-            run(() -> {
-                target.retrieve("instance-9/b.hib", back);
-                return null;
-            });
-            assertThat(run(() -> Files.readString(back))).as("step 3: retrieved bytes")
-                .isEqualTo("ssh-artifact");
-            assertThat(run(() -> target.exists("instance-9/b.hib")))
-                .as("step 3: and the target reports the artifact present").isTrue();
-
-            // 3b. Deleting a namespace's last artifact removes the folders it leaves empty there (an earlier
-            //     version's leftover included), never the base, and the next store recreates its folder (the remote
-            //     half of FilesystemBackupTargetTest's folder journey).
-            run(() -> {
-                Files.createDirectories(remoteBase.resolve("instance-9/leftover"));
-                target.delete("instance-9/b.hib");
-                return null;
-            });
-            assertThat(Files.exists(remoteBase.resolve("instance-9")))
-                .as("step 3b: the emptied namespace is gone, its leftover folder with it").isFalse();
-            assertThat(Files.isDirectory(remoteBase)).as("step 3b: the base stays").isTrue();
-            run(() -> {
-                target.store("instance-9/b.hib", file);
-                return null;
-            });
-            assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
-                .as("step 3b: a store recreates the folder").isTrue();
-
-            // 4. The argv this lane runs on is the inventoried-host argv: strict checking
-            //    against Hohenheim's OWN store and never the OS user's ~/.ssh. The target
-            //    builds no argv of its own, so there is no second place to check.
-            String flat = String.join(" ", HostKeys.sshArgv(pinned, List.of("true")));
-            assertThat(flat)
-                .as("step 4: strict, pinned, identity-only, and no ambient known_hosts")
-                .contains("StrictHostKeyChecking=yes")
-                .contains("GlobalKnownHostsFile=/dev/null")
-                .contains("IdentitiesOnly=yes")
-                .doesNotContain("accept-new")
-                .doesNotContain(System.getProperty("user.home") + "/.ssh");
-
-            // 5. A key is refused before any remote command runs.
-            assertThat(catchThrowable(() -> target.store("../escape.hib", file)))
-                .as("step 5: unsafe keys are refused")
-                .isInstanceOf(IOException.class).hasMessageContaining("not a safe remote path");
-
-            // 5b. A failing store commits NOTHING (unwritable destination directory).
-            Path blocked = remoteBase.resolve("blocked");
-            run(() -> {
-                Files.createDirectories(blocked);
-                return null;
-            });
-            assertThat(blocked.toFile().setWritable(false))
-                .as("step 5b: the fixture could actually make the base unwritable").isTrue();
-            try {
-                Row blockedRow = Models.get(BackupTargetModel.class).createEmptyRow();
-                blockedRow.set(BackupTargetModel.NAME, "sshbox-blocked");
-                blockedRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
-                blockedRow.set(BackupTargetModel.SETTINGS, Map.of(
+                Row targetRow = Models.get(BackupTargetModel.class).createEmptyRow();
+                targetRow.set(BackupTargetModel.NAME, "sshbox");
+                targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
+                targetRow.set(BackupTargetModel.SETTINGS, Map.of(
                     "server", HostModel.registryKeyOf(host.get(HostModel.ID)),
-                    "path", blocked.resolve("sub").toString()));
-                Models.get(BackupTargetModel.class).save(blockedRow);
-                BackupTarget blockedTarget = BackupTargetKinds.targetOf(blockedRow);
-                assertThat(catchThrowable(() -> blockedTarget.store("c.hib", file)))
-                    .as("step 5b: a store into an unwritable base fails loudly")
-                    .isInstanceOf(IOException.class);
-                assertThat(Files.exists(blocked.resolve("sub/c.hib")))
-                    .as("step 5b: and commits nothing").isFalse();
-            } finally {
-                blocked.toFile().setWritable(true);
-            }
+                    "path", remoteBase + "/"));
+                Models.get(BackupTargetModel.class).save(targetRow);
 
-            // 6. QUARANTINE: a rescan that disagreed with the pin left the offered key as
-            //    evidence. The destination is refused by NAME while the artifact it holds
-            //    is untouched -- backups do not silently continue to a machine whose
-            //    identity we can no longer reconcile.
-            pinned.set(HostModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
-            model.save(pinned);
-            assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(targetRow)))
-                .as("step 6: a quarantined destination is refused")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(keysOf(violations)).contains("host_quarantined"));
-            assertThat(catchThrowable(() -> target.exists("instance-9/b.hib")))
-                .as("step 6: and an already-resolved target refuses on its NEXT exchange")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(keysOf(violations)).contains("host_quarantined"));
-            assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
-                .as("step 6: the artifact itself is untouched by the refusal").isTrue();
+                // 1. An UNPINNED host cannot be a backup destination: refused at resolution, before any connection.
+                assertThat(keysOf(catchThrowable(() -> BackupStorages.of(targetRow))))
+                    .as("step 1: an unpinned destination host is refused outright").contains("host_key_unverified");
 
-            // 7. Clearing the quarantine restores exactly the behaviour of step 3, so the
-            //    refusal above measured the quarantine and nothing else.
-            pinned.set(HostModel.HOST_KEY_OFFERED, null);
-            model.save(pinned);
-            assertThat(run(() -> target.exists("instance-9/b.hib")))
-                .as("step 7: the same fixture works again once the quarantine clears")
-                .isTrue();
+                // 2. A pin alone is not enough: a scan pins UNVERIFIED.
+                HostKeys.scanAndPin(host);
+                Row pinned = model.findByName("backup-host");
+                assertThat((String) pinned.get(HostModel.HOST_KEY_FINGERPRINT))
+                    .as("step 2: the pin is the running sshd's real key").isEqualTo(sshd.hostKeyFingerprint());
+                assertThat(keysOf(catchThrowable(() -> BackupStorages.of(targetRow))))
+                    .as("step 2: an unconfirmed pin is still refused").contains("host_key_unverified");
 
-            // 8. The host key CHANGES underneath a confirmed pin. There is no ambient
-            //    known_hosts to fall back to and no accept-new, so the exchange dies at
-            //    verification -- and exists() RAISES rather than answering "absent",
-            //    which is what a retention sweep would have acted on.
-            sshd.regenerateHostKey();
-            assertThat(catchThrowable(() -> target.exists("instance-9/b.hib")))
-                .as("step 8: a changed host key fails closed instead of trusting on first use")
-                .isInstanceOfSatisfying(IOException.class, failure ->
-                    assertThat(failure.getMessage()).contains("Host key verification failed"));
-            assertThat((String) model.findByName("backup-host").get(HostModel.HOST_KEY))
-                .as("step 8: and nothing re-pinned the new key")
-                .isEqualTo((String) pinned.get(HostModel.HOST_KEY));
+                // 3. THE POSITIVE ANCHOR: confirmed out of band, the row is the SFTP kind with the host record's
+                //    address, account, client key and pin, and the base path as stored (its trailing slash dropped,
+                //    as the SSH target joined keys), and it speaks the whole storage over SFTP.
+                HostKeys.confirm(pinned);
+                Map<String, Object> settings = HohenheimStorages.declarationOf(targetRow).settings();
+                assertThat(HohenheimStorages.kindOf(targetRow)).as("step 3: the stored kind resolves to SFTP")
+                    .isEqualTo(SftpStorageKind.ID);
+                assertThat(settings).as("step 3: the host record's identity, the stored base path")
+                    .containsEntry("folder", remoteBase.toString())
+                    .containsEntry("sign_in", SftpStorageKind.SIGN_IN_KEY)
+                    .containsEntry("host_key", sshd.hostKeyFingerprint())
+                    .containsEntry("port", sshd.port());
+                StorageAdapter target = BackupStorages.of(targetRow);
+                run(() -> {
+                    BackupStorages.requireUsable(target);
+                    BackupStorages.store(target, "instance-9/b.hib", file);
+                    return null;
+                });
+                assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
+                    .as("step 3: the committed artifact is where the SSH target put it").isTrue();
+                assertThat(run(() -> BackupStorages.storedSha256(target, "instance-9/b.hib")))
+                    .as("step 3: and its sha comes from the REMOTE side")
+                    .isEqualTo(run(() -> BackupArchive.sha256Of(remoteBase.resolve("instance-9/b.hib"))));
+                Path back = tmp.resolve("ssh-back.bin");
+                run(() -> {
+                    BackupStorages.retrieve(target, "instance-9/b.hib", back);
+                    return null;
+                });
+                assertThat(run(() -> Files.readString(back))).as("step 3: retrieved bytes").isEqualTo("ssh-artifact");
 
-            // 9. A non-ssh host is not a backup destination at all: the local daemon has
-            //    no wire identity to pin, and pretending otherwise would sell a
-            //    same-machine directory as an off-host copy.
-            Row localTarget = Models.get(BackupTargetModel.class).createEmptyRow();
-            localTarget.set(BackupTargetModel.NAME, "not-really-off-host");
-            localTarget.set(BackupTargetModel.KIND, "hohenheim:ssh");
-            localTarget.set(BackupTargetModel.SETTINGS, Map.of(
-                "server", HostModel.registryKeyOf(HostModel.localHostId()),
-                "path", remoteBase.toString()));
-            Models.get(BackupTargetModel.class).save(localTarget);
-            assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(localTarget)))
-                .as("step 9: the local host is refused as an ssh backup destination")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(keysOf(violations)).contains("host_not_ssh"));
+                // 3b. Deleting a namespace's last artifact removes the folders it leaves empty there, never the base.
+                run(() -> {
+                    Files.createDirectories(remoteBase.resolve("instance-9/leftover"));
+                    BackupStorages.delete(target, "instance-9/b.hib");
+                    return null;
+                });
+                assertThat(Files.exists(remoteBase.resolve("instance-9")))
+                    .as("step 3b: the emptied namespace is gone, its leftover folder with it").isFalse();
+                assertThat(Files.isDirectory(remoteBase)).as("step 3b: the base stays").isTrue();
 
-            // 9b. And a target that named NO host says so, instead of folding a blank
-            //     spelling to the local host and answering step 9's riddle.
-            Row hostlessTarget = Models.get(BackupTargetModel.class).createEmptyRow();
-            hostlessTarget.set(BackupTargetModel.NAME, "no-host-at-all");
-            hostlessTarget.set(BackupTargetModel.KIND, "hohenheim:ssh");
-            hostlessTarget.set(BackupTargetModel.SETTINGS, Map.of("path", remoteBase.toString()));
-            Models.get(BackupTargetModel.class).save(hostlessTarget);
-            assertThat(catchThrowable(() -> BackupTargetKinds.targetOf(hostlessTarget)))
-                .as("step 9b: a target with no host named is refused as such")
-                .isInstanceOfSatisfying(Violations.class, violations ->
-                    assertThat(String.valueOf(violations.all().get(0).message()
-                        .args().get("reason")))
-                        .as("step 9b: naming the missing host, not the local one")
-                        .contains("names no destination host"));
-        });
+                // 4. QUARANTINE: a rescan that disagreed with the pin left the offered key as evidence; the storage
+                //    opened before is released at once and resolving it again is refused by NAME.
+                run(() -> {
+                    BackupStorages.store(target, "instance-9/b.hib", file);
+                    return null;
+                });
+                pinned.set(HostModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
+                model.save(pinned);
+                assertThat(keysOf(catchThrowable(() -> BackupStorages.of(targetRow))))
+                    .as("step 4: a quarantined destination is refused").contains("host_quarantined");
+                assertThat(catchThrowable(() -> BackupStorages.exists(target, "instance-9/b.hib")))
+                    .as("step 4: and the storage in hand refuses its next exchange").isInstanceOf(IOException.class);
+                assertThat(Files.exists(remoteBase.resolve("instance-9/b.hib")))
+                    .as("step 4: the artifact itself is untouched by the refusal").isTrue();
+
+                // 5. Clearing the quarantine restores step 3, so the refusal measured the quarantine alone.
+                pinned.set(HostModel.HOST_KEY_OFFERED, null);
+                model.save(pinned);
+                assertThat(run(() -> BackupStorages.exists(BackupStorages.of(targetRow), "instance-9/b.hib")))
+                    .as("step 5: the same fixture works again once the quarantine clears").isTrue();
+
+                // 6. The host key CHANGES underneath a confirmed pin: the pinned SFTP check refuses, and exists()
+                //    RAISES rather than answering "absent", which a retention sweep would have acted on.
+                sshd.regenerateHostKey();
+                assertThat(catchThrowable(() -> BackupStorages.exists(BackupStorages.of(targetRow),
+                        "instance-9/b.hib")))
+                    .as("step 6: a changed host key fails closed").isInstanceOfSatisfying(IOException.class,
+                        failure -> assertThat(failure.getMessage()).contains("does not pin"));
+                assertThat((String) model.findByName("backup-host").get(HostModel.HOST_KEY))
+                    .as("step 6: and nothing re-pinned the new key").isEqualTo((String) pinned.get(HostModel.HOST_KEY));
+
+                // 7. The local daemon is no SSH destination at all.
+                Row localTarget = Models.get(BackupTargetModel.class).createEmptyRow();
+                localTarget.set(BackupTargetModel.NAME, "not-really-off-host");
+                localTarget.set(BackupTargetModel.KIND, "hohenheim:ssh");
+                localTarget.set(BackupTargetModel.SETTINGS, Map.of(
+                    "server", HostModel.registryKeyOf(HostModel.localHostId()),
+                    "path", remoteBase.toString()));
+                Models.get(BackupTargetModel.class).save(localTarget);
+                assertThat(keysOf(catchThrowable(() -> BackupStorages.of(localTarget))))
+                    .as("step 7: the local host is refused as an ssh backup destination").contains("host_not_ssh");
+            });
+        }
     }
 
     // -- plumbing -------------------------------------------------------------
 
-    private static List<String> keysOf(Violations violations) {
+    private static List<String> keysOf(Throwable refusal) {
+        assertThat(refusal).as("a refusal").isInstanceOf(Violations.class);
         List<String> keys = new ArrayList<>();
-        for (Violation violation : violations.all()) {
+        for (Violation violation : ((Violations) refusal).all()) {
             keys.add(violation.message().key());
         }
         return keys;

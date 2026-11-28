@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.operation.RecordCodes;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -143,27 +144,28 @@ class HohenheimDatabaseToolsTest extends HohenheimHttpTestBase {
             assertThat(detached.error()).as("step 4: " + detached.text()).isFalse();
             assertThat(Models.get(InstanceDatabaseModel.class).findById(linkId)).as("step 4: detached").isNull();
 
-            // 5. A backup target on a folder of this machine is created, its folder changed, tested and deleted.
+            // 5. A storage on a folder of this machine is created by its kind's word and settings, its folder changed,
+            //    tested and deleted.
             Path folder = Files.createTempDirectory("hh-db-tools");
             Path other = Files.createTempDirectory("hh-db-tools-other");
             cleanUp.push(() -> folder.toFile().delete());
             cleanUp.push(() -> other.toFile().delete());
             McpHttpSession.Answer target = admin.call("backup_target_set", Map.of("name", PREFIX + "target-" + tag,
-                "kind", "filesystem", "path", folder.toString()));
+                "kind", "storage_local_folder", "settings", Map.of("folder", folder.toString())));
             assertThat(target.error()).as("step 5: " + target.text()).isFalse();
             String targetCode = codeIn(target.text(), "BT");
             int targetId = keyOf(BackupTargetModel.MODEL_ID, targetCode, cleanUp);
             assertThat(String.valueOf(row(BackupTargetModel.MODEL_ID, targetId).get(BackupTargetModel.KIND)))
-                .as("step 5: the word is stored as its kind").isEqualTo("hohenheim:filesystem");
+                .as("step 5: the word is stored as its kind").isEqualTo(LocalFolderStorageKind.ID.toString());
             McpHttpSession.Answer spelled = admin.call("backup_target_set", Map.of("name", PREFIX + "spelled-" + tag,
-                "kind", "hohenheim:filesystem", "path", folder.toString()));
+                "kind", LocalFolderStorageKind.ID.toString(), "settings", Map.of("folder", folder.toString())));
             assertThat(spelled.error()).as("step 5: a stored key is no word: " + spelled.text()).isTrue();
             assertThat(spelled.text()).as("step 5: the refusal names it").contains("kind");
             McpHttpSession.Answer repointed = admin.call("backup_target_set",
-                Map.of("code", targetCode, "path", other.toString()));
+                Map.of("code", targetCode, "settings", Map.of("folder", other.toString())));
             assertThat(repointed.error()).as("step 5: " + repointed.text()).isFalse();
             assertThat(String.valueOf(((Map<?, ?>) row(BackupTargetModel.MODEL_ID, targetId)
-                .get(BackupTargetModel.SETTINGS)).get("path"))).as("step 5: the new folder")
+                .get(BackupTargetModel.SETTINGS)).get("folder"))).as("step 5: the new folder")
                 .isEqualTo(other.toString());
             McpHttpSession.Answer tested = admin.call("test", Map.of("code", targetCode));
             assertThat(tested.text()).as("step 5: it can be reached").contains("test: passed");

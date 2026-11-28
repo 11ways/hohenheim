@@ -21,8 +21,8 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -543,41 +543,9 @@ class InstanceSnapshotBackupLiveTest {
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
             Path targetDir = workRoot.resolve("interrupted-target");
-            FilesystemBackupTarget real = new FilesystemBackupTarget(targetDir);
-            AtomicReference<String> attemptedKey = new AtomicReference<>();
-            BackupTarget failing = new BackupTarget() {
-                @Override public void healthCheck() throws IOException {
-                    real.healthCheck();
-                }
-                @Override public void store(String key, Path file) throws IOException {
-                    attemptedKey.set(key);
-                    // Simulate a network death mid-upload: the staged replacement gets
-                    // half the bytes, then the transfer dies without closing it.
-                    Path committed = targetDir.resolve(key);
-                    byte[] bytes = Files.readAllBytes(file);
-                    AtomicFiles.Staged dying = AtomicFiles.stage(committed);
-                    Files.write(dying.path(), java.util.Arrays.copyOf(bytes, bytes.length / 2));
-                    throw new IOException("simulated network failure mid-upload");
-                }
-                @Override public String storedSha256(String key) throws IOException {
-                    return real.storedSha256(key);
-                }
-                @Override public void retrieve(String key, Path destination) throws IOException {
-                    real.retrieve(key, destination);
-                }
-                @Override public java.util.List<String> list(String prefix) throws IOException {
-                    return real.list(prefix);
-                }
-                @Override public boolean exists(String key) throws IOException {
-                    return real.exists(key);
-                }
-                @Override public long usableBytes() throws IOException {
-                    return real.usableBytes();
-                }
-                @Override public void delete(String key) throws IOException {
-                    real.delete(key);
-                }
-            };
+            DyingUploadStorage failing = new DyingUploadStorage(targetDir);
+            StorageAdapter real = new LocalDiskStorageAdapter(targetDir);
+            AtomicReference<String> attemptedKey = failing.attemptedKey;
 
             int id = instanceRecord("interrupted-backup", alpineSettings());
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
@@ -606,7 +574,7 @@ class InstanceSnapshotBackupLiveTest {
                 assertThat(key).as("step 3: the upload was attempted").isNotNull();
                 assertThat(Files.exists(targetDir.resolve(key)))
                     .as("step 3: no committed artifact").isFalse();
-                assertThat(run(() -> AtomicFiles.staged(targetDir.resolve(key))))
+                assertThat(failing.stagingDebris())
                     .as("step 3: the partial staged file was removed").isEmpty();
 
                 // 4. A restore of the failed row REFUSES.

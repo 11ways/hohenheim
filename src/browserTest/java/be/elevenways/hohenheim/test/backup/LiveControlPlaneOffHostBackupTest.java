@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostShell;
@@ -191,7 +191,7 @@ class LiveControlPlaneOffHostBackupTest {
 
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "control-plane-offhost");
-            BackupTarget target = ControlPlaneBackups.requireDestination();
+            StorageAdapter target = ControlPlaneBackups.requireDestination();
 
             // 3. Back up. Completion means the REMOTE re-hashed the committed artifact.
             ControlPlaneBackups.Archive archive = run(() -> ControlPlaneBackups.backupNow(

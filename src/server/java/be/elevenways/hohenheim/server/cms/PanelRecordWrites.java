@@ -558,6 +558,19 @@ public final class PanelRecordWrites {
     private static void put(@NonNull Map<String, Object> raw, @NonNull Part part, @Nullable Object value,
                             @Nullable Row record) {
         if (part.container() == null) {
+            if (record != null && part.field() instanceof SchemaField schema && schema.isDynamic()
+                    && value instanceof Map<?, ?> sent) {
+                // A whole map whose shape its record's kind decides: a change sends what changes inside it, laid
+                // over the stored map while the kind stays, and posts that stored kind so the map is judged by it.
+                String selector = Objects.requireNonNull(schema.getSchemaFromField());
+                if (!raw.containsKey(selector)) {
+                    Map<String, Object> merged = new LinkedHashMap<>(RawValues.map(record.get(schema.getName())));
+                    sent.forEach((key, entry) -> merged.put(String.valueOf(key), entry));
+                    raw.put(schema.getName(), merged);
+                    raw.put(selector, record.get(selector));
+                    return;
+                }
+            }
             raw.put(part.field().getName(), value);
             return;
         }

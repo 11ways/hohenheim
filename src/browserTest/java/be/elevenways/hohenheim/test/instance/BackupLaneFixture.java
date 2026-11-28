@@ -5,8 +5,8 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -39,10 +39,10 @@ final class BackupLaneFixture {
     final int hostId;
     final int targetId;
     final Path targetRoot;
-    final BackupTarget target;
+    final StorageAdapter target;
 
     private BackupLaneFixture(SqlDatasource datasource, int hostId, int targetId,
-                              Path targetRoot, BackupTarget target) {
+                              Path targetRoot, StorageAdapter target) {
         this.datasource = datasource;
         this.hostId = hostId;
         this.targetId = targetId;
@@ -64,23 +64,26 @@ final class BackupLaneFixture {
             staging.toAbsolutePath().toString());
         Path targetRoot = Files.createTempDirectory("hohenheim-backup-target");
         targetRoot.toFile().deleteOnExit();
-        BackupTarget target = new FilesystemBackupTarget(targetRoot);
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             staging.resolve("test-ring.keys")));
 
         FakeNativeDaemons.register();
         int[] ids = new int[2];
+        StorageAdapter[] target = new StorageAdapter[1];
         Db.run(datasource, () -> {
             ids[0] = HostFixtures.admittedIncusHost("backup-test-host");
             Row record = Models.get(BackupTargetModel.class).createEmptyRow();
+            // Spelled as a folder target was stored before storages (hohenheim:filesystem, path): every backup of the
+            // lane goes through such a row as the storage layer reads it, never a hand-built adapter.
             record.set(BackupTargetModel.NAME, "backup-test-target");
             record.set(BackupTargetModel.KIND, "hohenheim:filesystem");
             record.set(BackupTargetModel.SETTINGS,
                 Map.of("path", targetRoot.toAbsolutePath().toString()));
             Models.get(BackupTargetModel.class).save(record);
             ids[1] = record.get(BackupTargetModel.ID);
+            target[0] = BackupStorages.forTarget(ids[1]);
         });
-        return new BackupLaneFixture(datasource, ids[0], ids[1], targetRoot, target);
+        return new BackupLaneFixture(datasource, ids[0], ids[1], targetRoot, target[0]);
     }
 
     /** Hand the process-global keyring back; the install is the only thing that took one. */

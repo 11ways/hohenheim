@@ -1,17 +1,22 @@
 package be.elevenways.hohenheim.test.database;
 
 import org.junit.jupiter.api.extension.RegisterExtension;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
 import be.elevenways.zenit.test.support.ServedApp;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupStatus;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.backup.BackupCipher;
+import be.elevenways.hohenheim.server.backup.HohenheimStorages;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.database.DumpOverCap;
 import be.elevenways.hohenheim.server.database.DatabaseRestores;
@@ -20,21 +25,41 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.MicrocopyScope;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.storage.StorageKindRegistry;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.security.SecureTokens;
+import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
+import be.elevenways.zenit.server.storage.StorageFact;
+import be.elevenways.zenit.server.storage.StorageKind;
+import be.elevenways.zenit.server.storage.StorageKinds;
+import be.elevenways.zenit.server.storage.StorageOwner;
+import be.elevenways.zenit.server.storage.Storages;
+import be.elevenways.zenit.storage.sftp.server.SftpStorageKind;
+import be.elevenways.zenit.storage.sftp.test.support.SftpTestServer;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,7 +68,10 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -241,6 +269,171 @@ class DatabaseDumpTargetTest {
             Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("dumpshop")).delete();
             Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("brokendump")).delete();
             Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("bulkyshop")).delete();
+        }
+    }
+
+    /**
+     * A storage is a record a person adds, of any kind the storage layer offers: a kind registered by this test alone
+     * is offered on the storage form with no other change; a dump goes to an SFTP server and back; a stored row keeps
+     * the kind it was written with; a name a settings mount holds, a tenant's storage aimed at a private address and
+     * a server whose key is not pinned yet are refused before anything is saved.
+     */
+    @Test
+    void aDumpGoesToTheStorageAPersonDeclaredOfAnyKindOnOffer() throws Exception {
+        DatabaseService service = DumpTargetFixture.scriptedDumps(new AtomicInteger());
+        DumpTargetFixture.databaseRow("sftpshop", DatabaseModel.ENGINE_POSTGRES);
+        SftpTestServer server = SftpTestServer.shared();
+        String previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_TARGET);
+        CrateKind crate = new CrateKind();
+        try {
+            // 1. A fourth kind registered here alone is offered by the storage's kind field, its form its own.
+            assertThat(BackupTargetModel.KIND.getValues()).as("step 1: not offered yet")
+                .doesNotContainKey(CrateKind.ID.toString());
+            StorageKinds.register(crate);
+            assertThat(BackupTargetModel.KIND.getValues()).as("step 1: offered with no change in Hohenheim")
+                .containsKey(CrateKind.ID.toString())
+                .containsKey(SftpStorageKind.ID.toString())
+                .containsKey(LocalFolderStorageKind.ID.toString());
+
+            try (OutboundFixture ignored = server.route()) {
+                // 2. An SFTP storage whose server key is not pinned yet is not saved: the refusal names the key.
+                Row unpinned = sftpRow("sftp-unpinned", server, server.freshFolder("dumps"), null);
+                assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(unpinned, StorageOwner.OPERATOR)))
+                    .as("step 2: asked to confirm the key").isInstanceOfSatisfying(Violations.class, refused ->
+                        assertThat(refused.all().get(0).message().args().get("presented"))
+                            .isEqualTo(server.hostKey()));
+
+                // 3. Pinned, it passes, and a dump lands on the SFTP server, verified there, and comes back whole.
+                String folder = server.freshFolder("dumps");
+                Row storage = sftpRow("sftp-dumps", server, folder, server.hostKey());
+                BackupTargetParts.judgeBeforeSave(storage, StorageOwner.OPERATOR);
+                Models.get(BackupTargetModel.class).save(storage);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_TARGET, "sftp-dumps");
+                Row dump = DatabaseBackups.backUp(service, "sftpshop");
+                assertThat((String) dump.get(DatabaseDumpModel.STATUS)).as("step 3: complete")
+                    .isEqualTo(BackupStatus.COMPLETE.key());
+                Path artifact = server.root().resolve(folder.substring(1))
+                    .resolve(String.valueOf((Object) dump.get(DatabaseDumpModel.REMOTE_KEY)));
+                assertThat(SecureTokens.sha256Hex(artifact)).as("step 3: the server holds what the row recorded")
+                    .isEqualTo(dump.get(DatabaseDumpModel.SHA256));
+                assertThat(Files.readString(DatabaseBackups.fetchVerified(dump, Files.createTempDirectory("sftp"))))
+                    .as("step 3: the round trip is exact").isEqualTo(DumpTargetFixture.DUMP_SQL + "1);\n");
+            }
+
+            // 4. The same settings declared by a tenant, its server at a private address: refused, nothing saved.
+            try (PrivateNetworkBootFixture ignored = new PrivateNetworkBootFixture();
+                 OutboundFixture lan = OutboundFixture.routeResolved(SftpTestServer.HOST,
+                     InetAddress.getByName("10.0.0.5"), server.port())) {
+                PrivateNetworkBootFixture.declare(StorageKinds.PRIVATE_NETWORKS, true);
+                Row tenants = sftpRow("tenant-box", server, server.freshFolder("dumps"), server.hostKey());
+                assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(tenants,
+                        new StorageOwner.Tenant(PrincipalRef.account(UUID.randomUUID())))))
+                    .as("step 4: refused for its address").isInstanceOfSatisfying(Violations.class, refused ->
+                        assertThat(refused.all().get(0).message().key()).isEqualTo("backup_target_unusable"));
+                assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq("tenant-box"))
+                    .count()).as("step 4: nothing saved").isZero();
+            }
+
+            // 5. A name a mount of the server's settings holds is refused, so a record never shadows that mount.
+            Storages.register("settings-mount", new LocalDiskStorageAdapter(Files.createTempDirectory("mount")));
+            try {
+                Row shadow = Models.get(BackupTargetModel.class).createEmptyRow();
+                shadow.set(BackupTargetModel.NAME, "settings-mount");
+                shadow.set(BackupTargetModel.KIND, LocalFolderStorageKind.ID.toString());
+                shadow.set(BackupTargetModel.SETTINGS, Map.of("folder", Files.createTempDirectory("shadow")
+                    .toString()));
+                assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(shadow, StorageOwner.OPERATOR)))
+                    .as("step 5: the name is taken").isInstanceOfSatisfying(Violations.class, refused ->
+                        assertThat(refused.all().get(0).message().key()).isEqualTo("backup_target_name_taken"));
+            } finally {
+                Storages.unregister("settings-mount");
+            }
+
+            // 6. A row stored before storages keeps its stored kind: it is read as the folder kind, never rewritten.
+            try (DumpTargetFixture legacy = DumpTargetFixture.install("legacy-folder")) {
+                Row row = Models.get(BackupTargetModel.class).find()
+                    .where(BackupTargetModel.NAME.eq(legacy.name())).first();
+                assertThat(HohenheimStorages.kindOf(row)).as("step 6: read as the folder kind")
+                    .isEqualTo(LocalFolderStorageKind.ID);
+                assertThat((String) DatabaseBackups.backUp(service, "sftpshop").get(DatabaseDumpModel.STATUS))
+                    .as("step 6: and a dump to it completes").isEqualTo(BackupStatus.COMPLETE.key());
+            }
+        } finally {
+            StorageKindRegistry.REGISTRY.remove(CrateKind.ID);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_TARGET, previous == null ? "" : previous);
+            Models.get(DatabaseDumpModel.class).find().delete();
+            Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq("sftp-dumps")).delete();
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq("sftpshop")).delete();
+        }
+    }
+
+    /** @return an unsaved SFTP storage row on the test server's folder, its key pinned or not */
+    private static Row sftpRow(String name, SftpTestServer server, String folder, String hostKey) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("host", SftpTestServer.HOST);
+        settings.put("folder", folder);
+        settings.put("user", SftpTestServer.USER);
+        settings.put("sign_in", SftpStorageKind.SIGN_IN_PASSWORD);
+        settings.put("password", SftpTestServer.PASSWORD);
+        settings.put("host_key", hostKey);
+        Row row = Models.get(BackupTargetModel.class).createEmptyRow();
+        row.set(BackupTargetModel.NAME, name);
+        row.set(BackupTargetModel.KIND, SftpStorageKind.ID.toString());
+        row.set(BackupTargetModel.SETTINGS, settings);
+        return row;
+    }
+
+    /** A fourth kind, known to this test alone: a folder, offered beside the storage layer's own kinds. */
+    private static final class CrateKind implements StorageKind<LocalDiskStorageAdapter> {
+
+        static final Identifier ID = HohenheimIds.id("storage_test_crate");
+
+        private final Schema schema = new Schema();
+
+        CrateKind() {
+            this.schema.addField(StringField.builder().name("folder").label(Microcopy.literal("Folder")).required()
+                .build());
+        }
+
+        @Override
+        public @NonNull Identifier typeId() {
+            return ID;
+        }
+
+        @Override
+        public @NonNull MicrocopyScope labelScope() {
+            return StorageKinds.COPY;
+        }
+
+        @Override
+        public @NonNull String getDisplayName() {
+            return "Crate";
+        }
+
+        @Override
+        public @NonNull Microcopy getDescription() {
+            return Microcopy.literal("A folder in a crate.");
+        }
+
+        @Override
+        public @NonNull Schema getSchema() {
+            return this.schema;
+        }
+
+        @Override
+        public @NonNull List<URI> addresses(@NonNull Map<String, Object> settings) {
+            return List.of();
+        }
+
+        @Override
+        public @NonNull LocalDiskStorageAdapter open(@NonNull String name, @NonNull Map<String, Object> settings,
+                                                     @NonNull OutboundUrlGuard guard) {
+            return new LocalDiskStorageAdapter(Path.of((String) settings.get("folder")));
+        }
+
+        @Override
+        public @NonNull List<StorageFact> facts(@NonNull Map<String, Object> settings) {
+            return List.of(new StorageFact(Microcopy.literal("Folder"), (String) settings.get("folder")));
         }
     }
 

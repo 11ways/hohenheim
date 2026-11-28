@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -60,7 +60,7 @@ class BackupRestoreLandingTest extends HohenheimTestBase {
         int instanceId = BackupLaneFixture.instanceRecord("restore-landing-source", hostId);
         new InstanceService().deploy(instanceId);
         backupId = new InstanceBackups().backupNow(instanceId, target.get(BackupTargetModel.ID),
-            new FilesystemBackupTarget(targetRoot));
+            BackupStorages.of(target));
     }
 
     @Test

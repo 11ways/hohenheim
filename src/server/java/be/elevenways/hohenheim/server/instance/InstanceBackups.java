@@ -38,8 +38,7 @@ import be.elevenways.hohenheim.server.backup.BackupManifest.FileEntry;
 import be.elevenways.hohenheim.server.backup.BackupManifest.InstanceProfile;
 import be.elevenways.hohenheim.server.backup.BackupManifest.TemplateRef;
 import be.elevenways.hohenheim.server.backup.BackupManifest.VariableEntry;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.backup.UploadLedger;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -69,6 +68,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -120,8 +120,8 @@ public final class InstanceBackups {
      * @throws Violations naming the refusal or failure
      */
     public int backupNow(int instanceId) {
-        // The capability gate BEFORE the target resolves: targetFor's violations name
-        // the instance's backup-target configuration (and the ssh kind adds the host's
+        // The capability gate BEFORE the target resolves: its violations name
+        // the instance's backup-target configuration (and an SSH-era target adds the host's
         // admission state), which is operator information. Resolving first handed that
         // to any caller who could merely SEE the instance, against the uniform-refusal
         // doctrine requireOperationCapability documents. The explicit-target overload
@@ -133,7 +133,7 @@ public final class InstanceBackups {
             throw Violations.ofForm(noTarget);
         }
         Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
-        return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
+        return backupNow(instanceId, targetId, BackupStorages.forTarget(targetId));
     }
 
     /**
@@ -181,7 +181,7 @@ public final class InstanceBackups {
      * schedule step); no surface writes one of its own. A failed attempt writes one too, carrying the failure's own
      * reason: a scheduled backup that fails has no toast, so the log is where an operator reads why.
      */
-    public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
+    public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull StorageAdapter target) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row owner = requireRow(instanceId);
         int backupId;
@@ -211,7 +211,7 @@ public final class InstanceBackups {
 
     /** The application lane of {@link #backupNow}; the caller holds the application's lock. */
     private int backupApplication(int instanceId, @Nullable Integer targetId,
-                                  @NonNull BackupTarget target) {
+                                  @NonNull StorageAdapter target) {
         Row owner = requireRow(instanceId);
         if (sourceUnreproducible(owner)) {
             throw Violations.ofForm(Objects.requireNonNull(backupRefusal(owner)));
@@ -229,7 +229,7 @@ public final class InstanceBackups {
     }
 
     private int backupResolved(int instanceId, @Nullable Integer targetId,
-                               BackupTarget target, Row owner, Resolved resolved,
+                               StorageAdapter target, Row owner, Resolved resolved,
                                boolean application) {
         int runtimeId = resolved.row().get(InstanceModel.ID);
         InstanceOperationGuard.requireOperable(owner);
@@ -240,9 +240,9 @@ public final class InstanceBackups {
             ? InstanceSnapshots.requireSupport(resolved) : null;
         Map<String, String> volumes = application ? applicationVolumes(instanceId)
             : nativeSupport == null ? InstanceSnapshots.logicalVolumes(resolved) : Map.of();
-        // Health BEFORE the capture: a dead target must not cost the workload downtime.
+        // Usable BEFORE the capture: a dead storage must not cost the workload downtime.
         try {
-            target.healthCheck();
+            BackupStorages.requireUsable(target);
         } catch (IOException unhealthy) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_unhealthy")
                 .withArg("reason", HohenheimViolations.reasonOf(unhealthy)));
@@ -439,10 +439,10 @@ public final class InstanceBackups {
             Path archive = staging.resolve("archive.hib");
             long size = BackupArchive.create(manifest, files, archive, keyring());
             String localSha = BackupArchive.sha256Of(archive);
-            target.store(key, archive);
+            BackupStorages.store(target, key, archive);
             // Verification observes TARGET state: the committed artifact, re-hashed
             // by/at the target -- never the bytes still in local staging.
-            String storedSha = target.storedSha256(key);
+            String storedSha = BackupStorages.storedSha256(target, key);
             if (!storedSha.equals(localSha)) {
                 throw new IOException("Stored artifact does not match what was uploaded"
                     + " (local sha256 " + localSha + ", target holds " + storedSha + ")");
@@ -472,7 +472,7 @@ public final class InstanceBackups {
             // swallowed: a named refusal is rethrown UNCHANGED so its identity survives,
             // anything else becomes the instance_backup_failed refusal naming it.
             try {
-                target.delete(key);
+                BackupStorages.delete(target, key);
             } catch (IOException | RuntimeException cleanupFailed) {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
                     HohenheimViolations.reasonOf(cleanupFailed));
@@ -703,13 +703,12 @@ public final class InstanceBackups {
         // BEFORE the target resolves: a broken target answering backup_target_missing to a tenant would be a probe
         // into control-plane state.
         tenantRestore(backup);
-        BackupTarget target = BackupTargetKinds.targetFor(
-            backup.get(InstanceBackupModel.TARGET_ID));
+        StorageAdapter target = BackupStorages.forTarget(backup.get(InstanceBackupModel.TARGET_ID));
         return restoreToNew(backup, target, newName, serverSpelling);
     }
 
     /** Explicit-target variant (tests, future re-target flows). */
-    public @NonNull Restored restoreToNew(@NonNull Row backup, @NonNull BackupTarget target,
+    public @NonNull Restored restoreToNew(@NonNull Row backup, @NonNull StorageAdapter target,
                                           @Nullable String newName,
                                           @Nullable Object serverSpelling) {
         if (!InstanceBackupModel.isRestorable(backup)) {
@@ -726,7 +725,7 @@ public final class InstanceBackups {
     }
 
     /** {@link #restoreToNew}'s body, run as the creation owner the restore charges. */
-    private @NonNull Restored restoreToNewOwned(@NonNull Row backup, @NonNull BackupTarget target,
+    private @NonNull Restored restoreToNewOwned(@NonNull Row backup, @NonNull StorageAdapter target,
                                                 @Nullable String newName, @Nullable Object serverSpelling,
                                                 @Nullable TenantRestore tenant) {
         String stamp = UtcStamp.now();
@@ -971,11 +970,11 @@ public final class InstanceBackups {
      *
      * @throws IOException naming why the backup cannot be trusted; nothing was restored from it
      */
-    private static BackupArchive.@NonNull Opened openVerified(@NonNull Row backup, @NonNull BackupTarget target,
+    private static BackupArchive.@NonNull Opened openVerified(@NonNull Row backup, @NonNull StorageAdapter target,
                                                               @NonNull Path staging) throws IOException {
         Path archive = staging.resolve("archive.hib");
         Files.createDirectories(staging);
-        target.retrieve(backup.get(InstanceBackupModel.REMOTE_KEY), archive);
+        BackupStorages.retrieve(target, backup.get(InstanceBackupModel.REMOTE_KEY), archive);
         String recordedSha = backup.get(InstanceBackupModel.SHA256);
         String actualSha = BackupArchive.sha256Of(archive);
         if (recordedSha != null && !recordedSha.equals(actualSha)) {
@@ -1021,7 +1020,7 @@ public final class InstanceBackups {
             throw new DomainRefusal(HohenheimRefusalReason.BACKUP_SOURCE_GONE,
                 "backup " + backupId + " names instance " + instanceId + ", which is gone");
         }
-        BackupTarget target = BackupTargetKinds.targetFor(backup.get(InstanceBackupModel.TARGET_ID));
+        StorageAdapter target = BackupStorages.forTarget(backup.get(InstanceBackupModel.TARGET_ID));
         return this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> restoreInPlaceLocked(backup, instanceId, target));
     }
@@ -1040,7 +1039,7 @@ public final class InstanceBackups {
     }
 
     /** {@link #restoreInPlace}'s body; the caller holds the instance's operation lock. */
-    private int restoreInPlaceLocked(@NonNull Row backup, int instanceId, @NonNull BackupTarget target) {
+    private int restoreInPlaceLocked(@NonNull Row backup, int instanceId, @NonNull StorageAdapter target) {
         int backupId = backup.get(InstanceBackupModel.ID);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
@@ -1210,14 +1209,14 @@ public final class InstanceBackups {
 
     /**
      * The sweep as {@code backupNow} runs it, carrying the target the completed backup used so same-target rows are
-     * prunable even when their id cannot be re-resolved ({@link UploadLedger#delete(Row, Integer, BackupTarget)}).
+     * prunable even when their id cannot be re-resolved ({@link UploadLedger#delete(Row, Integer, StorageAdapter)}).
      *
      * AIDEV-NOTE: each row is deleted without re-asking the BACKUPS capability: it was proven for the instance when the
      * operation was entered, and re-asking per row only made the sweep's {@code catch (Violations)} unable to tell a
      * refusal from an unreachable target. Same reasoning as {@code InstanceSnapshots.deleteAuthorized}.
      */
     private void pruneForRetention(int instanceId, @Nullable Integer currentTargetId,
-                                   @Nullable BackupTarget currentTarget) {
+                                   @Nullable StorageAdapter currentTarget) {
         RETENTION.sweep(instanceId, old -> LEDGER.delete(old, currentTargetId, currentTarget));
     }
 

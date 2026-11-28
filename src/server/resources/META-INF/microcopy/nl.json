@@ -7026,12 +7026,20 @@
     "text": "Back-updoel {$name} ontvangt de eigen herstelarchieven van deze server; kies er eerst een ander doel voor in Instellingen, onder Back-ups",
     "scope": "violations"
   },
-  "backup_target_kind_unknown": {
-    "text": "Onbekend back-updoeltype '{$kind}'",
-    "scope": "violations"
-  },
   "backup_target_invalid": {
     "text": "Back-updoel {$name} is verkeerd ingesteld: {$reason}",
+    "scope": "violations"
+  },
+  "backup_target_name_taken": {
+    "text": "De naam {$name} is al van een opslag uit de instellingen van deze server; kies een andere",
+    "scope": "violations"
+  },
+  "backup_target_confirm": {
+    "text": "{$question} De server toonde {$presented}: vergelijk die met de vingerafdruk die de eigenaar u geeft en bewaar ze dan als sleutel van de server om ze te bevestigen",
+    "scope": "violations"
+  },
+  "backup_target_unusable": {
+    "text": "{$name} is niet bewaard: {$reason} ({$diagnostic})",
     "scope": "violations"
   },
   "backup_target_unhealthy": {
@@ -7246,25 +7254,7 @@
       "scope": "git_provider"
     }
   ],
-  "filesystem": [
-    {
-      "text": "Map op schijf",
-      "scope": "backup_target_kind"
-    },
-    {
-      "text": "Een map op deze controller; die staat alleen buiten de host als de map zelf gerepliceerd of van een andere host gemount is",
-      "scope": "backup_target_kind_description"
-    }
-  ],
   "ssh": [
-    {
-      "text": "SSH-host",
-      "scope": "backup_target_kind"
-    },
-    {
-      "text": "Een map op een andere host via ssh; veilig bij verlies van deze host wanneer die host los ervan uitvalt",
-      "scope": "backup_target_kind_description"
-    },
     {
       "text": "SSH",
       "scope": "host_mode"
@@ -7370,18 +7360,6 @@
   },
   "backup_target_kind": {
     "text": "Waar back-upexports terechtkomen; of dat het verlies van deze host overleeft, is een deploymentfeit dat u beheert",
-    "scope": "help"
-  },
-  "backup_target_path": {
-    "text": "Map voor back-uparchieven. Een lokale map op deze host is NIET off-host; wijs naar gerepliceerde of gemounte externe opslag",
-    "scope": "help"
-  },
-  "backup_ssh_server": {
-    "text": "De ingeschreven host waar de back-ups terechtkomen; zijn bevestigde hostsleutel is de enige pin, en een host in quarantaine wordt geweigerd",
-    "scope": "help"
-  },
-  "backup_ssh_path": {
-    "text": "Absolute map op de back-uphost",
     "scope": "help"
   },
   "variable_wrong_carrier": {
@@ -20844,7 +20822,7 @@
   "mcp_code_database_engine_set": {"text": "De code van de engine; laat weg om er een aan te maken.", "scope": "hohenheim"},
   "mcp_tool_app_database_set": {"text": "Koppelt een beheerde database aan een app, die haar verbinding dan als variabelen onder een voorvoegsel ziet: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL, en de eerste gekoppelde database van de app geeft ook DATABASE_URL. Alleen een app op een Docker-host kan er een krijgen, op dezelfde host als de database. Een wijziging kan alleen het voorvoegsel zetten. De variabelen bereiken de app bij haar volgende uitrol. Ontkoppelen is delete DL2, dat de database en haar gegevens laat staan. Antwoordt met de code van de koppeling (DL2).", "scope": "hohenheim"},
   "mcp_code_app_database_set": {"text": "De code van de koppeling; laat weg om er een aan te maken.", "scope": "hohenheim"},
-  "mcp_tool_backup_target_set": {"text": "Maakt of wijzigt een back-updoel: waar back-ups van apps en dumps van databases geschreven worden. Soort filesystem is een map op de eigen machine van deze installatie, die niet buiten de host ligt tenzij de map gekoppelde externe opslag is; soort ssh is een map op een andere ingeschreven host, bereikt over SSH met haar bevestigde hostsleutel (een host in quarantaine of zonder bevestiging wordt bij gebruik geweigerd). Een wijziging stuurt alleen wat verandert. Controleer het met test BT1. Alleen beheerders. Antwoordt met de code van het doel (BT1).", "scope": "hohenheim"},
+  "mcp_tool_backup_target_set": {"text": "Maakt of wijzigt een opslag: waar back-ups van apps, dumps van databases en bestanden van sites bewaard worden. De soort is een van de opslagsoorten die deze installatie aanbiedt (storage_local_folder, een map op deze machine, die niet buiten de host staat; storage_s3, een S3-compatibele opslag; storage_sftp, een SFTP-server), en de instellingen zijn die van die soort, bij naam. Bewaren test de opslag eerst en wordt geweigerd als die niet bereikt of beschreven kan worden. Een wijziging stuurt alleen wat verandert. Controleer ze met test BT1. Alleen voor beheerders. Antwoordt met de code van de opslag (BT1).", "scope": "hohenheim"},
   "mcp_code_backup_target_set": {"text": "De code van het doel; laat weg om er een aan te maken.", "scope": "hohenheim"},
   "mcp_tool_backup_restore": {"text": "Zet een back-up van een app terug, op de achtergrond. Standaard in een nieuwe app terwijl de app waar ze van komt blijft draaien; een beheerder mag de host kiezen (weggelaten wordt een host met ruimte gekozen), ieder ander krijgt de eigen host van de bron-app. Met in_place vervangt de back-up de gegevens van de app waar ze van komt, nadat eerst een verse back-up van die app gemaakt is; de gegevens zoals ze waren bestaan dan alleen nog in die verse back-up. Een back-up die niet volledig is, wordt geweigerd. Antwoordt met een RUN-code: volg die met run_read.", "scope": "hohenheim"},
   "mcp_code_backup_restore": {"text": "De back-up om terug te zetten (BK7).", "scope": "hohenheim"},
@@ -20855,9 +20833,9 @@
   "database_engine_host_code": {"text": "De host (SR1) waarop de engine draait; weggelaten deze machine. Dit kan later niet veranderen.", "scope": "help"},
   "database_link_app": {"text": "De app (AP12) waaraan u de database koppelt, op een Docker-host.", "scope": "help"},
   "database_link_database": {"text": "De beheerde database (DB12) om te koppelen, op de eigen host van de app.", "scope": "help"},
-  "backup_target_host": {"text": "De ingeschreven host (SR1) waarnaar een SSH-doel schrijft; alleen een SSH-doel neemt dit.", "scope": "help"},
   "backup_restore_host": {"text": "De host (SR1) waarop de nieuwe app landt; weggelaten wordt een host met ruimte gekozen. Alleen beheerders.", "scope": "help"},
   "backup_target_name": {"text": "De naam waaronder het doel getoond en gekozen wordt; geen twee doelen delen er een.", "scope": "help"},
+  "backup_target_settings": {"text": "De instellingen van de opslagsoort bij naam, zoals het formulier ze bewaart (een map neemt folder; een S3-opslag address, bucket, access_key, secret_key; een SFTP-server host, user, password of private_key, host_key). Een wijziging stuurt alleen de instellingen die veranderen.", "scope": "help"},
   "database_password_twice": {"text": "Geef een wachtwoord of vraag een gegenereerd wachtwoord, niet allebei.", "scope": "violations"},
   "restore_new_description": {"text": "Zet de back-up terug als een nieuwe app, op de host die u kiest of een host met ruimte; de eigen app van de back-up blijft draaien.", "scope": "instance_backup"},
   "restore_in_place_description": {"text": "Maakt eerst een verse back-up van de app van de back-up en vervangt dan de volumes van die app door die van de back-up; de instellingen, variabelen en configuratiebestanden blijven.", "scope": "instance_backup"},

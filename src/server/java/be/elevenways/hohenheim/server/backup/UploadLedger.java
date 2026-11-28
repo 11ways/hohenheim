@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 
 /**
  * The columns of a ledger of artifacts on a backup target (instance backups, database dumps), the boot settle every
@@ -57,8 +58,8 @@ public record UploadLedger(@NonNull Class<? extends Model> model, @NonNull Integ
             String error = "Interrupted by a controller restart mid-upload";
             if (key != null && !key.isBlank()) {
                 try {
-                    BackupTargetKinds.targetFor(row.get(this.targetId)).delete(key);
-                } catch (IOException | Violations unreachable) {
+                    BackupStorages.delete(BackupStorages.forTarget(row.get(this.targetId)), key);
+                } catch (IOException | RuntimeException unreachable) {
                     error += "; the possibly-committed artifact could not be removed"
                         + " and may remain on the target under " + key;
                     Blast.log(this.lane + ": could not remove interrupted upload", key, ":",
@@ -93,16 +94,16 @@ public record UploadLedger(@NonNull Class<? extends Model> model, @NonNull Integ
      * @param currentTarget   the resolved target of the calling operation, or null
      * @throws Violations {@code backup_delete_failed} when the target cannot be reached; the row stays
      */
-    public void delete(@NonNull Row row, @Nullable Integer currentTargetId, @Nullable BackupTarget currentTarget) {
+    public void delete(@NonNull Row row, @Nullable Integer currentTargetId, @Nullable StorageAdapter currentTarget) {
         String key = row.get(this.remoteKey);
         if (key != null && !key.isBlank()) {
             try {
                 Integer rowTargetId = row.get(this.targetId);
-                BackupTarget target = currentTarget != null && Objects.equals(rowTargetId, currentTargetId)
+                StorageAdapter target = currentTarget != null && Objects.equals(rowTargetId, currentTargetId)
                     ? currentTarget
-                    : BackupTargetKinds.targetFor(rowTargetId);
-                target.delete(key);
-            } catch (IOException | Violations unreachable) {
+                    : BackupStorages.forTarget(rowTargetId);
+                BackupStorages.delete(target, key);
+            } catch (IOException | RuntimeException unreachable) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_delete_failed")
                     .withArg("reason", HohenheimViolations.reasonOf(unreachable)));
             }

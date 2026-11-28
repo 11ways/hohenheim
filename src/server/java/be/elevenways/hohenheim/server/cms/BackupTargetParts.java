@@ -10,10 +10,8 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.HostModel;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
-import be.elevenways.hohenheim.server.backup.SshTargetKind;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
+import be.elevenways.hohenheim.server.backup.HohenheimStorages;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -30,6 +28,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.JsonValue;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -40,18 +39,27 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.storage.StorageCheck;
+import be.elevenways.zenit.server.storage.StorageKinds;
+import be.elevenways.zenit.server.storage.StorageOwner;
+import be.elevenways.zenit.server.storage.StorageTrial;
+import be.elevenways.zenit.server.storage.Storages;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 import java.util.LinkedHashMap;
-import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * The backup targets' parts: full CRUD plus a live connection test, the target seam's health check against the real
- * destination, never a form-level syntax check.
+ * The storages' parts (board FO128): full CRUD over the kind and settings the storage layer declares, and a live
+ * test, the storage's own check against its real destination, never a form-level syntax check.
+ *
+ * AIDEV-NOTE: a save runs that same check first (the kind's trial) and a storage that fails it, or whose server
+ * presents a key the settings do not pin yet, is not saved: the refusal says why, and for a key it names the
+ * fingerprint to compare and pin. A name a mount of this server's settings holds is refused, so a record never
+ * shadows one ({@link BackupStorages#of}).
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -64,8 +72,8 @@ public final class BackupTargetParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.REF);
 
-    /** The argument naming the host an SSH target writes to. */
-    public static final String HOST = "host";
+    /** The argument carrying a storage's settings, in its kind's shape. */
+    public static final String SETTINGS = "settings";
 
     /** Runs the target's health check against its real destination. */
     public static final Operation<Row, Void, TestOutcome> TEST =
@@ -107,18 +115,18 @@ public final class BackupTargetParts {
     }
 
     /**
-     * A target's create and change through this resource's form: its name, its kind and, inside its kind's settings,
-     * the folder and (for an SSH target) the host by its code, stored as the host's registry key.
+     * A storage's create and change through this resource's form: its name, its kind by its word and its kind's
+     * settings as one map, so a kind a module adds is written with no change here.
      */
     public static final PanelRecordWrites WRITES = PanelRecordWrites.of("backup_target", BackupTargetModel.MODEL_ID,
             SUBJECT, BackupTargetModel.ID, HohenheimSlugs.BACKUP_TARGETS)
         .settings(List.of(BackupTargetModel.NAME))
-        // A caller names the kind by its plain word (filesystem, ssh); the stored key carries the namespace.
+        // A caller names the kind by its plain word (storage_s3, storage_sftp); the stored key carries the namespace.
         .byWord(BackupTargetModel.KIND)
-        .within(BackupTargetModel.SETTINGS)
-        .settings(List.of(FilesystemTargetKind.PATH))
-        .link(HOST, HohenheimMicrocopy.HELP.of("backup_target_host"), SshTargetKind.HOST, HostModel.MODEL_ID, false,
-            id -> HohenheimIds.id(id).toString())
+        // One object in the kind's own shape, judged by that kind when the record is written: an open object here,
+        // since its shape follows the kind the same call names.
+        .setting(JsonValue.of(SETTINGS).schema(Map.of("type", "object"))
+            .help(HohenheimMicrocopy.HELP.of("backup_target_settings")).build(), BackupTargetModel.SETTINGS)
         .build();
 
     static {
@@ -137,12 +145,16 @@ public final class BackupTargetParts {
         OperationHandlers.attach(TEST).handle(call -> {
             Row target = call.subject();
             String name = target.get(BackupTargetModel.NAME);
+            StorageCheck check;
             try {
-                BackupTargetKinds.targetOf(target).healthCheck();
-            } catch (IOException | Violations unhealthy) {
-                // Violations too: a destination host that is unconfirmed or quarantined is exactly what this test
-                // exists to surface, and an escaping refusal would render as a generic failure instead.
-                return new TestOutcome(name, HohenheimViolations.reasonOf(unhealthy));
+                check = BackupStorages.of(target).check();
+            } catch (RuntimeException unusable) {
+                // Violations too: an SSH-era destination host that is unconfirmed or quarantined is exactly what
+                // this test exists to surface, and an escaping refusal would render as a generic failure instead.
+                return new TestOutcome(name, HohenheimViolations.reasonOf(unusable));
+            }
+            if (!check.isUsable()) {
+                return new TestOutcome(name, check.diagnostic());
             }
             return new TestOutcome(name, null);
         });
@@ -181,7 +193,10 @@ public final class BackupTargetParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(BackupTargetModel.NAME).build())
             .form(ResourceForm.<Row>of(form).build())
-            .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
+            .writes(ResourceMutations.rows().create().update().delete(DELETE)
+                .beforeSave(save -> judgeBeforeSave(save.row(), save.isCreate()
+                    ? HohenheimStorages.ownerOfCreator(save.access()) : HohenheimStorages.ownerOf(save.row())))
+                .build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
@@ -189,6 +204,33 @@ public final class BackupTargetParts {
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
+    }
+
+    /**
+     * Refuses saving a storage whose name a settings mount holds, or that its kind's trial finds unusable or asks a
+     * confirmation of: the check a Test runs, before anything is written.
+     *
+     * @throws Violations naming the name, the problem or the fingerprint to pin
+     */
+    public static void judgeBeforeSave(@NonNull Row row, @NonNull StorageOwner owner) {
+        String name = String.valueOf((Object) row.get(BackupTargetModel.NAME));
+        if (Storages.has(name)) {
+            throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
+                HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_taken").withArg("name", name));
+        }
+        StorageTrial trial = StorageKinds.trial(HohenheimStorages.declarationOf(row, owner));
+        if (trial.question() != null) {
+            throw Violations.ofField(BackupTargetModel.SETTINGS.getName(), null,
+                HohenheimMicrocopy.VIOLATIONS.of("backup_target_confirm")
+                    .withArg("question", trial.question().asked().question())
+                    .withArg("presented", trial.question().presented()));
+        }
+        if (!trial.check().isUsable()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_unusable")
+                .withArg("name", name)
+                .withArg("reason", Objects.requireNonNull(trial.check().problem()).copy())
+                .withArg("diagnostic", trial.check().diagnostic()));
+        }
     }
 
     private static @NonNull CmsActionResult testWords(@NonNull TestOutcome outcome) {

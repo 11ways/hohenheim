@@ -4,13 +4,10 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.WordedKind;
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
-import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -114,30 +111,13 @@ class DeclaredMicrocopyKeysTest {
     }
 
     @Test
-    void theFilesystemTargetSaysWhatMakesItOffHost() {
-        // The kind picker's description stopped mid-clause ("only off-host if the directory itself is"), in both
-        // languages; it names the condition in full.
-        ShippedCatalogs catalogs = new ShippedCatalogs();
-        Microcopy description = Objects.requireNonNull(
-            BackupTargetKinds.getHandler(FilesystemTargetKind.ID.toString())).getDescription();
-        assertEquals("A directory on this controller; it is off-host only when the directory itself is replicated or"
-                + " mounted from another host",
-            catalogs.resolveSource(description.key(), LocaleChain.ofTags("en"), description.filters()),
-            "step 1: the English description names what makes the directory off-host");
-        assertEquals("Een map op deze controller; die staat alleen buiten de host als de map zelf gerepliceerd of"
-                + " van een andere host gemount is",
-            catalogs.resolveSource(description.key(), LocaleChain.ofTags("nl"), description.filters()),
-            "step 2: the Dutch description names it too");
-    }
-
-    @Test
     void everyTaskAndKindReadsAsWordsInBothLanguages() {
         // 1. Every task's label ships in en and nl: the framework's own coverage, since the key is the task's id path
         //    (ScheduledTask.labelIn), which no literal-key scan sees.
         TaskLabelCoverage.requireShipped(21, Path.of("src/server/java"), Path.of("src/common/java"));
 
         // 2. Every production kind's name and description ship in en and nl, for the instance, upstream, git provider,
-        //    backup target, template variable type and site auth provider families; both are keyed by the kind's id
+        //    template variable type and site auth provider families; both are keyed by the kind's id
         //    path (WordedKind), so a new kind without words fails here, never as a raw key (or an English display name
         //    in every language) on a kind picker. Touching InstanceKinds runs the kinds' autoload first.
         ShippedCatalogs catalogs = new ShippedCatalogs();
@@ -146,11 +126,10 @@ class DeclaredMicrocopyKeysTest {
         InstanceKindRegistry.registry().forEach(kinds::add);
         UpstreamKinds.registry().forEach(kinds::add);
         GitProviderKindRegistry.registry().forEach(kinds::add);
-        BackupTargetRegistry.registry().forEach(kinds::add);
         VariableTypeRegistry.registry().forEach(kinds::add);
         SiteAuthProviderTypeRegistry.registry().forEach(kinds::add);
         kinds.removeIf(kind -> !kind.getClass().getName().startsWith("be.elevenways.hohenheim.server."));
-        assertTrue(kinds.size() >= 26, () -> "step 2: the registries list the production kinds, found " + kinds);
+        assertTrue(kinds.size() >= 24, () -> "step 2: the registries list the production kinds, found " + kinds);
         List<String> missing = new ArrayList<>();
         for (WordedKind kind : kinds) {
             for (Microcopy words : List.of(kind.getLabel(), kind.getDescription())) {

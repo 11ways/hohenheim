@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
-import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
@@ -132,7 +131,7 @@ final class HohenheimDataTools {
                 HohenheimTools.words("mcp_tool_backup_target_set"), HohenheimTools.writes())
             .code(HohenheimTools.words("mcp_code_backup_target_set"))
             .creates(BackupTargetParts.WRITES.create(), null, List.of(BackupTargetModel.NAME.getInputName(),
-                BackupTargetModel.KIND.getInputName(), FilesystemTargetKind.PATH.getInputName()),
+                BackupTargetModel.KIND.getInputName(), BackupTargetParts.SETTINGS),
                 HohenheimTools.words("backup_target_thing"))
             .route(BackupTargetParts.WRITES.change(), HohenheimMcpAnswers::changed)
             .build();

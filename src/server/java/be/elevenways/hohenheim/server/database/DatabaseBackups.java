@@ -12,8 +12,7 @@ import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.backup.BackupCipher;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.backup.UploadLedger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -30,6 +29,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.io.DurableFiles;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,6 +47,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -109,8 +110,8 @@ public final class DatabaseBackups {
         }
     }
 
-    /** The resolved destination of the dumps: its record and its live target. */
-    private record Destination(int targetId, @NonNull String name, @NonNull BackupTarget target) {}
+    /** The resolved destination of the dumps: its record and its storage. */
+    private record Destination(int targetId, @NonNull String name, @NonNull StorageAdapter target) {}
 
     private DatabaseBackups() {
     }
@@ -148,7 +149,7 @@ public final class DatabaseBackups {
             throw new IOException("Setting " + HohenheimSettings.Database.BACKUP_TARGET.getPath()
                 + " names backup target '" + name + "', which does not exist");
         }
-        return new Destination(row.get(BackupTargetModel.ID), name, BackupTargetKinds.targetOf(row));
+        return new Destination(row.get(BackupTargetModel.ID), name, BackupStorages.of(row));
     }
 
     /**
@@ -184,9 +185,9 @@ public final class DatabaseBackups {
                                            InstanceOperationLock.@NonNull Contention contention) throws IOException {
         String name = database.get(DatabaseModel.NAME);
         Destination destination = requireDestination();
-        BackupTarget target = destination.target();
-        // Health BEFORE the dump: a dead target must not cost the engine a dump nobody can keep.
-        target.healthCheck();
+        StorageAdapter target = destination.target();
+        // Usable BEFORE the dump: a dead storage must not cost the engine a dump nobody can keep.
+        BackupStorages.requireUsable(target);
 
         DatabaseDumpModel dumps = Models.get(DatabaseDumpModel.class);
         Row dump = dumps.createEmptyRow();
@@ -231,8 +232,8 @@ public final class DatabaseBackups {
             requireTargetRoom(target, name, size);
             dump.set(DatabaseDumpModel.REMOTE_KEY, key);
             dumps.saveWritten(dump);
-            target.store(key, encrypted);
-            String storedSha = target.storedSha256(key);
+            BackupStorages.store(target, key, encrypted);
+            String storedSha = BackupStorages.storedSha256(target, key);
             if (!storedSha.equals(localSha)) {
                 throw new IOException("Stored dump does not match what was uploaded (local sha256 " + localSha
                     + ", target holds " + storedSha + ")");
@@ -244,7 +245,7 @@ public final class DatabaseBackups {
         } catch (IOException | RuntimeException failed) {
             if (key != null) {
                 try {
-                    target.delete(key);
+                    BackupStorages.delete(target, key);
                 } catch (IOException | RuntimeException cleanupFailed) {
                     Blast.log("DUMP: could not remove partial artifact", key, ":",
                         HohenheimViolations.reasonOf(cleanupFailed));
@@ -309,14 +310,18 @@ public final class DatabaseBackups {
     }
 
     /**
-     * Refuses a dump its backup target has no room for: {@code bytes} plus {@link #DUMP_FREE_RESERVE_BYTES} must be
-     * free there, so a target on the disk the engines live on never fills it.
+     * Refuses a dump its storage has no room for: {@code bytes} plus {@link #DUMP_FREE_RESERVE_BYTES} must be free
+     * there, so a storage on the disk the engines live on never fills it. A storage that cannot tell its room (an S3
+     * store) is judged by nothing here: its own refusal of a put is the answer then.
      *
-     * @throws DumpOverCap naming what the target has free and what was needed
+     * @throws DumpOverCap naming what the storage has free and what was needed
      */
-    private static void requireTargetRoom(@NonNull BackupTarget target, @NonNull String name, long bytes)
+    private static void requireTargetRoom(@NonNull StorageAdapter target, @NonNull String name, long bytes)
             throws IOException {
-        judgeTargetRoom(name, target.usableBytes(), bytes);
+        Optional<Long> free = BackupStorages.freeBytes(target);
+        if (free.isPresent()) {
+            judgeTargetRoom(name, free.get(), bytes);
+        }
     }
 
     /**
@@ -424,19 +429,19 @@ public final class DatabaseBackups {
         if (!DatabaseDumpModel.isRestorable(dump) || key == null || !key.endsWith(ENCRYPTED_SUFFIX)) {
             throw new IOException("Dump " + dump.get(DatabaseDumpModel.ID) + " is not complete");
         }
-        BackupTarget target;
+        StorageAdapter target;
         try {
-            target = BackupTargetKinds.targetFor(dump.get(DatabaseDumpModel.TARGET_ID));
+            target = BackupStorages.forTarget(dump.get(DatabaseDumpModel.TARGET_ID));
         } catch (Violations unavailable) {
             throw new IOException("The backup target of dump " + dump.get(DatabaseDumpModel.ID)
                 + " is unavailable: " + HohenheimViolations.reasonOf(unavailable), unavailable);
         }
         Files.createDirectories(workDir);
         Path encrypted = workDir.resolve("dump" + ENCRYPTED_SUFFIX);
-        if (!target.exists(key)) {
+        if (!BackupStorages.exists(target, key)) {
             throw new IOException("The stored dump " + key + " is missing on its backup target");
         }
-        target.retrieve(key, encrypted);
+        BackupStorages.retrieve(target, key, encrypted);
         DurableFiles.restrictToOwner(encrypted);
         String sha = SecureTokens.sha256Hex(encrypted);
         if (!sha.equals(dump.get(DatabaseDumpModel.SHA256))) {

@@ -14,8 +14,8 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.diagnostic.AtomicFiles;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -351,41 +351,9 @@ class IncusSnapshotBackupLiveTest {
                 //    row, no artifact, no staging debris, and the failed row refuses
                 //    restore -- while the source instance keeps running.
                 Path interruptedDir = workRoot.resolve("interrupted-target");
-                FilesystemBackupTarget real = new FilesystemBackupTarget(interruptedDir);
-                AtomicReference<String> attemptedKey = new AtomicReference<>();
-                BackupTarget failing = new BackupTarget() {
-                    @Override public void healthCheck() throws IOException {
-                        real.healthCheck();
-                    }
-                    @Override public void store(String storeKey, Path file) throws IOException {
-                        attemptedKey.set(storeKey);
-                        Path committed = interruptedDir.resolve(storeKey);
-                        byte[] half = read(file);
-                        AtomicFiles.Staged dying = AtomicFiles.stage(committed);
-                        Files.write(dying.path(), java.util.Arrays.copyOf(half, half.length / 2));
-                        throw new IOException("simulated network failure mid-upload");
-                    }
-                    @Override public String storedSha256(String storeKey) throws IOException {
-                        return real.storedSha256(storeKey);
-                    }
-                    @Override public void retrieve(String storeKey, Path destination)
-                            throws IOException {
-                        real.retrieve(storeKey, destination);
-                    }
-                    @Override public java.util.List<String> list(String prefix)
-                            throws IOException {
-                        return real.list(prefix);
-                    }
-                    @Override public boolean exists(String storeKey) throws IOException {
-                        return real.exists(storeKey);
-                    }
-                    @Override public long usableBytes() throws IOException {
-                        return real.usableBytes();
-                    }
-                    @Override public void delete(String storeKey) throws IOException {
-                        real.delete(storeKey);
-                    }
-                };
+                DyingUploadStorage failing = new DyingUploadStorage(interruptedDir);
+                StorageAdapter real = new LocalDiskStorageAdapter(interruptedDir);
+                AtomicReference<String> attemptedKey = failing.attemptedKey;
                 assertThat(catchThrowable(() -> backups.backupNow(id, null, failing)))
                     .as("step 9: the interrupted upload is a named failure")
                     .isInstanceOfSatisfying(Violations.class, violations ->
@@ -401,7 +369,7 @@ class IncusSnapshotBackupLiveTest {
                 assertThat(attempted).as("step 9: the upload was attempted").isNotNull();
                 assertThat(Files.exists(interruptedDir.resolve(attempted)))
                     .as("step 9: no committed artifact").isFalse();
-                assertThat(stagedBeside(interruptedDir.resolve(attempted)))
+                assertThat(failing.stagingDebris())
                     .as("step 9: the partial staged file was removed").isEmpty();
                 assertThat(catchThrowable(() -> backups.restoreToNew(
                         failed.get(0), real, "never-born", null)))

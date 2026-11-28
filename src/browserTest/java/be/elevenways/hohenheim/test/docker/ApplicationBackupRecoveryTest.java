@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
+import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerStreamConnection;
 import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
@@ -118,7 +118,7 @@ class ApplicationBackupRecoveryTest {
                     ArtifactDeploys.restoreSource(appId, jar);
                     int servingId = ApplicationReleases.restore(appId, IMAGE, ignored -> {}).instanceId();
                     String servingHandle = FakeDockerDaemon.handleOf(servingId);
-                    var target = new FilesystemBackupTarget(tmp.resolve("target"));
+                    var target = new LocalDiskStorageAdapter(tmp.resolve("target"));
                     InstanceBackups backups = new InstanceBackups();
 
                     int stopsBeforeMismatch = daemon.callCount("stop:" + servingHandle);

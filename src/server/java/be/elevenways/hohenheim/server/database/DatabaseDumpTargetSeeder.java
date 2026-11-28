@@ -3,22 +3,26 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.seed.SeedContext;
 import be.elevenways.zenit.server.orm.seed.Seeder;
+import be.elevenways.zenit.server.storage.CommonStorageProblem;
+import be.elevenways.zenit.server.storage.DeclaredStorage;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
+import be.elevenways.zenit.server.storage.StorageCheck;
+import be.elevenways.zenit.server.storage.StorageKinds;
+import be.elevenways.zenit.server.storage.StorageOwner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Keeps an upgraded install's nightly managed-database dumps: a filesystem backup target at {@code database.backup_path}
+ * Keeps an upgraded install's nightly managed-database dumps: a folder storage at {@code database.backup_path}
  * that {@code database.backup_target} names while nothing else does.
  *
  * AIDEV-NOTE: the dump setting is host-only, and the framework lets only default.dry, a hand edit of local.dry or the
@@ -58,23 +62,28 @@ public final class DatabaseDumpTargetSeeder implements Seeder {
             return;
         }
         Path root = DatabaseBackups.backupRoot().toAbsolutePath().normalize();
-        Map<String, Object> settings = new LinkedHashMap<>(Map.of(FilesystemTargetKind.PATH.getName(),
+        Map<String, Object> settings = new LinkedHashMap<>(Map.of(LocalFolderStorageKind.FOLDER.getName(),
             root.toString()));
+        StorageCheck check;
         try {
-            new FilesystemTargetKind().targetFor(settings).healthCheck();
-        } catch (IOException | RuntimeException unusable) {
+            check = StorageKinds.trial(new DeclaredStorage(TARGET_NAME, TARGET_NAME, LocalFolderStorageKind.ID,
+                settings, StorageOwner.OPERATOR, true)).check();
+        } catch (RuntimeException refused) {
+            check = StorageCheck.found(CommonStorageProblem.REFUSED, String.valueOf(refused.getMessage()));
+        }
+        if (!check.isUsable()) {
             Blast.log("DUMP: no backup target was created at", root, "for the managed-database dumps:",
-                unusable.getMessage(), "- they fail until", HohenheimSettings.Database.BACKUP_TARGET.getPath(),
+                check.diagnostic(), "- they fail until", HohenheimSettings.Database.BACKUP_TARGET.getPath(),
                 "names a target");
             return;
         }
         BackupTargetModel targets = Models.get(BackupTargetModel.class);
         Row row = targets.createEmptyRow();
         row.set(BackupTargetModel.NAME, TARGET_NAME);
-        row.set(BackupTargetModel.KIND, FilesystemTargetKind.ID.toString());
+        row.set(BackupTargetModel.KIND, LocalFolderStorageKind.ID.toString());
         row.set(BackupTargetModel.SETTINGS, settings);
         targets.save(row);
-        Blast.log("DUMP: managed-database dumps now go to the filesystem backup target", TARGET_NAME, "at", root);
+        Blast.log("DUMP: managed-database dumps now go to the folder storage", TARGET_NAME, "at", root);
     }
 
     /** Names the upgrade's target in the dump setting while no source set a value and the target exists. */

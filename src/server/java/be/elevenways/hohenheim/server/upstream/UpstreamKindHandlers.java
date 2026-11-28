@@ -11,7 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
  *
  * AIDEV-NOTE: a handler is read out of THE registry ({@link UpstreamKinds#registry()}), never a
  * private handler map beside it (two homes for one vocabulary); an entry that is not a server
- * handler fails closed as "unknown kind", as in BackupTargetKinds.
+ * handler fails closed as "unknown kind", as in the storage layer's StorageKinds.require.
  */
 public class UpstreamKindHandlers {
 

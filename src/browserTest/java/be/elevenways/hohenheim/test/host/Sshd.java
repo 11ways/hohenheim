@@ -93,7 +93,10 @@ public final class Sshd {
             + "PermitRootLogin no\n"
             + "PasswordAuthentication no\n"
             + "KbdInteractiveAuthentication no\n"
-            + "AuthorizedKeysFile " + authorizedKeys + "\n", StandardCharsets.UTF_8);
+            + "AuthorizedKeysFile " + authorizedKeys + "\n"
+            // An SSH-era backup target is read as an SFTP storage now (HohenheimStorages): served in-process, so no
+            // sftp-server binary is needed.
+            + "Subsystem sftp internal-sftp\n", StandardCharsets.UTF_8);
         Sshd sshd = new Sshd(directory, port);
         sshd.writeHostKey();
         sshd.spawn();

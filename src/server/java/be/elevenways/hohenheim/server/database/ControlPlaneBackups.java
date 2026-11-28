@@ -3,8 +3,7 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.backup.BackupTarget;
-import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
@@ -14,6 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.server.orm.backup.RecoveryArchive;
+import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -30,8 +30,8 @@ import java.util.List;
 
 /**
  * Control-plane recovery archives: hohenheim's OWN database plus the field-encryption keyring
- * as one verified unit ({@link RecoveryArchive}), uploaded to a configured
- * {@link BackupTarget}. This is the thin wiring over the zenit mechanism -- distinct from
+ * as one verified unit ({@link RecoveryArchive}), uploaded to a configured storage
+ * ({@link BackupStorages}). This is the thin wiring over the zenit mechanism -- distinct from
  * {@link BackupDatabases}, which dumps managed TENANT databases.
  *
  * AIDEV-NOTE: the destination is REQUIRED and it is a target RECORD, never a local directory.
@@ -92,12 +92,12 @@ public final class ControlPlaneBackups {
      */
     public static @NonNull Archive backupNow(@NonNull Datasource datasource,
                                              @NonNull EncryptionKeyring keyring,
-                                             @NonNull BackupTarget target,
+                                             @NonNull StorageAdapter target,
                                              @NonNull Path stagingDirectory,
                                              int retention,
                                              @NonNull String destinationName) throws IOException {
-        // Before the snapshot: a target that fails at store time already spent the capture.
-        target.healthCheck();
+        // Before the snapshot: a storage that fails at store time already spent the capture.
+        BackupStorages.requireUsable(target);
 
         Files.createDirectories(stagingDirectory);
         String fileName = "control-plane-" + UtcStamp.now() + ".zrec";
@@ -109,16 +109,16 @@ public final class ControlPlaneBackups {
         try {
             manifest = RecoveryArchive.create(datasource, keyring, staged);
             localSha = SecureTokens.sha256Hex(staged);
-            target.store(key, staged);
+            BackupStorages.store(target, key, staged);
         } finally {
             // Always: a surviving local .zrec is indistinguishable from a real backup while
             // being the one thing this class exists to stop producing.
             Files.deleteIfExists(staged);
         }
 
-        String remoteSha = target.storedSha256(key);
+        String remoteSha = BackupStorages.storedSha256(target, key);
         if (!remoteSha.equals(localSha)) {
-            target.delete(key);
+            BackupStorages.delete(target, key);
             throw new IOException("Control-plane archive " + key + " does not match on the target"
                 + " (uploaded sha256 " + localSha + ", the target holds " + remoteSha
                 + "); the artifact was removed and nothing was kept locally");
@@ -140,15 +140,15 @@ public final class ControlPlaneBackups {
      *
      * @return how many were removed
      */
-    private static int prune(@NonNull BackupTarget target, int retention) throws IOException {
+    private static int prune(@NonNull StorageAdapter target, int retention) throws IOException {
         if (retention <= 0) {
             return 0;
         }
-        List<String> keys = new ArrayList<>(target.list(KEY_PREFIX));
+        List<String> keys = new ArrayList<>(BackupStorages.list(target, KEY_PREFIX));
         keys.sort(Comparator.reverseOrder());
         int pruned = 0;
         for (int index = retention; index < keys.size(); index++) {
-            target.delete(keys.get(index));
+            BackupStorages.delete(target, keys.get(index));
             pruned++;
         }
         return pruned;
@@ -156,7 +156,7 @@ public final class ControlPlaneBackups {
 
     /** @return the archives the configured target currently holds, newest first */
     public static @NonNull List<String> listBackups() throws IOException {
-        List<String> keys = new ArrayList<>(requireDestination().list(KEY_PREFIX));
+        List<String> keys = new ArrayList<>(BackupStorages.list(requireDestination(), KEY_PREFIX));
         keys.sort(Comparator.reverseOrder());
         return keys;
     }
@@ -177,7 +177,7 @@ public final class ControlPlaneBackups {
     // swapped for a record id: it is what an operator writes into a settings file and reads
     // back on the dashboard, and the unique index makes it a real identity. If that index
     // ever goes, this must become an id.
-    public static @NonNull BackupTarget requireDestination() {
+    public static @NonNull StorageAdapter requireDestination() {
         String name = destinationName();
         Row row = Models.get(BackupTargetModel.class).find()
             .where(BackupTargetModel.NAME.eq(name)).first();
@@ -187,7 +187,7 @@ public final class ControlPlaneBackups {
                 + " names backup target '" + name + "', which does not exist. Configured targets: "
                 + knownTargetNames());
         }
-        return BackupTargetKinds.targetOf(row);
+        return BackupStorages.of(row);
     }
 
     /**
@@ -245,11 +245,11 @@ public final class ControlPlaneBackups {
      * @return the fetched archive; the caller removes it with {@link #deleteFetched}
      */
     public static @NonNull Path fetchFromTarget(@NonNull String key) throws IOException {
-        BackupTarget target = requireDestination();
+        StorageAdapter target = requireDestination();
         Path staging = Files.createTempDirectory("hohenheim-control-plane-restore");
         Path fetched = staging.resolve("archive.zrec");
         try {
-            target.retrieve(key, fetched);
+            BackupStorages.retrieve(target, key, fetched);
             return fetched;
         } catch (IOException | RuntimeException failed) {
             deleteFetched(fetched);
