@@ -21786,5 +21786,14 @@
   "added_on": {"text": "{$kind}, added on {$at :date}", "scope": "backup_target"},
   "keeps_no_dumps_yet": {"text": "Its dumps, none yet", "scope": "backup_target"},
   "back_up_own_target_missing": {"text": "The storage this database chose for its dumps is gone. Choose another one on its form.", "scope": "database"},
-  "database_dumps_kept_positive": {"text": "A database keeps at least one dump. Leave it empty to keep the server's number.", "scope": "violations"}
+  "database_dumps_kept_positive": {"text": "A database keeps at least one dump. Leave it empty to keep the server's number.", "scope": "violations"},
+  "held_app_started_toast": {"text": "{$name} was started", "scope": "held_app"},
+  "held_app_silent_never": {"text": "{$server} never answered.", "scope": "held_app"},
+  "held_app_silent_since": {"text": ".match {$day :string}\ntoday {{{$server} does not answer since {$since :time}.}}\n* {{{$server} does not answer since {$since :datetime}.}}", "scope": "held_app"},
+  "held_app_silent_body": {"text": "This is what {$master} remembers of this app. Nothing can be changed until {$server} answers.", "scope": "held_app"},
+  "held_app_waiting_tabs_title": {"text": "Logs, console, files, stats, backups, volumes, databases and history wait", "scope": "held_app"},
+  "held_app_waiting_tabs": {"text": "They show what runs on {$server} and are not brought to this server yet. Open them on {$server} meanwhile.", "scope": "held_app"},
+  "held_app_main_address": {"text": "Main address", "scope": "held_app"},
+  "held_app_also": {"text": "Also", "scope": "held_app"},
+  "held_app_more_addresses": {"text": ".match {$count :integer}\none {{1 more address}}\n* {{{$count :integer} more addresses}}", "scope": "held_app"}
 }

@@ -72,7 +72,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * collide in a shared fork -- the registration here is idempotent and there is exactly
  * one definition of what a fake workload is.
  */
-final class FakeNativeDaemons {
+public final class FakeNativeDaemons {
 
     /** name -> handle -> workload; the fake daemons, keyed by HOST record name. */
     static final Map<String, Map<String, FakeWorkload>> DAEMONS = new ConcurrentHashMap<>();
@@ -101,7 +101,7 @@ final class FakeNativeDaemons {
     }
 
     /** Register both fake kinds (idempotent) and make sure this host has a daemon map. */
-    static void register() {
+    public static void register() {
         followDatabase();
         FakeNativeKind.register();
     }
@@ -245,7 +245,7 @@ final class FakeNativeDaemons {
      * Consumed by the next {@code start}: whatever arrives while the daemon starts the workload, on the caller's
      * thread and inside the operation that started it (a rival asking for the same record).
      */
-    static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
+    public static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
 
     /**
      * handle -> how many times a runtime was asked to destroy it since a workload was last created under it (by create
@@ -796,9 +796,9 @@ final class FakeNativeDaemons {
     }
 
     /** The migratable fake kind: native export/import over the in-memory daemons. */
-    static final class FakeNativeKind implements InstanceKindHandler {
+    public static final class FakeNativeKind implements InstanceKindHandler {
 
-        static final Identifier ID = Identifier.of("hohenheim", "fake_native");
+        public static final Identifier ID = Identifier.of("hohenheim", "fake_native");
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());

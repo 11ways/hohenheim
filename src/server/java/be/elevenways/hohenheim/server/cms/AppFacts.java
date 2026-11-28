@@ -12,6 +12,8 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,12 +35,13 @@ import java.util.Objects;
  * @param host    the host it runs on, null without one
  * @param https   what HTTPS gives its main address, null without an exact address
  * @param health  the verdict its own record page leads with, its fixes left out of a told one
+ * @param started when what runs last started, null while it does not run or for an app nothing runs of
  * @author Jelle De Loecker
  * @since  0.10.0
  */
 record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull Microcopy kind,
                 @Nullable SiteHostnamesCell address, @Nullable String host, @Nullable StateLineCell https,
-                @NonNull RecordHealth health) {
+                @NonNull RecordHealth health, @Nullable Instant started) {
 
     AppFacts {
         Objects.requireNonNull(source, "source cannot be null");
@@ -70,6 +73,9 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
             document.put("address", address);
         }
         document.put("host", this.host);
+        if (this.started != null) {
+            document.put("started", this.started.toString());
+        }
         if (this.https != null) {
             Map<String, Object> https = new LinkedHashMap<>();
             https.put("state", this.https.state());
@@ -124,9 +130,17 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
             https = new StateLineCell(state, variant, label, copyOf(told.get("detail")), null, null,
                 copyOf(told.get("note")));
         }
+        Instant started = null;
+        if (facts.get("started") instanceof String told) {
+            try {
+                started = Instant.parse(told);
+            } catch (DateTimeParseException unreadable) {
+                return null;
+            }
+        }
         return new AppFacts(source, id.intValue(), name, kind, address,
             facts.get("host") instanceof String host ? host : null, https,
-            new RecordHealth(tone, headline, copyOf(health.get("detail")), List.of(), null));
+            new RecordHealth(tone, headline, copyOf(health.get("detail")), List.of(), null), started);
     }
 
     /** @return the copy as its DRY text, null for none */

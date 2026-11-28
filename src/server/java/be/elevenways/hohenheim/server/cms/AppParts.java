@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
@@ -19,7 +20,10 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -27,24 +31,28 @@ import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.StorePages;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.data.RecordPage;
-import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.peer.PeerRecordModel;
 import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.CarriedOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -67,9 +75,15 @@ import java.util.function.Predicate;
  * are counted in hundreds. The health column is the verdict each row's own record page leads with ({@link AppHealth},
  * read by the directory, or told by its server); the kind and state filters are the directory's closed {@link Source}
  * set and the framework's {@link HealthTone}, each derived from its home.
- * AIDEV-NOTE: a linked server's row is drawn by this server's cell code from the state it holds and opens nothing yet
- * (its page is the next step of the unified panel): the row simply has no link. A silent server's rows recede, draw no
- * state glyph and say when it last answered, and the list's notice over its rows says it does not answer.
+ * AIDEV-NOTE: a linked server's row is drawn by this server's cell code from the state it holds and opens this list's
+ * own page of it, the app overview drawn from that state alone (AppOverview.listedTab); this server's own row opens its
+ * record's page, whose overview leads with the same facts. A silent server's rows recede, draw no state glyph and say
+ * when it last answered, and the list's notice over its rows says it does not answer.
+ * AIDEV-NOTE: the page of a linked server's app offers Deploy, Restart, Stop and Start as the operations of its own
+ * server, carried there (CarriedOperations.over): they run there as the person through that server's own pipeline,
+ * never here. Only a workload has them, only while its server answers. Its record's other tabs (logs, console,
+ * files, stats, backups, volumes, databases, history) are not offered here: they show what runs on that server and
+ * wait for the stream relay; the overview says so in words.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -105,8 +119,89 @@ public final class AppParts {
      */
     static @NonNull PanelResource<Listed> admin(@NonNull List<String> related, @NonNull List<String> shown,
                                              @Nullable String putOnline) {
-        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, shown, putOnline, null)
+        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, shown, putOnline, null,
+            carriedVerbs())
+            .tabs(ResourceTabs.<Listed>of(List.of(AppOverview.listedTab())))
             .build();
+    }
+
+    /** Who may ask a linked server's app to do something from here: an administrator of this server. */
+    private static final OperationGate ADMINISTRATOR = OperationGate.permission(HohenheimPanel.ACCESS);
+
+    /** Start, carried to the server the app lives on. */
+    static final Operation<Listed, Void, Void> START = CarriedOperations.over(InstanceOperations.START,
+        HohenheimIds.id("held_app_start"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
+
+    /** Stop, carried to the server the app lives on. */
+    static final Operation<Listed, Void, Void> STOP = CarriedOperations.over(InstanceOperations.STOP,
+        HohenheimIds.id("held_app_stop"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
+
+    /** Restart, carried to the server the app lives on. */
+    static final Operation<Listed, Void, Void> RESTART = CarriedOperations.over(InstanceOperations.RESTART,
+        HohenheimIds.id("held_app_restart"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
+
+    /** Deploy, carried to the server the app lives on: its run there is followed by this server's own run. */
+    static final Operation<Listed, Void, Void> DEPLOY = CarriedOperations.over(InstanceOperations.DEPLOY,
+        HohenheimIds.id("held_app_deploy"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
+
+    /** Roll back, carried to the server the app lives on, which decides whether it has a release to go back to. */
+    static final Operation<Listed, Void, Void> ROLLBACK = CarriedOperations.over(InstanceOperations.ROLLBACK,
+        HohenheimIds.id("held_app_rollback"), AppDirectory.APP, ADMINISTRATOR, AppParts::where);
+
+    /** @return where a linked server's workload lives, null for this server's apps and what is no workload */
+    private static CarriedOperations.@Nullable Located where(@NonNull Listed app) {
+        return app instanceof HeldApp held && held.cells().source() == Source.WORKLOAD
+            ? new CarriedOperations.Located(held.held().peer(), String.valueOf(held.cells().id())) : null;
+    }
+
+    /** @return whether the app is a linked server's workload whose server answers, so its verbs are carried */
+    private static boolean carries(@NonNull Listed app) {
+        return where(app) != null && !((HeldApp) app).held().silent();
+    }
+
+    /**
+     * The verbs a linked server's workload offers on its page here, in the board's order: Deploy, Roll back, Restart,
+     * Stop, then Start.
+     */
+    private static @NonNull List<PanelAction<Listed>> carriedVerbs() {
+        return List.of(
+            PanelAction.<Listed, Void>placesRun(DEPLOY, ActionPlacement.ROW)
+                .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
+                .hiddenWhen(app -> !carries(app))
+                .build(),
+            PanelAction.<Listed, Void>placesRun(ROLLBACK, ActionPlacement.ROW)
+                .label(HohenheimMicrocopy.INSTANCE.of("rollback"))
+                .inlineInRow(false)
+                .hiddenWhen(app -> !carries(app))
+                .build(),
+            PanelAction.<Listed, Void>places(RESTART, ActionPlacement.ROW, (request, result) ->
+                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("restarted_toast")
+                        .withArg("name", request.subject().cells().name())))
+                .label(HohenheimMicrocopy.INSTANCE.of("restart"))
+                .icon(Icon.of("rotate-right"))
+                .inlineInRow(false)
+                .hiddenWhen(app -> !carries(app))
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("restart"),
+                    HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))
+                .build(),
+            PanelAction.<Listed, Void>places(STOP, ActionPlacement.ROW, (request, result) ->
+                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("stopped_toast")
+                        .withArg("name", request.subject().cells().name())))
+                .label(HohenheimMicrocopy.INSTANCE.of("stop"))
+                .icon(Icon.of("stop"))
+                .inlineInRow(false)
+                .style(ActionStyle.DESTRUCTIVE)
+                .hiddenWhen(app -> !carries(app))
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("stop"),
+                    HohenheimMicrocopy.INSTANCE.of("stop_confirm"), ActionStyle.DESTRUCTIVE))
+                .build(),
+            PanelAction.<Listed, Void>places(START, ActionPlacement.ROW, (request, result) ->
+                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.HELD_APP.of("held_app_started_toast")
+                        .withArg("name", request.subject().cells().name())))
+                .icon(Icon.of("play"))
+                .inlineInRow(false)
+                .hiddenWhen(app -> !carries(app))
+                .build());
     }
 
     /**
@@ -122,7 +217,7 @@ public final class AppParts {
                                               @Nullable String putOnline) {
         // A tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
         return ManageTwin.listed(onward(entry(ManageTwin.id("app"), HohenheimSlugs.MANAGE, false), related, shown,
-                    putOnline, InstanceTemplateParts::offersTenantCatalog),
+                    putOnline, InstanceTemplateParts::offersTenantCatalog, List.of()),
                 access -> HohenheimAccess.managesAnySite(access)
                     || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .build();
@@ -133,20 +228,27 @@ public final class AppParts {
      * instance's record trails "Apps / record", never through its own list.
      *
      * @param offered who is offered the primary verb, null for everyone the panel admits
+     * @param verbs   the record verbs the page offers beside the primary verb
      */
     private static PanelResource.@NonNull Builder<Listed> onward(PanelResource.@NonNull Builder<Listed> builder,
                                                               @NonNull List<String> related,
                                                               @NonNull List<String> shown,
                                                               @Nullable String putOnline,
-                                                              @Nullable Predicate<AccessContext> offered) {
+                                                              @Nullable Predicate<AccessContext> offered,
+                                                              @NonNull List<PanelAction<Listed>> verbs) {
         builder.navGroup(NavGroup.DEFAULT).navOrder(20).showsRowsOf(shown.toArray(String[]::new));
         List<RelatedPage> pages = new ArrayList<>();
         for (String slug : related) {
             pages.add(RelatedPage.toPeer(slug));
         }
         builder.relatedPages(pages.toArray(RelatedPage[]::new));
+        List<PanelAction<Listed>> actions = new ArrayList<>();
         if (putOnline != null) {
-            builder.actions(List.of(putOnlineAction(putOnline, offered)));
+            actions.add(putOnlineAction(putOnline, offered));
+        }
+        actions.addAll(verbs);
+        if (!actions.isEmpty()) {
+            builder.actions(actions);
         }
         return builder;
     }
@@ -211,8 +313,7 @@ public final class AppParts {
         } else {
             list.search(NAME.getName(), ADDRESS_TEXT.getName());
         }
-        return PanelResource.builder(id, HohenheimSlugs.APPS,
-                SubjectType.of(HohenheimIds.id("app"), Listed.class, app -> app.cells().key()))
+        return PanelResource.builder(id, HohenheimSlugs.APPS, AppDirectory.APP)
             .label(HohenheimMicrocopy.APP_LIST.of("plural"))
             .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             // The operator reads the data model it lists; a tenant reads their apps, never "sites, instances and
@@ -230,13 +331,16 @@ public final class AppParts {
             .health(ResourceHealth.of((app, access) -> app.cells().health()))
             .list(list.rowLink((app, request) -> switch (app) {
                 case App local -> local.target();
-                case HeldApp held -> null;
+                // A linked server's app opens this list's own page of it, drawn here from what that server told.
+                case HeldApp held -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.APPS, held.cells().key(),
+                    RecordOverview.SLUG);
             }).build())
-            // A linked server's app has no page here yet: its address answers as a page that does not exist, so the
-            // key loads this server's own apps alone.
+            // The list's own page is a linked server's app's; this server's app opens its record's page, so its key
+            // names nothing here. Read from the request's one read of the list, so a page of rows whose verbs each
+            // load their app reads nothing more per row.
             .reads(ResourceReads.<Listed>typed(app -> app.cells().key())
                 .load((key, access) -> apps(panelSlug, access).stream()
-                    .filter(app -> app instanceof App && app.cells().key().equals(key)).findFirst().orElse(null))
+                    .filter(app -> app instanceof HeldApp && app.cells().key().equals(key)).findFirst().orElse(null))
                 .values(AppParts::values)
                 .build()
                 .title(app -> Microcopy.literalOrNull(app.cells().name())));

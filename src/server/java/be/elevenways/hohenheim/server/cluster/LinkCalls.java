@@ -136,12 +136,20 @@ final class LinkCalls {
     /**
      * @param key     the key this server presents to the server it manages
      * @param locales the caller's languages, in order, as an Accept-Language header names them
-     * @return the answer of the server at {@code baseUrl} to its master carrying a tool call, in {@code body}
+     * @return the answer of the server at {@code baseUrl} to its master carrying a call, in {@code body}
      */
-    static @NonNull Answer tool(@NonNull String baseUrl, @NonNull String key, @NonNull Map<String, Object> body,
-                                @NonNull String locales) {
-        FetchRequest request = request(baseUrl, ClusterEndpoints.TOOL, body, key);
+    static @NonNull Answer carried(@NonNull String baseUrl, @NonNull String key, @NonNull Map<String, Object> body,
+                                   @NonNull String locales) {
+        FetchRequest request = request(baseUrl, ClusterEndpoints.CALL, body, key);
         return send(locales.isBlank() ? request : request.withHeader("Accept-Language", locales), toolFetcher());
+    }
+
+    /**
+     * @param key the key this server presents to its master
+     * @return the answer of the master at {@code baseUrl} to this server telling a state of a run it carried here
+     */
+    static @NonNull Answer run(@NonNull String baseUrl, @NonNull String key, @NonNull Map<String, Object> body) {
+        return call(baseUrl, ClusterEndpoints.RUN, body, key);
     }
 
     private static @NonNull Answer call(@NonNull String baseUrl, @NonNull Endpoint<?> endpoint,

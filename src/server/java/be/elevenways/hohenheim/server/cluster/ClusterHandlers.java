@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
 import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.code.CodeBlock;
@@ -23,6 +24,7 @@ import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.security.PermissionChecker;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.StoredRecordPrincipal;
+import be.elevenways.zenit.server.operation.CarriedOperations;
 import be.elevenways.zenit.server.peer.SharedRow;
 import be.elevenways.zenit.server.peer.SharedRows;
 import be.elevenways.zenit.server.peer.SharedRowsPage;
@@ -33,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Answers the calls of ClusterEndpoints: join (the code is the credential), and every other call (the link key is).
@@ -50,10 +53,11 @@ import java.util.Map;
  * this one manages may nudge it or be granted code numbers, or at joining the server a valid ticket of this one
  * names. A refusal answers the reason's code alone, never its diagnostic, and nothing of a row is ever logged.
  *
- * AIDEV-NOTE: "tool" is the one call that speaks for a person, so it answers this server's master alone, as
+ * AIDEV-NOTE: "call" is the one call that speaks for a person, so it answers this server's master alone, as
  * generations and rows do (401, then 403 for a server this one manages); the call runs on the master's word as the
- * person it names (ClusterToolCalls). A body that cannot be read is 400, an assistant connection this build does not
- * serve 404, and scopes not admitting the connection 403.
+ * person it names (ClusterToolCalls). A body that cannot be read is 400, a surface or a call this build does not
+ * serve 404, and scopes not admitting the surface 403. "run" is the opposite way, like "changed": only a server this
+ * one manages tells it a state of a run, and only of a run carried to that server (404 for any other).
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -121,7 +125,8 @@ public final class ClusterHandlers {
             return new JsonResult<>(Map.of("asked", true));
         });
         ClusterEndpoints.CODES.setHandler(ClusterHandlers::codes);
-        ClusterEndpoints.TOOL.setHandler(ClusterHandlers::tool);
+        ClusterEndpoints.CALL.setHandler(ClusterHandlers::call);
+        ClusterEndpoints.RUN.setHandler(ClusterHandlers::run);
         ClusterEndpoints.JOIN.setHandler(ClusterHandlers::join);
         ClusterEndpoints.STATUS.setHandler(conduit -> {
             Row row = LinkedServers.byKey(keyOf(conduit));
@@ -232,8 +237,8 @@ public final class ClusterHandlers {
         return new JsonResult<>(Map.of("blocks", ClusterCodes.blocksOnWire(blocks)));
     }
 
-    /** Runs a tool call this server's master carried, as the person it names; see the class note for each answer. */
-    private static @NonNull ActionResult<Object> tool(@NonNull Conduit conduit) {
+    /** Runs a call this server's master carried, as the person it names; see the class note for each answer. */
+    private static @NonNull ActionResult<Object> call(@NonNull Conduit conduit) {
         Row row = LinkedServers.byKey(keyOf(conduit));
         if (row == null) {
             return unknownKey(conduit);
@@ -246,21 +251,39 @@ public final class ClusterHandlers {
         if (asked == null) {
             return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
         }
-        ClusterToolCalls.Ran ran;
+        Map<String, Object> answer;
         try {
-            ran = ClusterToolCalls.runHere(row, Reader.READER.principal(row.get(LinkedServerModel.ID),
+            answer = ClusterToolCalls.runHere(row, Reader.READER.principal(row.get(LinkedServerModel.ID),
                 String.valueOf((Object) row.get(LinkedServerModel.NAME))), Reader.READER, asked, conduit);
         } catch (DomainRefusal refused) {
             return refusal(conduit, refused.reason());
         }
-        return switch (ran) {
-            case ClusterToolCalls.Answered answered ->
-                new JsonResult<>(Map.of("answer", ClusterToolCalls.wireOf(answered.response())));
-            case ClusterToolCalls.Unknown unknown -> {
-                conduit.setResponseStatus(404);
-                yield new JsonResult<>(Map.of("error", "unknown server"));
-            }
-        };
+        if (answer == null) {
+            conduit.setResponseStatus(404);
+            return new JsonResult<>(Map.of("error", "unknown call"));
+        }
+        return new JsonResult<>(Map.of("answer", answer));
+    }
+
+    /** Takes a state of a run this server carried to the server telling it; see the class note for each answer. */
+    private static @NonNull ActionResult<Object> run(@NonNull Conduit conduit) {
+        Row row = LinkedServers.byKey(keyOf(conduit));
+        if (row == null) {
+            return unknownKey(conduit);
+        }
+        if (LinkedServers.roleOf(row) != LinkRole.MANAGES) {
+            return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
+        }
+        Map<String, Object> body = bodyOf(conduit);
+        UUID invocation = body != null && body.get("invocation") instanceof String id ? Uuids.canonical(id) : null;
+        if (invocation == null || !(body.get("state") instanceof Map<?, ?> state)) {
+            return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
+        }
+        if (!CarriedOperations.relayed(ClusterRecords.peerKey(row), invocation, state)) {
+            conduit.setResponseStatus(404);
+            return new JsonResult<>(Map.of("error", "no such run"));
+        }
+        return new JsonResult<>(Map.of("told", true));
     }
 
     private static @NonNull ActionResult<Object> refused(@NonNull Conduit conduit, @NonNull JoinRefusal refusal) {

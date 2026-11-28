@@ -112,13 +112,25 @@ public final class ClusterEndpoints {
         .build();
 
     /**
-     * A master carries an assistant's tool call about this server's things, naming the person who asks by the sign-in
-     * both servers share: only its master may, and the call runs as that person's own account here.
+     * A master carries a call about this server's things (an assistant's tool call, a panel's operation), naming the
+     * person it speaks for and its word: only its master may, and the call runs here as that person, spoken for.
      */
-    public static final Endpoint<Object> TOOL = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("cluster_tool"))
+    public static final Endpoint<Object> CALL = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("cluster_call"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("tool").build())
+            .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("call").build())
+        .authenticatesItself()
+        .rateLimit(TOOL_LIMIT)
+        .build();
+
+    /**
+     * A managed server tells its master a state of a run a call the master carried there started: only a server this
+     * one manages may, and only of a run carried to it.
+     */
+    public static final Endpoint<Object> RUN = Endpoint.<Object>builder()
+        .identifier(HohenheimIds.id("cluster_run"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("cluster").addDelimiter().addStatic("run").build())
         .authenticatesItself()
         .rateLimit(TOOL_LIMIT)
         .build();

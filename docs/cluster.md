@@ -63,7 +63,8 @@ Linked servers are reached on the public internet only, unless the host declares
 | rows | `/api/cluster/rows` | the key of this server's master | one page of one kind's rows: `before`, `after` (the kind's generation around the page), `rows` (`key`, `code`, `title`, `document`) and `next` |
 | changed | `/api/cluster/changed` | the key of a server this one manages | `asked`; the master syncs that server |
 | codes | `/api/cluster/codes` | the key this server presents to its master; at joining also the master's `ticket` in the body | `blocks`: per prefix `prefix`, `first`, `last`; or `refusal` |
-| tool | `/api/cluster/tool` | the key of this server's master | `answer`: the tool's `text`, `error`, `images` (`data`, `mime_type`) and `structured`; or `refusal` |
+| call | `/api/cluster/call` | the key of this server's master | `answer`: the carried call's answer as its surface's data; or `refusal` |
+| run | `/api/cluster/run` | the key of a server this one manages | `told`; the run the master carried there takes the state |
 
 The join body carries `code`, the master's `name`, `base_url`, `token`, `build`, `key` (the key the managed
 server presents to the master) and `ticket` (see "One code per thing"). A join refusal answers one of `no_such_code`,
@@ -81,13 +82,20 @@ answers 401; a server this one manages, presenting its own valid key, answers 40
 server this one manages (codes also the server a valid ticket names) and 403 to its master. A refusal names its
 reason's code alone.
 
-A tool body carries `person` and `name` (the person as the master knows them), the master's word (core `MasterWord`):
+A call body carries `person` and `name` (the person as the master knows them), the master's word (core `MasterWord`):
 `permissions` (the declared permissions the caller holds there, see "Assistants"), `capabilities` (per model, the
-record capabilities the caller's key covers there) and `scopes` (those of the caller's key on the master),
-`server` (the assistant connection's name), `tool` and `arguments` as the assistant sent them; the master's
-`Accept-Language` carries the caller's languages. Tool answers only this server's master (401, then 403 as
-generations); a body it cannot read is 400, a connection this build does not serve 404, and scopes not admitting the
-connection 403. A tool call may take up to three minutes (a command run in an app answers within two).
+record capabilities the caller's credential covers there) and `scopes` (those of the caller's key on the master, none
+for a person signed in there), then `surface` and `call`: what is carried, as data of core's one carrier (`PeerCalls`).
+Surface `zenit:mcp_tool` is an assistant's tool call (`server`, `tool`, `arguments` as the assistant sent them; answer
+`text`, `error`, `images`, `structured`); surface `zenit:operation` is an operation of a panel's button (`operation`,
+`subject`, `invocation`, `relay`, and `surface`, the placement it was asked from on the master, which it runs under
+here; answer `done` and `run`, or `refusal` with `reason` and `words`), or a stop asked on the master of the run it
+started (`stop`: the invocation; answer `stopped`). The master's `Accept-Language` carries the caller's languages.
+Call answers only this server's master (401, then 403 as generations); a body it cannot read is 400, a surface or call
+this build does not serve 404, and scopes not admitting it 403. A call may take up to three minutes. A run a carried
+operation started tells the master every state it records (run: `invocation`, `state`), pushed as it happens, the
+latest one per run when several wait; only a server this one manages may, and only of a run carried to it (404
+otherwise).
 
 ## Checking each other
 

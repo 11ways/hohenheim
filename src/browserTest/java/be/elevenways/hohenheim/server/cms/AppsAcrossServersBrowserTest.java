@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkRole;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cluster.ClusterRecords;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.Uuids;
 import be.elevenways.protoblast.testsupport.browser.BoundedAssertions;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
@@ -40,7 +42,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * alone today, the day with it before) under the notice over the rows, and the Server filter offering every server,
  * this one first, uncounted, a silent one in the board's words.
  *
- * AIDEV-NOTE: it writes the list, then the list with its Server filter open, to build/apps-across-servers-screenshots:
+ * AIDEV-NOTE: it writes the list, the list with its Server filter open, a linked server's app page and a silent
+ * server's, to build/apps-across-servers-screenshots:
  * the evidence a landing compares with board FO119's Apps screens. The linked servers' told states are the master's own
  * app's facts under other names, kept as the master's sync keeps them, so every cell is drawn from real copy.
  *
@@ -74,6 +77,10 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             told(kuifje, own, 102, "kuifje-wiki");
             told(gaston, own, 201, "gaston-forum");
             told(haddock, own, 301, "haddock-docs");
+            AppFacts workload = new AppFacts(AppDirectory.Source.WORKLOAD, 103, "kuifje-api",
+                InstanceModel.KIND.getValues().get("hohenheim:docker_container").getLabel(), own.address(), "kuifje",
+                own.https(), own.health(), Now.instant().minus(Duration.ofHours(2)));
+            keep(kuifje, workload);
 
             // 2. One list: the master's app and both servers' apps, each under its server's name.
             navigateToApp("/admin/" + HohenheimSlugs.APPS);
@@ -131,6 +138,27 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                     "Kuifje");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("apps-server-filter.png"))
                 .setFullPage(true));
+
+            // 6. A linked server's workload opens the master's own page of it, drawn from what its server told: its
+            //    name, kind, host and server, the waiting tabs said in words, and that server's verbs offered.
+            navigateToApp("/admin/" + HohenheimSlugs.APPS + "/" + peerOf(kuifje) + "-" + workload.key() + "/page/"
+                + RecordOverview.SLUG);
+            waitForHydration();
+            String held = page.locator("body").textContent();
+            assertThat(held).as("step 6: Kuifje's workload by its told facts").contains("kuifje-api")
+                .contains("Kuifje").contains("kuifje").contains("Deploy").contains("Restart")
+                .contains("Logs, console, files, stats, backups, volumes, databases and history wait");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-page.png")).setFullPage(true));
+
+            // 7. A silent server's app page says since when it does not answer and offers nothing to do.
+            navigateToApp("/admin/" + HohenheimSlugs.APPS + "/" + peerOf(gaston) + "-website-201/page/"
+                + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.locator("body").textContent()).as("step 7: the silent server's app page")
+                .containsPattern("Gaston does not answer since \\d{1,2}:\\d{2}")
+                .contains("Nothing can be changed until Gaston answers.");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-silent.png"))
+                .setFullPage(true));
         } finally {
             Models.get(PeerRecordModel.class).find().where(PeerRecordModel.PEER.in(servers.stream()
                 .map(String::valueOf).toList())).delete();
@@ -181,14 +209,23 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
 
     /** Keeps an app's state as that server told it, as the master's sync keeps it: this server's facts renamed. */
     private static void told(UUID server, AppFacts own, int id, String name) {
-        AppFacts facts = new AppFacts(own.source(), id, name, own.kind(), own.address(), own.host(), own.https(),
-            own.health());
+        keep(server, new AppFacts(own.source(), id, name, own.kind(), own.address(), own.host(), own.https(),
+            own.health(), own.started()));
+    }
+
+    /** @return the key the master keeps a linked server's records under */
+    private static String peerOf(UUID server) {
+        return ClusterRecords.peerKey(Models.get(LinkedServerModel.class).findById(server));
+    }
+
+    /** Keeps the facts as the state that server told of one app, as the master's sync keeps it. */
+    private static void keep(UUID server, AppFacts facts) {
         Row row = Models.get(PeerRecordModel.class).createEmptyRow();
         row.set(PeerRecordModel.ID, Uuids.v7());
-        row.set(PeerRecordModel.PEER, ClusterRecords.peerKey(Models.get(LinkedServerModel.class).findById(server)));
+        row.set(PeerRecordModel.PEER, peerOf(server));
         row.set(PeerRecordModel.MODEL, AppStates.KIND.toString());
         row.set(PeerRecordModel.RECORD_KEY, facts.key());
-        row.set(PeerRecordModel.TITLE, name);
+        row.set(PeerRecordModel.TITLE, facts.name());
         row.set(PeerRecordModel.DOCUMENT, facts.document());
         row.set(PeerRecordModel.DIGEST, "planted");
         row.set(PeerRecordModel.FIRST_SEEN, Now.instant());

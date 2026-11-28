@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cluster;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.cluster.ClusterEndpoints;
@@ -36,7 +37,13 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.test.TestSessions;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationResult;
+import be.elevenways.zenit.common.operation.OperationRunModel;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
+import be.elevenways.zenit.common.operation.Operations;
 import be.elevenways.zenit.common.orm.code.CodeGrantModel;
 import be.elevenways.zenit.common.orm.code.RecordCodeBehaviour;
 import be.elevenways.zenit.common.orm.code.RecordCodeKinds;
@@ -68,10 +75,13 @@ import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.peer.CodeHomes;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.operation.OperationRun;
+import be.elevenways.zenit.server.operation.OperationRuns;
 import be.elevenways.zenit.server.peer.PeerRecords;
 import be.elevenways.zenit.server.peer.SharedRowsPage;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.CommittedWrites;
 import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.OutboundTlsStub;
@@ -97,6 +107,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -274,24 +285,27 @@ class LinkedServersJourneyTest {
             assertThat(told.get("source")).as("step 2: a website").isEqualTo("website");
             assertThat(((Map<?, ?>) told.get("health")).get("tone")).as("step 2: with Kuifje's verdict").isNotNull();
             //    The master's Apps list draws it itself from that state, its copy revived from the state's typed
-            //    wire: a row under Kuifje's name in the Server column that exists now a server is linked, opening
-            //    nothing; the Server filter offers both servers.
+            //    wire: a row under Kuifje's name in the Server column that exists now a server is linked, opening the
+            //    master's own page of it; the Server filter offers both servers.
             String listed = masterApps("later-site");
             assertThat(listed).as("step 2: the master's list names the server").contains("data-column=\"server\"")
                 .contains("\"filter.server\"");
             String laterRow = rowOf(listed, "later-site");
+            String heldPage = "/admin/" + HohenheimSlugs.APPS + "/" + peer + "-website-" + made + "/page/"
+                + RecordOverview.SLUG;
             assertThat(laterRow).as("step 2: the row names Kuifje").contains("Kuifje");
-            assertThat(laterRow).as("step 2: a linked server's row opens nothing here")
-                .doesNotContain("cms-row-link").doesNotContain("data-cms-row-opener");
+            assertThat(laterRow).as("step 2: a linked server's row opens the master's page of it").contains(heldPage);
             assertThat(titled(listed, OWN_SITE)).as("step 2: the search narrows the list to Kuifje's app").isNull();
             assertThat(titled(masterApps(OWN_SITE), OWN_SITE)).as("step 2: the master's own app beside it").isNotNull();
-            //    Kuifje's app typed by its address on the master is a page that does not exist here yet: never the
-            //    master's own app of that number, never a failure.
-            HttpResponse<String> typed = asAdministrator("/admin/" + HohenheimSlugs.APPS + "/" + peer + "-website-"
-                + made);
-            assertThat(typed.statusCode()).as("step 2: no page of Kuifje's app here yet").isEqualTo(404);
-            assertThat(typed.body()).as("step 2: and no app's page instead").doesNotContain("later-site")
-                .doesNotContain(OWN_SITE);
+            //    That page is drawn by the master from what Kuifje told: Kuifje's app under its name, its server named,
+            //    never the master's own app of that number; the tabs that show what runs on Kuifje say they wait, and
+            //    a website offers no carried verb.
+            HttpResponse<String> typed = asAdministrator(heldPage);
+            assertThat(typed.statusCode()).as("step 2: the master's page of Kuifje's app").isEqualTo(200);
+            assertThat(typed.body()).as("step 2: Kuifje's app, by Kuifje's facts").contains("later-site")
+                .contains("Kuifje").doesNotContain(OWN_SITE)
+                .contains("Logs, console, files, stats, backups, volumes, databases and history wait")
+                .doesNotContain("held_app_deploy").doesNotContain("held_app_restart");
             //    Its state settles: with nothing changed on Kuifje, two reads answer the same generations, so a
             //    transfer is never retried for a fact that moves by itself (a countdown, a "since").
             assertThat(bodyOf(LinkCalls.generations(CHILD_ADDRESS, masterKey)))
@@ -520,13 +534,13 @@ class LinkedServersJourneyTest {
         ForkedHohenheim kuifje = boot(directory, directory.resolve("kuifje.db"), true, reporter);
         relay.retarget(kuifje.port());
         try {
-            // 1. Kuifje is linked and holds an app; the master names Kuifje as where its code lives. A key of the
-            //    "Hohenheim assistant" preset connects the master's administrator to the master; Kuifje holds no
-            //    account of that person.
+            // 1. Kuifje is linked and holds an app that runs (on a daemon-free fake runtime of a host of its own); the
+            //    master names Kuifje as where its code lives. A key of the "Hohenheim assistant" preset connects the
+            //    master's administrator to the master; Kuifje holds no account of that person.
             add(codeOf(kuifje.ask("offer")));
             awaitSyncs();
             String peer = ClusterRecords.peerKey(only());
-            String[] app = after("app ", kuifje.ask("app carried-app")).split(" ");
+            String[] app = after("app ", kuifje.ask("fake-app carried-app")).split(" ");
             String appKey = app[0];
             String appCode = app[1];
             settle(kuifje);
@@ -611,6 +625,97 @@ class LinkedServersJourneyTest {
             assertThat(silent.error()).as("step 8: an error").isTrue();
             assertThat(silent.text()).as("step 8: in words").isEqualTo("Kuifje does not answer; nothing was changed.");
 
+            // 8. The master's list opens its own page of Kuifje's app, drawn from what Kuifje told alone: its name,
+            //    its host there and its server, never the master's own app of that number. The tabs that show what
+            //    runs on Kuifje say they wait, and the page offers Kuifje's Deploy, Roll back, Restart and Stop.
+            String listKey = peer + "-workload-" + appKey;
+            String appPage = "/admin/" + HohenheimSlugs.APPS + "/" + listKey + "/page/" + RecordOverview.SLUG;
+            assertThat(rowOf(masterApps("carried-app"), "carried-app")).as("step 8: its row opens that page")
+                .contains(appPage);
+            HttpResponse<String> shown = asAdministrator(appPage);
+            assertThat(shown.statusCode()).as("step 8: the master's page of Kuifje's app").isEqualTo(200);
+            assertThat(shown.body()).as("step 8: by Kuifje's facts").contains("carried-app")
+                .contains(ForkedHohenheim.FAKE_HOST).contains("Kuifje")
+                .contains("Logs, console, files, stats, backups, volumes, databases and history wait")
+                .contains("held_app_deploy").contains("held_app_rollback").contains("held_app_restart")
+                .contains("held_app_stop");
+            Row twin = Models.get(InstanceModel.class).findById(Integer.parseInt(appKey));
+            if (twin != null) {
+                assertThat(shown.body()).as("step 8: never the master's own app of that number")
+                    .doesNotContain(">" + twin.get(InstanceModel.NAME) + "<");
+            }
+            //    Its reads stay flat: the same statements on the kept records and the links with one linked server
+            //    as with three.
+            DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(PeerRecordModel.class)
+                .getResolvedDatasource());
+            DatasourceProbe.Statements oneServer = probe.statementsOf(() -> asAdministrator(appPage));
+            List<UUID> planted = new ArrayList<>();
+            DatasourceProbe.Statements threeServers;
+            try {
+                planted.add(plant("gaston", "https://gaston.cluster.test"));
+                planted.add(plant("lagaffe", "https://lagaffe.cluster.test"));
+                threeServers = probe.statementsOf(() -> asAdministrator(appPage));
+            } finally {
+                Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.in(planted)).delete();
+            }
+            for (String table : List.of(PeerRecordModel.TABLE, "linked_servers")) {
+                assertThat(threeServers.executedNaming(table)).as("step 8: the page reads %s as often for three"
+                    + " servers", table).isEqualTo(oneServer.executedNaming(table)).isPositive();
+            }
+
+            // 9. Restart from that page restarts it ON Kuifje, as the person: Kuifje's record says it started again,
+            //    later, and Kuifje's history names the person through the master.
+            Instant startedBefore = startedOn(kuifje, appKey, "step 9");
+            assertThat(kuifje.ask("offset 1")).isEqualTo("ok");
+            invokeHeld(kuifje, "held_app_restart", listKey, Uuids.v7());
+            Instant restarted = startedOn(kuifje, appKey, "step 9");
+            assertThat(restarted).as("step 9: restarted on Kuifje").isAfter(startedBefore);
+            assertThat(kuifje.ask("last-action")).as("step 9: Kuifje names the person through the master")
+                .isEqualTo("action " + ZenitPrincipalKind.SPOKEN_FOR.id() + " " + ZenitPrincipalKind.LINKED_INSTALL.id()
+                    + " " + person);
+
+            // 10. The same restart asked of the master's assistant goes through the same carrier and runs on Kuifje.
+            assertThat(kuifje.ask("offset 2")).isEqualTo("ok");
+            McpHttpSession.Answer power = master.call("power", Map.of("code", appCode, "action", "restart"));
+            assertThat(power.error()).as("step 10: " + power.text()).isFalse();
+            assertThat(startedOn(kuifje, appKey, "step 10")).as("step 10: restarted on Kuifje").isAfter(restarted);
+            assertThat(kuifje.ask("offset 0")).isEqualTo("ok");
+
+            // 11. Deploy from the page runs on Kuifje in the background, followed by the master's own run. A stop the
+            //     person asks where they watch it, on the master, reaches Kuifje's run at once; the master's run ends
+            //     as Kuifje's ends.
+            assertThat(kuifje.ask("hold-start")).isEqualTo("ok");
+            UUID deploying = Uuids.v7();
+            Long run = invokeHeld(kuifje, "held_app_deploy", listKey, deploying).run();
+            assertThat(run).as("step 11: the master runs it as a run of its own").isNotNull();
+            assertThat(OperationRuns.requestStop(run, TenantConduits.operator())).as("step 11: stopped on the master")
+                .isTrue();
+            assertThat(kuifje.ask("run-stop " + deploying)).as("step 11: the stop reached Kuifje's run")
+                .isEqualTo("run-stop true");
+            assertThat(kuifje.ask("release-start")).isEqualTo("ok");
+            OperationRun ended = CommittedWrites.awaitValue(OperationRunModel.MODEL_ID, Duration.ofSeconds(60), () -> {
+                OperationRun now = OperationRuns.of(run, TenantConduits.operator());
+                return now != null && now.status().isTerminal() ? now : null;
+            });
+            assertThat(ended).as("step 11: the master's run ended").isNotNull();
+            assertThat(ended.status()).as("step 11: as Kuifje's did").isEqualTo(OperationRunStatus.SUCCEEDED);
+            assertThat(ended.stepsDone()).as("step 11: its step done").isEqualTo(1L);
+
+            // 12. Kuifje does not answer: its app's page says since when and offers none of Kuifje's verbs.
+            relay.retarget(closedPort());
+            LinkedServers.sweep();
+            awaitSyncs();
+            String silentPage = asAdministrator(appPage).body();
+            relay.retarget(kuifje.port());
+            assertThat(silentPage).as("step 12: the page says Kuifje does not answer")
+                .contains("Kuifje does not answer since")
+                .contains("Nothing can be changed until Kuifje answers.");
+            assertThat(silentPage).as("step 12: and offers no verb").doesNotContain("held_app_deploy")
+                .doesNotContain("held_app_restart").doesNotContain("held_app_stop");
+            LinkedServers.sweep();
+            awaitSyncs();
+            assertThat(stateOf(only())).as("step 12: Kuifje answers again").isNotEqualTo(LinkState.NOT_ANSWERING);
+
             assertThat(remove(only())).isEqualTo(LinkedServers.Removal.LEFT.token());
         } finally {
             kuifje.close();
@@ -619,6 +724,28 @@ class LinkedServersJourneyTest {
 
     private static String[] bearer(String key) {
         return new String[] {"Authorization", "Bearer " + key};
+    }
+
+    /** @return when what runs of Kuifje's app last started, as Kuifje's record says, asserting that it runs */
+    private static Instant startedOn(ForkedHohenheim kuifje, String appKey, String step) throws Exception {
+        String[] started = after("started ", kuifje.ask("started " + appKey)).split(" ");
+        assertThat(started[0]).as(step + ": it runs on Kuifje").isEqualTo(InstanceModel.STATUS_RUNNING);
+        return Instant.parse(started[1]);
+    }
+
+    /** @return the outcome of a verb the master's page of a linked server's app offers, asked by its administrator */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static OperationResult<?> invokeHeld(ForkedHohenheim kuifje, String verb, String key, UUID invocation) {
+        Operation operation = Operations.registry().get(HohenheimIds.id(verb));
+        assertThat(operation).as("the page's %s", verb).isNotNull();
+        try {
+            return OperationPipeline.invoke(OperationRequest.of(operation, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(TenantConduits.operator()).subjectKeys(List.of(key)).invocation(invocation));
+        } catch (DomainRefusal refused) {
+            throw new AssertionError(verb + " was refused: " + TenantConduits.operator().text(refused.shown())
+                + "\nKuifje said:\n" + kuifje.tail(),
+                refused);
+        }
     }
 
     /** @return Kuifje's current allocated codes */

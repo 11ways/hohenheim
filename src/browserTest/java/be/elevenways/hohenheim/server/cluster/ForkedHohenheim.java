@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkState;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
@@ -19,8 +20,11 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.instance.FakeNativeDaemons;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -28,12 +32,15 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.testsupport.thread.ThreadWaits;
+import be.elevenways.zenit.ai.server.mcp.host.McpCarriedCalls;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.test.TestSessions;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.SecretResult;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -60,6 +67,7 @@ import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.test.support.CommittedWrites;
 import be.elevenways.zenit.test.support.MigratedDatabase;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.OutboundTlsStub;
@@ -85,10 +93,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A second, real Hohenheim in a child JVM on this JVM's classpath, for the journeys of two linked servers: its own
@@ -107,6 +118,9 @@ final class ForkedHohenheim implements AutoCloseable {
 
     /** Every line the child answers starts with this. */
     private static final String MARK = "FORKED_HOHENHEIM ";
+
+    /** The host of Kuifje's own the fake runtime's apps run on ("fake-app"). */
+    static final String FAKE_HOST = "kuifje-fake-host";
 
     /** The heap a whole Hohenheim runtime with every role off boots in. */
     private static final long HEAP = 512L * 1024 * 1024;
@@ -248,7 +262,8 @@ final class ForkedHohenheim implements AutoCloseable {
         this.answers.add("gone");
     }
 
-    private @NonNull String tail() {
+    /** @return the child's last lines of output, for a failure to name what it said */
+    @NonNull String tail() {
         synchronized (this.tail) {
             return String.join("\n", this.tail);
         }
@@ -262,6 +277,9 @@ final class ForkedHohenheim implements AutoCloseable {
 
         /** The other server's plain HTTP port. */
         private static int masterPort;
+
+        /** The latch a held start waits on ("hold-start"), null while none is held. */
+        private static final AtomicReference<CountDownLatch> HELD_START = new AtomicReference<>();
 
         public static void main(String[] args) throws Exception {
             Path database = Path.of(args[0]);
@@ -379,6 +397,59 @@ final class ForkedHohenheim implements AutoCloseable {
                     Models.get(InstanceModel.class).save(app);
                     String key = String.valueOf((Object) app.get(InstanceModel.ID));
                     yield "app " + key + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key);
+                }
+                // "fake-app NAME" deploys an app on the daemon-free fake runtime of a host of Kuifje's own, so it runs:
+                // "app <id> <code>".
+                case "fake-app" -> {
+                    FakeNativeDaemons.register();
+                    Row host = Models.get(HostModel.class).findByName(FAKE_HOST);
+                    int hostId = host != null ? host.get(HostModel.ID) : HostFixtures.admittedIncusHost(FAKE_HOST);
+                    Row app = Models.get(InstanceModel.class).createEmptyRow();
+                    app.set(InstanceModel.NAME, words[1]);
+                    app.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
+                    app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
+                    app.set(InstanceModel.HOST_ID, hostId);
+                    Models.get(InstanceModel.class).save(app);
+                    int id = app.get(InstanceModel.ID);
+                    new InstanceService().deploy(id);
+                    yield "app " + id + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, String.valueOf(id));
+                }
+                // "started ID": "started <status> <when what runs last started>" of the app's record here.
+                case "started" -> {
+                    Row app = Models.get(InstanceModel.class).find().noCache()
+                        .where(InstanceModel.ID.eq(Integer.parseInt(words[1]))).first();
+                    yield app == null ? "none" : "started " + app.get(InstanceModel.STATUS) + " "
+                        + app.get(InstanceModel.STARTED_AT);
+                }
+                // "hold-start": the next start on the fake runtime waits there until "release-start".
+                case "hold-start" -> {
+                    CountDownLatch latch = new CountDownLatch(1);
+                    HELD_START.set(latch);
+                    FakeNativeDaemons.DURING_START.set(() -> ThreadWaits.hold(latch));
+                    yield "ok";
+                }
+                case "release-start" -> {
+                    CountDownLatch latch = HELD_START.getAndSet(null);
+                    if (latch != null) {
+                        latch.countDown();
+                    }
+                    yield "ok";
+                }
+                // "run-stop INVOCATION": whether a stop was asked of the run carried here under that invocation,
+                // waiting for it as its row is written.
+                case "run-stop" -> {
+                    UUID invocation = UUID.fromString(words[1]);
+                    try {
+                        yield "run-stop " + CommittedWrites.await(OperationRunModel.MODEL_ID, Duration.ofSeconds(30),
+                            () -> {
+                                Row run = Models.get(OperationRunModel.class).find().noCache()
+                                    .where(OperationRunModel.INVOCATION_ID.eq(invocation)).first();
+                                return run != null && run.get(OperationRunModel.STOP_REQUESTED_AT) != null;
+                            });
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        yield "error interrupted";
+                    }
                 }
                 // "code MODEL KEY": the record's current code here.
                 case "code" -> "code " + RecordCodes.codeUnjudged(model(words[1]), words[2]);
@@ -527,10 +598,10 @@ final class ForkedHohenheim implements AutoCloseable {
                     body.put("name", "Somebody");
                     body.put("permissions", List.of("*"));
                     body.put("scopes", List.of("mcp:hohenheim", "*"));
-                    body.put("server", "hohenheim");
-                    body.put("tool", "read");
-                    body.put("arguments", Map.of("codes", List.of(words[1])));
-                    LinkCalls.Answer answer = LinkCalls.tool(master.get(LinkedServerModel.BASE_URL),
+                    body.put("surface", McpCarriedCalls.SURFACE.toString());
+                    body.put("call", Map.of("server", "hohenheim", "tool", "read",
+                        "arguments", Map.of("codes", List.of(words[1]))));
+                    LinkCalls.Answer answer = LinkCalls.carried(master.get(LinkedServerModel.BASE_URL),
                         master.get(LinkedServerModel.LINK_KEY), body, "en");
                     yield "status " + (answer instanceof LinkCalls.Answered answered ? answered.status() : -1);
                 }

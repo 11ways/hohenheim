@@ -203,15 +203,17 @@ public final class InstanceOverview {
     }
 
     /**
-     * The Details card: the app's verdict as its Status with how old the stored status is, the kind, and (for the
-     * operator) the host.
+     * The Details card: the app's facts every app page leads with ({@link AppOverview#identity}, through the one
+     * facts source), then what only its record here says: its install, how old the stored status is, its budget,
+     * databases, image lines and backups.
      *
-     * AIDEV-NOTE: the Status is the band's verdict (AppHealth), never the stored status token: a shop once read "Cannot
+     * AIDEV-NOTE: the Status is the verdict (AppHealth), never the stored status token: a shop once read "Cannot
      * start yet" in the band beside a red "Error" here, an older failed start the host's refusal had since overtaken.
      *
      * AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name is the machine's identity and
      * the link carries its numeric server id, which is the id every host-scoped admin route is keyed on. A tenant is
-     * told WHAT their workload is doing, never WHERE it runs; the censoring is the fact simply NOT BEING ADDED.
+     * told WHAT their workload is doing, never WHERE it runs; the censoring is the fact simply NOT BEING ADDED (the
+     * delegated panel's facts hold no host).
      *
      * @param runtime the row whose status speaks for its runtime: an application's serving release, else itself
      */
@@ -220,20 +222,10 @@ public final class InstanceOverview {
                                                    @NonNull AccessContext viewer) {
         LocaleChain locales = viewer.conduit().getLocales();
         MessageResolver resolver = viewer.conduit().getMessageResolver();
-        List<WidgetFact> facts = new ArrayList<>();
-        RecordHealth reading = AppHealth.instanceReading(instance, delegated, viewer).health();
-        HealthCellState verdict = HealthCellState.of(reading, viewer);
-        // The verdict's one word ("Working"), never its headline: the band above says the sentence ("Live at
-        // https://..."), which as a pill outgrew this narrow card. An unknown tone has no word of its own, so its
-        // short headline ("Not deployed yet") speaks, agreeing with the band (AppParts.stateWord).
-        facts.add(WidgetFact.badge(AppOverview.text("state", locales, resolver),
-            new WidgetBadge(AppParts.stateWord(reading).resolve(locales, resolver), verdict.variant(), null,
-                verdict.icon(), true)));
-        Object kind = instance.get(InstanceModel.KIND);
-        if (kind != null) {
-            facts.add(WidgetFact.badge(AppOverview.text("kind", locales, resolver),
-                WidgetBadge.of(InstanceModel.KIND, kind, locales, resolver)));
-        }
+        List<WidgetFact> facts = new ArrayList<>(AppOverview.identity(
+            AppDirectory.cellsOf(AppDirectory.Source.WORKLOAD, instance, viewer), delegated ? null
+                : CmsRoutes.subpage(panelSlug, HohenheimSlugs.HOSTS, serverId, RecordOverview.SLUG).toUrl(), null,
+            viewer));
         // The install line only while there IS an install lifecycle (InstanceModel.isNotableInstallState); "no
         // install step" on every record is the clutter this card exists to avoid.
         Object installState = instance.get(InstanceModel.INSTALL_STATE);
@@ -247,20 +239,6 @@ public final class InstanceOverview {
         // deliberately: reading it costs nothing, while dialling the daemon per render is
         // the thing the disk gauge already refuses to do.
         facts.add(statusConfirmation(runtime, locales, resolver));
-        // How long it has run ("Running for 2 hours"): since the last start of what runs, stamped on its record
-        // (InstanceModel.STARTED_AT); a failed start since clears it, so an old start never shows beside it.
-        Instant started = InstanceModel.STATUS_RUNNING.equals(runtime.get(InstanceModel.STATUS))
-            ? runtime.get(InstanceModel.STARTED_AT) : null;
-        if (started != null) {
-            facts.add(WidgetFact.instant(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("started")
-                .resolve(locales, resolver), started.toString()));
-        }
-        if (!delegated) {
-            facts.add(WidgetFact.link(
-                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host").resolve(locales, resolver),
-                HostModel.nameOf(serverId),
-                CmsRoutes.subpage(panelSlug, HohenheimSlugs.HOSTS, serverId, RecordOverview.SLUG).toUrl()));
-        }
         if (!delegated) {
             WidgetFact quota = quotaFact(instance, panelSlug, locales, resolver);
             if (quota != null) {

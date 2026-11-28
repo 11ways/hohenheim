@@ -7,6 +7,11 @@ import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
 import be.elevenways.hohenheim.app.AppProtection;
 import be.elevenways.hohenheim.model.*;
+import be.elevenways.hohenheim.server.cluster.LinkedServers;
+import be.elevenways.hohenheim.server.cms.AppDirectory.App;
+import be.elevenways.hohenheim.server.cms.AppDirectory.Cells;
+import be.elevenways.hohenheim.server.cms.AppDirectory.HeldApp;
+import be.elevenways.hohenheim.server.cms.AppDirectory.Listed;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
@@ -16,6 +21,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
@@ -29,10 +35,13 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.AlertVariant;
+import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
+import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
@@ -52,14 +61,21 @@ import java.util.Set;
 import static be.elevenways.hohenheim.server.cms.CmsSupport.opens;
 
 /**
- * The ONE composition of an app's overview, drawn by both of its record pages (an instance's, and a site's when it
- * serves no workload of its own): Addresses, Protection and what the workload uses in the wide column, Details and
- * Recent in the narrow one, each a framework card ({@link CardWidget}). The record's actions are the record heading's
- * (zenitcms:record-head) and the verdict is the resource's health part ({@link AppHealth}), the page's first band.
+ * The ONE composition of an app's overview, drawn by each of its pages (an instance's, a site's when it serves no
+ * workload of its own, and the Apps list's page of a linked server's app): Addresses, Protection and what the workload
+ * uses in the wide column, Details and Recent in the narrow one, each a framework card ({@link CardWidget}). The
+ * record's actions are the record heading's (zenitcms:record-head) and the verdict is the resource's health part
+ * ({@link AppHealth}), the page's first band.
  *
  * AIDEV-NOTE: every card READS the facts other surfaces own (certificate coverage, the protected-path invariant, the
- * activity source), so the overview, the list columns and the health band say the same thing. The delegated panel
- * draws the same composition; the host and the audit log are never added there (see InstanceOverview).
+ * activity source), so the overview, the list columns and the health band say the same thing. The Details card leads
+ * with the app's facts ({@link #identity}): for this server's record read through the one facts source
+ * ({@link AppDirectory#cellsOf}), for a linked server's app what that server told, never this process's fact for its
+ * id. A card only this server's own record can fill (Resources, Recent, the record's own lines) is not drawn for a
+ * linked server's app. The delegated panel draws the same composition; the host and the audit log are never added
+ * there (see InstanceOverview).
+ * AIDEV-NOTE: localized content: the copy is the reader's (a told kind, verdict and HTTPS words revive as copy); the
+ * name, host, server and addresses are content.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -410,12 +426,8 @@ final class AppOverview {
         LocaleChain locales = conduit.getLocales();
         MessageResolver resolver = conduit.getMessageResolver();
         String panelSlug = CmsSupport.panelSlug(conduit);
-        List<WidgetFact> facts = new ArrayList<>();
-        facts.add(WidgetFact.of(text("state", locales, resolver),
-            text(Boolean.TRUE.equals(site.get(SiteModel.ENABLED)) ? "switched_on" : "switched_off", locales,
-                resolver)));
-        facts.add(WidgetFact.of(text("kind", locales, resolver),
-            SiteParts.upstreamLabel(site).resolve(locales, resolver)));
+        List<WidgetFact> facts = new ArrayList<>(identity(AppDirectory.cellsOf(AppDirectory.Source.WEBSITE, site,
+            access), null, null, access));
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance != null) {
@@ -432,6 +444,103 @@ final class AppOverview {
         return facts;
     }
 
+    // -- the facts every app page leads with ------------------------------------------
+
+    /**
+     * The Details lines every app page leads with, drawn from the app's facts alone: its state in its verdict's one
+     * word, its kind, the host it runs on, the linked server it lives on, and since when what runs started.
+     *
+     * @param hostUrl the host's page, null where the reader opens none here (a linked server's host, a tenant)
+     * @param server  the name of the linked server it lives on, null for this server's own
+     */
+    static @NonNull List<WidgetFact> identity(AppDirectory.@NonNull Cells cells, @Nullable String hostUrl,
+                                              @Nullable String server, @NonNull AccessContext access) {
+        List<WidgetFact> facts = new ArrayList<>();
+        // The verdict's one word ("Working"), never its headline: the band above says the sentence ("Live at
+        // https://..."), which as a pill outgrew this narrow card. An unknown tone has no word of its own, so its
+        // short headline ("Not deployed yet") speaks, agreeing with the band (AppParts.stateWord).
+        HealthCellState verdict = HealthCellState.of(cells.health(), access);
+        facts.add(WidgetFact.badge(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("state")),
+            new WidgetBadge(access.text(AppParts.stateWord(cells.health())), verdict.variant(), null, verdict.icon(),
+                true)));
+        if (!cells.kind().isEmpty()) {
+            facts.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("kind")), cells.kind()));
+        }
+        if (cells.host() != null) {
+            String label = access.text(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host"));
+            facts.add(hostUrl != null ? WidgetFact.link(label, cells.host(), hostUrl)
+                : WidgetFact.of(label, cells.host()));
+        }
+        if (server != null) {
+            facts.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_LIST.of("server_column")), server));
+        }
+        // How long it has run ("Running for 2 hours"): since the last start of what runs, null while it does not.
+        if (cells.started() != null) {
+            facts.add(WidgetFact.instant(access.text(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("started")),
+                cells.started().toString()));
+        }
+        return facts;
+    }
+
+    /**
+     * The overview of the Apps list's own page ({@link AppParts}), which opens for a linked server's app: the same
+     * composition, drawn from what that server told alone.
+     */
+    static @NonNull RecordOverview<Listed> listedTab() {
+        return RecordOverview.<Listed>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
+            .withoutFields()
+            .widgets(AppOverview::listedWidgets);
+    }
+
+    private static @NonNull WidgetTree listedWidgets(@NonNull Listed app, @NonNull AccessContext access) {
+        return switch (app) {
+            case App local -> compose(List.of(), List.of(), List.of(details(identity(local.cells(), null, null,
+                access))));
+            case HeldApp held -> heldWidgets(held, access);
+        };
+    }
+
+    private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull AccessContext access) {
+        Cells cells = app.cells();
+        String server = app.held().server();
+        List<WidgetInstance> top = new ArrayList<>();
+        if (app.held().silent()) {
+            // The board's words (FO119, "App page while its server does not answer").
+            Instant lastSeen = app.held().lastSeen();
+            Microcopy since = lastSeen == null
+                ? HohenheimMicrocopy.HELD_APP.of("held_app_silent_never").withArg("server", server)
+                : HohenheimMicrocopy.HELD_APP.of("held_app_silent_since").withArg("server", server)
+                    .withArg("since", lastSeen).withArg("day", AppDirectory.recentDay(access.getReader(), lastSeen));
+            top.add(notice(AlertVariant.WARNING, access.text(since), access.text(HohenheimMicrocopy.HELD_APP
+                .of("held_app_silent_body").withArg("server", server).withArg("master", LinkedServers.ownName()))));
+        }
+        top.add(notice(AlertVariant.INFO, access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs_title")),
+            access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs").withArg("server", server))));
+
+        // Its addresses as its server told them: the main one with what HTTPS gives it, and how many more it has.
+        List<WidgetFact> addresses = new ArrayList<>();
+        if (cells.address() != null && cells.address().primary() != null) {
+            addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.HELD_APP.of("held_app_main_address")),
+                cells.address().primary()));
+            if (cells.https() != null) {
+                addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_LIST.of("https")),
+                    access.text(cells.https().label())));
+            }
+            if (cells.address().moreCount() > 0) {
+                addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.HELD_APP.of("held_app_also")),
+                    access.text(HohenheimMicrocopy.HELD_APP.of("held_app_more_addresses")
+                        .withArg("count", cells.address().moreCount()))));
+            }
+        }
+        return compose(top, List.of(CardWidget.ofFacts(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), addresses)),
+            List.of(details(identity(cells, null, server, access))));
+    }
+
+    private static @NonNull WidgetInstance notice(@NonNull AlertVariant variant, @NonNull String title,
+                                                  @NonNull String body) {
+        return new WidgetInstance(AlertWidget.ID, Map.of("variant", variant.token())).withData(NoticeData.of(title,
+            body));
+    }
     // -- helpers ----------------------------------------------------------------------
 
     private static @NonNull String listName(@Nullable Integer accessListId) {

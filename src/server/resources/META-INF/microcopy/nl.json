@@ -21786,5 +21786,14 @@
   "added_on": {"text": "{$kind}, toegevoegd op {$at :date}", "scope": "backup_target"},
   "keeps_no_dumps_yet": {"text": "Zijn dumps, nog geen", "scope": "backup_target"},
   "back_up_own_target_missing": {"text": "De opslagplaats die deze database voor zijn dumps koos, bestaat niet meer. Kies een andere in het formulier.", "scope": "database"},
-  "database_dumps_kept_positive": {"text": "Een database bewaart minstens één dump. Laat het leeg om het aantal van de server te bewaren.", "scope": "violations"}
+  "database_dumps_kept_positive": {"text": "Een database bewaart minstens één dump. Laat het leeg om het aantal van de server te bewaren.", "scope": "violations"},
+  "held_app_started_toast": {"text": "{$name} is gestart", "scope": "held_app"},
+  "held_app_silent_never": {"text": "{$server} heeft nooit geantwoord.", "scope": "held_app"},
+  "held_app_silent_since": {"text": ".match {$day :string}\ntoday {{{$server} antwoordt niet sinds {$since :time}.}}\n* {{{$server} antwoordt niet sinds {$since :datetime}.}}", "scope": "held_app"},
+  "held_app_silent_body": {"text": "Dit is wat {$master} van deze app onthoudt. Er kan niets veranderd worden tot {$server} antwoordt.", "scope": "held_app"},
+  "held_app_waiting_tabs_title": {"text": "Logs, console, bestanden, statistieken, back-ups, volumes, databases en geschiedenis wachten", "scope": "held_app"},
+  "held_app_waiting_tabs": {"text": "Ze tonen wat op {$server} draait en worden nog niet naar deze server gebracht. Open ze intussen op {$server}.", "scope": "held_app"},
+  "held_app_main_address": {"text": "Hoofdadres", "scope": "held_app"},
+  "held_app_also": {"text": "Ook", "scope": "held_app"},
+  "held_app_more_addresses": {"text": ".match {$count :integer}\none {{nog 1 adres}}\n* {{nog {$count :integer} adressen}}", "scope": "held_app"}
 }

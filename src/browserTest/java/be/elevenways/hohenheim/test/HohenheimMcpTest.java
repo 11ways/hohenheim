@@ -128,7 +128,11 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:confirm_host_key", "hohenheim:confirm_incus_cert", "hohenheim:create_game_domain",
         "hohenheim:create_site", "hohenheim:declare_volume", "hohenheim:delete_dns_record",
         "hohenheim:delete_schedule_step", "hohenheim:dyndns_revoke",
-        "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record", "hohenheim:lift_ban",
+        "hohenheim:dyndns_token", "hohenheim:edit_remote_dns_record",
+        // A linked server's app's verbs on the master's page: an assistant reaches the same operation of that server
+        // through its own tool, the call carried there by the app's code (CarriedOperations.over).
+        "hohenheim:held_app_deploy", "hohenheim:held_app_restart", "hohenheim:held_app_rollback",
+        "hohenheim:held_app_start", "hohenheim:held_app_stop", "hohenheim:lift_ban",
         "hohenheim:linked_server_add", "hohenheim:linked_server_check", "hohenheim:linked_server_offer_join",
         "hohenheim:linked_server_remove", "hohenheim:manage_update_site",
         "hohenheim:open_framebuffer", "hohenheim:open_shell",

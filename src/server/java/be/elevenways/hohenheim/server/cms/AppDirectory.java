@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.*;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -25,6 +27,7 @@ import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -32,6 +35,7 @@ import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -101,6 +105,20 @@ final class AppDirectory {
     }
 
     /**
+     * An app as the Apps list and its page name it: by its list key, a linked server's behind that server's key.
+     *
+     * AIDEV-NOTE: its subjects without a viewer (OperationHandlers.loader) are the linked servers' apps alone, worded
+     * in the default language: the operations on an app are carried to the server it lives on (AppParts.carried), and
+     * this server's own app is the subject of its record's own operations, never of this type's.
+     */
+    static final SubjectType<Listed> APP = SubjectType.of(HohenheimIds.id("app"), Listed.class,
+        app -> app.cells().key());
+
+    static {
+        OperationHandlers.loader(APP, key -> AppStates.held(key, Wording.of(AccessContext.anonymous())));
+    }
+
+    /**
      * One app as a list draws it: this server's, opening its record page ({@link App}), or a linked server's as that
      * server last told it, opening nothing here yet ({@link HeldApp}).
      */
@@ -124,15 +142,17 @@ final class AppDirectory {
      *                    words; null without an exact address
      * @param health      the verdict its own record page leads with; an app of this server's offers its fixes on the
      *                    record it speaks for, a told one carries none
+     * @param started     when what runs last started, null while nothing runs
      */
     record Cells(@NonNull String key, @Nullable Source source, int id, @NonNull String name, @NonNull String kind,
                  @Nullable SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-                 @Nullable StateLineCell https, @NonNull RecordHealth health) {
+                 @Nullable StateLineCell https, @NonNull RecordHealth health, @Nullable Instant started) {
 
         private static @NonNull Cells of(@NonNull String key, @NonNull AppFacts facts, @Nullable StateLineCell https,
                                          @NonNull RecordHealth health, @NonNull Wording words) {
             return new Cells(key, facts.source(), facts.id(), facts.name(), words.say(facts.kind()), facts.address(),
-                facts.address() == null ? null : facts.address().primary(), facts.host(), https, health);
+                facts.address() == null ? null : facts.address().primary(), facts.host(), https, health,
+                facts.started());
         }
     }
 
@@ -194,7 +214,8 @@ final class AppDirectory {
                                            @NonNull Wording words) {
             RecordHealth unread = new RecordHealth(HealthTone.UNKNOWN, HohenheimMicrocopy.APP_LIST.of("held_unreadable")
                 .withArg("server", held.server()), null, List.of(), null);
-            Cells cells = new Cells(held.peer() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread);
+            Cells cells = new Cells(held.peer() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread,
+                null);
             return new HeldApp(cells, held);
         }
     }
@@ -396,6 +417,8 @@ final class AppDirectory {
 
         List<Located> apps = new ArrayList<>();
         Function<Row, RecordHealth> workloadHealth = AppHealth.instances(delegated).read(instances, access);
+        // Since when what runs started: an application's serving release, which its own record never is.
+        Map<Integer, Row> runtimes = ApplicationReleases.runtimeRows(instances);
         for (Row instance : instances) {
             int id = instance.get(InstanceModel.ID);
             List<Row> served = servingSites.getOrDefault(id, List.of());
@@ -411,7 +434,8 @@ final class AppDirectory {
             apps.add(new Located(new AppFacts(Source.WORKLOAD, id,
                 String.valueOf((Object) instance.get(InstanceModel.NAME)), kindOf(instance), address,
                 delegated ? null : HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)),
-                mainHttps(names, served, working, certificates, access, panelSlug), workloadHealth.apply(instance)),
+                mainHttps(names, served, working, certificates, access, panelSlug), workloadHealth.apply(instance),
+                started(runtimes.getOrDefault(id, instance))),
                 InstanceParts.recordRoute(panelSlug, instance, null)));
         }
 
@@ -424,7 +448,7 @@ final class AppDirectory {
             apps.add(new Located(new AppFacts(Source.WEBSITE, id, String.valueOf((Object) site.get(SiteModel.NAME)),
                 SiteParts.upstreamLabel(site), address, websiteHost(site, servedBy),
                 mainHttps(names, List.of(site), working, certificates, access, panelSlug),
-                websiteHealth.apply(site)), SiteParts.recordRoute(panelSlug, id)));
+                websiteHealth.apply(site), null), SiteParts.recordRoute(panelSlug, id)));
         }
 
         Function<Row, RecordHealth> stackHealth = AppHealth.stacks().read(stacks, access);
@@ -435,10 +459,33 @@ final class AppDirectory {
                 HohenheimMicrocopy.APP_LIST.of("stack_kind").withArg("count", members.getOrDefault(id, 0L)),
                 new SiteHostnamesCell(null, 0),
                 delegated ? null : HostModel.canonicalNameOf(stack.get(StackModel.HOST_ID)), null,
-                stackHealth.apply(stack)),
+                stackHealth.apply(stack), null),
                 CmsRoutes.subpage(panelSlug, HohenheimSlugs.STACKS, id, HohenheimSlugs.Tab.SERVICES)));
         }
         return apps;
+    }
+
+    /**
+     * @return the cells of one record as the Apps list of the viewer's panel draws it, read from this process: the
+     *         facts its own page leads with, the same the list and a linked server's master hold of it
+     */
+    static @NonNull Cells cellsOf(@NonNull Source source, @NonNull Row record, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        List<Row> one = List.of(record);
+        Members members = switch (source) {
+            case WORKLOAD -> new Members(one, List.of(), List.of());
+            case WEBSITE -> new Members(List.of(), one, List.of());
+            case STACK -> new Members(List.of(), List.of(), one);
+        };
+        Located located = located(members, CmsSupport.isDelegatedPanel(conduit), access,
+            CmsSupport.panelSlug(conduit)).getFirst();
+        return App.of(located.facts(), located.target(), Wording.of(access)).cells();
+    }
+
+    /** @return when what the runtime row speaks for last started, null while it does not run */
+    private static @Nullable Instant started(@NonNull Row runtime) {
+        return InstanceModel.STATUS_RUNNING.equals(runtime.get(InstanceModel.STATUS))
+            ? runtime.get(InstanceModel.STARTED_AT) : null;
     }
 
     /** @return a workload's kind in the words its record's kind field declares, its stored key when it declares none */

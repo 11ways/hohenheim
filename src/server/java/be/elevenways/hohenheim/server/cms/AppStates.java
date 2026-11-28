@@ -15,6 +15,7 @@ import be.elevenways.zenit.server.peer.PeerRecords;
 import be.elevenways.zenit.server.peer.SharedRow;
 import be.elevenways.zenit.server.peer.SharedStates;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,6 +69,37 @@ public final class AppStates {
      * @return the apps in the order kept (by server key, then app key), worded for the viewer
      */
     static @NonNull List<HeldApp> held(@NonNull Wording words) {
+        Map<String, Held> servers = servers();
+        List<HeldApp> apps = new ArrayList<>();
+        if (servers.isEmpty()) {
+            return apps;
+        }
+        for (PeerRecords.PeerKept kept : PeerRecords.everyPeer(KIND)) {
+            Held held = servers.get(kept.peer());
+            if (held != null) {
+                apps.add(appOf(kept.record(), held, words));
+            }
+        }
+        return apps;
+    }
+
+    /**
+     * @param key the app's key in the Apps list: its server's key, then the key its state is kept under
+     * @return the linked server's app the key names, as that server last told it; null for a key naming none
+     */
+    static @Nullable HeldApp held(@NonNull String key, @NonNull Wording words) {
+        for (Held held : servers().values()) {
+            String prefix = held.peer() + "-";
+            if (key.startsWith(prefix)) {
+                PeerRecords.KeptRecord kept = PeerRecords.read(held.peer(), KIND, key.substring(prefix.length()));
+                return kept == null ? null : appOf(kept, held, words);
+            }
+        }
+        return null;
+    }
+
+    /** @return every server this one manages by the key its records are kept under, as this server last heard of it */
+    private static @NonNull Map<String, Held> servers() {
         Map<String, Held> servers = new HashMap<>();
         String version = LinkedServers.ownVersion();
         for (Row server : LinkedServers.all()) {
@@ -78,19 +110,13 @@ public final class AppStates {
                     server.get(LinkedServerModel.LAST_SEEN_AT)));
             }
         }
-        List<HeldApp> apps = new ArrayList<>();
-        if (servers.isEmpty()) {
-            return apps;
-        }
-        for (PeerRecords.PeerKept kept : PeerRecords.everyPeer(KIND)) {
-            Held held = servers.get(kept.peer());
-            if (held == null) {
-                continue;
-            }
-            AppFacts facts = AppFacts.of(kept.record().document());
-            apps.add(facts == null ? HeldApp.unreadable(kept.record().key(), kept.record().title(), held, words)
-                : HeldApp.of(facts, held, words));
-        }
-        return apps;
+        return servers;
+    }
+
+    private static @NonNull HeldApp appOf(PeerRecords.@NonNull KeptRecord kept, @NonNull Held held,
+                                          @NonNull Wording words) {
+        AppFacts facts = AppFacts.of(kept.document());
+        return facts == null ? HeldApp.unreadable(kept.key(), kept.title(), held, words)
+            : HeldApp.of(facts, held, words);
     }
 }
