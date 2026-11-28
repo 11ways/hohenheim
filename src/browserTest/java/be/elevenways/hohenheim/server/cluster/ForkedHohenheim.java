@@ -408,7 +408,7 @@ final class ForkedHohenheim implements AutoCloseable {
                     int hostId = host != null ? host.get(HostModel.ID) : HostFixtures.admittedIncusHost(FAKE_HOST);
                     Row app = Models.get(InstanceModel.class).createEmptyRow();
                     app.set(InstanceModel.NAME, words[1]);
-                    app.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
+                    app.set(InstanceModel.KIND, FakeNativeDaemons.nativeKind().toString());
                     app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
                     app.set(InstanceModel.HOST_ID, hostId);
                     Models.get(InstanceModel.class).save(app);

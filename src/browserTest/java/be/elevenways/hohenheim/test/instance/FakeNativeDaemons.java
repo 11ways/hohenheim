@@ -106,6 +106,11 @@ public final class FakeNativeDaemons {
         FakeNativeKind.register();
     }
 
+    /** @return the migratable fake kind's id, for fixtures outside this package that store a workload of it */
+    public static @NonNull Identifier nativeKind() {
+        return FakeNativeKind.ID;
+    }
+
     /** Drops the scripted streams of the previous database once a fresh one is in place. */
     private static synchronized void followDatabase() {
         SqlDatasource current = HohenheimDatabase.datasource();
@@ -795,10 +800,17 @@ public final class FakeNativeDaemons {
         }
     }
 
-    /** The migratable fake kind: native export/import over the in-memory daemons. */
-    public static final class FakeNativeKind implements InstanceKindHandler {
+    /**
+     * The migratable fake kind: native export/import over the in-memory daemons.
+     *
+     * AIDEV-NOTE: never public. The autoload scan registers every public, no-arg-constructible InstanceKindHandler of
+     * the browserTest set at boot, before any class's InstanceKindIsolation snapshot, so a public fake kind stands in
+     * every class's kind picker and filter (InstanceSurfacesBrowserTest's stored surfaces caught it). A fixture outside
+     * this package names it through {@link #nativeKind()}.
+     */
+    static final class FakeNativeKind implements InstanceKindHandler {
 
-        public static final Identifier ID = Identifier.of("hohenheim", "fake_native");
+        static final Identifier ID = Identifier.of("hohenheim", "fake_native");
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
