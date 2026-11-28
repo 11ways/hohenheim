@@ -510,6 +510,12 @@ final class ForkedHohenheim implements AutoCloseable {
                     });
                     yield "ok";
                 }
+                // "site-enabled ID": "enabled <true|false>" of the site's record here.
+                case "site-enabled" -> {
+                    Row site = Models.get(SiteModel.class).find().noCache()
+                        .where(SiteModel.ID.eq(Integer.parseInt(words[1]))).first();
+                    yield site == null ? "none" : "enabled " + site.get(SiteModel.ENABLED);
+                }
                 // "address SITE HOSTNAME" gives a site an exact address, as its Addresses tab's form stores one.
                 case "address" -> {
                     Row domain = Models.get(SiteDomainModel.class).createEmptyRow();

@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
@@ -311,8 +312,8 @@ class LinkedServersJourneyTest {
             assertThat(titled(masterApps(OWN_SITE), OWN_SITE)).as("step 2: the master's own app beside it").isNotNull();
             //    That page, the page a website of the master's opens, is drawn from what Kuifje told: Kuifje's app
             //    under its name, its server named, never the master's own app of that number; the tabs that show what
-            //    runs on Kuifje say they wait and are not offered (its Addresses tab is: step 2b), and a website runs
-            //    no verb where it lives yet.
+            //    runs on Kuifje say they wait and are not offered (its Addresses tab is: step 2b), and its switch is
+            //    offered, as it runs where the site lives (step 2b).
             HttpResponse<String> typed = asAdministrator(heldPage);
             assertThat(typed.statusCode()).as("step 2: the master's page of Kuifje's app").isEqualTo(200);
             assertThat(typed.body()).as("step 2: Kuifje's app, by Kuifje's facts").contains("later-site")
@@ -373,6 +374,19 @@ class LinkedServersJourneyTest {
             assertThat(heldAddresses.body()).as("step 2b: none of the master's own")
                 .doesNotContain("own.robbedoes.test").doesNotContain("data-column=\"server\"")
                 .doesNotContain("/" + HohenheimSlugs.DOMAINS + "/create");
+            //     Enable pressed on that page switches Kuifje's site on ON Kuifje, and Disable switches it off again,
+            //     each judged there; the master's record follows.
+            assertThat(typed.body()).as("step 2b: the site's switch is offered").contains("enable_site");
+            assertThat(pressOnPage(HohenheimSlugs.SITES, SiteOperations.ENABLE, peer + "-" + made))
+                .as("step 2b: the page's Enable answered").isNotNull();
+            assertThat(kuifje.ask("site-enabled " + made)).as("step 2b: switched on on Kuifje")
+                .isEqualTo("enabled true");
+            settle(kuifje);
+            assertThat(pressOnPage(HohenheimSlugs.SITES, SiteOperations.DISABLE, peer + "-" + made))
+                .as("step 2b: the page's Disable answered").isNotNull();
+            assertThat(kuifje.ask("site-enabled " + made)).as("step 2b: switched off on Kuifje")
+                .isEqualTo("enabled false");
+            settle(kuifje);
             assertThat(rowOf(masterList(HohenheimSlugs.CERTIFICATES, "later-cert"), "nice_name", "later-cert"))
                 .as("step 2b: Kuifje's certificate, failing as Kuifje told it").contains("Kuifje")
                 .contains("data-state=\"renewal_failing\"").doesNotContain("pl-table-select-row")
@@ -797,7 +811,8 @@ class LinkedServersJourneyTest {
             //    Kuifje's record says it started again, later, and Kuifje's history names the person through the master.
             Instant startedBefore = startedOn(kuifje, appKey, "step 9");
             assertThat(kuifje.ask("offset 1")).isEqualTo("ok");
-            assertThat(pressOnPage(InstanceOperations.RESTART, listKey)).as("step 9: the page's Restart answered")
+            assertThat(pressOnPage(HohenheimSlugs.INSTANCES, InstanceOperations.RESTART, listKey))
+                .as("step 9: the page's Restart answered")
                 .isNotNull();
             Instant restarted = startedOn(kuifje, appKey, "step 9");
             assertThat(restarted).as("step 9: restarted on Kuifje").isAfter(startedBefore);
@@ -834,7 +849,8 @@ class LinkedServersJourneyTest {
 
             //     Stop pressed on the page stops it ON Kuifje: Kuifje's record says it is stopped.
             settle(kuifje);
-            assertThat(pressOnPage(InstanceOperations.STOP, listKey)).as("step 11: the page's Stop answered")
+            assertThat(pressOnPage(HohenheimSlugs.INSTANCES, InstanceOperations.STOP, listKey))
+                .as("step 11: the page's Stop answered")
                 .isNotNull();
             assertThat(after("started ", kuifje.ask("started " + appKey)).split(" ")[0])
                 .as("step 11: stopped on Kuifje").isEqualTo(InstanceModel.STATUS_STOPPED);
@@ -842,7 +858,7 @@ class LinkedServersJourneyTest {
             //     of an app of this kind: Kuifje refuses it, the master's run ends refused, and Kuifje's app stays as it
             //     was.
             int beforeRollback = relay.accepted();
-            assertThat(pressOnPage(InstanceOperations.ROLLBACK, listKey))
+            assertThat(pressOnPage(HohenheimSlugs.INSTANCES, InstanceOperations.ROLLBACK, listKey))
                 .as("step 11: the page's Roll back answered its run").isNotNull();
             OperationRun rolledBack = CommittedWrites.awaitValue(OperationRunModel.MODEL_ID, Duration.ofSeconds(60),
                 () -> {
@@ -902,8 +918,8 @@ class LinkedServersJourneyTest {
      * @return the answer of a verb pressed on the master's page of Kuifje's app, through the invoke route its button
      *         posts to (the panel's admission, the action's offer and the pipeline), null when it answered a refusal
      */
-    private static @Nullable ActionResult<?> pressOnPage(Operation<Row, Void, ?> operation, String key) {
-        return PanelResourceCalls.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, operation.id(), key,
+    private static @Nullable ActionResult<?> pressOnPage(String entry, Operation<Row, Void, ?> operation, String key) {
+        return PanelResourceCalls.invoke(HohenheimSlugs.ADMIN, entry, operation.id(), key,
             CmsConfirmation.PLAIN_PROOF, TenantConduits.operator());
     }
 

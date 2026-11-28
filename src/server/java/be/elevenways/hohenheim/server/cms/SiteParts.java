@@ -515,11 +515,16 @@ public final class SiteParts {
                         .withArg("ports", DeleteImpact.join(forwarded)).withArg("count", forwarded.size());
             }
             case WEBSITE, NONE -> {
-                List<String> bound = DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID));
+                // A linked server's site names the addresses and the app its server keeps of it, never this server's
+                // of a site of that number.
+                KeptRow held = site instanceof KeptRow kept ? kept : null;
+                List<String> bound = held == null ? DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID))
+                    : keptDomainsOf(held).stream()
+                        .map(domain -> String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME))).toList();
                 if (bound.isEmpty()) {
                     yield HohenheimMicrocopy.SITE.of(none).withArg("name", name);
                 }
-                String app = exposing == null ? null : exposedAppOf(site);
+                String app = exposing == null ? null : held != null ? keptInstanceTitle(held) : exposedAppOf(site);
                 Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? hostnames : exposing).withArg("name", name)
                     .withArg("hostnames", DeleteImpact.join(bound)).withArg("count", bound.size());
                 yield app == null ? body : body.withArg("app", app);

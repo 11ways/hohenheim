@@ -43,7 +43,10 @@ public final class SiteOperations {
     /** The subject of every site operation: one site record. */
     public static final SubjectType<Row> SITE = SubjectType.record(SiteModel.REF);
 
-    /** Puts a disabled site's hostnames into the route table; the enable route invariant may refuse it. */
+    /**
+     * Puts a disabled site's hostnames into the route table; the enable route invariant may refuse it. A linked
+     * server's site is switched where it lives.
+     */
     public static final Operation<Row, Void, Void> ENABLE = Operation.declare(HohenheimIds.id("enable_site"))
         .happened(OperationSentences.of("enable_site"))
         .label(HohenheimMicrocopy.SITE.of("enable").withFallback("Enable"))
@@ -52,11 +55,11 @@ public final class SiteOperations {
         .one(SITE)
         .verb(OperationVerb.RESUME)
         .gate(OperationGate.open())
-        .facts(OperationFact.REACHES_OUTSIDE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(COMMAND)
         .register();
 
-    /** Takes an enabled site's hostnames out of the route table. */
+    /** Takes an enabled site's hostnames out of the route table; a linked server's site is switched where it lives. */
     public static final Operation<Row, Void, Void> DISABLE = Operation.declare(HohenheimIds.id("disable_site"))
         .happened(OperationSentences.of("disable_site"))
         .label(HohenheimMicrocopy.SITE.of("disable").withFallback("Disable"))
@@ -65,7 +68,7 @@ public final class SiteOperations {
         .one(SITE)
         .verb(OperationVerb.PAUSE)
         .gate(OperationGate.open())
-        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(COMMAND)
         .register();
 
