@@ -902,7 +902,8 @@ class LinkedServersJourneyTest {
             assertThat(asAdministrator(stackBase + "/page/" + HohenheimSlugs.Tab.SERVICES).statusCode())
                 .as("step 11c: its Services tab is not served").isEqualTo(404);
 
-            // 12. Kuifje does not answer: its app's page says since when and offers none of Kuifje's verbs.
+            // 12. Kuifje does not answer: its app's page says so once, since when, offers Try again (the Servers list's
+            //     re-check of Kuifje's link) and none of Kuifje's verbs, and shows what the master remembers of it.
             relay.retarget(closedPort());
             LinkedServers.sweep();
             awaitSyncs();
@@ -910,7 +911,8 @@ class LinkedServersJourneyTest {
             relay.retarget(kuifje.port());
             assertThat(silentPage).as("step 12: the page says Kuifje does not answer")
                 .contains("Kuifje does not answer since")
-                .contains("Nothing can be changed until Kuifje answers.");
+                .contains("Nothing can be changed until Kuifje answers.").contains("What Robbedoes remembers")
+                .contains(LinkedServerParts.CHECK.id().getPath());
             assertThat(silentPage).as("step 12: and offers no verb").doesNotContain("deploy_instance")
                 .doesNotContain("restart_instance").doesNotContain("stop_instance");
             //     An operation that does not run where its subject lives is refused on Kuifje's app, sending nothing.

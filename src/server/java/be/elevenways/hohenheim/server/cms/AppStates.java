@@ -91,6 +91,16 @@ public final class AppStates {
         return null;
     }
 
+    /**
+     * @param key the app's key in its server's own Apps list
+     * @return the facts that server last told of the app, as told (a silent server's verdict included); null when it
+     *         told none or this build cannot read them
+     */
+    static @Nullable AppFacts told(@NonNull Holder server, @NonNull String key) {
+        PeerRecords.KeptRecord kept = PeerRecords.read(server.key(), KIND, key);
+        return kept == null ? null : AppFacts.of(kept.document());
+    }
+
     private static @NonNull HeldApp appOf(PeerRecords.@NonNull KeptRecord kept, @NonNull Holder held,
                                           @NonNull Wording words) {
         AppFacts facts = AppFacts.of(kept.document());

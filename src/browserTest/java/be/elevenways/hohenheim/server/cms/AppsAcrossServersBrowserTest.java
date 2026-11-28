@@ -211,13 +211,17 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("local-website-page.png"))
                 .setFullPage(true));
 
-            // 7. A silent server's app page says since when it does not answer and offers nothing to do.
+            // 7. A silent server's app page says once since when it does not answer, offers its link's re-check, and
+            //    shows what this server remembers of the app.
             navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(gaston) + "-201/page/"
                 + RecordOverview.SLUG);
             waitForHydration();
-            assertThat(page.locator("body").textContent()).as("step 7: the silent server's app page")
+            String silentPage = page.locator("main").innerText();
+            assertThat(silentPage).as("step 7: the silent server's app page")
                 .containsPattern("Gaston does not answer since \\d{1,2}:\\d{2}")
-                .contains("Nothing can be changed until Gaston answers.");
+                .contains("Nothing can be changed until Gaston answers.").contains("What Robbedoes remembers")
+                .contains("Check now");
+            assertThat(silentPage.split("does not answer", -1).length - 1).as("step 7: said once").isEqualTo(1);
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-silent.png"))
                 .setFullPage(true));
 

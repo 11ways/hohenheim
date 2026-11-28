@@ -382,12 +382,15 @@ public final class SiteParts {
         };
     }
 
-    /** @return a held site's verdict as its server told it; a silent or unreadable one says so, an untold one none */
+    /**
+     * @return a held site's verdict as its server told it; a silent one's is its page's one saying so
+     *         ({@link AppOverview#silentBand}), an unreadable one says so, an untold one none
+     */
     private static @Nullable RecordHealth heldHealth(@NonNull Row row) {
         KeptRow site = (KeptRow) row;
         HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(site), "a held site's server");
         if (server.silent()) {
-            return ClusterLists.silent(server);
+            return AppOverview.silentBand(server);
         }
         Map<String, @Nullable Map<?, ?>> told = ClusterLists.told(SiteStates.SITE_KIND);
         if (!site.readable() || (told.containsKey(site.listKey()) && told.get(site.listKey()) == null)) {

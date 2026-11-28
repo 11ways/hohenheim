@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -523,12 +524,70 @@ final class AppOverview {
      * @param source the kind of record it is
      */
     static @NonNull WidgetTree heldWidgets(@NonNull Row kept, @NonNull Source source, @NonNull AccessContext access) {
-        return heldWidgets(toldApp(kept, source, Wording.of(access)), access);
+        KeptRow row = (KeptRow) kept;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(row), "a held app's server");
+        return server.silent() ? remembered(row, source, server, access)
+            : heldWidgets(toldApp(kept, source, Wording.of(access)), access);
     }
 
-    /** @return the verdict a linked server's app made of a kept record leads its page with, as that server told it */
+    /**
+     * @return the verdict a linked server's app made of a kept record leads its page with, as that server told it;
+     *         while that server does not answer, the page's one saying so ({@link #silentBand})
+     */
     static @NonNull RecordHealth heldHealth(@NonNull Row kept, @NonNull Source source) {
-        return toldApp(kept, source, Wording.of(AccessContext.anonymous())).cells().health();
+        HeldRecords.Holder server = ClusterLists.holderOf(kept);
+        return server != null && server.silent() ? silentBand(server)
+            : toldApp(kept, source, Wording.of(AccessContext.anonymous())).cells().health();
+    }
+
+    /**
+     * The band of a silent server's thing's page, the one place it says so (board FO119, "App page while its server
+     * does not answer"): since when it does not answer and that nothing can be changed, with Try again, the Servers
+     * list's own re-check of that server's link (LinkedServerParts.CHECK) offered here.
+     */
+    static @NonNull RecordHealth silentBand(HeldRecords.@NonNull Holder server) {
+        Instant lastSeen = server.lastSeen();
+        Microcopy since = lastSeen == null
+            ? HohenheimMicrocopy.HELD_APP.of("held_app_silent_never").withArg("server", server.name())
+            : HohenheimMicrocopy.HELD_APP.of("held_app_silent_since").withArg("server", server.name())
+                .withArg("since", lastSeen)
+                .withArg("day", AppDirectory.recentDay(AccessContext.anonymous().getReader(), lastSeen));
+        return RecordHealth.silent(since)
+            .detail(HohenheimMicrocopy.HELD_APP.of("held_app_silent_body").withArg("server", server.name())
+                .withArg("master", LinkedServers.ownName()))
+            .fixedBy(LinkedServerParts.CHECK.id()).on(HohenheimSlugs.SERVERS, server.key());
+    }
+
+    /**
+     * What this server remembers of a silent server's app, as one card (board FO119): what it is, its addresses, its
+     * host and its state when its server last answered, all as that server last told them.
+     */
+    private static @NonNull WidgetTree remembered(@NonNull KeptRow row, @NonNull Source source,
+                                                  HeldRecords.@NonNull Holder server, @NonNull AccessContext access) {
+        AppFacts facts = AppStates.told(server, source.token() + "-" + row.key());
+        List<WidgetFact> lines = new ArrayList<>();
+        if (facts != null) {
+            lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("kind")),
+                access.text(facts.kind())));
+            SiteHostnamesCell address = facts.address();
+            if (address != null && address.primary() != null) {
+                lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("addresses")),
+                    address.moreCount() > 0 ? access.text(HohenheimMicrocopy.HELD_APP.of("held_app_address_and_more")
+                        .withArg("address", address.primary()).withArg("count", address.moreCount()))
+                        : address.primary()));
+            }
+            if (facts.host() != null) {
+                lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host")), facts.host()));
+            }
+            if (server.lastSeen() != null) {
+                lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.HELD_APP.of("held_app_last_state")),
+                    access.text(HohenheimMicrocopy.HELD_APP.of("held_app_state_at")
+                        .withArg("state", AppParts.stateWord(facts.health())).withArg("at", server.lastSeen())
+                        .withArg("day", AppDirectory.recentDay(access.getReader(), server.lastSeen())))));
+            }
+        }
+        return compose(List.of(), List.of(CardWidget.ofFacts(HohenheimMicrocopy.HELD_APP.of("held_app_remembers")
+            .withArg("master", LinkedServers.ownName()), lines)), List.of());
     }
 
     /**
@@ -546,16 +605,6 @@ final class AppOverview {
         Cells cells = app.cells();
         String server = app.held().name();
         List<WidgetInstance> top = new ArrayList<>();
-        if (app.held().silent()) {
-            // The board's words (FO119, "App page while its server does not answer").
-            Instant lastSeen = app.held().lastSeen();
-            Microcopy since = lastSeen == null
-                ? HohenheimMicrocopy.HELD_APP.of("held_app_silent_never").withArg("server", server)
-                : HohenheimMicrocopy.HELD_APP.of("held_app_silent_since").withArg("server", server)
-                    .withArg("since", lastSeen).withArg("day", AppDirectory.recentDay(access.getReader(), lastSeen));
-            top.add(notice(AlertVariant.WARNING, access.text(since), access.text(HohenheimMicrocopy.HELD_APP
-                .of("held_app_silent_body").withArg("server", server).withArg("master", LinkedServers.ownName()))));
-        }
         top.add(notice(AlertVariant.INFO, access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs_title")),
             access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs").withArg("server", server))));
 

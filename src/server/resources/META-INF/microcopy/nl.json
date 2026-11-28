@@ -21802,5 +21802,9 @@
   "held_app_waiting_tabs": {"text": "Ze tonen wat op {$server} draait en worden nog niet naar deze server gebracht. Open ze intussen op {$server}.", "scope": "held_app"},
   "held_app_main_address": {"text": "Hoofdadres", "scope": "held_app"},
   "held_app_also": {"text": "Ook", "scope": "held_app"},
-  "held_app_more_addresses": {"text": ".match {$count :integer}\none {{nog 1 adres}}\n* {{nog {$count :integer} adressen}}", "scope": "held_app"}
+  "held_app_more_addresses": {"text": ".match {$count :integer}\none {{nog 1 adres}}\n* {{nog {$count :integer} adressen}}", "scope": "held_app"},
+  "held_app_remembers": {"text": "Wat {$master} onthoudt", "scope": "held_app"},
+  "held_app_address_and_more": {"text": ".match {$count :integer}\none {{{$address} en nog 1}}\n* {{{$address} en nog {$count :integer}}}", "scope": "held_app"},
+  "held_app_last_state": {"text": "Toestand toen laatst gezien", "scope": "held_app"},
+  "held_app_state_at": {"text": ".match {$day :string}\ntoday {{{$state} om {$at :time}}}\n* {{{$state} op {$at :datetime}}}", "scope": "held_app"}
 }
