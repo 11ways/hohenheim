@@ -60,11 +60,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -252,22 +250,10 @@ public final class TrafficTvLinks {
      */
     private static @NonNull List<ShareLink> live() {
         List<ShareLink> links = new ArrayList<>();
-        Set<Integer> liveSites = null;
         for (ShareLink link : ShareLinks.listAt(TrafficTvLinkLevel.LEVEL, ControllerIdentity.recordId())) {
-            if (!link.isLive(Now.instant())) continue;
-            ActivityAsk shows = TrafficTvLinkLevel.shows(link);
-            if (shows != null && shows.kind() == ActivityAsk.Kind.SITE) {
-                if (liveSites == null) {
-                    // One read of the live sites, only when a link shows one site (the default find hides the trash).
-                    liveSites = new HashSet<>();
-                    for (Row site : Models.get(SiteModel.class).find().all()) liveSites.add(site.get(SiteModel.ID));
-                }
-                Integer site = HohenheimTraffic.siteOf(Objects.requireNonNull(shows.value()));
-                if (site == null || !liveSites.contains(site)) continue;
-            }
-            links.add(link);
+            if (link.isLive(Now.instant())) links.add(link);
         }
-        return links;
+        return TrafficTvLinkLevel.ofLiveSites(links);
     }
 
     /** @return each listed link's title, what it shows and who made it, its sites and makers read once a page */

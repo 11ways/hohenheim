@@ -320,7 +320,9 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
 
             // 2. The address waits on the Activity tab for the account behind the call, shown once.
             HttpResponse<String> tab = adminGet(activity);
-            assertThat(ADDRESS.matcher(tab.body()).find()).as("step 2: the address on the tab").isTrue();
+            Matcher addressed = ADDRESS.matcher(tab.body());
+            assertThat(addressed.find()).as("step 2: the address on the tab").isTrue();
+            String token = addressed.group(1);
             assertThat(ADDRESS.matcher(adminGet(activity).body()).find()).as("step 2: once").isFalse();
             // The list names the link by its code, what it shows and who made it; neither it nor the read says the
             // address.
@@ -334,15 +336,23 @@ class TrafficTvJourneyTest extends HohenheimTestBase {
                 .doesNotContain("znsl_").doesNotContain("/tv/").doesNotContain("share_link");
             assertThat(admin.call("list", Map.of("kind", "share_link")).error())
                 .as("step 2: zenit-auth's word is no kind here").isTrue();
-            // 2b. Its site in the trash, the link of that one site is listed nowhere; the site restored, it is back.
+            // 2b. Its site in the trash, the link of that one site is listed nowhere and its address is the ordinary
+            //     not-found; the site restored, it is back and opens its page again.
             assertThat(admin.call("delete", Map.of("code", siteCode)).error()).as("step 2b: the site trashed")
                 .isFalse();
             assertThat(admin.call("list", Map.of("kind", "tv_link")).text()).as("step 2b: not listed")
                 .doesNotContainPattern("\\b" + code + "\\b");
+            HttpResponse<String> trashed = httpGet("/tv/" + token, null);
+            HttpResponse<String> wrong = httpGet("/tv/znsl_nothing" + fixture.tag, null);
+            assertThat(trashed.statusCode()).as("step 2b: its address opens nothing").isEqualTo(404);
+            assertThat(trashed.body().replace(token, "T")).as("step 2b: as a link that does not exist")
+                .isEqualTo(wrong.body().replace("znsl_nothing" + fixture.tag, "T"));
             McpHttpSession.Answer restored = admin.call("site_restore", Map.of("code", siteCode));
             assertThat(restored.error()).as("step 2b: restored " + restored.text()).isFalse();
             assertThat(admin.call("list", Map.of("kind", "tv_link")).text()).as("step 2b: back with its site")
                 .contains(code);
+            assertThat(httpGet("/tv/" + token, null).statusCode()).as("step 2b: its address opens again")
+                .isEqualTo(200);
 
             // 3. A wrong call is refused by the argument it names.
             McpHttpSession.Answer nowhere = admin.call("tv_link_set", Map.of("site", "S999999"));

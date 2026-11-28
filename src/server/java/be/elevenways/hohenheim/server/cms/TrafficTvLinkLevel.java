@@ -27,8 +27,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -115,10 +117,49 @@ public final class TrafficTvLinkLevel {
         return tvLinkOf(bearer) == null ? null : AccessContext.detached(Objects.requireNonNull(bearer));
     }
 
-    /** @return the live TV link a bearer holds, null for none, another level's, or one ended or expired */
+    /**
+     * @return the live TV link a bearer holds, null for none, another level's, one ended or expired, or one of a site
+     *         in the trash
+     */
     private static @Nullable ShareLink tvLinkOf(@Nullable LinkBearerPrincipal bearer) {
         ShareLink link = bearer == null ? null : ShareLinks.linkOf(bearer);
-        return link != null && isTv(link) ? link : null;
+        return link != null && isTv(link) && !ofLiveSites(List.of(link)).isEmpty() ? link : null;
+    }
+
+    /**
+     * THE "is its site in the trash" fact of TV links, for the list and every token read alike: a link of one site
+     * in the trash is left out, and comes back with its site.
+     *
+     * @param links TV links
+     * @return those showing every site, or a site out of the trash, in order; one read of the sites they name
+     */
+    static @NonNull List<ShareLink> ofLiveSites(@NonNull List<ShareLink> links) {
+        Set<Integer> named = new HashSet<>();
+        for (ShareLink link : links) {
+            Integer site = siteShown(link);
+            if (site != null) named.add(site);
+        }
+        Set<Integer> live = new HashSet<>();
+        if (!named.isEmpty()) {
+            // The default find hides the trash, as SiteModel.ofLiveSite does for a site's other children.
+            for (Row site : Models.get(SiteModel.class).find().where(SiteModel.ID.in(named)).all()) {
+                live.add(site.get(SiteModel.ID));
+            }
+        }
+        List<ShareLink> kept = new ArrayList<>();
+        for (ShareLink link : links) {
+            ActivityAsk shows = shows(link);
+            if (shows != null && shows.kind() == ActivityAsk.Kind.SITE && !live.contains(siteShown(link))) continue;
+            kept.add(link);
+        }
+        return kept;
+    }
+
+    /** @return the site a one-site link shows, null for every other link or a source naming no site */
+    private static @Nullable Integer siteShown(@NonNull ShareLink link) {
+        ActivityAsk shows = shows(link);
+        return shows == null || shows.kind() != ActivityAsk.Kind.SITE ? null
+            : HohenheimTraffic.siteOf(Objects.requireNonNull(shows.value()));
     }
 
     /** @return what a TV link shows: every site or one, null for a scope no TV link is made with */

@@ -10,6 +10,7 @@ import io.undertow.client.ContinueNotification;
 import io.undertow.client.PushCallback;
 import io.undertow.connector.ByteBufferPool;
 import io.undertow.protocols.http2.Http2StreamSourceChannel;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.server.protocol.http.HttpAttachments;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.AttachmentList;
@@ -25,6 +26,8 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Adapts Undertow's client for streaming upstreams, which stock Undertow proxying cannot
@@ -38,13 +41,20 @@ import java.util.concurrent.TimeUnit;
  *
  * Request commit: the upstream request is never put on the wire until a request BODY
  * byte shows up -- see {@link #commitRequestHeaders}.
+ *
+ * A client that hung up is no failure: see {@link TrailerCapturingExchange#setResponseListener}.
  */
 final class StreamingProxyClientConnection implements ClientConnection {
 
-    private final ClientConnection delegate;
+    private static final Logger LOG = Logger.getLogger(StreamingProxyClientConnection.class.getName());
 
-    StreamingProxyClientConnection(ClientConnection delegate) {
+    private final ClientConnection delegate;
+    private final HttpServerExchange downstream;
+
+    /** @param downstream the exchange this upstream connection serves, its one exchange */
+    StreamingProxyClientConnection(ClientConnection delegate, HttpServerExchange downstream) {
         this.delegate = delegate;
+        this.downstream = downstream;
     }
 
     @Override
@@ -52,7 +62,7 @@ final class StreamingProxyClientConnection implements ClientConnection {
         delegate.sendRequest(request, new ClientCallback<>() {
             @Override
             public void completed(ClientExchange exchange) {
-                callback.completed(new TrailerCapturingExchange(exchange));
+                callback.completed(new TrailerCapturingExchange(exchange, downstream));
                 // The callback above is ProxyHandler wiring up the request-body relay, so
                 // the request is fully described by now and safe to put on the wire.
                 commitRequestHeaders(exchange);
@@ -98,14 +108,26 @@ final class StreamingProxyClientConnection implements ClientConnection {
     private static final class TrailerCapturingExchange implements ClientExchange {
 
         private final ClientExchange delegate;
+        private final HttpServerExchange downstream;
 
-        TrailerCapturingExchange(ClientExchange delegate) {
+        TrailerCapturingExchange(ClientExchange delegate, HttpServerExchange downstream) {
             this.delegate = delegate;
+            this.downstream = downstream;
         }
 
+        /**
+         * AIDEV-NOTE: a failure reported AFTER the response was handed on, while the client is already gone, is the
+         * cleanup of a client that hung up (the downstream connection's close closes this upstream, see
+         * UpstreamProxyClient, and the closed upstream fails the exchange with a ClosedChannelException): it goes to
+         * the FINE log, never to ProxyHandler, which logs every failure as UT005028 at ERROR and would only close
+         * the downstream connection already closed. Robbedoes logged one for every assistant's MCP stream that
+         * ended (2026-11-28). An upstream that fails while the client still listens is passed on as ever.
+         */
         @Override
         public void setResponseListener(ClientCallback<ClientExchange> listener) {
             delegate.setResponseListener(new ClientCallback<>() {
+                private volatile boolean handedOn;
+
                 @Override
                 public void completed(ClientExchange response) {
                     StreamSourceChannel channel = response.getResponseChannel();
@@ -113,11 +135,17 @@ final class StreamingProxyClientConnection implements ClientConnection {
                         h2.setTrailersHandler(trailers ->
                             response.putAttachment(HttpAttachments.REQUEST_TRAILERS, trailers));
                     }
+                    this.handedOn = true;
                     listener.completed(TrailerCapturingExchange.this);
                 }
 
                 @Override
                 public void failed(IOException e) {
+                    if (this.handedOn && (downstream.isComplete() || !downstream.getConnection().isOpen())) {
+                        LOG.log(Level.FINE, "The client of " + downstream.getRequestURI()
+                            + " hung up; its upstream exchange ended with it", e);
+                        return;
+                    }
                     listener.failed(e);
                 }
             });

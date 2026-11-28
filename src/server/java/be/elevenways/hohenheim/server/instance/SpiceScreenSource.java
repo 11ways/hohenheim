@@ -146,11 +146,23 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         Session opened = Pepperglass.connect(reached.options().settings(SETTINGS).build(), this);
         synchronized (this) {
             if (!this.closed) {
-                this.session = opened;
                 return;
             }
         }
         opened.close();
+    }
+
+    /**
+     * Takes the session before its first channel dials, so a viewer's input reaches it from the first frame on;
+     * the session holds it until its inputs channel links.
+     */
+    @Override
+    public void sessionOpened(@NonNull Session opened) {
+        synchronized (this) {
+            if (!this.closed) {
+                this.session = opened;
+            }
+        }
     }
 
     // --- The display ---

@@ -135,7 +135,7 @@ final class UpstreamProxyClient implements ProxyClient {
                 // headers without waiting for a request body. Applied to EVERY upstream
                 // connection so no protocol combination is left out.
                 callback.completed(exchange, new ProxyConnection(
-                    new StreamingProxyClientConnection(connection), path));
+                    new StreamingProxyClientConnection(connection, exchange), path));
             }
 
             @Override

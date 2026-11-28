@@ -34,6 +34,7 @@ import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -130,6 +131,8 @@ public final class DatabaseDumpParts {
     static {
         OperationHandlers.attach(RESTORE_TO_NEW)
             .applies(DatabaseDumpModel::isRestorable)
+            // A host with no room refuses the call before a run starts, in the words its booking would refuse with.
+            .availability(Availability.batch((dumps, access) -> DatabaseRestores.newDatabaseRefusals(dumps)))
             .handle(call -> {
                 String name = Objects.requireNonNull(call.input(), "the restore names its database").name();
                 Row created = DatabaseRestores.restoreToNew(new DatabaseService(),

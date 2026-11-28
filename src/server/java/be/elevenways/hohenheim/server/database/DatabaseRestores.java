@@ -8,7 +8,11 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.protoblast.diagnostic.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -22,7 +26,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Restores a dump into a managed database: a STORED dump ({@link DatabaseDumpModel}) into a new database of the
@@ -109,6 +120,65 @@ public final class DatabaseRestores {
             throw new UncheckedIOException(failed);
         } finally {
             FileTrees.deleteQuietly(work);
+        }
+    }
+
+    /**
+     * Why each of these dumps cannot be restored into a new database now, in dump order (null where it can): the host
+     * each would land on (its source's, else this one) judged for a new dedicated engine of the dump's engine and
+     * image by the create pick's own verdict ({@link InstancePlacement#createRefusalOn}), so a host without room
+     * refuses the call in the words its booking would.
+     *
+     * AIDEV-NOTE: the restore's operation asks this BEFORE its run starts (its availability); the run's booking stays
+     * the arbiter of a host that filled since. One read of the sources and one verdict per host, engine and image,
+     * however many dumps a list asks about. A dump of an unknown engine is not judged here: its run refuses it.
+     */
+    public static @NonNull List<@Nullable Microcopy> newDatabaseRefusals(@NonNull List<? extends Row> dumps) {
+        Set<Integer> sourceIds = new HashSet<>();
+        for (Row dump : dumps) {
+            Integer databaseId = dump.get(DatabaseDumpModel.DATABASE_ID);
+            if (databaseId != null) sourceIds.add(databaseId);
+        }
+        Map<Integer, @Nullable Integer> storedHosts = new HashMap<>();
+        if (!sourceIds.isEmpty()) {
+            for (Row source : Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.in(sourceIds)).all()) {
+                storedHosts.put(source.get(DatabaseModel.ID), source.get(DatabaseModel.HOST_ID));
+            }
+        }
+        // A gone source, and a source on no stored host, land on this host, as restoreToNew places them.
+        List<@Nullable Integer> landings = new ArrayList<>();
+        for (Row dump : dumps) {
+            Integer databaseId = dump.get(DatabaseDumpModel.DATABASE_ID);
+            landings.add(databaseId == null ? null : storedHosts.get(databaseId));
+        }
+        Map<@Nullable Integer, Integer> hosts = HostModel.canonicalHostIds(landings);
+        InstanceKindHandler kind = Objects.requireNonNull(
+            InstanceKinds.getHandler(DatabaseContainerKind.ID.toString()), "the database container kind");
+        String bucket = InstanceQuota.creationBucket();
+        Map<NewEngine, Optional<Microcopy>> verdicts = new HashMap<>();
+        List<@Nullable Microcopy> refusals = new ArrayList<>();
+        for (int at = 0; at < dumps.size(); at++) {
+            Row dump = dumps.get(at);
+            ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(dump.get(DatabaseDumpModel.ENGINE));
+            if (engine == null) {
+                refusals.add(null);
+                continue;
+            }
+            NewEngine wanted = new NewEngine(hosts.get(landings.get(at)), engine, dump.get(DatabaseDumpModel.IMAGE));
+            refusals.add(verdicts.computeIfAbsent(wanted, each -> Optional.ofNullable(
+                InstancePlacement.createRefusalOn(each.serverId(), kind, bucket,
+                    DatabaseInstances.desiredSettings(each.host())))).orElse(null));
+        }
+        return refusals;
+    }
+
+    /** A new dedicated engine a restore into a new database would deploy, as its placement is judged. */
+    private record NewEngine(int serverId, ManagedDatabase.@NonNull Engine engine, @Nullable String image) {
+
+        /** @return the engine host restoreToNew's insert would describe: no ceilings, persistent, not shared */
+        @NonNull EngineHost host() {
+            return new EngineHost(DatabaseModel.MODEL_ID, 0, "restore", this.engine, this.image, false, "", "", "",
+                this.serverId, ResourceLimits.none(), false);
         }
     }
 

@@ -154,6 +154,10 @@ then close the downstream connection, one stream on HTTP/2, or answer 504; a req
 the 503 Undertow's own failure path answers when the upstream closes, as on its request timeout). An upgraded
 connection is not covered. The upstream connection is closed through Undertow's clean close, which with a request in
 flight drains for up to 10 s (`io.undertow.max-drain-time`) before it closes, as on the request timeout.
+A request that asks for an event stream (`Accept: text/event-stream`, such as an MCP client's notification stream)
+is the exception to the absolute `request_timeout`: its upstream keeps it open on purpose, so the request timeout
+bounds its silence instead (the `idle_timeout` when that is shorter), and a stream that sends keep-alives lives
+while a stuck one is still cut (`SiteDispatcher.asksForEventStream`).
 
 **Dev namespace**: `registration_token` (secret). The matched wildcard's first label picks a
 live `DevLease`; a name with no lease renders the dev-offline page. `SiteResource` mints a

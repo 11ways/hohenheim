@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -32,6 +33,7 @@ import io.undertow.server.handlers.proxy.ProxyHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.util.Headers;
 import io.undertow.util.AttachmentKey;
+import io.undertow.util.HeaderValues;
 import io.undertow.util.HttpString;
 import io.undertow.util.StatusCodes;
 
@@ -641,7 +643,9 @@ public class SiteDispatcher implements HttpHandler {
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange, String publicPath) {
         exchange.addResponseCommitListener(ex -> ResponseMutations.apply(entry, ex, publicPath));
 
-        ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
+        boolean stream = asksForEventStream(exchange);
+        ProxyHandler timedProxyHandler = proxyHandlerFor(stream ? -1 : entry.requestTimeoutMs);
+        int idleMs = stream ? streamSilenceMs(entry) : entry.idleTimeoutMs;
         int siteId = entry.siteId;
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UpstreamProxyClient.UPSTREAM_URI, upstream);
@@ -654,7 +658,7 @@ public class SiteDispatcher implements HttpHandler {
             // publish a half-built response. Handlers that build their OWN response (a
             // redirect's 302 + Location, a static file, an error page) must not be committed
             // out from under them.
-            ExchangeIdleTimeout.install(exchange, entry.idleTimeoutMs);
+            ExchangeIdleTimeout.install(exchange, idleMs);
             EagerResponseCommit.install(exchange);
             try {
                 timedProxyHandler.handleRequest(exchange);
@@ -675,6 +679,42 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.dispatch(dispatch);
             }
         }, entry.requestDelayMs);
+    }
+
+    /**
+     * Whether the request asks for an event stream ({@code Accept: text/event-stream}): an exchange its upstream keeps
+     * open on purpose, such as an MCP client's notification stream.
+     *
+     * AIDEV-NOTE: such an exchange is proxied with NO absolute lifetime; {@link #streamSilenceMs} bounds its silence
+     * instead. Robbedoes logged UT005027/UT005028 at ERROR about four times a minute for 37 minutes on 2026-11-28:
+     * the panel site's 30 s request timeout cut every assistant's MCP GET stream, which sends a keep-alive every 15 s
+     * (McpHostEndpoints.KEEP_ALIVE_MILLIS), and the client opened it again. Any client may ask so: it trades the
+     * absolute lifetime for the silence bound, so an exchange lives past the request timeout only while its upstream
+     * keeps sending, and a stuck upstream is still cut once it said nothing for the request timeout.
+     */
+    private static boolean asksForEventStream(HttpServerExchange exchange) {
+        HeaderValues accepts = exchange.getRequestHeaders().get(Headers.ACCEPT);
+        if (accepts == null) {
+            return false;
+        }
+        for (String accept : accepts) {
+            if (BlastString.lower(accept).contains("text/event-stream")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return how long an event stream may stay silent before it is cut: the site's idle time, bounded by its request
+     *         timeout; 0 (no cut) when the site sets neither
+     */
+    private static int streamSilenceMs(RouteEntry entry) {
+        if (entry.requestTimeoutMs <= 0) {
+            return entry.idleTimeoutMs;
+        }
+        return entry.idleTimeoutMs > 0
+            ? Math.min(entry.idleTimeoutMs, entry.requestTimeoutMs) : entry.requestTimeoutMs;
     }
 
     public void setHttpsAvailable(boolean httpsAvailable) {

@@ -143,6 +143,18 @@ class HohenheimDataToolsTest extends HohenheimHttpTestBase {
                 .where(DatabaseModel.NAME.eq(PREFIX + "restored-" + tag)).all()
                 .forEach(row -> HardDeletes.row(Models.get(DatabaseModel.class), row)));
 
+            // 5b. Its host with no room for the new engine: the restore is refused before any run starts, in the words
+            //     the engine's booking would refuse with, and nothing is created under the name.
+            HostFixtures.makeLocalPlaceable(768);
+            McpHttpSession.Answer full = admin.call("database_dump_restore",
+                Map.of("code", dumpCode, "name", PREFIX + "unplaced-" + tag));
+            assertThat(full.error()).as("step 5b: refused " + full.text()).isTrue();
+            assertThat(full.text()).as("step 5b: why, in the booking's words").contains("has no room for this app");
+            assertThat(RUN_CODE.matcher(full.text()).find()).as("step 5b: no run started").isFalse();
+            assertThat(Models.get(DatabaseModel.class).findByName(PREFIX + "unplaced-" + tag))
+                .as("step 5b: nothing created").isNull();
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+
             // 6. A backup target on a folder of this machine is tested by its code.
             Path folder = Files.createTempDirectory("hh-data-tools");
             cleanUp.push(() -> folder.toFile().delete());

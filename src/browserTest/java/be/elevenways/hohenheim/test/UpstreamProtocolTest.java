@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.tls.UpstreamTrust;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.Pace;
+import be.elevenways.protoblast.testsupport.time.Poll;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -78,6 +79,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -786,6 +791,23 @@ class UpstreamProtocolTest {
                     out.write("tunnel-alive".getBytes(StandardCharsets.US_ASCII));
                     out.flush();
                     awaitClose(in, path);
+                } else if (path.startsWith("/events")) {
+                    // An event stream of keep-alive comments, one per TRICKLE: eight, or (/events-long) until the
+                    // proxy hangs up, which completes closedFor.
+                    out.write(EVENTS_OK);
+                    int events = path.startsWith("/events-long") ? 100 : 8;
+                    try {
+                        for (int index = 1; index <= events; index++) {
+                            if (index > 1) {
+                                Pace.sleep(TRICKLE);
+                            }
+                            writeChunk(out, ": k" + index + "\n\n");
+                        }
+                        out.write("0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                        out.flush();
+                    } catch (IOException hungUp) {
+                        closedFor(path).complete(null);
+                    }
                 }
             } catch (IOException | InterruptedException | RuntimeException ended) {
                 // The proxy hung up or the test is over; the futures already say what the journey needs.
@@ -832,6 +854,10 @@ class UpstreamProtocolTest {
         private static final byte[] CHUNKED_OK =
             "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
 
+        /** The head of an event stream, its events following in chunks. */
+        private static final byte[] EVENTS_OK = ("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+            + "Transfer-Encoding: chunked\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
+
         private static void writeChunk(OutputStream out, String text) throws IOException {
             String chunk = Integer.toHexString(text.length()) + "\r\n" + text + "\r\n";
             out.write(chunk.getBytes(StandardCharsets.US_ASCII));
@@ -852,12 +878,17 @@ class UpstreamProtocolTest {
 
     /** One raw HTTP/1.1 exchange: a GET, or a POST whose {@code trickled} body bytes go one per {@link #TRICKLE}. */
     private static RawAnswer raw(int port, String host, String path, int trickled) throws Exception {
+        return raw(port, host, path, trickled, "");
+    }
+
+    /** {@link #raw}, with further request header lines ({@code "Name: value\r\n"} each). */
+    private static RawAnswer raw(int port, String host, String path, int trickled, String headers) throws Exception {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(5000);
             Now.Stopwatch took = Now.stopwatch();
             OutputStream out = socket.getOutputStream();
             StringBuilder head = new StringBuilder(trickled > 0 ? "POST " : "GET ").append(path)
-                .append(" HTTP/1.1\r\nHost: ").append(host).append("\r\nConnection: close\r\n");
+                .append(" HTTP/1.1\r\nHost: ").append(host).append("\r\nConnection: close\r\n").append(headers);
             if (trickled > 0) {
                 head.append("Content-Length: ").append(trickled).append("\r\n");
             }
@@ -1048,6 +1079,68 @@ class UpstreamProtocolTest {
             for (String path : List.of("/silent/1", "/started/2", "/started/5")) {
                 upstream.closedFor(path).get(15, TimeUnit.SECONDS);
                 assertThat(upstream.dialsFor(path)).as("step 9: %s was dialed once", path).isEqualTo(1);
+            }
+
+            // 10. An event stream, as an MCP client's notification stream: kept open on purpose, it outlives the 1 s
+            //     request timeout while its keep-alives move (eight, 2.1 s), where an ordinary exchange is ended (step
+            //     7); a silent one is still cut once it said nothing for the request timeout.
+            String accepts = "Accept: text/event-stream\r\n";
+            RawAnswer kept = raw(proxyPort, "total.test", "/events/10", 0, accepts);
+            assertThat(kept.text()).as("step 10: every keep-alive arrived").startsWith("HTTP/1.1 200")
+                .contains(": k8").contains("\r\n0\r\n");
+            assertThat(kept.millis()).as("step 10: past the request timeout").isGreaterThan(1500);
+            RawAnswer quietStream = raw(proxyPort, "total.test", "/started/10", 0, accepts);
+            assertThat(quietStream.ended()).as("step 10: a silent stream is cut").isTrue();
+            assertThat(quietStream.millis()).as("step 10: after the request timeout of silence").isLessThan(2500);
+
+            // 11. A client hanging up its event stream is no proxy failure: nothing is logged at ERROR for it, and the
+            //     upstream is closed at its next keep-alive. An ordinary exchange the request timeout ends is the
+            //     control: Undertow logs that one at ERROR, so the capture hears what it would.
+            List<LogRecord> severe = new CopyOnWriteArrayList<>();
+            Handler capture = new Handler() {
+                @Override
+                public void publish(LogRecord record) {
+                    if (record.getLevel().intValue() >= Level.SEVERE.intValue()) {
+                        severe.add(record);
+                    }
+                }
+
+                @Override
+                public void flush() {
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+            Logger undertow = Logger.getLogger("io.undertow");
+            undertow.addHandler(capture);
+            try {
+                raw(proxyPort, "total.test", "/silent/11", 0);
+                Poll.until("step 11 control: a timed out exchange is logged at ERROR", Duration.ofSeconds(5),
+                    () -> severe.stream().anyMatch(each -> String.valueOf(each.getMessage()).contains("/silent/11")));
+                try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
+                    socket.setSoTimeout(5000);
+                    socket.getOutputStream().write(("GET /events-long/11 HTTP/1.1\r\nHost: total.test\r\n" + accepts
+                        + "\r\n").getBytes(StandardCharsets.US_ASCII));
+                    socket.getOutputStream().flush();
+                    InputStream in = socket.getInputStream();
+                    ByteArrayOutputStream seen = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[1024];
+                    int count;
+                    while (!seen.toString(StandardCharsets.US_ASCII).contains(": k2")
+                            && (count = in.read(buffer)) >= 0) {
+                        seen.write(buffer, 0, count);
+                    }
+                    assertThat(seen.toString(StandardCharsets.US_ASCII)).as("step 11: the stream ran")
+                        .contains(": k2");
+                }
+                upstream.closedFor("/events-long/11").get(15, TimeUnit.SECONDS);
+                assertThat(severe).as("step 11: no proxy failure logged for the hung up stream")
+                    .extracting(each -> String.valueOf(each.getMessage())).noneMatch(message ->
+                        message.contains("/events-long/11"));
+            } finally {
+                undertow.removeHandler(capture);
             }
         }
     }
