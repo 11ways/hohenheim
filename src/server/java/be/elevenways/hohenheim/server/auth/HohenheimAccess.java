@@ -250,6 +250,12 @@ public final class HohenheimAccess {
         return RecordOwners.manageSubjectsOf(model, recordId);
     }
 
+    /** {@link #manageSubjectsOf} of many records in one read; see {@link RecordOwners#manageSubjectsOfAll}. */
+    public static @Nullable Map<String, Set<String>> manageSubjectsOfAll(@NonNull Identifier model,
+                                                                         @NonNull Collection<?> recordIds) {
+        return RecordOwners.manageSubjectsOfAll(model, recordIds);
+    }
+
     /** Site convenience over {@link #manageSubjectsOf(Identifier, Object)}. */
     public static @Nullable Set<String> manageSubjectsOf(int siteId) {
         return RecordOwners.manageSubjectsOf(SiteModel.MODEL_ID, siteId);

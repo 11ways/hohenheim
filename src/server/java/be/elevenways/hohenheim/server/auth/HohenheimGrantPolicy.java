@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.auth;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -463,6 +464,21 @@ final class HohenheimGrantPolicy {
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(AccessListModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
+        // Storages: MANAGE is the whole vocabulary, the git-provider decision verbatim. Who holds it OWNS the storage
+        // (HohenheimStorages.ownerOf reads that grant): a tenant's storage reaches public addresses only, an unheld one
+        // is the operator's. Using one is no grant question either: a picker offers the ones the principal manages.
+        RecordGrants.declareGrantable(GrantableModel.of(BackupTargetModel.MODEL_ID));
+        KnownCapabilities.register(BackupTargetModel.MODEL_ID,
+            KnownCapability.of(MANAGE)
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_storage_description"))
+                .elevated()
+                .asDelegable());
+        RecordCapabilityRules.declare(BackupTargetModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));

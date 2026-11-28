@@ -77,20 +77,22 @@ public final class SiteFiles {
     }
 
     /**
-     * The storage a site's own files live in.
+     * The storage a site's own files live in: this server's own site files, a mount its settings declare, or a storage
+     * a person added (opened through the storage layer's declared source).
      *
-     * @throws Violations {@code site_files_storage_missing} when the site names a storage this host has not mounted
+     * @throws Violations {@code site_files_storage_missing} when the site names a storage this host does not know
      */
     public static @NonNull StorageAdapter storageOf(@Nullable Map<String, Object> settings) {
         String named = storageNameOf(settings);
         if (STORAGE.equals(named)) {
             return Storages.mountLocalFollowing(STORAGE, HohenheimSettings.Files.SITE_FILES_DIRECTORY, null);
         }
-        if (!Storages.has(named)) {
+        try {
+            return Storages.get(named);
+        } catch (IllegalStateException unknown) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_files_storage_missing")
                 .withArg("storage", named));
         }
-        return Storages.get(named);
     }
 
     /** @return the tree the proxy serves a site's own files from, under the settings it is dialled with */

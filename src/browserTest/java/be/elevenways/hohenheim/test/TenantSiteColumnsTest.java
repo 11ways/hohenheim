@@ -163,7 +163,6 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
         assertThat(model.findById(ownSite).get(SiteModel.TARGET_TRUSTED))
             .as("step 5: what it shares aims nothing, so the operator's target mark stays").isEqualTo(true);
         for (Map<String, Object> host : List.of(Map.<String, Object>of(StaticUpstreamKind.ROOT_PATH.getName(), "/etc"),
-                Map.<String, Object>of(StaticUpstreamKind.STORAGE.getName(), "elsewhere"),
                 Map.<String, Object>of("undeclared", "x"),
                 Map.<String, Object>of(SiteSharing.READABLE_BY, "nobody", StaticUpstreamKind.ROOT_PATH.getName(),
                     "/etc"))) {
@@ -172,6 +171,10 @@ class TenantSiteColumnsTest extends HohenheimHttpTestBase {
             assertThat(refused.message().key()).as("step 5: %s frozen", host).isEqualTo("tenant_field_frozen");
             assertThat(refused.path()).as("step 5: on its key").startsWith(SiteModel.SETTINGS.getName() + ".");
         }
+        // ...while "Files kept in" is the manager's, but only for a storage the manager may use.
+        Violation elsewhere = settingsWrite(Map.of(StaticUpstreamKind.STORAGE.getName(), "elsewhere"));
+        assertThat(elsewhere).as("step 5: a storage the manager may not use refused").isNotNull();
+        assertThat(elsewhere.message().key()).as("step 5: as not usable").isEqualTo("site_storage_not_usable");
         Map<?, ?> kept = (Map<?, ?>) model.findById(ownSite).get(SiteModel.SETTINGS);
         assertThat(kept).as("step 5: THE ASSERTION -- only the manager's settings changed").isEqualTo(Map.of(
             StaticUpstreamKind.ROOT_PATH.getName(), "/tmp", SiteSharing.READABLE_BY, "any",

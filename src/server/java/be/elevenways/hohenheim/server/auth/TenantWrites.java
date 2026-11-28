@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.files.SitePicks;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
@@ -806,6 +807,16 @@ public final class TenantWrites {
             if (hostKey != null) {
                 throw Violations.ofField(settingsKey(hostKey), writtenSettings.get(hostKey),
                     HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
+            }
+            // "Files kept in" is the manager's to change, but only to a storage the manager may use (SitePicks, the
+            // picker's own offer), so a direct write never reaches another tenant's storage or an operator's mount.
+            String storage = StaticUpstreamKind.STORAGE.getName();
+            if (!Objects.equals(storedSettings.get(storage), writtenSettings.get(storage))) {
+                String named = RawValues.trimmed(writtenSettings.get(storage));
+                if (!named.isEmpty() && !SitePicks.mayUse(named, acting())) {
+                    throw Violations.ofField(settingsKey(storage), named,
+                        HohenheimMicrocopy.VIOLATIONS.of("site_storage_not_usable").withArg("storage", named));
+                }
             }
             writable = new LinkedHashSet<>(SITE_TENANT_WRITABLE);
             writable.add(SiteModel.SETTINGS.getName());

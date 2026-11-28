@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -173,6 +174,8 @@ public final class ManagePanel extends Panel {
         // tenant's own sites. Shared operator providers are usable but never listed
         // here -- see GitProviderParts.manage().
         HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
+        // The tenant's OWN storages: where its sites keep their files and its backups go (board FO128 screen 6).
+        HohenheimPanel.addIf(peers, BackupTargetParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
@@ -181,7 +184,7 @@ public final class ManagePanel extends Panel {
         // toolbar names the sibling entries this node registered.
         HohenheimPanel.addIf(peers, AppParts.manage(HohenheimPanel.present(peers, HohenheimSlugs.SITES,
                 HohenheimSlugs.INSTANCES, HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.PREVIEWS,
-                    HohenheimSlugs.GIT_PROVIDERS),
+                    HohenheimSlugs.GIT_PROVIDERS, HohenheimSlugs.BACKUP_TARGETS),
             HohenheimPanel.present(peers, AppDirectory.sourceEntrySlugs()),
             HohenheimPanel.present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE),
             Role.PROXY, Role.INSTANCES);
@@ -452,6 +455,15 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.REF)
             .search(GitProviderModel.NAME)
             .scopedBy(TenantScopes.USABLE_GIT_PROVIDERS)
+            .referencePolicy()
+            .build());
+
+        // Storages: the SAME two-derived-defaults hazard (BackupTargetParts.admin and .manage both derive one from the
+        // model's display field), and the widest would name every tenant's storage, host and bucket included, to
+        // whoever a picker rendered for. The scope is the one the /manage list keeps: nothing shares a storage yet.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(BackupTargetModel.REF)
+            .search(BackupTargetModel.NAME)
+            .scopedBy(TenantScopes.MANAGED_STORAGES)
             .referencePolicy()
             .build());
 

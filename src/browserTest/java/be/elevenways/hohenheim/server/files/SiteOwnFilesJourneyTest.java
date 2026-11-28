@@ -4,6 +4,15 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
+import be.elevenways.protoblast.common.async.ProgressSink;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
@@ -17,6 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.Storages;
 import be.elevenways.zenit.test.support.ServedApp;
 import org.junit.jupiter.api.AfterAll;
@@ -31,6 +41,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -162,8 +175,60 @@ class SiteOwnFilesJourneyTest {
         assertThat(tail.head()).as("step 8: a range at the end").startsWith("HTTP/1.1 206")
             .containsIgnoringCase("content-range: bytes " + (bigSize - 1000) + "-" + (bigSize - 1) + "/" + bigSize);
         assertThat(tail.bodyBytes()).as("step 8: its bytes").isEqualTo(1000);
+
+        // 9. "Files kept in" offers what the person may use: the operator this server's own files and every storage;
+        //    the site's manager this server's own files and the storages the manager added, never the operator's.
+        Files.delete(storage.resolve("sites/" + siteId + "/releases/big.bin"));
+        Path movedTo = Files.createTempDirectory("hh-moved-files");
+        String operatorStore = "hh-moved-" + UUID.randomUUID();
+        storageRow(operatorStore, movedTo);
+        String managerStore = "hh-mine-" + UUID.randomUUID();
+        Row managerRow = storageRow(managerStore, Files.createTempDirectory("hh-mine"));
+        RecordGrants.grant(GrantSubjectType.USER, manager, BackupTargetModel.MODEL_ID,
+            managerRow.get(BackupTargetModel.ID), HohenheimCapabilities.MANAGE, true);
+        assertThat(SitePicks.offered(TenantConduits.operator())).as("step 9: the operator's picker")
+            .extracting(FieldOption::value).contains(SiteFiles.STORAGE, operatorStore, managerStore);
+        AccessContext managing = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(manager, "user-" + manager)));
+        assertThat(SitePicks.offered(managing)).as("step 9: the manager's picker").extracting(FieldOption::value)
+            .contains(SiteFiles.STORAGE, managerStore).doesNotContain(operatorStore);
+
+        // 10. Moving the files: each copied and verified, the site switched over and the old copies removed last;
+        //     the site serves the file at its path from the new storage, and nothing is left in the old one.
+        List<Microcopy> steps = new ArrayList<>();
+        int moved = SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)),
+            operatorStore, ProgressSink.SILENT, steps::add);
+        assertThat(moved).as("step 10: the one file moved").isEqualTo(1);
+        assertThat(steps).as("step 10: copied, switched, removed").extracting(Microcopy::key)
+            .containsExactly(HohenheimMicrocopy.SITE.of("move_files_copied").key(),
+                HohenheimMicrocopy.SITE.of("move_files_switched").key(),
+                HohenheimMicrocopy.SITE.of("move_files_removed").key());
+        assertThat(movedTo.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")).as("step 10: in the new storage")
+            .hasBinaryContent(installer);
+        assertThat(Files.exists(storage.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")))
+            .as("step 10: gone from the old one").isFalse();
+        assertThat(ProxyTestSupport.rawRequest(port, "downloads.files.test", "/releases/Tadoma-1.2.EXE"))
+            .as("step 10: served from the new storage").startsWith("HTTP/1.1 200")
+            .contains("TADOMA-INSTALLER-0123456789");
+
+        // 11. A save that changes where the files are kept without moving them is refused while files are there.
+        Row switched = Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId));
+        Map<String, Object> back = new LinkedHashMap<>(RawValues.map(switched.get(SiteModel.SETTINGS)));
+        back.put(StaticUpstreamKind.STORAGE.getName(), SiteFiles.STORAGE);
+        switched.set(SiteModel.SETTINGS, back);
+        assertThat(keyOf(catchThrowable(() -> Models.get(SiteModel.class).save(switched))))
+            .as("step 11: move them first").isEqualTo("site_files_move_first");
     }
 
+
+    /** An operator's storage on a folder of this server. */
+    private static Row storageRow(String name, Path folder) {
+        Row row = Models.get(BackupTargetModel.class).createEmptyRow();
+        row.set(BackupTargetModel.NAME, name);
+        row.set(BackupTargetModel.KIND, LocalFolderStorageKind.ID.toString());
+        row.set(BackupTargetModel.SETTINGS, Map.of(LocalFolderStorageKind.FOLDER.getName(), folder.toString()));
+        Models.get(BackupTargetModel.class).save(row);
+        return row;
+    }
     /** @return the bytes every live thread allocated so far */
     private static long allocated(ThreadMXBean threads) {
         long[] ids = threads.getAllThreadIds();

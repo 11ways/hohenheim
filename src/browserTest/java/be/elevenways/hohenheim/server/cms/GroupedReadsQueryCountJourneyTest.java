@@ -30,6 +30,9 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.CellMapper;
+import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
+import java.nio.file.Path;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -783,6 +786,50 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
         }
     }
 
+    @Test
+    void theStoragesListAndItsDeleteReadOncePerPage() {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. Two storages, the first an app backs up to: the Used by cells read the sites, the dumps, the apps
+            //    and the owners' grants once each; the used storage's delete is dead with the reason, the other live.
+            List<Row> storages = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                storages.add(storage(cleanup, "store" + i));
+            }
+            Row app = instance(cleanup, "store-app");
+            app.set(InstanceModel.BACKUP_TARGET_ID, storages.get(0).get(BackupTargetModel.ID));
+            Models.get(InstanceModel.class).save(app);
+            String[] tables = {"sites", "database_dumps", "instances", "auth_record_grants"};
+            Cells two = cells(HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.USED_BY_COLUMN, storages, tables);
+            assertThat(two.cells()).as("step 1: the used storage says by what, the other nothing")
+                .containsExactly("1 app", CellMapper.Computed.EMPTY);
+            assertThat(cells(HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.ADDED_BY_COLUMN, storages).cells())
+                .as("step 1: no grant holds them: the operator's").containsOnly("An administrator");
+            assertThat(cells(HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.WHERE_COLUMN, storages).cells())
+                .as("step 1: where each is, the folder its kind lists")
+                .allMatch(cell -> String.valueOf(cell).contains(PREFIX + "store"));
+            Measured twoDeletes = measure(BackupTargetParts.DELETE, Models.get(BackupTargetModel.class),
+                BackupTargetModel.ID, storages, tables);
+            assertThat(twoDeletes.offers().get(0)).as("step 1: a used storage's delete is dead")
+                .isInstanceOf(Offer.Unavailable.class);
+            assertThat(twoDeletes.offers().get(1)).as("step 1: an unused one's is live")
+                .isInstanceOf(Offer.Available.class);
+
+            // 2. Forty storages: the same reads, for the cells and for the deletes.
+            for (int i = 2; i < 40; i++) {
+                storages.add(storage(cleanup, "store" + i));
+            }
+            Cells forty = cells(HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.USED_BY_COLUMN, storages, tables);
+            assertThat(forty.statements()).as("step 2: forty storages, the same reads").isEqualTo(two.statements());
+            assertThat(forty.cells()).as("step 2: forty answers").hasSize(40);
+            assertThat(measure(BackupTargetParts.DELETE, Models.get(BackupTargetModel.class), BackupTargetModel.ID,
+                storages, tables).statements()).as("step 2: and so do their deletes")
+                .isEqualTo(twoDeletes.statements());
+        } finally {
+            runAll(cleanup);
+        }
+    }
+
     // -- measuring ----------------------------------------------------------------------------------------------------
 
     /** The offers of one operation over a page, and the statements naming each measured table. */
@@ -1170,6 +1217,14 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
         model.save(row);
         cleanup.add(() -> HardDeletes.row(model, row));
         return row;
+    }
+
+    /** A storage on a folder of this server, as an operator adds one. */
+    private static Row storage(List<Runnable> cleanup, String name) {
+        return row(cleanup, Models.get(BackupTargetModel.class), Map.of(BackupTargetModel.NAME.getName(),
+            PREFIX + name, BackupTargetModel.KIND.getName(), LocalFolderStorageKind.ID.toString(),
+            BackupTargetModel.SETTINGS.getName(), Map.of(LocalFolderStorageKind.FOLDER.getName(),
+                Path.of(System.getProperty("java.io.tmpdir"), PREFIX + name).toString())));
     }
 
     /** Undoes the fixtures, newest first. */

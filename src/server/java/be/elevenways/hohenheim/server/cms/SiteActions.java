@@ -15,6 +15,7 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.hohenheim.server.files.SiteFileMoves;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -73,7 +74,7 @@ final class SiteActions {
             disableAction(), cloneAction(), movePortsAction(),
             rollbackAction(), deployFromRepositoryAction(), protectPathAction(), fixHttpsAction(),
             stopForcingHttpsAction(), addAddressAction(), fixProtectionAction(), changeConfigurationAction(),
-            regenerateRegistrationTokenAction());
+            regenerateRegistrationTokenAction(), moveFilesAction());
     }
 
     /**
@@ -83,7 +84,21 @@ final class SiteActions {
     static @NonNull List<PanelAction<Row>> delegated() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openSites, SiteModel.ID), enableAction(),
             disableAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
-            fixProtectionAction());
+            fixProtectionAction(), moveFilesAction());
+    }
+
+    /**
+     * Move files: where a site keeps its own files changes with its files, a background run that copies, verifies,
+     * switches and removes the old copies last (SiteFileMoves); the site's manager may run it too.
+     */
+    private static @NonNull PanelAction<Row> moveFilesAction() {
+        return PanelAction.<Row, Integer>placesRun(SiteFileMoves.MOVE, ActionPlacement.ROW)
+            .label(HohenheimMicrocopy.SITE.of("move_files"))
+            .icon(Icon.of("right-left"))
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("move_files"),
+                HohenheimMicrocopy.SITE.of("move_files_confirm"), ActionStyle.DEFAULT))
+            .build();
     }
 
     /**

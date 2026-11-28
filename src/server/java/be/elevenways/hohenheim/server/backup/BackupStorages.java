@@ -13,6 +13,7 @@ import be.elevenways.zenit.server.storage.StorageCheck;
 import be.elevenways.zenit.server.storage.StorageException;
 import be.elevenways.zenit.server.storage.StorageRoom;
 import be.elevenways.zenit.server.storage.Storages;
+import be.elevenways.zenit.server.storage.StorageReadings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -90,12 +91,13 @@ public final class BackupStorages {
     }
 
     /**
-     * Checks the storage can be reached and written now, before a backup spends any downtime or disk on it.
+     * Checks the storage can be reached and written now, before a backup spends any downtime or disk on it; what it
+     * found is what the storages list says of it next ({@link StorageReadings}).
      *
      * @throws IOException carrying the check's own diagnostic when it cannot
      */
     public static void requireUsable(@NonNull StorageAdapter storage) throws IOException {
-        StorageCheck check = storage.check();
+        StorageCheck check = StorageReadings.check(storage);
         if (!check.isUsable()) {
             throw new IOException(check.diagnostic());
         }
@@ -197,7 +199,7 @@ public final class BackupStorages {
      */
     public static @NonNull Optional<Long> freeBytes(@NonNull StorageAdapter storage) throws IOException {
         try {
-            return storage.room().map(StorageRoom::freeBytes);
+            return StorageReadings.room(storage).map(StorageRoom::freeBytes);
         } catch (StorageException failed) {
             throw new IOException(failed.getMessage(), failed);
         }

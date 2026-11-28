@@ -186,8 +186,8 @@ public class BackupTargetModel extends Model {
     }
 
     private static final Noun NOUN = new Noun(Map.of(
-        "en", new Noun.Forms("backup target", "backup targets", Map.of(NounFact.ARTICLE, "a")),
-        "nl", new Noun.Forms("back-upbestemming", "back-upbestemmingen", Map.of(NounFact.GENDER, "common"))));
+        "en", new Noun.Forms("storage", "storages", Map.of(NounFact.ARTICLE, "a")),
+        "nl", new Noun.Forms("opslagplaats", "opslagplaatsen", Map.of(NounFact.GENDER, "common"))));
 
     @Override public @NonNull Noun noun() { return NOUN; }
 

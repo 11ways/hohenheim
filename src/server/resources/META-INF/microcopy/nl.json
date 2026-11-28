@@ -1309,6 +1309,7 @@
     }
   ],
   "empty": [
+    {"text": "Nog geen opslagplaatsen. Voeg er een toe om sitebestanden of back-ups elders te bewaren.", "scope": "backup_target"},
     {
       "text": "Geen databases gekoppeld",
       "scope": "site_databases"
@@ -2968,11 +2969,11 @@
       "case": "sentence"
     },
     {
-      "text": "Back-updoelen",
+      "text": "Opslagplaatsen",
       "scope": "backup_target"
     },
     {
-      "text": "back-updoelen",
+      "text": "opslagplaatsen",
       "scope": "backup_target",
       "case": "sentence"
     },
@@ -3185,7 +3186,7 @@
       "scope": "notification_channel"
     },
     {
-      "text": "Test van back-updoel mislukt: {$reason}",
+      "text": "Test mislukt: {$reason}",
       "scope": "backup_target"
     },
     {
@@ -3215,7 +3216,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "Back-updoel {$name} is bereikbaar en beschrijfbaar",
+      "text": "{$name} is bereikbaar en beschrijfbaar",
       "scope": "backup_target"
     },
     {
@@ -5148,6 +5149,7 @@
     }
   ],
   "overview": [
+    {"text": "Overzicht", "scope": "backup_target"},
     {
       "text": "Misbruikbescherming",
       "scope": "spamservice"
@@ -6016,6 +6018,7 @@
     "scope": "violations"
   },
   "files": [
+    {"text": ".match {$count :integer}\none {{1 bestand}}\n* {{{$count :integer} bestanden}}", "scope": "count"},
     {
       "text": "Bestanden",
       "scope": "stack_services"
@@ -7246,7 +7249,7 @@
   },
   "test_connection": [
     {
-      "text": "Verbinding testen",
+      "text": "Testen",
       "scope": "backup_target"
     },
     {
@@ -10246,11 +10249,11 @@
       "case": "sentence"
     },
     {
-      "text": "Back-updoel",
+      "text": "Opslagplaats",
       "scope": "backup_target"
     },
     {
-      "text": "back-updoel",
+      "text": "opslagplaats",
       "scope": "backup_target",
       "case": "sentence"
     },
@@ -11941,7 +11944,7 @@
       "scope": "settings"
     },
     {
-      "text": "Waar back-ups van apps en databanken terechtkomen: lokale schijf of externe opslag.",
+      "text": "Waar sites hun bestanden bewaren en waar back-ups terechtkomen.",
       "scope": "backup_target"
     },
     {
@@ -17768,8 +17771,8 @@
   "connect_with": {"text": "Verbinden met", "scope": "database_overview"},
   "password_where": {"text": "Op verzoek getoond op het tabblad {$tab}", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Apps die hem gebruiken krijgen deze als omgevingsvariabelen; niemand hoeft ze te plakken.", "scope": "database_overview"},
-  "used_by_none": {"text": "Geen app", "scope": "database_overview"},
-  "used_by_none_detail": {"text": "Koppel hem vanaf de pagina van de app: Meer, dan Gekoppelde databanken.", "scope": "database_overview"},
+  "used_by_none": [{"text": "Geen app", "scope": "database_overview"}, {"text": "Nog niets", "scope": "backup_target"}],
+  "used_by_none_detail": [{"text": "Koppel hem vanaf de pagina van de app: Meer, dan Gekoppelde databanken.", "scope": "database_overview"}, {"text": "Geen site, database of app bewaart hier iets.", "scope": "backup_target"}],
   "backup_temporary": {"text": "Geen backup", "scope": "database_overview"},
   "backup_temporary_detail": {"text": "Tijdelijke gegevens, weg zodra hij stopt", "scope": "database_overview"},
   "backup_never": {"text": "Nooit", "scope": "database_overview"},
@@ -21702,5 +21705,54 @@
   "server_silent_option": {"text": "{$server}, antwoordt niet", "scope": "app_list"},
   "list_apps_on_servers": {"text": "{$apps} op {$servers}", "scope": "app_list"},
   "list_app_count": {"text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "app_list"},
-  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"}
+  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"},
+  "column_failure": {"text": "Probleem", "scope": "backup_target"},
+  "column_where": {"text": "Waar", "scope": "backup_target"},
+  "column_added_by": {"text": "Toegevoegd door", "scope": "backup_target"},
+  "column_used_by": {"text": "Gebruikt door", "scope": "backup_target"},
+  "column_room_left": {"text": "Vrije ruimte", "scope": "backup_target"},
+  "in_use": {"text": "In gebruik door {$used}. Kies eerst voor elk daarvan een andere opslagplaats.", "scope": "backup_target"},
+  "in_use_lead": {"text": "Een opslagplaats in gebruik kan niet verwijderd worden. Kies eerst voor elk daarvan een andere opslagplaats.", "scope": "backup_target"},
+  "failing_since": {"text": "{$reason} sinds {$since :datetime}", "scope": "backup_target"},
+  "room_of": {"text": "{$free :bytes} van {$total :bytes}", "scope": "backup_target"},
+  "added_by_administrator": {"text": "Een beheerder", "scope": "backup_target"},
+  "added_by_you": {"text": "U", "scope": "backup_target"},
+  "where_fact": {"text": "{$label}: {$value}", "scope": "backup_target"},
+  "card_where": {"text": "Waar", "scope": "backup_target"},
+  "card_used_by": {"text": "Gebruikt door", "scope": "backup_target"},
+  "card_room": {"text": "Ruimte", "scope": "backup_target"},
+  "room_left": {"text": "Vrij", "scope": "backup_target"},
+  "room_left_value": {"text": "{$free :bytes} vrij", "scope": "backup_target"},
+  "room_used": {"text": "Gebruikt", "scope": "backup_target"},
+  "room_used_value": {"text": "{$used :bytes} van {$total :bytes} gebruikt", "scope": "backup_target"},
+  "room_read_at": {"text": "Gelezen op", "scope": "backup_target"},
+  "room_unknown": {"text": "Nog niet gelezen", "scope": "backup_target"},
+  "room_unknown_detail": {"text": "Druk op Testen om te lezen hoeveel ruimte er is. Een S3-compatibele opslag vertelt zijn ruimte niet.", "scope": "backup_target"},
+  "last_check": {"text": "Laatste test", "scope": "backup_target"},
+  "used_by_recovery_archive": {"text": "Herstelarchief", "scope": "backup_target"},
+  "used_by_database_dumps": {"text": "Databasedumps", "scope": "backup_target"},
+  "used_by_joined": {"text": "{$first}, {$next}", "scope": "backup_target"},
+  "keeps_recovery_archive": {"text": "De eigen database en sleutels van deze server", "scope": "backup_target"},
+  "keeps_database_dumps": {"text": "De dumps van elke database", "scope": "backup_target"},
+  "keeps_site": {"text": "Zijn bestanden", "scope": "backup_target"},
+  "keeps_dumps": {"text": "{$dumps}, {$bytes :bytes}", "scope": "backup_target"},
+  "keeps_app_backups": {"text": "Zijn back-ups", "scope": "backup_target"},
+  "site_files_own": {"text": "Sitebestanden op deze server", "scope": "backup_target"},
+  "dumps": {"text": ".match {$count :integer}\none {{1 dump}}\n* {{{$count :integer} dumps}}", "scope": "count"},
+  "manage_storage_description": {"text": "Deze opslagplaats bewerken, testen en verwijderen.", "scope": "capability"},
+  "site_storage_not_usable": {"text": "Opslagplaats '{$storage}' is er geen waarin u de bestanden van deze site mag bewaren", "scope": "violations"},
+  "site_files_move_first": {"text": "De nieuwe opslagplaats mist {$files} van deze site. Gebruik Bestanden verplaatsen om te wijzigen waar de bestanden bewaard worden.", "scope": "violations"},
+  "site_files_move_same": {"text": "Deze site bewaart zijn bestanden al in {$storage}", "scope": "violations"},
+  "site_files_copy_unverified": {"text": "De kopie van {$file} komt niet overeen met het origineel; de site is niet omgeschakeld", "scope": "violations"},
+  "move_files": {"text": "Bestanden verplaatsen", "scope": "site"},
+  "move_files_to_help": {"text": "De opslagplaats waar de bestanden van de site naartoe gaan. Ze blijven bereikbaar tijdens het verplaatsen, en de oude bestanden worden pas verwijderd als elk bestand is nagegaan.", "scope": "site"},
+  "move_files_copy_step": {"text": "Elk bestand overzetten en nagaan", "scope": "site"},
+  "move_files_switch_step": {"text": "De site omschakelen", "scope": "site"},
+  "move_files_remove_step": {"text": "De oude bestanden verwijderen", "scope": "site"},
+  "move_files_copied": {"text": "{$files} overgezet en nagegaan", "scope": "site"},
+  "move_files_switched": {"text": "De site bewaart zijn bestanden nu in {$storage}", "scope": "site"},
+  "move_files_removed": {"text": "{$files} verwijderd uit de oude opslagplaats", "scope": "site"},
+  "move_site_files_description": {"text": "Verplaatst de eigen bestanden van een site naar een andere opslagplaats, nagegaan, terwijl de site ze blijft serveren.", "scope": "hohenheim"},
+  "move_site_files": {"text": "{$actor} verplaatste de bestanden van site {$subject}", "scope": "hohenheim", "target": "happened"},
+  "move_files_confirm": {"text": "Verplaats de bestanden van deze site naar de opslagplaats die u kiest. De site blijft ze serveren tijdens het verplaatsen en schakelt om zodra elk bestand is overgezet en nagegaan.", "scope": "site"}
 }

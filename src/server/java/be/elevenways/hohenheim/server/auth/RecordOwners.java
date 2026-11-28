@@ -140,6 +140,35 @@ final class RecordOwners {
     }
 
     /**
+     * {@link #manageSubjectsOf} of many records of one model, in one read per chunk of ids.
+     *
+     * @return the manage-grant subjects by the record id's text, every asked id answered (empty: the operator's), or
+     *         null when grants are unreadable (callers fail closed)
+     */
+    static @Nullable Map<String, Set<String>> manageSubjectsOfAll(@NonNull Identifier model,
+                                                                  @NonNull Collection<?> recordIds) {
+        Map<String, Set<String>> subjects = new LinkedHashMap<>();
+        for (Object id : recordIds) {
+            subjects.put(String.valueOf(id), new HashSet<>());
+        }
+        if (!ZenitAuth.isInitialized() || recordIds.isEmpty()) {
+            return subjects;
+        }
+        try {
+            for (Row grant : RecordGrants.listForRecords(model, recordIds)) {
+                Set<String> held = subjects.get(String.valueOf((Object) grant.get(RecordGrantModel.RECORD_ID)));
+                if (held != null && MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
+                        && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE)) && RecordGrants.inForce(grant)) {
+                    held.add(GrantSubjects.tokenOf(grant));
+                }
+            }
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+        return subjects;
+    }
+
+    /**
      * THE canonical packing of a subject set (released-claim ledger, quota bucket keys):
      * sorted and newline-joined, so two spellings of one owner set can never compare
      * unequal. EMPTY packs to "" -- the operator. A second packing beside this one is how

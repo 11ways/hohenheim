@@ -646,8 +646,7 @@ class SiteSharingJourneyTest extends HohenheimTestBase {
         assertThat(page.locator(section).count()).as("step 6: the Sharing section").isOne();
         assertThat(page.locator("pl-field[data-path='settings." + StaticUpstreamKind.AUTOINDEX.getName() + "']")
             .count()).as("step 6: what its folders list").isOne();
-        for (String host : List.of(StaticUpstreamKind.ROOT_PATH.getName(), StaticUpstreamKind.STORAGE.getName(),
-                StaticUpstreamKind.OWN_FILES.getName())) {
+        for (String host : List.of(StaticUpstreamKind.ROOT_PATH.getName(), StaticUpstreamKind.OWN_FILES.getName())) {
             assertThat(page.locator("pl-field[data-path='settings." + host + "']").count())
                 .as("step 6: no %s for a manager", host).isZero();
         }

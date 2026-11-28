@@ -1309,6 +1309,7 @@
     }
   ],
   "empty": [
+    {"text": "No storages yet. Add one to keep site files or backups somewhere else.", "scope": "backup_target"},
     {
       "text": "No databases attached",
       "scope": "site_databases"
@@ -2968,11 +2969,11 @@
       "case": "sentence"
     },
     {
-      "text": "Backup targets",
+      "text": "Storages",
       "scope": "backup_target"
     },
     {
-      "text": "backup targets",
+      "text": "storages",
       "scope": "backup_target",
       "case": "sentence"
     },
@@ -3185,7 +3186,7 @@
       "scope": "notification_channel"
     },
     {
-      "text": "Backup target test failed: {$reason}",
+      "text": "Test failed: {$reason}",
       "scope": "backup_target"
     },
     {
@@ -3215,7 +3216,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "Backup target {$name} is reachable and writable",
+      "text": "{$name} is reachable and writable",
       "scope": "backup_target"
     },
     {
@@ -5148,6 +5149,7 @@
     }
   ],
   "overview": [
+    {"text": "Overview", "scope": "backup_target"},
     {
       "text": "Abuse protection",
       "scope": "spamservice"
@@ -6016,6 +6018,7 @@
     "scope": "violations"
   },
   "files": [
+    {"text": ".match {$count :integer}\none {{1 file}}\n* {{{$count :integer} files}}", "scope": "count"},
     {
       "text": "Files",
       "scope": "stack_services"
@@ -7246,7 +7249,7 @@
   },
   "test_connection": [
     {
-      "text": "Test connection",
+      "text": "Test",
       "scope": "backup_target"
     },
     {
@@ -10246,11 +10249,11 @@
       "case": "sentence"
     },
     {
-      "text": "Backup target",
+      "text": "Storage",
       "scope": "backup_target"
     },
     {
-      "text": "backup target",
+      "text": "storage",
       "scope": "backup_target",
       "case": "sentence"
     },
@@ -11941,7 +11944,7 @@
       "scope": "settings"
     },
     {
-      "text": "Where app and database backups are written: local disk or a remote store.",
+      "text": "Where sites keep their files and where backups go.",
       "scope": "backup_target"
     },
     {
@@ -17768,8 +17771,8 @@
   "connect_with": {"text": "Connect with", "scope": "database_overview"},
   "password_where": {"text": "Shown on request on the {$tab} tab", "scope": "database_overview"},
   "how_apps_connect_value": {"text": "Apps that use it get these as environment variables; nobody has to paste them.", "scope": "database_overview"},
-  "used_by_none": {"text": "No app", "scope": "database_overview"},
-  "used_by_none_detail": {"text": "Attach it from the app's page: More, then Attached databases.", "scope": "database_overview"},
+  "used_by_none": [{"text": "No app", "scope": "database_overview"}, {"text": "Nothing yet", "scope": "backup_target"}],
+  "used_by_none_detail": [{"text": "Attach it from the app's page: More, then Attached databases.", "scope": "database_overview"}, {"text": "No site, database or app keeps anything here.", "scope": "backup_target"}],
   "backup_temporary": {"text": "Not backed up", "scope": "database_overview"},
   "backup_temporary_detail": {"text": "Temporary data, gone when it stops", "scope": "database_overview"},
   "backup_never": {"text": "Never", "scope": "database_overview"},
@@ -21702,5 +21705,54 @@
   "server_silent_option": {"text": "{$server}, does not answer", "scope": "app_list"},
   "list_apps_on_servers": {"text": "{$apps} on {$servers}", "scope": "app_list"},
   "list_app_count": {"text": ".match {$count :integer}\none {{1 app}}\n* {{{$count :integer} apps}}", "scope": "app_list"},
-  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"}
+  "list_server_count": {"text": ".match {$count :integer}\none {{1 server}}\n* {{{$count :integer} servers}}", "scope": "app_list"},
+  "column_failure": {"text": "Problem", "scope": "backup_target"},
+  "column_where": {"text": "Where", "scope": "backup_target"},
+  "column_added_by": {"text": "Added by", "scope": "backup_target"},
+  "column_used_by": {"text": "Used by", "scope": "backup_target"},
+  "column_room_left": {"text": "Room left", "scope": "backup_target"},
+  "in_use": {"text": "In use by {$used}. Choose another storage for each of these first.", "scope": "backup_target"},
+  "in_use_lead": {"text": "A storage in use cannot be deleted. Choose another storage for each of these first.", "scope": "backup_target"},
+  "failing_since": {"text": "{$reason} since {$since :datetime}", "scope": "backup_target"},
+  "room_of": {"text": "{$free :bytes} of {$total :bytes}", "scope": "backup_target"},
+  "added_by_administrator": {"text": "An administrator", "scope": "backup_target"},
+  "added_by_you": {"text": "You", "scope": "backup_target"},
+  "where_fact": {"text": "{$label}: {$value}", "scope": "backup_target"},
+  "card_where": {"text": "Where", "scope": "backup_target"},
+  "card_used_by": {"text": "Used by", "scope": "backup_target"},
+  "card_room": {"text": "Room", "scope": "backup_target"},
+  "room_left": {"text": "Left", "scope": "backup_target"},
+  "room_left_value": {"text": "{$free :bytes} left", "scope": "backup_target"},
+  "room_used": {"text": "Used", "scope": "backup_target"},
+  "room_used_value": {"text": "{$used :bytes} of {$total :bytes} used", "scope": "backup_target"},
+  "room_read_at": {"text": "Read at", "scope": "backup_target"},
+  "room_unknown": {"text": "Not read yet", "scope": "backup_target"},
+  "room_unknown_detail": {"text": "Press Test to read how much room it has. An S3-compatible store does not tell its room.", "scope": "backup_target"},
+  "last_check": {"text": "Last test", "scope": "backup_target"},
+  "used_by_recovery_archive": {"text": "Recovery archive", "scope": "backup_target"},
+  "used_by_database_dumps": {"text": "Database dumps", "scope": "backup_target"},
+  "used_by_joined": {"text": "{$first}, {$next}", "scope": "backup_target"},
+  "keeps_recovery_archive": {"text": "This server's own database and keys", "scope": "backup_target"},
+  "keeps_database_dumps": {"text": "The dumps of every database", "scope": "backup_target"},
+  "keeps_site": {"text": "Its files", "scope": "backup_target"},
+  "keeps_dumps": {"text": "{$dumps}, {$bytes :bytes}", "scope": "backup_target"},
+  "keeps_app_backups": {"text": "Its backups", "scope": "backup_target"},
+  "site_files_own": {"text": "Site files on this server", "scope": "backup_target"},
+  "dumps": {"text": ".match {$count :integer}\none {{1 dump}}\n* {{{$count :integer} dumps}}", "scope": "count"},
+  "manage_storage_description": {"text": "Edit, test and delete this storage.", "scope": "capability"},
+  "site_storage_not_usable": {"text": "Storage '{$storage}' is not one you may keep this site's files in", "scope": "violations"},
+  "site_files_move_first": {"text": "The new storage lacks {$files} of this site. Use Move files to change where its files are kept.", "scope": "violations"},
+  "site_files_move_same": {"text": "This site keeps its files in {$storage} already", "scope": "violations"},
+  "site_files_copy_unverified": {"text": "The copy of {$file} does not match its original; the site was not switched over", "scope": "violations"},
+  "move_files": {"text": "Move files", "scope": "site"},
+  "move_files_to_help": {"text": "The storage the site's files move to. They stay served while they move, and the old copies are removed once every file is verified.", "scope": "site"},
+  "move_files_copy_step": {"text": "Copy and verify each file", "scope": "site"},
+  "move_files_switch_step": {"text": "Switch the site over", "scope": "site"},
+  "move_files_remove_step": {"text": "Remove the old copies", "scope": "site"},
+  "move_files_copied": {"text": "{$files} copied and verified", "scope": "site"},
+  "move_files_switched": {"text": "The site now keeps its files in {$storage}", "scope": "site"},
+  "move_files_removed": {"text": "{$files} removed from the old storage", "scope": "site"},
+  "move_site_files_description": {"text": "Moves a site's own files to another storage, verified, while the site keeps serving them.", "scope": "hohenheim"},
+  "move_site_files": {"text": "{$actor} moved the files of site {$subject}", "scope": "hohenheim", "target": "happened"},
+  "move_files_confirm": {"text": "Move this site's files to the storage you choose. The site keeps serving them while they move, and it switches over once every file is copied and verified.", "scope": "site"}
 }

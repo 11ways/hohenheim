@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BuildHookModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -270,6 +271,14 @@ public final class TenantScopes {
     /** The git providers a tenant may USE: shared rows plus the managed ones (the pickers). */
     public static final RowScope USABLE_GIT_PROVIDERS = RowScope.perPrincipal(HohenheimAccess::gitProviderScope);
 
+
+    /**
+     * The storages a tenant OWNS: the /manage list and every storage picker, since nothing shares a storage yet (no
+     * column says "everyone may use it"); an administrator reaches every one.
+     */
+    public static final RowScope MANAGED_STORAGES = RowScope.perPrincipal(
+        ctx -> HohenheimAccess.grantScope(ctx, Models.get(BackupTargetModel.class),
+            BackupTargetModel.MODEL_ID, HohenheimCapabilities.MANAGE, BackupTargetModel.ID::in));
     private TenantScopes() {
     }
 

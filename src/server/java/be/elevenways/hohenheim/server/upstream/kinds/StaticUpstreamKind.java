@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.files.SiteFiles;
+import be.elevenways.hohenheim.server.files.SiteStorageField;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.StaticFileHandler;
@@ -52,13 +53,15 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
             .help(HohenheimMicrocopy.HELP.of("own_files")).build());
 
     /**
-     * The storage mount a site's own files live in; blank is the installation's own site-files folder. An
-     * administrator's choice (TenantWrites freezes the settings a delegate may not author).
+     * The storage a site's own files live in ("Files kept in"), picked from the storages the editing person may use
+     * ({@code SitePicks}); blank is the installation's own site-files folder. The site's manager may change it, and a
+     * change while files are kept is made by moving them ({@code SiteFileMoves}), never by a save alone.
      */
     public static final StringField STORAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder("storage")
+        SiteStorageField.builder("storage")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage"))
-            .help(HohenheimMicrocopy.HELP.of("site_storage")).build());
+            .help(HohenheimMicrocopy.HELP.of("site_storage"))
+            .attribute(SiteManagerSettings.MANAGER_CHANGES, true).build());
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
         PathField.builder("root_path").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
