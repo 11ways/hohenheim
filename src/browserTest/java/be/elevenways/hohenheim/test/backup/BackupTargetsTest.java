@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -179,8 +180,9 @@ class BackupTargetsTest {
                 assertThat(settings).as("step 3: the host record's identity, the stored base path")
                     .containsEntry("folder", remoteBase.toString())
                     .containsEntry("sign_in", SftpStorageKind.SIGN_IN_KEY)
-                    .containsEntry("host_key", sshd.hostKeyFingerprint())
                     .containsEntry("port", sshd.port());
+                assertThat(String.valueOf(settings.get("host_key"))).as("step 3: the pin with its key type")
+                    .matches("[a-z0-9-]+ " + Pattern.quote(sshd.hostKeyFingerprint()));
                 StorageAdapter target = BackupStorages.of(targetRow);
                 run(() -> {
                     BackupStorages.requireUsable(target);

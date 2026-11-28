@@ -550,21 +550,25 @@ public final class PanelRecordWrites {
 
     /**
      * Lays the value into the write: the record's own column, or the map it sits inside, as that map stands. A change
-     * inside a map whose shape its record's kind decides posts that stored kind with it, as the panel's form does, so
-     * the map is judged by the kind it belongs to.
+     * inside a map whose shape its record's kind decides is laid over that map as the resource's form holds it (its
+     * read of the record, so a map stored in a former shape is changed as every reader shows it) and posts that
+     * stored kind with it, as the panel's form does, so the map is judged by the kind it belongs to.
      *
      * @param record the record a change writes over, null for a create or a map a change of its kind empties
+     * @param shown  the record's values as the resource's form holds them, null for a create
      */
     private static void put(@NonNull Map<String, Object> raw, @NonNull Part part, @Nullable Object value,
-                            @Nullable Row record) {
+                            @Nullable Row record, @Nullable Map<String, Object> shown) {
         if (part.container() == null) {
             if (record != null && part.field() instanceof SchemaField schema && schema.isDynamic()
                     && value instanceof Map<?, ?> sent) {
                 // A whole map whose shape its record's kind decides: a change sends what changes inside it, laid
-                // over the stored map while the kind stays, and posts that stored kind so the map is judged by it.
+                // over the shown map while the kind stays, and posts that stored kind so the map is judged by it.
                 String selector = Objects.requireNonNull(schema.getSchemaFromField());
                 if (!raw.containsKey(selector)) {
-                    Map<String, Object> merged = new LinkedHashMap<>(RawValues.map(record.get(schema.getName())));
+                    Map<String, Object> merged = new LinkedHashMap<>(RawValues.map(shown != null
+                        && shown.containsKey(schema.getName()) ? shown.get(schema.getName())
+                        : record.get(schema.getName())));
                     sent.forEach((key, entry) -> merged.put(String.valueOf(key), entry));
                     raw.put(schema.getName(), merged);
                     raw.put(selector, record.get(selector));
@@ -634,7 +638,7 @@ public final class PanelRecordWrites {
                 parentKey = part.written(value);
                 parentColumn = part.field();
             } else {
-                put(raw, part, part.written(value), null);
+                put(raw, part, part.written(value), null, null);
             }
         }
         Set<String> handled = new LinkedHashSet<>();
@@ -699,6 +703,10 @@ public final class PanelRecordWrites {
         Set<String> handled = new LinkedHashSet<>();
         Set<String> turned = this.turned(record, input, sent);
         for (String map : turned) raw.put(map, new LinkedHashMap<>());
+        // A caller whose panel declares no such resource changes nothing, an entry of its own writer neither.
+        Panel panel = panelOf(caller);
+        PanelResource<Row> resource = this.resource(panel);
+        Map<String, Object> shown = PartsReads.valuesFromRow(resource, record);
         for (String name : sent) {
             Part part = this.part(name);
             Object value = input.get(name);
@@ -707,13 +715,10 @@ public final class PanelRecordWrites {
                 handled.add(name);
             } else {
                 put(raw, part, part.written(value), part.container() != null
-                    && turned.contains(part.container().getName()) ? null : record);
+                    && turned.contains(part.container().getName()) ? null : record, shown);
             }
         }
         String code = this.label(record.get(this.idField.getName()));
-        // A caller whose panel declares no such resource changes nothing, an entry of its own writer neither.
-        Panel panel = panelOf(caller);
-        PanelResource<Row> resource = this.resource(panel);
         @Nullable Runnable after = handled.isEmpty() || this.also == null ? null
             : this.also.judge(record, input, handled, caller);
         if (!raw.isEmpty()) {

@@ -7037,6 +7037,10 @@
     "text": "The name {$name} is taken by a storage of this server's settings; choose another",
     "scope": "violations"
   },
+  "backup_target_follows_host": {
+    "text": "{$name} follows the server {$host}: where it goes and how it signs in are that server's to change. To send backups elsewhere, add a new storage.",
+    "scope": "violations"
+  },
   "backup_target_unusable": {
     "text": "{$name} was not saved: {$reason} ({$diagnostic})",
     "scope": "violations"
@@ -21742,6 +21746,8 @@
   "try_ok_title": {"text": "Reachable and writable", "scope": "backup_target"},
   "add_storage": {"text": "Add a storage", "scope": "backup_target"},
   "secret_never_shown": {"text": "It is never shown. Edit replaces it.", "scope": "backup_target"},
+  "follows_host": {"text": "Follows server", "scope": "backup_target"},
+  "follows_host_notice": {"text": "This storage follows the server {$host}: its address, login, sign-in key and pinned server key come from that server's record at every use. Change them there; to send backups elsewhere, add a new storage.", "scope": "backup_target"},
   "room_read_lead": {"text": "Read at {$at :datetime}.", "scope": "backup_target"},
   "manage_storage_description": {"text": "Edit, test and delete this storage.", "scope": "capability"},
   "site_storage_not_usable": {"text": "Storage '{$storage}' is not one you may keep this site's files in", "scope": "violations"},

@@ -4,11 +4,20 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.HostModel;
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.backup.HohenheimStorages;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
+import be.elevenways.hohenheim.server.host.HostPins;
+import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
+import be.elevenways.hohenheim.test.stack.StackServiceSecretsTest;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
+import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
+import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
@@ -30,10 +39,15 @@ import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyEncryptionContext;
+import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -317,6 +331,136 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
         // 6. Deleted through the twin: it is gone.
         PanelResourceCalls.delete(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS, key, theirs);
         assertThat(Models.get(BackupTargetModel.class).findById(key)).as("step 6: deleted").isNull();
+    }
+
+    /**
+     * Storages stored before storages were records, in their former settings, read with their real values by the read
+     * tool, the form and the page (the Starfleet rehearsal read them as empty): a folder target's next save writes the
+     * folder kind's shape and keeps working; an SSH target follows its host record (blocked for workloads, as
+     * Starfleet's is, its pin on a key the server presents only when asked for it), shows where it goes and never the
+     * host's client key, passes its test, keeps its link through a save that changes nothing it decides and refuses
+     * one that changes where it goes.
+     */
+    @Test
+    void storagesStoredBeforeTheRoundReadWithTheirRealValues() throws Exception {
+        String tag = HohenheimMcpTest.letters();
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer mcp = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        McpHttpSession admin = HohenheimMcpTest.presetSession(mcp, endpoint,
+            TenantConduits.operatorUser().get(UserModel.ID), "Test Admin");
+        SftpTestServer server = SftpTestServer.shared();
+        Integer hostId = null;
+        try (OutboundFixture ignored = server.route()) {
+            // 1. A folder target's row as Starfleet holds it (its kind column rewritten by the boot's reconciler, its
+            //    settings {"path": ...} as stored): the tool, the form and the page read its folder.
+            Path folder = Files.createTempDirectory("hh-former-folder");
+            Row disk = storage("Former disk " + tag, LocalFolderStorageKind.ID.toString(),
+                Map.of("path", folder.toString()));
+            int diskId = disk.get(BackupTargetModel.ID);
+            assertThat(String.join("", StackServiceSecretsTest.rawColumn(
+                "SELECT settings FROM backup_targets WHERE id = ?", diskId))).as("step 1: stored in the former shape")
+                .contains("\"path\"").doesNotContain("\"folder\"");
+            String diskCode = HohenheimMcpTest.code(BackupTargetModel.MODEL_ID, diskId, TenantConduits.operator());
+            assertThat(admin.call("read", Map.of("codes", List.of(diskCode))).text()).as("step 1: the read tool")
+                .contains(folder.toString()).doesNotContain("Folder: not set");
+            Row found = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(diskId), "step 1");
+            assertThat(RawValues.map(BackupTargetParts.admin().formValues(found).get(BackupTargetModel.SETTINGS
+                .getName()))).as("step 1: the form").containsEntry("folder", folder.toString());
+            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/" + diskId + "/page/" + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.content()).as("step 1: the page").contains(folder.toString());
+
+            // 2. Its next save (the form's, through the tool) writes the folder kind's shape, and it keeps working.
+            McpHttpSession.Answer resaved = admin.call("backup_target_set", Map.of("code", diskCode, "settings",
+                Map.of("folder", folder.toString())));
+            assertThat(resaved.error()).as("step 2: saved: " + resaved.text()).isFalse();
+            assertThat(String.join("", StackServiceSecretsTest.rawColumn(
+                "SELECT settings FROM backup_targets WHERE id = ?", diskId))).as("step 2: the folder kind's shape")
+                .contains("\"folder\"").doesNotContain("\"path\"");
+            BackupStorages.requireUsable(BackupStorages.of(Objects.requireNonNull(
+                Models.get(BackupTargetModel.class).findById(diskId), "step 2")));
+
+            // 3. An SSH target's row ({"server": ..., "path": ...}, its kind column rewritten) on a host record blocked
+            //    for workloads, its pin confirmed on the server's Ed25519 key, which the server presents only when
+            //    asked for it: the tool, the form and the page read where it goes and the server it follows, never the
+            //    host's client key.
+            String boxFolder = server.freshFolder("former-box");
+            hostId = sshHost("phoenix-" + tag, server);
+            Row box = storage("Former box " + tag, SftpStorageKind.ID.toString(),
+                Map.of("server", HostModel.registryKeyOf(hostId), "path", boxFolder + "/"));
+            int boxId = box.get(BackupTargetModel.ID);
+            String pin = "ssh-ed25519 " + server.hostKey("ssh-ed25519");
+            String clientKey = Objects.requireNonNull(Objects.requireNonNull(Models.get(HostModel.class)
+                .findById(hostId)).get(HostTrustSlot.SSH.clientPrivate()), "step 3: the host's client key");
+            String boxCode = HohenheimMcpTest.code(BackupTargetModel.MODEL_ID, boxId, TenantConduits.operator());
+            String read = admin.call("read", Map.of("codes", List.of(boxCode))).text();
+            assertThat(read).as("step 3: the read tool").contains(SftpTestServer.HOST, boxFolder, SftpTestServer.USER,
+                server.hostKey("ssh-ed25519")).doesNotContain("Host: not set").doesNotContain(clientKey);
+            Map<String, Object> form = RawValues.map(BackupTargetParts.admin().formValues(Objects.requireNonNull(
+                Models.get(BackupTargetModel.class).findById(boxId), "step 3")).get(BackupTargetModel.SETTINGS
+                .getName()));
+            assertThat(form).as("step 3: the form").containsEntry("host", SftpTestServer.HOST)
+                .containsEntry("folder", boxFolder).containsEntry("user", SftpTestServer.USER)
+                .containsEntry("host_key", pin).containsEntry("sign_in", SftpStorageKind.SIGN_IN_KEY)
+                .doesNotContainKey("private_key");
+            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/" + boxId + "/page/" + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.content()).as("step 3: the page").contains(SftpTestServer.HOST, boxFolder,
+                "Follows server", "phoenix-" + tag).doesNotContain(clientKey);
+
+            // 4. Its test passes: the pinned Ed25519 key is asked for, though the server presents ECDSA first.
+            McpHttpSession.Answer tested = admin.call("test", Map.of("code", boxCode));
+            assertThat(tested.text()).as("step 4: reachable").contains("test: passed");
+
+            // 5. A rename keeps the link; the form's settings with only its server changed (where it goes is the host
+            //    record's) are refused naming the server it follows, and the link is kept.
+            McpHttpSession.Answer renamed = admin.call("backup_target_set", Map.of("code", boxCode, "name",
+                "Renamed box " + tag));
+            assertThat(renamed.error()).as("step 5: renamed: " + renamed.text()).isFalse();
+            this.made.add("Renamed box " + tag);
+            Map<String, Object> elsewhere = new LinkedHashMap<>(form);
+            elsewhere.put("host", "elsewhere.example.test");
+            McpHttpSession.Answer moved = admin.call("backup_target_set", Map.of("code", boxCode, "settings",
+                elsewhere));
+            assertThat(moved.error()).as("step 5: refused: " + moved.text()).isTrue();
+            assertThat(moved.text()).as("step 5: naming the server it follows").contains("follows the server",
+                "phoenix-" + tag);
+            assertThat(String.join("", StackServiceSecretsTest.rawColumn(
+                "SELECT settings FROM backup_targets WHERE id = ?", boxId))).as("step 5: still the link")
+                .contains("\"server\"").doesNotContain("elsewhere");
+        } finally {
+            for (String name : List.copyOf(this.made)) {
+                Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(name)).delete();
+            }
+            if (hostId != null) {
+                Models.get(HostModel.class).find().where(HostModel.ID.eq(hostId)).delete();
+            }
+        }
+    }
+
+    /**
+     * @return a host record reaching the test SFTP server over ssh, left blocked for workloads, its client key the
+     *         server's login key and its pin confirmed on the server's Ed25519 host key
+     */
+    private static int sshHost(String name, SftpTestServer server) throws Exception {
+        HostModel hosts = Models.get(HostModel.class);
+        Row host = hosts.createEmptyRow();
+        host.set(HostModel.NAME, name);
+        host.set(HostModel.RUNTIME, HostModel.RUNTIME_DOCKER);
+        host.set(HostModel.MODE, HostModel.MODE_SSH);
+        host.set(HostModel.SSH_TARGET, SftpTestServer.USER + "@" + SftpTestServer.HOST);
+        ByteArrayOutputStream key = new ByteArrayOutputStream();
+        OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(server.loginKey(), "test",
+            (OpenSSHKeyEncryptionContext) null, key);
+        host.set(HostModel.IDENTITY_PRIVATE_KEY, key.toString(StandardCharsets.UTF_8));
+        hosts.save(host);
+        int id = host.get(HostModel.ID);
+        HostPins.apply(Objects.requireNonNull(hosts.findById(id)), HostTrustSlot.SSH,
+            server.hostKeyLine("ssh-ed25519"), server.hostKey("ssh-ed25519"));
+        HostPins.confirm(Objects.requireNonNull(hosts.findById(id)), HostTrustSlot.SSH);
+        assertThat((String) Objects.requireNonNull(hosts.findById(id)).get(HostModel.ADMISSION))
+            .as("the host is blocked for workloads").isEqualTo(HostModel.ADMISSION_BLOCKED);
+        return id;
     }
 
     private void chooseKind(String kind) {

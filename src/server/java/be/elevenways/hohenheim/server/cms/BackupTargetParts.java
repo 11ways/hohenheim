@@ -357,9 +357,10 @@ public final class BackupTargetParts {
             .recordLabel(HohenheimMicrocopy.BACKUP_TARGET.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.BACKUP_TARGET))
             .icon(Icon.of("box-archive"))
-            .reads(ResourceReads.rows().pageBatch(BackupTargetParts::cells))
+            .reads(ResourceReads.rows().pageBatch(BackupTargetParts::cells).mapValues(BackupTargetParts::readable))
             .list(list.build())
-            .form(ResourceForm.<Row>of(form).landingTab(RecordOverview.SLUG).savesAtFootOnly().build())
+            .form(ResourceForm.<Row>of(form).landingTab(RecordOverview.SLUG).savesAtFootOnly()
+                .notice((storage, access) -> followsNotice(storage)).build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
@@ -401,12 +402,34 @@ public final class BackupTargetParts {
     }
 
     /**
+     * @return the record's values with its settings as every reader shows them
+     *         ({@link HohenheimStorages#readableSettings}), the stored ones untouched when they already are
+     */
+    private static @NonNull Map<String, Object> readable(@NonNull Row storage, @NonNull Map<String, Object> values) {
+        Map<String, Object> stored = RawValues.map(storage.get(BackupTargetModel.SETTINGS));
+        Map<String, Object> shown = HohenheimStorages.readableSettings(storage);
+        if (shown.equals(stored)) {
+            return values;
+        }
+        Map<String, Object> mapped = new LinkedHashMap<>(values);
+        mapped.put(BackupTargetModel.SETTINGS.getName(), shown);
+        return mapped;
+    }
+
+    /** @return what an SSH-era storage's form says it follows, null for any other storage */
+    private static @Nullable Microcopy followsNotice(@NonNull Row storage) {
+        String host = HohenheimStorages.hostRecordOf(storage);
+        return host == null ? null : HohenheimMicrocopy.BACKUP_TARGET.of("follows_host_notice").withArg("host", host);
+    }
+
+    /**
      * Refuses saving a storage whose name a settings mount holds, or that its kind's trial finds unusable or asks a
      * confirmation of: the check a Test runs, before anything is written.
      *
      * @throws Violations naming the name, the problem or the fingerprint to pin
      */
     public static void judgeBeforeSave(@NonNull Row row, @NonNull StorageOwner owner) {
+        HohenheimStorages.keepHostRecordLink(row);
         String name = String.valueOf((Object) row.get(BackupTargetModel.NAME));
         if (Storages.has(name)) {
             throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
@@ -635,6 +658,10 @@ public final class BackupTargetParts {
         List<WidgetFact> where = new ArrayList<>();
         for (StorageFact fact : facts(storage)) {
             where.add(WidgetFact.of(access.text(fact.label()), fact.value()));
+        }
+        String host = HohenheimStorages.hostRecordOf(storage);
+        if (host != null) {
+            where.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("follows_host")), host));
         }
         main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_where"), where));
         // One card per secret the storage holds, named by it as the board draws "Password": set, never shown.
