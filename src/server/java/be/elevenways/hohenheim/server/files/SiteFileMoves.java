@@ -48,11 +48,16 @@ import java.util.function.Consumer;
  * copies every file to the new storage, verifies each copy by the SHA-256 the new storage computes, switches the site
  * over and removes the old copies last, the site serving its files throughout.
  *
- * AIDEV-NOTE: the site reads the storage its settings name on every request, so before the switch the old storage
- * holds every file and after it the new one does; a file written to the old storage during the copy is copied by the
- * second pass just before the switch. A save that changes the storage while the old one holds a file the new one
- * lacks is refused ({@code site_files_move_first}): the change is offered only with the move until Jelle rules on
- * leaving files where they are (H1 brief item 6).
+ * AIDEV-NOTE: the site reads the storage its settings name on every request and every write resolves it again, so
+ * before the switch the old storage holds every file and after it the new one does. A file written to the old storage
+ * during the copy is copied by the second pass just before the switch; one written by a write that resolved the old
+ * storage just before the switch and landed after it is caught by VERIFY-AFTER-SWITCH: after the switch every key the
+ * old storage holds is settled again (copied when the new storage lacks it or holds only this move's earlier copy,
+ * left alone when a write since the switch put a newer one there) right before its old copy is removed, so nothing
+ * written is left only where the site no longer reads. No write is held: a hold would stall a person's upload for the
+ * length of a save. A save that changes the storage while the old one holds a file the new one lacks is refused
+ * ({@code site_files_move_first}): the change is offered only with the move until Jelle rules on leaving files where
+ * they are (H1 brief item 6).
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -98,6 +103,9 @@ public final class SiteFileMoves {
                 OperationSteps.step("remove", HohenheimMicrocopy.SITE.of("move_files_remove_step"))))
             .register();
 
+    /** The site whose move is saving its switch on this thread, which the storage-change check lets through. */
+    private static final ThreadLocal<Integer> SWITCHING = new ThreadLocal<>();
+
     static {
         OperationHandlers.attach(MOVE)
             .applies(SiteFiles::servesOwnFiles)
@@ -120,7 +128,9 @@ public final class SiteFileMoves {
             Map<String, Object> after = RawValues.map(row.get(SiteModel.SETTINGS));
             String from = SiteFiles.storageNameOf(before);
             String to = SiteFiles.storageNameOf(after);
-            if (!from.equals(to)) {
+            // The move's own switch is let through: what landed in the old storage since its second pass is settled
+            // right after it (verify-after-switch), which a refusal here would only turn into a failed move.
+            if (!from.equals(to) && !Objects.equals(SWITCHING.get(), stored.get(SiteModel.ID))) {
                 requireHeldBy(stored.get(SiteModel.ID), before, after, to);
             }
         });
@@ -183,15 +193,23 @@ public final class SiteFileMoves {
             .withArg("files", HohenheimCounts.of("files", copied.size())));
 
         site.set(SiteModel.SETTINGS, moved);
-        Models.get(SiteModel.class).save(site);
+        SWITCHING.set(siteId);
+        try {
+            Models.get(SiteModel.class).save(site);
+        } finally {
+            SWITCHING.remove();
+        }
         SiteFiles.forget(siteId);
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_switched").withArg("storage", to));
 
-        // Only what was copied and verified is removed, and only while it is still the verified bytes: a file
-        // written to the old storage after the second pass stays there rather than being lost.
-        for (Map.Entry<String, String> verified : copied.entrySet()) {
-            if (verified.getValue().equals(source.storedSha256(verified.getKey()))) {
-                source.deleteIfExists(verified.getKey());
+        // Verify after the switch: each key the old storage still holds is settled once more right before its old
+        // copy goes, so a write that landed there after the second pass is in the new storage first.
+        for (String key : source.list(prefix)) {
+            String settled = settled(source, target, key, copied);
+            // Removed only while it still holds the bytes just settled: a write landing between the two is kept for
+            // the next look rather than lost.
+            if (settled != null && source.stat(key) != null && settled.equals(source.storedSha256(key))) {
+                source.deleteIfExists(key);
             }
         }
         if (source.list(prefix).isEmpty()) {
@@ -200,6 +218,38 @@ public final class SiteFileMoves {
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_removed")
             .withArg("files", HohenheimCounts.of("files", copied.size())));
         return copied.size();
+    }
+
+    /**
+     * Settles one key after the switch: the new storage holds it as the old one does, or holds a newer copy a write
+     * since the switch put there.
+     *
+     * @param copied the verified SHA-256 of each key this move copied, extended here
+     * @return the SHA-256 of the old copy that is settled, so it may go; null for a key no longer in the old storage
+     */
+    private static @Nullable String settled(@NonNull StorageAdapter source, @NonNull StorageAdapter target,
+                                            @NonNull String key, @NonNull Map<String, String> copied) {
+        StoredObject object = source.stat(key);
+        if (object == null) {
+            return null;
+        }
+        String held = source.storedSha256(key);
+        String ours = copied.get(key);
+        if (held.equals(ours)) {
+            return held;
+        }
+        String there = target.stat(key) == null ? null : target.storedSha256(key);
+        if (there != null && !there.equals(ours)) {
+            // Written to the new storage since the switch: that copy is the newer one, and the site serves it.
+            return held;
+        }
+        if (there == null && ours != null) {
+            // This move put it there and the site removed it since the switch: never brought back.
+            return held;
+        }
+        copyOne(source, target, key, object, held);
+        copied.put(key, held);
+        return held;
     }
 
     /**
@@ -223,17 +273,27 @@ public final class SiteFileMoves {
             if (held.equals(copied.get(key))) {
                 continue;
             }
-            try (InputStream in = source.get(key)) {
-                target.put(key, in, PutOptions.builder().contentLength(object.size()).durable().build());
-            } catch (IOException failed) {
-                throw new UncheckedIOException(failed);
-            }
-            if (!held.equals(target.storedSha256(key))) {
-                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_files_copy_unverified")
-                    .withArg("file", key));
-            }
+            copyOne(source, target, key, object, held);
             copied.put(key, held);
             progress.reportProgress((double) walked / keys.size());
+        }
+    }
+
+    /**
+     * Copies one key durably and verifies it by the SHA-256 the new storage computes.
+     *
+     * @throws Violations {@code site_files_copy_unverified} when the copy's SHA-256 differs from its source's
+     */
+    private static void copyOne(@NonNull StorageAdapter source, @NonNull StorageAdapter target, @NonNull String key,
+                                @NonNull StoredObject object, @NonNull String held) {
+        try (InputStream in = source.get(key)) {
+            target.put(key, in, PutOptions.builder().contentLength(object.size()).durable().build());
+        } catch (IOException failed) {
+            throw new UncheckedIOException(failed);
+        }
+        if (!held.equals(target.storedSha256(key))) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_files_copy_unverified")
+                .withArg("file", key));
         }
     }
 }

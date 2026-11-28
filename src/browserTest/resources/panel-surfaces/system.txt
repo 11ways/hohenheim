@@ -6,8 +6,8 @@ column name at=0 shown=true hidden=false sortable=false filterable=true copyable
 column events at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column format at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-filter name at=0 kind=TEXT facet=false param=filter.name
-filter format at=1 kind=SELECT facet=true param=filter.format
+filter name at=0 kind=leaf:variable%3Dname,key%3Dfilter.name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.name%3D%252525- facet=false param=filter.name
+filter format at=1 kind=leaf:variable%3Dformat,key%3Dfilter.format,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.format%2525252Cprotoblast:text%2525252CENUM%2525252Cslack%252525252Cdiscord%252525252Cgeneric%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.format%3D%252525- facet=true param=filter.format
 header hohenheim:route_notification_events at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:route_events%252Cscope%3Dnotification_channel,body:routes_help%252Cscope%3Dnotification_channel,confirm:routes_save%252Cscope%3Dnotification_channel,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.route_notification_events
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
@@ -22,16 +22,38 @@ case admin.backup-targets.operator admin backup-targets operator v2
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column created_at at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-tab history at=0 landing=false view=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=failure relation=false
+column failure at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column where at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext=where_detail relation=false
+column where_detail at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column used_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column room_left at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab overview at=0 landing=true view=false
+tab history at=1 landing=false view=false
+tab access at=2 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:filesystem,hohenheim:ssh binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:filesystem%252Chohenheim:ssh
-control CREATE%20settings[hohenheim:filesystem]/settings.path at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:ssh]/settings.server at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:1 binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:ssh]/settings.path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3 binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control CREATE%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.address at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.region at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.bucket at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.prefix at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.access_key at=4 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.secret_key at=5 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.path_style at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.part_mib at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.page at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.backup-targets.tenant admin backup-targets tenant v2
 admission - verdict=zenit:forbidden
@@ -49,11 +71,11 @@ column active at=5 shown=false hidden=true sortable=false filterable=false copya
 column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-filter ip at=0 kind=TEXT facet=false param=filter.ip
-filter source at=1 kind=SELECT facet=true param=filter.source
-filter scope at=2 kind=SELECT facet=true param=filter.scope
+filter ip at=0 kind=leaf:variable%3Dip,key%3Dfilter.ip,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.ip%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.ip%3D%252525- facet=false param=filter.ip
+filter source at=1 kind=leaf:variable%3Dsource,key%3Dfilter.source,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.source%2525252Cprotoblast:text%2525252CENUM%2525252Cauto%252525252Cmanual%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.source%3D%252525- facet=true param=filter.source
+filter scope at=2 kind=leaf:variable%3Dscope,key%3Dfilter.scope,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.scope%2525252Cprotoblast:text%2525252CENUM%2525252Cweb%252525252Cssh%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.scope%3D%252525- facet=true param=filter.scope
 filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
-filter event_type at=4 kind=TEXT facet=false param=filter.event_type
+filter event_type at=4 kind=leaf:variable%3Devent_type,key%3Dfilter.event_type,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.event_type%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.event_type%3D%252525- facet=false param=filter.event_type
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20reason at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -73,10 +95,10 @@ column name at=0 shown=true hidden=false sortable=false filterable=true copyable
 column events at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column format at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-filter name at=0 kind=TEXT facet=false param=filter.name
-filter format at=1 kind=SELECT facet=true param=filter.format
+filter name at=0 kind=leaf:variable%3Dname,key%3Dfilter.name,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.name%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.name%3D%252525- facet=false param=filter.name
+filter format at=1 kind=leaf:variable%3Dformat,key%3Dfilter.format,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.format%2525252Cprotoblast:text%2525252CENUM%2525252Cslack%252525252Cdiscord%252525252Cgeneric%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.format%3D%252525- facet=true param=filter.format
 header hohenheim:route_notification_events at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:route_events%252Cscope%3Dnotification_channel,body:routes_help%252Cscope%3Dnotification_channel,confirm:routes_save%252Cscope%3Dnotification_channel,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.route_notification_events
-row hohenheim:test_channel at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_channel
+row hohenheim:test_channel at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/invoke/hohenheim.test_channel?ids%3D{record}
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dnotification_channel,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
@@ -97,25 +119,62 @@ verb CREATE
 verb UPDATE
 verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column created_at at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row hohenheim:test_backup_target at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_backup_target
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=failure relation=false
+column failure at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column where at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext=where_detail relation=false
+column where_detail at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column used_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column room_left at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row hohenheim:test_backup_target at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/invoke/hohenheim.test_backup_target?ids%3D{record}
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:delete_backup_target at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.delete_backup_target?ids%3D{record}
-tab history at=0 landing=false view=false
+tab overview at=0 landing=true view=false
+tab history at=1 landing=false view=false
+tab access at=2 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:filesystem,hohenheim:ssh binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:filesystem%252Chohenheim:ssh
-control CREATE%20settings[hohenheim:filesystem]/settings.path at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:ssh]/settings.server at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:1 binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:ssh]/settings.path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3 binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control CREATE%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.address at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.region at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.bucket at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.prefix at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.access_key at=4 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.secret_key at=5 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.path_style at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.part_mib at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20settings[zenit:storage_s3]/settings.page at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:filesystem,hohenheim:ssh binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:filesystem%252Chohenheim:ssh
-control EDIT%20settings[hohenheim:filesystem]/settings.path at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:ssh]/settings.server at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:1 binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings[hohenheim:ssh]/settings.path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3,hohenheim:filesystem binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control EDIT%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.address at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.region at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.bucket at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.prefix at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.access_key at=4 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.secret_key at=5 kind=zenitforms:control/string input=secret required=true readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.path_style at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.part_mib at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20settings[zenit:storage_s3]/settings.page at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 
 case admin.bans.operator.active admin bans operator v2
 admission - verdict=admitted
@@ -131,12 +190,12 @@ column active at=5 shown=false hidden=true sortable=false filterable=false copya
 column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-filter ip at=0 kind=TEXT facet=false param=filter.ip
-filter source at=1 kind=SELECT facet=true param=filter.source
-filter scope at=2 kind=SELECT facet=true param=filter.scope
+filter ip at=0 kind=leaf:variable%3Dip,key%3Dfilter.ip,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.ip%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.ip%3D%252525- facet=false param=filter.ip
+filter source at=1 kind=leaf:variable%3Dsource,key%3Dfilter.source,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.source%2525252Cprotoblast:text%2525252CENUM%2525252Cauto%252525252Cmanual%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.source%3D%252525- facet=true param=filter.source
+filter scope at=2 kind=leaf:variable%3Dscope,key%3Dfilter.scope,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.scope%2525252Cprotoblast:text%2525252CENUM%2525252Cweb%252525252Cssh%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.scope%3D%252525- facet=true param=filter.scope
 filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
-filter event_type at=4 kind=TEXT facet=false param=filter.event_type
-row hohenheim:lift_ban at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:lift_title%252Cscope%3Dban,body:lift_confirm%252Cscope%3Dban,confirm:lift_title%252Cscope%3Dban,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/lift_ban
+filter event_type at=4 kind=leaf:variable%3Devent_type,key%3Dfilter.event_type,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.event_type%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.event_type%3D%252525- facet=false param=filter.event_type
+row hohenheim:lift_ban at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:lift_title%252Cscope%3Dban,body:lift_confirm%252Cscope%3Dban,confirm:lift_title%252Cscope%3Dban,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.lift_ban?ids%3D{record}
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20reason at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -162,11 +221,11 @@ column active at=5 shown=false hidden=true sortable=false filterable=false copya
 column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-filter ip at=0 kind=TEXT facet=false param=filter.ip
-filter source at=1 kind=SELECT facet=true param=filter.source
-filter scope at=2 kind=SELECT facet=true param=filter.scope
+filter ip at=0 kind=leaf:variable%3Dip,key%3Dfilter.ip,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.ip%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.ip%3D%252525- facet=false param=filter.ip
+filter source at=1 kind=leaf:variable%3Dsource,key%3Dfilter.source,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.source%2525252Cprotoblast:text%2525252CENUM%2525252Cauto%252525252Cmanual%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.source%3D%252525- facet=true param=filter.source
+filter scope at=2 kind=leaf:variable%3Dscope,key%3Dfilter.scope,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.scope%2525252Cprotoblast:text%2525252CENUM%2525252Cweb%252525252Cssh%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.scope%3D%252525- facet=true param=filter.scope
 filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
-filter event_type at=4 kind=TEXT facet=false param=filter.event_type
+filter event_type at=4 kind=leaf:variable%3Devent_type,key%3Dfilter.event_type,operators%3Dprotoblast:contains,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/text%2525252Cfilter.event_type%2525252Cprotoblast:text%2525252CTEXT%2525252C%25252525-%2525252Cfalse%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.event_type%3D%252525- facet=false param=filter.event_type
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20reason at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=

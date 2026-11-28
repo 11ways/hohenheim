@@ -183,7 +183,7 @@ final class StorageUsage {
     }
 
     /** @return how many live sites keep their own files in each storage, by its name; one read */
-    private static @NonNull Map<String, Long> sitesByStorage() {
+    static @NonNull Map<String, Long> sitesByStorage() {
         Map<String, Long> sites = new HashMap<>();
         for (Row site : liveFileSites()) {
             sites.merge(SiteFiles.storageNameOf(RawValues.map(site.get(SiteModel.SETTINGS))), 1L, Long::sum);

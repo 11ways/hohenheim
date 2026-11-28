@@ -35,7 +35,9 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.sun.management.ThreadMXBean;
+import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -193,11 +195,25 @@ class SiteOwnFilesJourneyTest {
             .contains(SiteFiles.STORAGE, managerStore).doesNotContain(operatorStore);
 
         // 10. Moving the files: each copied and verified, the site switched over and the old copies removed last;
-        //     the site serves the file at its path from the new storage, and nothing is left in the old one.
+        //     the site serves the file at its path from the new storage, and nothing is left in the old one. A file a
+        //     write put in the old storage after the second pass, just before the switch, is in the new one too.
         List<Microcopy> steps = new ArrayList<>();
+        Path late = storage.resolve("sites/" + siteId + "/releases/late.txt");
         int moved = SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)),
-            operatorStore, ProgressSink.SILENT, steps::add);
-        assertThat(moved).as("step 10: the one file moved").isEqualTo(1);
+            operatorStore, ProgressSink.SILENT, step -> {
+                steps.add(step);
+                if (step.key().equals(HohenheimMicrocopy.SITE.of("move_files_copied").key())) {
+                    try {
+                        Files.writeString(late, "LATE-WRITE");
+                    } catch (IOException failed) {
+                        throw new UncheckedIOException(failed);
+                    }
+                }
+            });
+        assertThat(moved).as("step 10: the file, and the late one after the switch").isEqualTo(2);
+        assertThat(movedTo.resolve("sites/" + siteId + "/releases/late.txt")).as("step 10: the late write moved")
+            .hasContent("LATE-WRITE");
+        assertThat(Files.exists(late)).as("step 10: and left the old storage").isFalse();
         assertThat(steps).as("step 10: copied, switched, removed").extracting(Microcopy::key)
             .containsExactly(HohenheimMicrocopy.SITE.of("move_files_copied").key(),
                 HohenheimMicrocopy.SITE.of("move_files_switched").key(),
@@ -206,6 +222,8 @@ class SiteOwnFilesJourneyTest {
             .hasBinaryContent(installer);
         assertThat(Files.exists(storage.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")))
             .as("step 10: gone from the old one").isFalse();
+        // This test's own proxy is no ServerMain proxy, which the site's save reloads: reload it as that hook does.
+        proxy.reload();
         assertThat(ProxyTestSupport.rawRequest(port, "downloads.files.test", "/releases/Tadoma-1.2.EXE"))
             .as("step 10: served from the new storage").startsWith("HTTP/1.1 200")
             .contains("TADOMA-INSTALLER-0123456789");

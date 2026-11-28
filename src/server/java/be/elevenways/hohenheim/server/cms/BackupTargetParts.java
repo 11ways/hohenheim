@@ -34,6 +34,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.JsonValue;
@@ -45,6 +46,7 @@ import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.storage.StorageKindInfo;
@@ -62,6 +64,12 @@ import be.elevenways.zenit.server.storage.StorageReadings;
 import be.elevenways.zenit.server.storage.StorageRoom;
 import be.elevenways.zenit.server.storage.StorageTrial;
 import be.elevenways.zenit.server.storage.Storages;
+import be.elevenways.zenit.server.storage.DeclaredStorage;
+import be.elevenways.hohenheim.HohenheimCounts;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.files.SiteFiles;
+import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
+import be.elevenways.zenit.widget.common.data.WidgetItem;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
@@ -227,7 +235,7 @@ public final class BackupTargetParts {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.KIND))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
             .build();
-        return base(HohenheimIds.id("backup_target"), form)
+        return base(HohenheimIds.id("backup_target"), form, true)
             // Listed inside the settings page's Backups section (board Settings), beside the settings that name one
             // of these storages, never a sidebar row of its own.
             .showInNav(false)
@@ -251,7 +259,7 @@ public final class BackupTargetParts {
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
             .build();
-        return ManageTwin.reached(base(ManageTwin.id("backup_target"), form), TenantScopes.MANAGED_STORAGES,
+        return ManageTwin.reached(base(ManageTwin.id("backup_target"), form, false), TenantScopes.MANAGED_STORAGES,
                 ResourceTabs.<Row>of(List.of(overview())).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             .writes(ResourceMutations.rows().create().update().delete(DELETE)
@@ -267,8 +275,13 @@ public final class BackupTargetParts {
             .build();
     }
 
-    /** The parts both twins share: identity, the list as drawn and its page read, the form and the test. */
-    private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id, @NonNull FormSpec form) {
+    /**
+     * The parts both twins share: identity, the list as drawn and its page read, the form and the test.
+     *
+     * @param settingsCard whether the list shows the storages the server's settings declare above the records
+     */
+    private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id, @NonNull FormSpec form,
+                                                           boolean settingsCard) {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(BackupTargetModel.NAME).filterable().subtext(FAILURE_COLUMN).build())
             .column(ColumnSpec.virtual(FAILURE_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_failure"))
@@ -288,6 +301,9 @@ public final class BackupTargetParts {
         ResourceList.Builder<Row> list = ResourceList.rows(table).chrome(ListChrome.MINIMAL)
             .emptyDescription(HohenheimMicrocopy.BACKUP_TARGET.of("empty"))
             .search(BackupTargetModel.NAME);
+        if (settingsCard) {
+            list.widgets(scope -> inSettings(scope.accessContext()));
+        }
         // The one-record read of each computed column; a listed page answers from the page batch.
         for (String column : List.of(FAILURE_COLUMN, WHERE_COLUMN, WHERE_DETAIL_COLUMN, ADDED_BY_COLUMN,
                 USED_BY_COLUMN, ROOM_COLUMN)) {
@@ -450,11 +466,11 @@ public final class BackupTargetParts {
         return String.join(", ", names);
     }
 
-    /** @return the facts the storage's kind marks listed, none for a storage whose settings cannot be read */
+    /** @return the facts the storage's kind names in a list, none for a storage whose settings cannot be read */
     private static @NonNull List<StorageFact> listedFacts(@NonNull Row storage) {
         List<StorageFact> listed = new ArrayList<>();
         for (StorageFact fact : facts(storage)) {
-            if (fact.listed()) {
+            if (fact.listed() != null) {
                 listed.add(fact);
             }
         }
@@ -472,23 +488,79 @@ public final class BackupTargetParts {
     }
 
     /**
-     * @param first the place itself (the first listed fact's value) when true, else the rest as one line under it
-     *              ("bucket tadoma-releases, folder site")
+     * @param first the place itself (the first listed fact, in its kind's words) when true, else the rest as one line
+     *              under it ("bucket tadoma-releases, folder site")
      */
-    private static @Nullable String place(@NonNull List<StorageFact> listed, @NonNull AccessContext access,
-                                          boolean first) {
+    static @Nullable String place(@NonNull List<StorageFact> listed, @NonNull AccessContext access, boolean first) {
         if (listed.isEmpty()) {
             return null;
         }
         if (first) {
-            return listed.getFirst().value();
+            return access.text(Objects.requireNonNull(listed.getFirst().listed()));
         }
         List<String> rest = new ArrayList<>();
         for (StorageFact fact : listed.subList(1, listed.size())) {
-            rest.add(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("where_fact")
-                .withArg("label", fact.label()).withArg("value", fact.value())));
+            rest.add(access.text(Objects.requireNonNull(fact.listed())));
         }
         return rest.isEmpty() ? null : String.join(", ", rest);
+    }
+
+    /**
+     * The storages the server's settings declare (board FO128 screen 1, "From the server's settings"): read-only,
+     * each with where it is in its kind's words, the sites keeping their files there and the room it last told.
+     *
+     * AIDEV-NOTE: drawn as a card above the records, not as rows of the records' table: a list's rows are records of
+     * its model, and these are no row of backup_targets. The site-files folder is mounted on first use, so it is
+     * mounted here first to be listed.
+     */
+    static @NonNull WidgetTree inSettings(@NonNull AccessContext access) {
+        try {
+            SiteFiles.storageOf(null);
+        } catch (RuntimeException unmounted) {
+            Blast.log("STORAGE: this server's site files are not mounted:", unmounted.getMessage());
+        }
+        List<DeclaredStorage> declared = Storages.inSettings();
+        if (declared.isEmpty()) {
+            return WidgetTree.empty();
+        }
+        Map<String, Long> sites = StorageUsage.sitesByStorage();
+        List<WidgetItem> items = new ArrayList<>();
+        for (DeclaredStorage storage : declared) {
+            List<String> line = new ArrayList<>();
+            StorageKindInfo kind = StorageKindRegistry.REGISTRY.get(storage.kind());
+            if (kind != null) {
+                line.add(access.text(kind.getLabel()));
+            }
+            List<StorageFact> listed = new ArrayList<>();
+            try {
+                for (StorageFact fact : StorageKinds.facts(storage)) {
+                    if (fact.listed() != null) {
+                        listed.add(fact);
+                    }
+                }
+            } catch (RuntimeException unreadable) {
+                Blast.log("STORAGE: the facts of", storage.name(), "cannot be read:", unreadable.getMessage());
+            }
+            String where = place(listed, access, true);
+            String detail = place(listed, access, false);
+            for (String part : new String[] {where, detail}) {
+                if (part != null) {
+                    line.add(part);
+                }
+            }
+            long used = sites.getOrDefault(storage.name(), 0L);
+            if (used > 0) {
+                line.add(access.text(HohenheimCounts.of("sites", used)));
+            }
+            WidgetItem item = new WidgetItem(storage.name(), null, List.of()).withFacts(line);
+            String room = room(storage.name(), access);
+            items.add(room == null ? item : item.withAside(room));
+        }
+        WidgetInstance card = new WidgetInstance(CardWidget.ID,
+            Map.of("title", HohenheimMicrocopy.BACKUP_TARGET.of("in_settings_title"),
+                "lead", HohenheimMicrocopy.BACKUP_TARGET.of("in_settings_lead")),
+            new WidgetTree(List.of(ItemListWidget.of(items, null))));
+        return new WidgetTree(List.of(card));
     }
 
     /** A storage's page: where it is, the room it last told and what uses it. */
@@ -496,6 +568,29 @@ public final class BackupTargetParts {
         return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.BACKUP_TARGET.of("overview"))
             .withoutFields()
             .widgets(BackupTargetParts::widgets);
+    }
+
+    /**
+     * @return each secret the storage's kind holds and the storage stores, saying it is set and never shown: a
+     *         secret is replaced through the form's own stored-secret entry, never read back here
+     */
+    private static @NonNull List<WidgetFact> secrets(@NonNull Row storage, @NonNull AccessContext access) {
+        // Read whole: a page's record may come projected or masked, and only whether a secret is stored is shown.
+        Row whole = Models.get(BackupTargetModel.class).findById(storage.get(BackupTargetModel.ID));
+        List<WidgetFact> secrets = new ArrayList<>();
+        StorageKindInfo kind = whole == null ? null : StorageKindRegistry.REGISTRY.get(HohenheimStorages.kindOf(whole));
+        if (kind == null) {
+            return secrets;
+        }
+        Map<String, Object> settings = RawValues.map(whole.get(BackupTargetModel.SETTINGS));
+        for (Field<?, ?> field : kind.getSchema().getFields().values()) {
+            Object value = settings.get(field.getName());
+            if (field.isSecret() && value != null && !String.valueOf(value).isEmpty()) {
+                secrets.add(WidgetFact.of(access.text(FieldLabels.labelFor(field)),
+                    access.text(HohenheimMicrocopy.BACKUP_TARGET.of("secret_stored"))));
+            }
+        }
+        return secrets;
     }
 
     private static @NonNull WidgetTree widgets(@NonNull Row storage, @NonNull AccessContext access) {
@@ -507,6 +602,11 @@ public final class BackupTargetParts {
             where.add(WidgetFact.of(access.text(fact.label()), fact.value()));
         }
         main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_where"), where));
+        List<WidgetFact> secrets = secrets(storage, access);
+        if (!secrets.isEmpty()) {
+            main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_secrets"),
+                HohenheimMicrocopy.BACKUP_TARGET.of("secrets_lead"), secrets));
+        }
         StorageUsage.Counts counts = StorageUsage.of(storage);
         List<WidgetFact> used = StorageUsage.facts(storage, panelSlug, access);
         main.add(counts.inUse()
