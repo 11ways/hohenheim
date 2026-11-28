@@ -765,7 +765,9 @@ class LinkedServersJourneyTest {
             // 8. The master's list opens Kuifje's app on the SAME page a workload of the master opens (its Instances
             //    page, the key it keeps it by), drawn from what Kuifje told alone: its name, its host there and its
             //    server, never the master's own app of that number. The tabs that show what runs on Kuifje say they
-            //    wait and are not offered, and the page offers the record's own Restart, Roll back and Stop.
+            //    wait and are not offered, and the page offers the record's own Restart and Stop, as Kuifje tells it
+            //    offers them; Roll back, which Kuifje tells does not apply to an app of a kind that keeps no release,
+            //    is not offered, as a local page of that kind offers none.
             String listKey = peer + "-" + appKey;
             String appBase = "/admin/" + HohenheimSlugs.INSTANCES + "/" + listKey;
             String appPage = appBase + "/page/" + RecordOverview.SLUG;
@@ -776,7 +778,7 @@ class LinkedServersJourneyTest {
             assertThat(shown.body()).as("step 8: by Kuifje's facts").contains("carried-app")
                 .contains(ForkedHohenheim.FAKE_HOST).contains("Kuifje")
                 .contains("Logs, console, files, stats, backups, volumes, databases and history wait")
-                .contains("rollback_instance").contains("restart_instance").contains("stop_instance");
+                .contains("restart_instance").contains("stop_instance").doesNotContain("rollback_instance");
             assertThat(pagesLinked(shown.body(), appBase))
                 .as("step 8: no tab beside the overview (a strip of one is not drawn)")
                 .isSubsetOf(RecordOverview.SLUG);
@@ -854,27 +856,32 @@ class LinkedServersJourneyTest {
                 .isNotNull();
             assertThat(after("started ", kuifje.ask("started " + appKey)).split(" ")[0])
                 .as("step 11: stopped on Kuifje").isEqualTo(InstanceModel.STATUS_STOPPED);
-            //     Roll back pressed on the page starts the master's run of it, judged on Kuifje, which keeps no release
-            //     of an app of this kind: Kuifje refuses it, the master's run ends refused, and Kuifje's app stays as it
-            //     was.
+            //     Roll back is not offered (step 8), and pressed anyway it is refused here: nothing is asked of Kuifje,
+            //     and Kuifje's app stays as it was.
+            settle(kuifje);
+            awaitSyncs();
             int beforeRollback = relay.accepted();
             assertThat(pressOnPage(HohenheimSlugs.INSTANCES, InstanceOperations.ROLLBACK, listKey))
-                .as("step 11: the page's Roll back answered its run").isNotNull();
-            OperationRun rolledBack = CommittedWrites.awaitValue(OperationRunModel.MODEL_ID, Duration.ofSeconds(60),
-                () -> {
-                    List<OperationRun> runs = OperationRuns.recentFor(InstanceOperations.INSTANCE, listKey, 1,
-                        TenantConduits.operator());
-                    OperationRun now = runs.isEmpty() ? null : runs.getFirst();
-                    return now != null && now.operation() != null
-                        && InstanceOperations.ROLLBACK.id().equals(now.operation().id()) && now.status().isTerminal()
-                        ? now : null;
-                });
-            assertThat(rolledBack).as("step 11: the master's run of the roll back ended").isNotNull();
-            assertThat(rolledBack.status()).as("step 11: refused, as Kuifje judged it")
-                .isEqualTo(OperationRunStatus.REFUSED);
-            assertThat(relay.accepted()).as("step 11: it was asked of Kuifje").isGreaterThan(beforeRollback);
+                .as("step 11: the page's Roll back is refused here").isNull();
+            assertThat(relay.accepted()).as("step 11: nothing was asked of Kuifje").isEqualTo(beforeRollback);
             assertThat(after("started ", kuifje.ask("started " + appKey)).split(" ")[0])
                 .as("step 11: Kuifje's app is as it was").isEqualTo(InstanceModel.STATUS_STOPPED);
+
+            // 11b. An app of a kind that keeps releases: its page offers Roll back dead, in Kuifje's words, while
+            //      Kuifje keeps no earlier release of it, and live once Kuifje keeps one: what Kuifje tells it offers
+            //      reaches the master's page with Kuifje's next change.
+            String releasing = after("app ", kuifje.ask("release-app carried-releases")).split(" ")[0];
+            settle(kuifje);
+            awaitSyncs();
+            String releasingPage = "/admin/" + HohenheimSlugs.INSTANCES + "/" + peer + "-" + releasing + "/page/"
+                + RecordOverview.SLUG;
+            assertThat(asAdministrator(releasingPage).body()).as("step 11b: Roll back offered, dead in Kuifje's words")
+                .contains("rollback_instance").contains("This app keeps no earlier release");
+            assertThat(kuifje.ask("keep-release " + releasing)).isEqualTo("ok");
+            settle(kuifje);
+            awaitSyncs();
+            assertThat(asAdministrator(releasingPage).body()).as("step 11b: Roll back live once Kuifje keeps one")
+                .contains("rollback_instance").doesNotContain("This app keeps no earlier release");
 
             // 12. Kuifje does not answer: its app's page says since when and offers none of Kuifje's verbs.
             relay.retarget(closedPort());

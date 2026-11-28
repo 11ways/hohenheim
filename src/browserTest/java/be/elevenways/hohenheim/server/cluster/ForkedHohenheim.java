@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.server.cluster;
 
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkState;
@@ -22,6 +26,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.ProteusSignIn;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -399,6 +404,39 @@ final class ForkedHohenheim implements AutoCloseable {
                     Models.get(InstanceModel.class).save(app);
                     String key = String.valueOf((Object) app.get(InstanceModel.ID));
                     yield "app " + key + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key);
+                }
+                // "release-app NAME" stores an app of a kind that keeps releases, not deployed yet: "app <id> <code>".
+                case "release-app" -> {
+                    Row app = Models.get(InstanceModel.class).createEmptyRow();
+                    app.set(InstanceModel.NAME, words[1]);
+                    app.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+                    app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+                    app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+                    Models.get(InstanceModel.class).save(app);
+                    String key = String.valueOf((Object) app.get(InstanceModel.ID));
+                    yield "app " + key + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key);
+                }
+                // "keep-release ID": the app keeps an earlier release to roll back to, generated as the engine does.
+                case "keep-release" -> {
+                    int applicationId = Integer.parseInt(words[1]);
+                    Map<String, Object> spec = new LinkedHashMap<>();
+                    spec.put(ReleaseKind.IMAGE.getName(), "registry.test/kept:stable");
+                    spec.put("commit_sha", "kept0000aaaa");
+                    spec.put(InstanceKindFields.MEMORY_LIMIT_MB, 256);
+                    try {
+                        GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+                            InstanceModel.MODEL_ID.toString(), applicationId), () -> {
+                            Row release = Models.get(InstanceModel.class).createEmptyRow();
+                            release.set(InstanceModel.NAME, "kept-" + applicationId);
+                            release.set(InstanceModel.KIND, ReleaseKind.ID.toString());
+                            release.set(InstanceModel.SETTINGS, spec);
+                            release.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
+                            Models.get(InstanceModel.class).save(release);
+                        });
+                    } catch (Exception failed) {
+                        throw new IllegalStateException("the kept release was not stored", failed);
+                    }
+                    yield "ok";
                 }
                 // "fake-app NAME" deploys an app on the daemon-free fake runtime of a host of Kuifje's own, so it runs:
                 // "app <id> <code>".
