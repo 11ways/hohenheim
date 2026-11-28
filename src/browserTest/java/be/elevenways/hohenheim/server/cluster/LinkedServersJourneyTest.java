@@ -883,6 +883,25 @@ class LinkedServersJourneyTest {
             assertThat(asAdministrator(releasingPage).body()).as("step 11b: Roll back live once Kuifje keeps one")
                 .contains("rollback_instance").doesNotContain("This app keeps no earlier release");
 
+            // 11c. Kuifje's stack opens on the master's Stacks page, the page a stack of the master opens, its overview
+            //      drawn from what Kuifje told. Kuifje tells that Deploy applies to it and Stop and Roll back do not (it
+            //      runs nothing and has no deployment to go back to); its Services tab, which shows what runs on
+            //      Kuifje, is not served.
+            String stackKey = after("stack ", kuifje.ask("stack carried-stack"));
+            settle(kuifje);
+            awaitSyncs();
+            String stackBase = "/admin/" + HohenheimSlugs.STACKS + "/" + peer + "-" + stackKey;
+            String stackPage = stackBase + "/page/" + RecordOverview.SLUG;
+            assertThat(rowOf(masterApps("carried-stack"), "carried-stack")).as("step 11c: its row opens that page")
+                .contains(stackPage);
+            HttpResponse<String> stackShown = asAdministrator(stackPage);
+            assertThat(stackShown.statusCode()).as("step 11c: the master's page of Kuifje's stack").isEqualTo(200);
+            assertThat(stackShown.body()).as("step 11c: by Kuifje's facts, offering what Kuifje tells")
+                .contains("carried-stack").contains("Kuifje").contains("deploy_stack")
+                .doesNotContain("stop_stack").doesNotContain("rollback_stack");
+            assertThat(asAdministrator(stackBase + "/page/" + HohenheimSlugs.Tab.SERVICES).statusCode())
+                .as("step 11c: its Services tab is not served").isEqualTo(404);
+
             // 12. Kuifje does not answer: its app's page says since when and offers none of Kuifje's verbs.
             relay.retarget(closedPort());
             LinkedServers.sweep();

@@ -66,7 +66,7 @@ public final class StackOperations {
         .one(STACK)
         .verb(HohenheimVerbs.DEPLOY)
         .gate(HohenheimSources.OPERATOR)
-        .facts(OperationFact.REACHES_OUTSIDE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(CmsCommands.EXTERNAL)
         .register();
 
@@ -79,7 +79,7 @@ public final class StackOperations {
         .one(STACK)
         .verb(HohenheimVerbs.STOP)
         .gate(HohenheimSources.OPERATOR)
-        .facts(OperationFact.REACHES_OUTSIDE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(CmsCommands.EXTERNAL)
         .register();
 
@@ -92,7 +92,7 @@ public final class StackOperations {
         .one(STACK)
         .verb(HohenheimVerbs.ROLL_BACK)
         .gate(HohenheimSources.OPERATOR)
-        .facts(OperationFact.REACHES_OUTSIDE)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.RUNS_WHERE_SUBJECT_LIVES)
         .command(CmsCommands.EXTERNAL)
         .register();
 

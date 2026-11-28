@@ -70,7 +70,7 @@ import java.util.function.Predicate;
  * AIDEV-NOTE: every row opens its app's record page, a linked server's too: a workload on the Instances page, a website
  * on the Sites page, under the key the master keeps it by (its server's key, then its own), where that page draws it
  * from what its server told and offers the operations that run where their subject lives (zenit-cms opensHeld,
- * RecordTab.servesHeld). A linked server's stack opens nothing yet: its page declares no held surface. A silent
+ * RecordTab.servesHeld); a stack on the Stacks page's overview. A silent
  * server's rows recede, draw no state glyph and say when it last answered, and the list's notice over its rows says it
  * does not answer.
  *
@@ -229,8 +229,9 @@ public final class AppParts {
     }
 
     /**
-     * @return a linked server's app's record page: a workload's or a website's opens on this panel's Instances or
-     *         Sites page under its server's key and its own; a stack's, or one this build cannot read, opens nothing
+     * @return a linked server's app's record page: a workload's, a website's or a stack's opens on this panel's
+     *         Instances, Sites or Stacks page under its server's key and its own; one this build cannot read opens
+     *         nothing
      */
     private static @Nullable RouteTarget heldTarget(@NonNull HeldApp app, @NonNull String panelSlug) {
         Source source = app.cells().source();
@@ -238,7 +239,7 @@ public final class AppParts {
         return source == null ? null : switch (source) {
             case WORKLOAD -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.INSTANCES, key, RecordOverview.SLUG);
             case WEBSITE -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, key, RecordOverview.SLUG);
-            case STACK -> null;
+            case STACK -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.STACKS, key, RecordOverview.SLUG);
         };
     }
 

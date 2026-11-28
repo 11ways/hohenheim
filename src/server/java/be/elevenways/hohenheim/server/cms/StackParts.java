@@ -29,6 +29,7 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -174,10 +175,24 @@ public final class StackParts {
             .deleteConfirmation(DeleteConfirmation.of(
                 DeleteConfirmation.body(HohenheimMicrocopy.STACK.of("delete_confirm"))))
             .actions(stackActions())
-            .tabs(ResourceTabs.<Row>of(List.of(new StackServicesPage(), new StackDeploymentsPage())).withHistory()
+            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.stackTab(), new StackServicesPage(),
+                    new StackDeploymentsPage())).withHistory()
                 .withContributions())
+            // A linked server's stack opens on this same page: its overview drawn from what that server told and its
+            // deploy, stop and roll back run there (they run where their subject lives); every other tab waits.
+            .opensHeld(HELD)
             .build();
     }
+
+    /**
+     * The stacks of the servers this one manages, as it keeps them, opened on this page for an administrator; a
+     * stack is an app, so the lists' words are the apps'.
+     */
+    private static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("stack"),
+            access -> List.copyOf(ClusterLists.rows(Models.get(StackModel.class), StackModel.MODEL_ID)),
+            "held_band", "list_app_count")
+        .health(stack -> AppOverview.heldHealth(stack, AppDirectory.Source.STACK))
+        .build();
 
     /** @return the services of the stacks, nav-hidden and reached through a stack's Services tab */
     public static @NonNull PanelResource<Row> services() {

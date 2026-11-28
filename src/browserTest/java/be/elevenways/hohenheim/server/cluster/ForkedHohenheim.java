@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -415,6 +416,14 @@ final class ForkedHohenheim implements AutoCloseable {
                     Models.get(InstanceModel.class).save(app);
                     String key = String.valueOf((Object) app.get(InstanceModel.ID));
                     yield "app " + key + " " + RecordCodes.codeUnjudged(InstanceModel.MODEL_ID, key);
+                }
+                // "stack NAME" stores a stack on the local daemon, never deployed: "stack <id>".
+                case "stack" -> {
+                    Row stack = Models.get(StackModel.class).createEmptyRow();
+                    stack.set(StackModel.NAME, words[1]);
+                    stack.set(StackModel.HOST_ID, HostModel.localHostId());
+                    Models.get(StackModel.class).save(stack);
+                    yield "stack " + stack.get(StackModel.ID);
                 }
                 // "keep-release ID": the app keeps an earlier release to roll back to, generated as the engine does.
                 case "keep-release" -> {

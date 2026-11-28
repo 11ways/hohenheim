@@ -132,6 +132,31 @@ final class AppOverview {
         return compose(List.of(), main, side);
     }
 
+    /**
+     * A stack's overview, the app composition over the stack: its Details (the facts every app page leads with) and
+     * its Recent activity; a linked server's stack opens it too, drawn from what that server told ({@link
+     * #heldWidgets}). Its Services tab stays the landing tab of this server's own stack.
+     */
+    static @NonNull RecordOverview<Row> stackTab() {
+        return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
+            .withoutFields()
+            .widgets(AppOverview::stackWidgets)
+            .servesHeld((stack, access) -> heldWidgets(stack, Source.STACK, access));
+    }
+
+    private static @NonNull WidgetTree stackWidgets(@NonNull Row stack, @NonNull AccessContext access) {
+        Integer hostId = stack.get(StackModel.HOST_ID);
+        boolean delegated = CmsSupport.isDelegatedPanel(access.conduit());
+        String hostUrl = delegated || hostId == null ? null : CmsRoutes.subpage(CmsSupport.panelSlug(access.conduit()),
+            HohenheimSlugs.HOSTS, HostModel.canonicalHostId(hostId), RecordOverview.SLUG).toUrl();
+        List<WidgetInstance> side = new ArrayList<>();
+        if (!delegated) {
+            side.add(recent(Models.get(StackModel.class), stack.get(StackModel.ID), access));
+        }
+        return compose(List.of(), List.of(details(identity(AppDirectory.cellsOf(Source.STACK, stack, access), hostUrl,
+            null, access))), side);
+    }
+
     // -- composition ------------------------------------------------------------------
 
     /** The overview's grid: an optional full-width row on top, a wide column and a narrow one below it. */
