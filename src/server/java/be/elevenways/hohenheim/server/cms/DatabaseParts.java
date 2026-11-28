@@ -500,7 +500,7 @@ public final class DatabaseParts {
             .writes(ResourceMutations.rows()
                 .create(call -> DatabaseWrites.create(call.values()))
                 .update(call -> {
-                    DatabaseWrites.resize(Objects.requireNonNull(call.record()), call.values(), call.merged());
+                    DatabaseWrites.change(Objects.requireNonNull(call.record()), call.values(), call.merged());
                     return null;
                 })
                 .delete(DELETE)

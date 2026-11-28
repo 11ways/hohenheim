@@ -435,9 +435,9 @@ public final class BackupTargetParts {
     }
 
     /**
-     * Refuses saving a storage whose name a settings mount holds, or that its kind's trial finds unusable or asks a
-     * confirmation of: the check a Test runs, before anything is written. A tenant's storage is saved with the
-     * operator's two switches off, so neither its reach nor who sees it can widen.
+     * Refuses saving a storage whose name a settings mount or another storage holds, or that its kind's trial finds
+     * unusable or asks a confirmation of: the check a Test runs, before anything is written. A tenant's storage is
+     * saved with the operator's two switches off, so neither its reach nor who sees it can widen.
      *
      * @throws Violations naming the name, the problem or the fingerprint to pin
      */
@@ -447,6 +447,12 @@ public final class BackupTargetParts {
         if (Storages.has(name)) {
             throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_taken").withArg("name", name));
+        }
+        // The unique index (backup_targets_name_unique) refuses it too, but as a database error in no one's words.
+        Row named = Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(name)).first();
+        if (named != null && !Objects.equals(named.get(BackupTargetModel.ID), row.get(BackupTargetModel.ID))) {
+            throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
+                HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_exists").withArg("name", name));
         }
         HohenheimStorages.keepSwitchesOperators(row, owner);
         DeclaredStorage declaration = HohenheimStorages.declarationOf(row, owner);

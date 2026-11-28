@@ -1,14 +1,17 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.application.FakeApps;
+import be.elevenways.hohenheim.test.database.DumpTargetFixture;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
@@ -27,10 +30,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -161,6 +166,12 @@ class HohenheimDatabaseToolsTest extends HohenheimHttpTestBase {
                 "kind", LocalFolderStorageKind.ID.toString(), "settings", Map.of("folder", folder.toString())));
             assertThat(spelled.error()).as("step 5: a stored key is no word: " + spelled.text()).isTrue();
             assertThat(spelled.text()).as("step 5: the refusal names it").contains("kind");
+            McpHttpSession.Answer twin = admin.call("backup_target_set", Map.of("name", PREFIX + "target-" + tag,
+                "kind", "storage_local_folder", "settings", Map.of("folder", other.toString())));
+            assertThat(twin.error()).as("step 5: a name a storage holds is refused: " + twin.text()).isTrue();
+            assertThat(twin.text()).as("step 5: in words, never the database's")
+                .contains("A storage named " + PREFIX + "target-" + tag + " exists already")
+                .doesNotContain("Duplicate");
             McpHttpSession.Answer repointed = admin.call("backup_target_set",
                 Map.of("code", targetCode, "settings", Map.of("folder", other.toString())));
             assertThat(repointed.error()).as("step 5: " + repointed.text()).isFalse();
@@ -169,6 +180,35 @@ class HohenheimDatabaseToolsTest extends HohenheimHttpTestBase {
                 .isEqualTo(other.toString());
             McpHttpSession.Answer tested = admin.call("test", Map.of("code", targetCode));
             assertThat(tested.text()).as("step 5: it can be reached").contains("test: passed");
+
+            // 5b. The database takes that storage and a number kept of its own by tool, as the rehearsal called it:
+            //     both are stored, a read says them, the next dump lands in that storage, and a null clears both.
+            McpHttpSession.Answer own = admin.call("database_set", Map.of("code", databaseCode,
+                "backup_target", targetCode, "dumps_kept", 2));
+            assertThat(own.error()).as("step 5b: " + own.text()).isFalse();
+            assertThat((Integer) row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.BACKUP_TARGET_ID))
+                .as("step 5b: THE ASSERTION, its storage is stored").isEqualTo(targetId);
+            assertThat((Integer) row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.DUMPS_KEPT))
+                .as("step 5b: and its number kept").isEqualTo(2);
+            assertThat(admin.call("read", Map.of("codes", List.of(databaseCode))).text())
+                .as("step 5b: a read says both").contains(targetCode).contains("dumps_kept: 2");
+            Row dump = DatabaseBackups.backUp(DumpTargetFixture.scriptedDumps(new AtomicInteger()),
+                String.valueOf((Object) row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.NAME)));
+            assertThat((Integer) dump.get(DatabaseDumpModel.TARGET_ID)).as("step 5b: the dump went to its storage")
+                .isEqualTo(targetId);
+            assertThat(other.resolve(String.valueOf((Object) dump.get(DatabaseDumpModel.REMOTE_KEY))))
+                .as("step 5b: and lies in its folder").exists();
+            Models.get(DatabaseDumpModel.class).find().where(DatabaseDumpModel.ID.eq((Integer) dump.get(
+                DatabaseDumpModel.ID))).delete();
+            Map<String, Object> cleared = new HashMap<>(Map.of("code", databaseCode));
+            cleared.put("backup_target", null);
+            cleared.put("dumps_kept", null);
+            McpHttpSession.Answer back = admin.call("database_set", cleared);
+            assertThat(back.error()).as("step 5b: " + back.text()).isFalse();
+            assertThat(row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.BACKUP_TARGET_ID))
+                .as("step 5b: back to the server's storage").isNull();
+            assertThat(row(DatabaseModel.MODEL_ID, databaseId).get(DatabaseModel.DUMPS_KEPT))
+                .as("step 5b: and its number").isNull();
 
             // 6. A backup restore routes by in_place: a host is for a new app only, and an incomplete backup is not
             //    restored.

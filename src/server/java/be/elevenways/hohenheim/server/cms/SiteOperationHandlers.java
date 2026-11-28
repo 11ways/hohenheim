@@ -31,6 +31,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.RecordRef;
@@ -519,7 +520,7 @@ public final class SiteOperationHandlers {
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.UPSTREAM_KIND, input.upstream_kind());
         site.set(SiteModel.INSTANCE_ID, input.instance_id());
-        Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), null);
+        Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), null, caller);
         String minted = SiteRegistrationTokens.mintInto(input.upstream_kind(), settings);
         SiteRegistrationTokens.requireShownTo(minted, caller);
         site.set(SiteModel.SETTINGS, settings);
@@ -612,7 +613,7 @@ public final class SiteOperationHandlers {
         boolean settingsWritten = writes(written, SiteModel.SETTINGS) || writes(written, SiteModel.UPSTREAM_KIND);
         String minted = null;
         if (settingsWritten) {
-            Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), site);
+            Map<String, Object> settings = settingsOf(input.upstream_kind(), input.settings(), site, caller);
             minted = SiteRegistrationTokens.mintInto(input.upstream_kind(), settings);
             SiteRegistrationTokens.requireShownTo(minted, caller);
             UpstreamKindHandler kept = Objects.equals(input.upstream_kind(), storedKind)
@@ -714,9 +715,11 @@ public final class SiteOperationHandlers {
      * one instead of minting a second; only an absent token is minted, exactly as the row lane did.
      *
      * @param stored the site as stored, null on a create
+     * @param caller who writes it: a setting picked from options that depend on the person (the storage its own
+     *               files are kept in) is judged against the options offered to them
      */
     private static @Nullable Map<String, Object> settingsOf(@Nullable String kind, @Nullable Map<String, Object> posted,
-                                                            @Nullable Row stored) {
+                                                            @Nullable Row stored, @NonNull AccessContext caller) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(SiteModel.UPSTREAM_KIND.getName(), kind);
         values.put(SiteModel.SETTINGS.getName(), posted == null ? Map.of() : posted);
@@ -727,7 +730,7 @@ public final class SiteOperationHandlers {
         }
         // The form names a settings map by its entries (the fields' input names); the site stores the stored names.
         Map<String, Object> plain = SubmittedValueCoercion.coerceJsonOrThrow(SiteWrites.SETTINGS_FORM,
-            SiteWrites.SETTINGS_FORM.entryMaps(values), null);
+            SiteWrites.SETTINGS_FORM.entryMaps(values), EditContext.of(caller).withRecord(stored));
         Object restored = SiteWrites.SETTINGS_FORM.storedMaps(FormSecrets.restore(SiteWrites.SETTINGS_FORM, plain,
             SiteWrites.SETTINGS_FORM.byEntryNames(existing))).get(SiteModel.SETTINGS.getName());
         Map<String, Object> restoredMap = RawValues.mapOrNull(restored);

@@ -411,12 +411,30 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
         assertThat(refused.error()).as("step 5: " + refused.text()).isTrue();
         assertThat(refused.text()).as("step 5: nothing of it").doesNotContain("Read me.txt");
 
-        // 6. Kept in another storage without moving them: the file left behind is listed and read by tool, a new one
-        //    lands in the storage chosen, and a delete takes the old one out of the earlier storage.
+        // 6. Kept in another storage without moving them, all by tool as the rehearsal did: the operator names a
+        //    storage by the code the tools show (BT); the file left behind is read and listed where it stays, a new
+        //    one lands in the storage chosen, a delete takes an old one out of the earlier storage, and
+        //    site_files_move, given the same code, consolidates them.
         McpHttpSession.Answer kept = own.call("file_write", Map.of("code", code, "path", "/docs/Kept.txt",
             "content", "kept " + tag));
         assertThat(kept.error()).as("step 6: " + kept.text()).isFalse();
-        Path newer = keptElsewhere(siteId);
+        assertThat(own.call("file_write", Map.of("code", code, "path", "/docs/Gone.txt", "content", "gone " + tag))
+            .error()).as("step 6: a second old file").isFalse();
+        Path newer = Files.createTempDirectory("hh-site-unmoved");
+        McpHttpSession.Answer storageMade = admin.call("backup_target_set", Map.of("name", "hh-reach-" + tag,
+            "kind", "storage_local_folder", "settings", Map.of("folder", newer.toString())));
+        assertThat(storageMade.error()).as("step 6: " + storageMade.text()).isFalse();
+        Matcher storageCode = Pattern.compile("\\bBT\\d+\\b").matcher(storageMade.text());
+        assertThat(storageCode.find()).as("step 6: the storage's code: " + storageMade.text()).isTrue();
+        McpHttpSession.Answer switched = admin.call("site_static_files_set", Map.of("code", code,
+            "storage", storageCode.group()));
+        assertThat(switched.error()).as("step 6: THE ASSERTION, the code is taken: " + switched.text()).isFalse();
+        Map<String, Object> settings = RawValues.map(Objects.requireNonNull(Models.get(SiteModel.class)
+            .findById(siteId)).get(SiteModel.SETTINGS));
+        assertThat(settings.get(StaticUpstreamKind.STORAGE.getName())).as("step 6: the site keeps the storage's name")
+            .isEqualTo("hh-reach-" + tag);
+        assertThat(SiteFiles.earlierStorageNamesOf(settings)).as("step 6: and still reads the one it left")
+            .containsExactly(SiteFiles.STORAGE);
         assertThat(own.call("file_read", Map.of("code", code, "path", "/docs/Kept.txt")).text())
             .as("step 6: the file left behind reads").contains("kept " + tag);
         assertThat(own.call("file_write", Map.of("code", code, "path", "/docs/New.txt", "content", "new " + tag))
@@ -424,11 +442,23 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
         assertThat(newer.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/New.txt"))
             .as("step 6: in the storage chosen").hasContent("new " + tag);
         assertThat(own.call("file_read", Map.of("code", code, "path", "/docs")).text())
-            .as("step 6: the listing holds both").contains("Kept.txt").contains("New.txt");
-        assertThat(own.call("file_delete", Map.of("code", code, "path", "/docs/Kept.txt")).error())
-            .as("step 6: the old one is deleted").isFalse();
+            .as("step 6: the listing holds both").contains("Kept.txt").contains("Gone.txt").contains("New.txt");
+        assertThat(own.call("file_delete", Map.of("code", code, "path", "/docs/Gone.txt")).error())
+            .as("step 6: an old one is deleted").isFalse();
+        assertThat(Files.exists(storage.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/Gone.txt")))
+            .as("step 6: out of the earlier storage").isFalse();
+        McpHttpSession.Answer move = admin.call("site_files_move", Map.of("code", code,
+            "storage", storageCode.group()));
+        assertThat(move.error()).as("step 6: the move by the same code: " + move.text()).isFalse();
+        Matcher run = Pattern.compile("RUN\\d+").matcher(move.text());
+        assertThat(run.find()).as("step 6: the move names its run: " + move.text()).isTrue();
+        HohenheimMcpTest.followed(admin, run.group(), "step 6");
+        assertThat(newer.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/Kept.txt"))
+            .as("step 6: the move consolidated the file left behind").hasContent("kept " + tag);
         assertThat(Files.exists(storage.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/Kept.txt")))
             .as("step 6: out of the earlier storage").isFalse();
+        assertThat(SiteFiles.earlierStorageNamesOf(RawValues.map(Objects.requireNonNull(Models.get(SiteModel.class)
+            .findById(siteId)).get(SiteModel.SETTINGS)))).as("step 6: the read-through ended").isEmpty();
     }
 
     // -- plumbing -------------------------------------------------------------

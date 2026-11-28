@@ -7037,6 +7037,10 @@
     "text": "The name {$name} is taken by a storage of this server's settings; choose another",
     "scope": "violations"
   },
+  "backup_target_name_exists": {
+    "text": "A storage named {$name} exists already; choose another name",
+    "scope": "violations"
+  },
   "backup_target_follows_host": {
     "text": "{$name} follows the server {$host}: where it goes and how it signs in are that server's to change. To send backups elsewhere, add a new storage.",
     "scope": "violations"
@@ -21647,7 +21651,7 @@
   ],
   "storage": {"text": "Storage", "scope": "hohenheim_field"},
   "files_kept_in": {"text": "Files kept in", "scope": "hohenheim_field"},
-  "site_storage": {"text": "The storage this site's own files are kept in; leave empty for this installation's own folder of site files. Choosing another without Move files leaves the files where they are: the site keeps serving them from there and puts new files in the storage chosen.", "scope": "help"},
+  "site_storage": {"text": "The storage this site's own files are kept in, a storage named by its code (BT3); empty is this installation's own folder of site files. Choosing another without Move files leaves the files where they are: the site keeps serving them and puts new files in the one chosen.", "scope": "help"},
   "site_lead": {"text": "These files are served at this site's addresses, at the same paths: /releases/app.dmg here is https://your-address/releases/app.dmg.", "scope": "instance_files"},
   "site_files_storage": {"text": "the storage this site's files are kept in is not available on this server", "scope": "site_fault"},
   "site_files_not_permitted": {"text": "You are not allowed to reach this site's files", "scope": "violations"},
@@ -21756,7 +21760,7 @@
   "site_files_move_same": {"text": "This site keeps its files in {$storage} already", "scope": "violations"},
   "site_files_copy_unverified": {"text": "The copy of {$file} does not match its original; the site was not switched over", "scope": "violations"},
   "move_files": {"text": "Move files", "scope": "site"},
-  "move_files_to_help": {"text": "The storage the site's files move to. They stay served while they move, and the old copies are removed once every file is verified.", "scope": "site"},
+  "move_files_to_help": {"text": "The storage the site's files move to, a storage named by its code (BT3). They stay served while they move, and the old copies are removed once every file is verified.", "scope": "site"},
   "move_files_copy_step": {"text": "Copy and verify each file", "scope": "site"},
   "move_files_switch_step": {"text": "Switch the site over", "scope": "site"},
   "move_files_remove_step": {"text": "Remove the old copies", "scope": "site"},

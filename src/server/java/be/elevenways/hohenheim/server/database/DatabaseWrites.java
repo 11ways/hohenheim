@@ -23,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -96,6 +97,29 @@ public final class DatabaseWrites {
         Row created = new DatabaseService().createAsync(name, engine, image.isEmpty() ? null : image, user, password,
             database, ephemeral, server, limits, placement.isEmpty() ? null : placement, engineId);
         return created.get(DatabaseModel.ID);
+    }
+
+    /**
+     * THE change of a managed database from its form or database_set: its ceilings ({@link #resize}), then its own
+     * storage and number of dumps kept (any placement), so a refused ceiling stores neither.
+     *
+     * AIDEV-NOTE: until 2026-11-28 the update writer called resize alone, which stores the ceilings and nothing else,
+     * so the form and the tool answered "changed" for backup_target and dumps_kept and stored neither.
+     *
+     * @param values the entries this write carries
+     * @param merged the stored record's values with the submission over them; a present null is a deliberate clear
+     */
+    public static void change(@NonNull Row existing, @NonNull Map<String, Object> values,
+                              OperationInput.@NonNull Values merged) {
+        resize(existing, values, merged);
+        Integer target = RawValues.parsedInt(merged.get(DatabaseModel.BACKUP_TARGET_ID));
+        Integer kept = RawValues.parsedInt(merged.get(DatabaseModel.DUMPS_KEPT));
+        if (!Objects.equals(target, existing.get(DatabaseModel.BACKUP_TARGET_ID))
+                || !Objects.equals(kept, existing.get(DatabaseModel.DUMPS_KEPT))) {
+            existing.set(DatabaseModel.BACKUP_TARGET_ID, target);
+            existing.set(DatabaseModel.DUMPS_KEPT, kept);
+            Models.get(DatabaseModel.class).save(existing);
+        }
     }
 
     /**

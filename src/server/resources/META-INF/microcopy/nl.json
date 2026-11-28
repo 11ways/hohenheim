@@ -7037,6 +7037,10 @@
     "text": "De naam {$name} is al van een opslag uit de instellingen van deze server; kies een andere",
     "scope": "violations"
   },
+  "backup_target_name_exists": {
+    "text": "Er bestaat al een opslag met de naam {$name}; kies een andere naam",
+    "scope": "violations"
+  },
   "backup_target_follows_host": {
     "text": "{$name} volgt de server {$host}: waar het heen gaat en hoe het aanmeldt, wijzigt u bij die server. Wilt u back-ups ergens anders heen sturen, voeg dan een nieuwe opslag toe.",
     "scope": "violations"
@@ -21647,7 +21651,7 @@
   ],
   "storage": {"text": "Opslag", "scope": "hohenheim_field"},
   "files_kept_in": {"text": "Bestanden bewaard in", "scope": "hohenheim_field"},
-  "site_storage": {"text": "De opslag waarin de eigen bestanden van deze site bewaard worden; laat leeg voor de eigen map met sitebestanden van deze installatie. Kiest u een andere zonder Bestanden verplaatsen, dan blijven de bestanden waar ze zijn: de site serveert ze daar verder en zet nieuwe bestanden in de gekozen opslag.", "scope": "help"},
+  "site_storage": {"text": "De opslag waarin de eigen bestanden van deze site bewaard worden, een opslag genoemd bij haar code (BT3); leeg is de eigen map met sitebestanden van deze installatie. Kiest u een andere zonder Bestanden verplaatsen, dan blijven de bestanden waar ze zijn: de site serveert ze verder en zet nieuwe bestanden in de gekozen opslag.", "scope": "help"},
   "site_lead": {"text": "Deze bestanden worden op de adressen van deze site geserveerd, op hetzelfde pad: /releases/app.dmg hier is https://uw-adres/releases/app.dmg.", "scope": "instance_files"},
   "site_files_storage": {"text": "de opslag waarin de bestanden van deze site bewaard worden is niet beschikbaar op deze server", "scope": "site_fault"},
   "site_files_not_permitted": {"text": "U mag de bestanden van deze site niet bereiken", "scope": "violations"},
@@ -21756,7 +21760,7 @@
   "site_files_move_same": {"text": "Deze site bewaart zijn bestanden al in {$storage}", "scope": "violations"},
   "site_files_copy_unverified": {"text": "De kopie van {$file} komt niet overeen met het origineel; de site is niet omgeschakeld", "scope": "violations"},
   "move_files": {"text": "Bestanden verplaatsen", "scope": "site"},
-  "move_files_to_help": {"text": "De opslagplaats waar de bestanden van de site naartoe gaan. Ze blijven bereikbaar tijdens het verplaatsen, en de oude bestanden worden pas verwijderd als elk bestand is nagegaan.", "scope": "site"},
+  "move_files_to_help": {"text": "De opslagplaats waar de bestanden van de site naartoe gaan, een opslag genoemd bij haar code (BT3). Ze blijven bereikbaar tijdens het verplaatsen, en de oude bestanden worden pas verwijderd als elk bestand is nagegaan.", "scope": "site"},
   "move_files_copy_step": {"text": "Elk bestand overzetten en nagaan", "scope": "site"},
   "move_files_switch_step": {"text": "De site omschakelen", "scope": "site"},
   "move_files_remove_step": {"text": "De oude bestanden verwijderen", "scope": "site"},
