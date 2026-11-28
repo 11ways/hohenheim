@@ -10,11 +10,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * AIDEV-NOTE: zenit chains every stream in version order (a115be18), so a migration declares
  * only its cross-stream edges, never its predecessor. The stream starts with ONE baseline, M001_HohenheimBaseline,
  * which squashed 001..019 on 2026-10-21 and is published (kuifje, robbedoes). The last published version is
- * M008_StreamPortLists, which starfleet, robbedoes and kuifje applied on 2026-11-25; M001 to M008 are all applied on
- * the live hosts. M009_StorageChoices (Jelle's approval of 2026-11-28) is the one open migration until the next live
- * deploy publishes it. MigrationIntegrityTest pins the list and that a migration at or below
- * MigrationIntegrityTest.DEPLOYED_THROUGH is never edited: a deploy that applies the open migration raises PUBLISHED
- * and pins it in the same commit, or the open migration stays editable while installs already recorded it.
+ * M009_StorageChoices (Jelle's approval of 2026-11-28), which starfleet applied on 2026-11-28 12:52; robbedoes and
+ * kuifje still hold M001 to M008 and apply it at their next deploy. MigrationIntegrityTest pins the list and that a
+ * migration at or below MigrationIntegrityTest.DEPLOYED_THROUGH is never edited: a deploy that applies a new open
+ * migration raises PUBLISHED and pins it in the same commit, or the open migration stays editable while installs
+ * already recorded it.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -25,9 +25,9 @@ public abstract class HohenheimMigration extends Migration {
     @NonNull
     public static final String STREAM = "be.elevenways.hohenheim";
 
-    /** The version Hohenheim's live hosts recorded last (starfleet, robbedoes, kuifje, 2026-11-25 about 06:15). */
+    /** The version a Hohenheim host recorded last (starfleet, 2026-11-28 12:52: M009_StorageChoices). */
     @NonNull
-    public static final String PUBLISHED = "2026_11_25_000001";
+    public static final String PUBLISHED = "2026_11_28_000001";
 
     protected HohenheimMigration(@NonNull String version, @NonNull String name) {
         super(version, name);
