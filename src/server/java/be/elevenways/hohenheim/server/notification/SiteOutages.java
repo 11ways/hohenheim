@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SiteOutageModel;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
+import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteAvailability;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.server.peer.SharedStates;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -202,6 +204,8 @@ public final class SiteOutages {
         if (won == 0) {
             return;
         }
+        // The app's verdict on its master's Apps list turned with it: tell the master now, not at its minute check.
+        SharedStates.changed(AppStates.KIND);
         String name = nameOf(application);
         Microcopy subject = named
             ? HohenheimMicrocopy.ALERT.of("site_recovered_subject_at").withArg("name", name)
@@ -219,6 +223,7 @@ public final class SiteOutages {
         if (won == 0) {
             return;
         }
+        SharedStates.changed(AppStates.KIND);
         int applicationId = application.get(InstanceModel.ID);
         Microcopy detail = ApplicationUpstreams.resolve(applicationId).upstream() == null
             ? HohenheimMicrocopy.ALERT.of("site_down_nothing_serving")

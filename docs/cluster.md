@@ -165,6 +165,17 @@ DNS zones (a secondary's refresh stamps `last_checked_at`, `last_transfer_at` an
 (every transfer and notify stamps `last_axfr_*` and `last_notify_*`), build hooks (`last_triggered_at` at every call)
 and backups and database dumps (a scheduled run adds rows and moves their status).
 
+## What the master is told of how things are doing
+
+The record says what things ARE; how they are DOING is state, kept beside it the same way. Each server offers, per
+app of its Apps list, the facts that list draws (`AppFacts`: name, kind, address, host, HTTPS and the verdict, in
+copy keys, never words), as the state kind `hohenheim:app_state` (core `SharedStates`, producer `AppStates`). It
+travels the generations and rows calls, is told at once after every committed change of a shared kind and when a
+site's outage latch turns, is compared at the minute check, and is kept in the same core tables under that kind,
+left out of the kept counts. Its generation lives in the owning server's process, starting at that process's start,
+so a restart only moves it forward. A master reads every server's apps' state with two statements: its links and
+the kept state of all of them. A silent server's state stays as it last told it.
+
 ## One code per thing
 
 A code (`AP12`, `S14`) names one thing in the whole cluster, the same on every server, with no server letter in it.

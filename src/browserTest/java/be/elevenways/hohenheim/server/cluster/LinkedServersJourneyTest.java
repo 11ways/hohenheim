@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.auth.ProteusSignIn;
+import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.hohenheim.server.cms.ClusterAttention;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
@@ -270,6 +271,13 @@ class LinkedServersJourneyTest {
             PeerRecords.KeptRecord kept = PeerRecords.read(peer, SiteModel.MODEL_ID, made);
             assertThat(kept).as("step 2: the new site is kept").isNotNull();
             assertThat(kept.title()).as("step 2: under its name").isEqualTo("later-site");
+            //    Beside the record, the master holds the state Kuifje tells of each of its apps, told at once too: the
+            //    new site is an app of its own there, under its name, with the verdict Kuifje's own list leads with.
+            Map<String, Object> told = toldState(peer, "website-" + made);
+            assertThat(told).as("step 2: the master holds the new app's state").isNotNull();
+            assertThat(told.get("name")).as("step 2: under its name").isEqualTo("later-site");
+            assertThat(told.get("source")).as("step 2: a website").isEqualTo("website");
+            assertThat(((Map<?, ?>) told.get("health")).get("tone")).as("step 2: with Kuifje's verdict").isNotNull();
 
             // 3. A change and a removal there are followed.
             assertThat(kuifje.ask("describe " + made + " described-on-kuifje")).isEqualTo("ok");
@@ -279,6 +287,7 @@ class LinkedServersJourneyTest {
             assertThat(kuifje.ask("unsite " + made)).startsWith("unsite ");
             settle(kuifje);
             assertThat(PeerRecords.read(peer, SiteModel.MODEL_ID, made)).as("step 3: the removal is followed").isNull();
+            assertThat(toldState(peer, "website-" + made)).as("step 3: its app's state went with it").isNull();
             assertThat(kept(peer)).as("step 3: in step again").isEqualTo(kuifje.ask("counts"));
 
             //    The master's statements per sync stay flat as Kuifje's rows grow: one site or six, in one commit.
@@ -353,6 +362,8 @@ class LinkedServersJourneyTest {
             assertThat(kept(peer)).as("step 5: everything kept stays").isEqualTo(keptBefore);
             assertThat((Integer) only().get(LinkedServerModel.SITES)).as("step 5: its count stays")
                 .isEqualTo(sitesBefore);
+            assertThat(toldState(peer, "website-" + early)).as("step 5: the state Kuifje last told stays")
+                .isNotNull();
 
             // 6. Kuifje's database is put back to an earlier state: the copy taken now, before one more site the
             //    master takes in. The state, the attention item and the alert come once; nothing kept changes.
@@ -680,6 +691,13 @@ class LinkedServersJourneyTest {
     /** @return the keys of the records (up to 500) the master keeps of one kind of a linked server */
     private static List<String> keptKeys(String peer, Identifier model) {
         return PeerRecords.page(peer, model, null, 500).entries().stream().map(PeerRecords.KeptEntry::key).toList();
+    }
+
+    /** @return the state a linked server last told of one of its apps, as the master keeps it; null when none */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> toldState(String peer, String app) {
+        PeerRecords.KeptRecord kept = PeerRecords.read(peer, AppStates.KIND, app);
+        return kept == null ? null : (Map<String, Object>) Zenit.DRY.parseJsonTree(kept.document());
     }
 
     /**

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.cluster.JoinRefusal;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.server.HohenheimSystemPurposes;
+import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -69,12 +70,14 @@ public final class ClusterHandlers {
 
     /**
      * Installs the handlers of the cluster calls, the nudge that tells this server's master of a change, the
-     * numbering that takes code numbers from it and the carrier of tool calls about its managed servers' things.
+     * numbering that takes code numbers from it, the carrier of tool calls about its managed servers' things and the
+     * state of this server's apps it offers its master.
      */
     public static void init() {
         ClusterNudge.install();
         ClusterCodes.install();
         ClusterToolCalls.install();
+        AppStates.declare();
         ClusterEndpoints.GENERATIONS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
             Map<String, Object> generations = new LinkedHashMap<>();
             SharedRows.generations(caller)

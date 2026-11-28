@@ -22,6 +22,7 @@ import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.KeyedRows;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -97,7 +99,8 @@ final class AppDirectory {
     /**
      * One app as the list draws it, worded for the viewer it was read for.
      *
-     * @param key         unique over the list: the source's token and the record's id
+     * @param key         unique over the list: the source's token and the record's id, behind the linked server's
+     *                    key for an app of another server
      * @param kind        what it is, in the words its own record page uses
      * @param addressText the address cell as plain text, for the list's search; null when it has none
      * @param host        the host it runs on (a website's: the host of the instance serving it), null without one and
@@ -105,25 +108,55 @@ final class AppDirectory {
      * @param https       what HTTPS gives its main address (the one the address cell shows), in the Addresses list's
      *                    words; null without an exact address
      * @param health      the verdict its own record page leads with, its fixes offered on the record it speaks for
-     * @param target      its record page's front door
+     * @param target      its record page's front door, null for an app of another server, which has no page here yet
+     * @param held        the linked server it lives on, null for an app of this server
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
                @Nullable SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @Nullable StateLineCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {
+               @Nullable StateLineCell https, @NonNull RecordHealth health, @Nullable RouteTarget target,
+               @Nullable Held held) {
 
         // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of the
         // site a workload's verdict already speaks for), never of the Apps entry: ResourceHealth.fixColumn() offers
-        // them on that record exactly as its band does ("Get a certificate").
+        // them on that record exactly as its band does ("Get a certificate"). A told verdict carries no fixes.
         App {
-            if (health.fixesOn() == null) {
+            if (held == null && health.fixesOn() == null) {
                 health = health.on(source.entrySlug, id);
             }
+        }
+
+        /** @return this server's app drawn from its facts, opening its record page */
+        static @NonNull App of(@NonNull AppFacts facts, @NonNull RouteTarget target, @NonNull Wording words) {
+            return drawn(facts.key(), facts, target, null, words);
+        }
+
+        /** @return a linked server's app drawn from the facts that server told, opening nothing */
+        static @NonNull App held(@NonNull AppFacts facts, @NonNull Held held, @NonNull Wording words) {
+            return drawn(held.peer() + "-" + facts.key(), facts, null, held, words);
+        }
+
+        private static @NonNull App drawn(@NonNull String key, @NonNull AppFacts facts, @Nullable RouteTarget target,
+                                          @Nullable Held held, @NonNull Wording words) {
+            return new App(key, facts.source(), facts.id(), facts.name(), words.say(facts.kind()), facts.address(),
+                facts.address() == null ? null : facts.address().primary(), facts.host(), facts.https(),
+                facts.health(), target, held);
         }
 
         /** @return how the dashboard and the sidebar count this app, by the verdict its record page leads with */
         @NonNull Count count() {
             return Count.of(this.health.tone());
         }
+    }
+
+    /**
+     * The linked server an app lives on, as this server last heard of it.
+     *
+     * @param peer     the key the record of that server is kept under
+     * @param server   its name
+     * @param silent   whether it does not answer now, so what it told is no longer current
+     * @param lastSeen when it last answered, null when it never did
+     */
+    record Held(@NonNull String peer, @NonNull String server, boolean silent, @Nullable Instant lastSeen) {
     }
 
     /**
@@ -218,9 +251,39 @@ final class AppDirectory {
         Wording words = Wording.of(access);
         Members records = Members.of(listed(panel, HohenheimSlugs.SITES, access),
             listed(panel, HohenheimSlugs.INSTANCES, access), listed(panel, HohenheimSlugs.STACKS, access));
+        List<App> apps = new ArrayList<>();
+        for (Located located : located(records, delegated, access, panel.slug())) {
+            apps.add(App.of(located.facts(), located.target(), words));
+        }
+        apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
+        return List.copyOf(apps);
+    }
+
+    /**
+     * The facts of every app of this installation as the operator's Apps list holds them, read without a viewer from
+     * the rows the operator's entries hold (as {@link InstallationCounts} counts them): what this server tells its
+     * master ({@link AppStates}). A fixed number of reads whatever the installation holds.
+     */
+    static @NonNull List<AppFacts> operatorFacts() {
+        Members records = Members.of(Models.get(SiteModel.class).find().noCache().all(),
+            Models.get(InstanceModel.class).find().noCache().where(InstanceParts.listedByOperator()).all(),
+            Models.get(StackModel.class).find().noCache().all());
+        List<AppFacts> facts = new ArrayList<>();
+        for (Located located : located(records, false, AccessContext.anonymous(), HohenheimSlugs.ADMIN)) {
+            facts.add(located.facts());
+        }
+        return facts;
+    }
+
+    /** One app's facts and its record page's front door on the panel they were read for. */
+    private record Located(@NonNull AppFacts facts, @NonNull RouteTarget target) {
+    }
+
+    /** The facts of the apps these records make, read from this process for this reader. */
+    private static @NonNull List<Located> located(@NonNull Members records, boolean delegated,
+                                                  @NonNull AccessContext access, @NonNull String panelSlug) {
         List<Row> instances = records.workloads();
         List<Row> stacks = records.stacks();
-
         Set<String> working = AppHealth.workingNames();
         // The HTTPS column's certificate rows, read once for the whole list (and only when a main name asks), shared
         // with the site and instance verdicts below.
@@ -239,7 +302,7 @@ final class AppDirectory {
         servingSites.values().forEach(named::addAll);
         Map<Integer, List<Row>> domains = domainsBySite(named);
 
-        List<App> apps = new ArrayList<>();
+        List<Located> apps = new ArrayList<>();
         Function<Row, RecordHealth> workloadHealth = AppHealth.instances(delegated).read(instances, access);
         for (Row instance : instances) {
             int id = instance.get(InstanceModel.ID);
@@ -253,14 +316,11 @@ final class AppDirectory {
             InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
             SiteHostnamesCell address = !names.isEmpty() ? SiteParts.hostnamesCellOf(names)
                 : endpointAddress(id, delegated, kind != null && kind.supportsSiteUpstream());
-            apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
-                String.valueOf((Object) instance.get(InstanceModel.NAME)),
-                WidgetBadge.of(InstanceModel.KIND, instance.get(InstanceModel.KIND), words.locales, words.resolver)
-                    .label(),
-                address, address == null ? null : address.primary(),
+            apps.add(new Located(new AppFacts(Source.WORKLOAD, id,
+                String.valueOf((Object) instance.get(InstanceModel.NAME)), kindOf(instance), address,
                 delegated ? null : HostModel.canonicalNameOf(instance.get(InstanceModel.HOST_ID)),
-                mainHttps(names, served, working, certificates, access, panel.slug()), workloadHealth.apply(instance),
-                InstanceParts.recordRoute(panel.slug(), instance, null)));
+                mainHttps(names, served, working, certificates, access, panelSlug), workloadHealth.apply(instance)),
+                InstanceParts.recordRoute(panelSlug, instance, null)));
         }
 
         Function<Row, RecordHealth> websiteHealth = AppHealth.sites(delegated).read(websites, access);
@@ -269,29 +329,31 @@ final class AppDirectory {
             int id = site.get(SiteModel.ID);
             List<Row> names = domains.getOrDefault(id, List.of());
             SiteHostnamesCell address = SiteParts.addressCellOf(site, names);
-            apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
-                String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
-                address, address.primary(), websiteHost(site, servedBy),
-                mainHttps(names, List.of(site), working, certificates, access, panel.slug()),
-                websiteHealth.apply(site),
-                SiteParts.recordRoute(panel.slug(), id)));
+            apps.add(new Located(new AppFacts(Source.WEBSITE, id, String.valueOf((Object) site.get(SiteModel.NAME)),
+                SiteParts.upstreamLabel(site), address, websiteHost(site, servedBy),
+                mainHttps(names, List.of(site), working, certificates, access, panelSlug),
+                websiteHealth.apply(site)), SiteParts.recordRoute(panelSlug, id)));
         }
 
         Function<Row, RecordHealth> stackHealth = AppHealth.stacks().read(stacks, access);
         Map<Integer, Long> members = memberCounts(stacks);
         for (Row stack : stacks) {
             int id = stack.get(StackModel.ID);
-            apps.add(new App(Source.STACK.token() + "-" + id, Source.STACK, id,
-                String.valueOf((Object) stack.get(StackModel.NAME)),
-                words.say(HohenheimMicrocopy.APP_LIST.of("stack_kind")
-                    .withArg("count", members.getOrDefault(id, 0L))),
-                new SiteHostnamesCell(null, 0), null,
-                delegated ? null : HostModel.canonicalNameOf(stack.get(StackModel.HOST_ID)),
-                null, stackHealth.apply(stack),
-                CmsRoutes.subpage(panel.slug(), HohenheimSlugs.STACKS, id, HohenheimSlugs.Tab.SERVICES)));
+            apps.add(new Located(new AppFacts(Source.STACK, id, String.valueOf((Object) stack.get(StackModel.NAME)),
+                HohenheimMicrocopy.APP_LIST.of("stack_kind").withArg("count", members.getOrDefault(id, 0L)),
+                new SiteHostnamesCell(null, 0),
+                delegated ? null : HostModel.canonicalNameOf(stack.get(StackModel.HOST_ID)), null,
+                stackHealth.apply(stack)),
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.STACKS, id, HohenheimSlugs.Tab.SERVICES)));
         }
-        apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
-        return List.copyOf(apps);
+        return apps;
+    }
+
+    /** @return a workload's kind in the words its record's kind field declares, its stored key when it declares none */
+    private static @NonNull Microcopy kindOf(@NonNull Row instance) {
+        String stored = String.valueOf((Object) instance.get(InstanceModel.KIND));
+        EnumField.EnumValue value = InstanceModel.KIND.getValues().get(stored);
+        return value == null ? Microcopy.literal(stored) : value.getLabel();
     }
 
     /**
