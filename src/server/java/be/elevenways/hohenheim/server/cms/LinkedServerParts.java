@@ -108,10 +108,11 @@ public final class LinkedServerParts {
      * @param lastAnswer when it last answered, null for this server and one never answering
      * @param apps       how many apps that server counts, as it last said; null before it said
      * @param sites      how many sites that server holds, as it last said; null before it said
+     * @param link       where its link stands, this server's own row reachable
      */
     public record ServerRow(@NonNull String key, @NonNull String name, @Nullable Microcopy note,
                             @NonNull RecordHealth state, @Nullable String version, @Nullable Instant lastAnswer,
-                            @Nullable Integer apps, @Nullable Integer sites) {
+                            @Nullable Integer apps, @Nullable Integer sites, @NonNull LinkState link) {
 
         /** @return whether this is this server's own row */
         public boolean own() {
@@ -316,6 +317,9 @@ public final class LinkedServerParts {
                 (request, state) -> CmsActionResult.refreshWithToast(
                     HohenheimMicrocopy.LINKED_SERVER.of("linked_server_checked")))
             .label(HohenheimMicrocopy.LINKED_SERVER.of("linked_server_check"))
+            // A server that does not answer is asked again: "Try again", as its things' pages say it (board FO119).
+            .dynamicLabel(row -> row.link() == LinkState.NOT_ANSWERING
+                ? HohenheimMicrocopy.LINKED_SERVER.of("linked_server_try_again") : null)
             .style(ActionStyle.OUTLINE)
             .icon(Icon.of("rotate"))
             .hiddenWhen(ServerRow::own)
@@ -360,7 +364,7 @@ public final class LinkedServerParts {
         InstallationCounts counts = InstallationCounts.read();
         return new ServerRow(OWN_KEY, LinkedServers.ownName(),
             HohenheimMicrocopy.LINKED_SERVER.of("linked_server_this_server"), LinkState.ownVerdict(), version, null,
-            counts.apps(), counts.sites());
+            counts.apps(), counts.sites(), LinkState.REACHABLE);
     }
 
     private static @NonNull ServerRow rowOf(@NonNull Row linked, @NonNull String version) {
@@ -370,7 +374,7 @@ public final class LinkedServerParts {
                 ? HohenheimMicrocopy.LINKED_SERVER.of("linked_server_manages_this") : null,
             LinkState.verdict(linked, version), linked.get(LinkedServerModel.BUILD),
             linked.get(LinkedServerModel.LAST_SEEN_AT), linked.get(LinkedServerModel.APPS),
-            linked.get(LinkedServerModel.SITES));
+            linked.get(LinkedServerModel.SITES), LinkState.of(linked, version));
     }
 
     /** @return the row of this key, null for no such server */

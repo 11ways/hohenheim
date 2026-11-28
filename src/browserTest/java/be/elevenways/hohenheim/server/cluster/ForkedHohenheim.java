@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -52,6 +53,7 @@ import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.SecretResult;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.code.CodeBlocks;
@@ -71,11 +73,15 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
+import be.elevenways.zenit.server.operation.CarriedOperations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.peer.SharedRow;
+import be.elevenways.zenit.server.peer.SharedRows;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.test.support.CommittedWrites;
+import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.zenit.test.support.MigratedDatabase;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.OutboundTlsStub;
@@ -446,6 +452,51 @@ final class ForkedHohenheim implements AutoCloseable {
                         throw new IllegalStateException("the kept release was not stored", failed);
                     }
                     yield "ok";
+                }
+                // "apps N" stores N apps as "app" does, in ONE transaction: one commit, so one nudge and one sync.
+                case "apps" -> {
+                    int many = Integer.parseInt(words[1]);
+                    InstanceModel instances = Models.get(InstanceModel.class);
+                    instances.getResolvedDatasource().withTransaction(transaction -> {
+                        for (int at = 0; at < many; at++) {
+                            Row app = instances.createEmptyRow();
+                            app.set(InstanceModel.NAME, "batch-app-" + Now.millis() + "-" + at);
+                            app.set(InstanceModel.KIND, "hohenheim:docker_container");
+                            app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+                            app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+                            instances.save(app);
+                        }
+                    });
+                    yield "ok";
+                }
+                // "stack-deploys ID": "stack-deploys <count> <reasons>" of the stack's deployment records here.
+                case "stack-deploys" -> {
+                    List<String> reasons = new ArrayList<>();
+                    for (Row deployment : Models.get(StackDeploymentModel.class).find().noCache()
+                            .where(StackDeploymentModel.STACK_ID.eq(Integer.parseInt(words[1])))
+                            .orderBy(StackDeploymentModel.ID, SortOrder.ASC).all()) {
+                        reasons.add(String.valueOf((Object) deployment.get(StackDeploymentModel.REASON)));
+                    }
+                    yield ("stack-deploys " + reasons.size() + " " + String.join(",", reasons)).trim();
+                }
+                // "offers-statements": what telling the master what each thing here offers costs, measured on this
+                // thread alone as the master's read of that state: "statements <executed> <prepared> entries <told>
+                // empty <told with nothing to offer>", then a tab and the statements' SQL.
+                case "offers-statements" -> {
+                    AccessContext caller = ClusterHandlers.masterCaller(Objects.requireNonNull(LinkedServers.master(),
+                        "this server has a master"));
+                    DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Models.get(InstanceModel.class)
+                        .getResolvedDatasource());
+                    List<SharedRow> told = new ArrayList<>();
+                    DatasourceProbe.Statements cost;
+                    try (DatasourceProbe.Armed ignored = probe.measuringOnlyThisThread()) {
+                        cost = probe.statementsOf(() -> told.addAll(SharedRows.rows(caller, CarriedOperations.OFFERS,
+                            null, SharedRows.MAX_PAGE).rows()));
+                    }
+                    long empty = told.stream().filter(row -> "{}".equals(row.document())).count();
+                    yield "statements " + cost.executed().size() + " " + cost.prepared().size() + " entries "
+                        + told.size() + " empty " + empty + "\t"
+                        + String.join(" | ", cost.executed()).replaceAll("\\s+", " ");
                 }
                 // "fake-app NAME" deploys an app on the daemon-free fake runtime of a host of Kuifje's own, so it runs:
                 // "app <id> <code>".

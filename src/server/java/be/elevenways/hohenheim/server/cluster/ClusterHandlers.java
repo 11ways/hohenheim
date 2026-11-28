@@ -170,14 +170,19 @@ public final class ClusterHandlers {
         if (LinkedServers.roleOf(row) != LinkRole.MANAGED_BY) {
             return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
         }
-        AccessContext caller = AccessContext.detached(Reader.READER.principal(row.get(LinkedServerModel.ID),
-            String.valueOf((Object) row.get(LinkedServerModel.NAME))), PermissionChecker.DENY_ALL);
+        AccessContext caller = masterCaller(row);
         try {
             return ExecutionIdentity.supply(ExecutionIdentity.caller(caller, CallerChannel.ofRequest(conduit)),
                 () -> call.answer(row, caller));
         } catch (DomainRefusal refused) {
             return refusal(conduit, refused.reason());
         }
+    }
+
+    /** @return the caller a call of this server's master is read as: a LinkedInstallPrincipal of the one reader */
+    static @NonNull AccessContext masterCaller(@NonNull Row master) {
+        return AccessContext.detached(Reader.READER.principal(master.get(LinkedServerModel.ID),
+            String.valueOf((Object) master.get(LinkedServerModel.NAME))), PermissionChecker.DENY_ALL);
     }
 
     /** @return a refusal answered by its reason's status and code alone */

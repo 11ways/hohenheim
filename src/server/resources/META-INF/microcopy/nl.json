@@ -20270,6 +20270,7 @@
   "linked_server_managed_from": {"text": "Beheerd vanuit {$name} sinds {$since :date}", "scope": "linked_server"},
   "linked_server_joining_from": {"text": "Wordt gekoppeld aan {$name}, nog niet bevestigd. Ongedaan gemaakt als {$name} het niet bevestigt.", "scope": "linked_server"},
   "linked_server_check": [{"text": "Nu controleren", "scope": "linked_server"}, {"text": "{$actor} controleerde {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "linked_server_try_again": {"text": "Opnieuw proberen", "scope": "linked_server"},
   "linked_server_checked": {"text": "Gecontroleerd. De lijst toont wat hij antwoordde.", "scope": "linked_server"},
   "linked_server_remove": [{"text": "Verwijderen", "scope": "linked_server"}, {"text": "{$actor} verwijderde de koppeling met {$subject}", "scope": "hohenheim", "target": "happened"}],
   "linked_server_remove_confirm": {"text": "De koppeling eindigt: de andere server wordt gevraagd ze ook te vergeten, en deze server vergeet ze wat hij ook antwoordt.", "scope": "linked_server"},

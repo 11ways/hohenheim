@@ -20270,6 +20270,7 @@
   "linked_server_managed_from": {"text": "Managed from {$name} since {$since :date}", "scope": "linked_server"},
   "linked_server_joining_from": {"text": "Joining {$name}, not confirmed yet. Undone by itself when {$name} does not confirm it.", "scope": "linked_server"},
   "linked_server_check": [{"text": "Check now", "scope": "linked_server"}, {"text": "{$actor} checked {$subject}", "scope": "hohenheim", "target": "happened"}],
+  "linked_server_try_again": {"text": "Try again", "scope": "linked_server"},
   "linked_server_checked": {"text": "Checked. The list shows what it answered.", "scope": "linked_server"},
   "linked_server_remove": [{"text": "Remove", "scope": "linked_server"}, {"text": "{$actor} removed the link with {$subject}", "scope": "hohenheim", "target": "happened"}],
   "linked_server_remove_confirm": {"text": "The link ends: the other server is asked to forget it too, and this server forgets it whatever it answers.", "scope": "linked_server"},

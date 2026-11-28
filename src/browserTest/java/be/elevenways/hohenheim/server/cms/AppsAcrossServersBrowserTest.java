@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
@@ -89,7 +90,10 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             servers.add(haddock);
             AppFacts own = AppDirectory.operatorFacts().stream().filter(facts -> "robbedoes-blog".equals(facts.name()))
                 .findFirst().orElseThrow();
-            told(kuifje, own, 101, "kuifje-shop", "https://shop.kuifje.test");
+            // kuifje-shop's main address is the one Kuifje's own page marks (the told primary), not the first kept.
+            keep(kuifje, new AppFacts(own.source(), 101, "kuifje-shop", own.kind(),
+                new SiteHostnamesCell("shop.kuifje.test", 1), own.host(), own.https(), own.health(), own.started(),
+                "https://shop.kuifje.test"));
             told(kuifje, own, 102, "kuifje-wiki");
             told(gaston, own, 201, "gaston-forum");
             told(haddock, own, 301, "haddock-docs");
@@ -99,7 +103,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             keep(kuifje, workload);
             // The records the apps are made of, as the master keeps them: each app's page opens on them.
             heldWorkload(kuifje, 103, "kuifje-api");
-            heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test");
+            heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test", "kuifje-shop.example");
             heldEstate(gaston, 201, "gaston-forum", "forum.gaston.test");
             heldStack(kuifje, 104, "kuifje-stack", own);
 
@@ -196,6 +200,10 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             BoundedAssertions.assertThat(addressesCard.first()).isVisible();
             assertThat(page.locator("main [href='https://shop.kuifje.test']").count())
                 .as("step 6: Open site goes where Kuifje says").isPositive();
+            assertThat(page.locator("[data-app-address='shop.kuifje.test'] pl-list-item-meta").textContent())
+                .as("step 6: the main address is the one Kuifje marks").contains("Main address");
+            assertThat(page.locator("[data-app-address='kuifje-shop.example']").textContent())
+                .as("step 6: not the first one kept").doesNotContain("Main address");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-page.png"))
                 .setFullPage(true));
             //    Its Addresses tab lists the address Kuifje keeps of it, under no Server column, offering no add.
@@ -229,19 +237,26 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("local-website-page.png"))
                 .setFullPage(true));
 
-            // 7. A silent server's app page says once since when it does not answer, offers its link's re-check, and
-            //    shows what this server remembers of the app.
-            navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(gaston) + "-201/page/"
-                + RecordOverview.SLUG);
+            // 7. A silent server's app page says once since when it does not answer, offers Try again (its link's
+            //    re-check), shows what this server remembers of the app, and opens no tab but its Overview.
+            String silentBase = "/admin/" + HohenheimSlugs.SITES + "/" + peerOf(gaston) + "-201";
+            navigateToApp(silentBase + "/page/" + RecordOverview.SLUG);
             waitForHydration();
             String silentPage = page.locator("main").innerText();
             assertThat(silentPage).as("step 7: the silent server's app page")
                 .containsPattern("Gaston does not answer since \\d{1,2}:\\d{2}")
                 .contains("Nothing can be changed until Gaston answers.").contains("What Robbedoes remembers")
-                .contains("Check now").contains("forum.gaston.test");
+                .contains("Try again").doesNotContain("Check now").contains("forum.gaston.test");
             assertThat(silentPage.split("does not answer", -1).length - 1).as("step 7: said once").isEqualTo(1);
+            Object silentTabs = page.locator("a[href*='" + silentBase + "/page/']").evaluateAll(
+                "links => [...new Set(links.map(link => link.getAttribute('href').split('/page/')[1]"
+                    + ".split(/[?#]/)[0]))]");
+            assertThat(((List<?>) silentTabs).stream().map(String::valueOf).toList())
+                .as("step 7: its Addresses tab is not offered while Gaston is silent").isSubsetOf(RecordOverview.SLUG);
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-silent.png"))
                 .setFullPage(true));
+            assertThat(page.navigate(baseUrl() + silentBase + "/page/" + SiteParts.DOMAINS_TAB).status())
+                .as("step 7: nor served").isEqualTo(404);
 
             // 8. The Sites, Addresses and Certificates lists hold Kuifje's and Gaston's beside this server's, drawn by
             //    this server's cells from their records and told state, under their server's name; Gaston's recede
@@ -428,10 +443,12 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
     }
 
     /**
-     * Keeps one website of a linked server, its one address and the certificate covering it, as that server's sync
+     * Keeps one website of a linked server, its address and the certificate covering it, as that server's sync
      * keeps them: the records as portable documents of rows never stored here, the state as that server tells it.
+     *
+     * @param earlier further addresses of the site, kept before its main one (lower keys), told nothing of
      */
-    private static void heldEstate(UUID server, int id, String name, String hostname) {
+    private static void heldEstate(UUID server, int id, String name, String hostname, String... earlier) {
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.ID, id);
@@ -451,6 +468,15 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         domain.set(SiteDomainModel.FORCE_SSL, true);
         keep(server, SiteDomainModel.MODEL_ID, String.valueOf(id + 400), hostname, portable(domains, domain));
+        for (int at = 0; at < earlier.length; at++) {
+            Row other = domains.createEmptyRow();
+            other.set(SiteDomainModel.ID, id + 300 + at);
+            other.set(SiteDomainModel.SITE_ID, id);
+            other.set(SiteDomainModel.HOSTNAME, earlier[at]);
+            other.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            keep(server, SiteDomainModel.MODEL_ID, String.valueOf(id + 300 + at), earlier[at],
+                portable(domains, other));
+        }
         RecordHealth working = new RecordHealth(HealthTone.OK, AppParts.stateLabel(HealthTone.OK.token()), null,
             List.of(), null);
         keep(server, SiteStates.SITE_KIND, String.valueOf(id), name, Zenit.DRY.toJson(Map.of(

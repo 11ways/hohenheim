@@ -534,7 +534,8 @@ final class AppOverview {
         Wording words = Wording.of(access);
         HeldApp app = facts == null ? HeldApp.unreadable(row.key(), row.title(), server, words)
             : HeldApp.of(facts, server, words);
-        return heldWidgets(app, domains, facts == null ? null : facts.open(), access);
+        return heldWidgets(app, domains, facts == null ? null : facts.open(),
+            facts == null || facts.address() == null ? null : facts.address().primary(), access);
     }
 
     /**
@@ -633,30 +634,35 @@ final class AppOverview {
 
     /**
      * A linked server's app's composition: the waiting tabs said in words, its Addresses card as its server keeps its
-     * addresses (with what HTTPS gives each, as told) and Open site where that server says visitors reach it, and its
-     * Details. An app its server keeps no address of (a stack, an app not online yet) draws no Addresses card: its
-     * empty card here could only ask for an address this server cannot add.
+     * addresses (with what HTTPS gives each, as told, and its main one where that server's own page marks it) and Open
+     * site where that server says visitors reach it, and its Details. An app its server keeps no address of (a stack,
+     * an app not online yet) draws no Addresses card: its empty card here could only ask for an address this server
+     * cannot add. Its Details then take the wide column, as a local stack's do.
      *
      * @param open where its Open site goes, as its server told it; null for none
+     * @param main the address its server's own page marks as its main one (the told primary), null for none
      */
     private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull List<KeptRow> domains,
-                                                   @Nullable String open, @NonNull AccessContext access) {
+                                                   @Nullable String open, @Nullable String main,
+                                                   @NonNull AccessContext access) {
         Cells cells = app.cells();
         String server = app.held().name();
         List<WidgetInstance> top = new ArrayList<>();
         top.add(notice(AlertVariant.INFO, access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs_title")),
             access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs").withArg("server", server))));
-        List<WidgetInstance> main = new ArrayList<>();
-        if (!domains.isEmpty()) {
-            List<AppAddress> rows = new ArrayList<>();
-            for (KeptRow domain : domains) {
-                rows.add(heldAddress(domain, rows.isEmpty(), app.held(), access));
-            }
-            main.add(card(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"),
-                new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
-                HohenheimMicrocopy.APP_OVERVIEW.of("open_site"), open, "up-right-from-square"));
+        WidgetInstance details = details(identity(cells, null, server, access));
+        if (domains.isEmpty()) {
+            return compose(top, List.of(details), List.of());
         }
-        return compose(top, main, List.of(details(identity(cells, null, server, access))));
+        List<AppAddress> rows = new ArrayList<>();
+        for (KeptRow domain : domains) {
+            rows.add(heldAddress(domain, String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME)).equals(main),
+                app.held(), access));
+        }
+        List<WidgetInstance> wide = List.of(card(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"),
+            new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
+            HohenheimMicrocopy.APP_OVERVIEW.of("open_site"), open, "up-right-from-square"));
+        return compose(top, wide, List.of(details));
     }
 
     /**

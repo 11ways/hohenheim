@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.hohenheim.server.cms.ClusterAttention;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
+import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -869,7 +870,8 @@ class LinkedServersJourneyTest {
 
             // 11b. An app of a kind that keeps releases: its page offers Roll back dead, in Kuifje's words, while
             //      Kuifje keeps no earlier release of it, and live once Kuifje keeps one: what Kuifje tells it offers
-            //      reaches the master's page with Kuifje's next change.
+            //      reaches the master's page with Kuifje's next change (settle waits for a sync that STARTED after
+            //      Kuifje told it, never only for one already under way).
             String releasing = after("app ", kuifje.ask("release-app carried-releases")).split(" ")[0];
             settle(kuifje);
             awaitSyncs();
@@ -901,6 +903,32 @@ class LinkedServersJourneyTest {
                 .doesNotContain("stop_stack").doesNotContain("rollback_stack");
             assertThat(asAdministrator(stackBase + "/page/" + HohenheimSlugs.Tab.SERVICES).statusCode())
                 .as("step 11c: its Services tab is not served").isEqualTo(404);
+            //      Deploy pressed on that page (its button's own invoke route) deploys it ON Kuifje, through the
+            //      carrier: Kuifje records the deployment, asked by hand, and the call went to Kuifje.
+            assertThat(kuifje.ask("stack-deploys " + stackKey)).as("step 11c: never deployed")
+                .isEqualTo("stack-deploys 0");
+            int beforeDeploy = relay.accepted();
+            assertThat(pressOnPage(HohenheimSlugs.STACKS, StackOperations.DEPLOY, peer + "-" + stackKey))
+                .as("step 11c: the page's Deploy answered").isNotNull();
+            assertThat(relay.accepted()).as("step 11c: carried to Kuifje").isGreaterThan(beforeDeploy);
+            assertThat(kuifje.ask("stack-deploys " + stackKey)).as("step 11c: deployed on Kuifje, by hand")
+                .isEqualTo("stack-deploys 1 manual");
+            settle(kuifje);
+
+            // 11d. What Kuifje tells its master each thing offers costs it the same statements for its few things as
+            //      for 38 more apps, and it tells nothing of a thing nothing applies to.
+            String[] few = kuifje.ask("offers-statements").split("\t", 2);
+            assertThat(kuifje.ask("apps 38")).isEqualTo("ok");
+            settle(kuifje);
+            String[] many = kuifje.ask("offers-statements").split("\t", 2);
+            String[] fewCounts = few[0].split(" ");
+            String[] manyCounts = many[0].split(" ");
+            assertThat(manyCounts[1] + " " + manyCounts[2])
+                .as("step 11d: flat as Kuifje's apps grow\nfew: %s\nmany: %s", few[1], many[1])
+                .isEqualTo(fewCounts[1] + " " + fewCounts[2]);
+            assertThat(Integer.parseInt(manyCounts[4])).as("step 11d: every new app is told what it offers")
+                .isEqualTo(Integer.parseInt(fewCounts[4]) + 38);
+            assertThat(manyCounts[6]).as("step 11d: no entry tells nothing").isEqualTo("0");
 
             // 12. Kuifje does not answer: its app's page says so once, since when, offers Try again (the Servers list's
             //     re-check of Kuifje's link) and none of Kuifje's verbs, and shows what the master remembers of it.
@@ -912,7 +940,7 @@ class LinkedServersJourneyTest {
             assertThat(silentPage).as("step 12: the page says Kuifje does not answer")
                 .contains("Kuifje does not answer since")
                 .contains("Nothing can be changed until Kuifje answers.").contains("What Robbedoes remembers")
-                .contains(LinkedServerParts.CHECK.id().getPath());
+                .contains(LinkedServerParts.CHECK.id().getPath()).contains("Try again");
             assertThat(silentPage).as("step 12: and offers no verb").doesNotContain("deploy_instance")
                 .doesNotContain("restart_instance").doesNotContain("stop_instance");
             //     An operation that does not run where its subject lives is refused on Kuifje's app, sending nothing.
@@ -1032,9 +1060,13 @@ class LinkedServersJourneyTest {
         }
     }
 
-    /** Waits until Kuifje told its master of every change, and the master's syncs it caused ended. */
+    /**
+     * Waits until Kuifje told its master of every change, and a sync of it that STARTED after each telling ended: a
+     * sync already under way when Kuifje told may have read before the change.
+     */
     private static void settle(ForkedHohenheim kuifje) throws Exception {
         assertThat(kuifje.ask("settle")).as("Kuifje told its master").isEqualTo("settled true");
+        assertThat(ClusterRecords.awaitAsked(Duration.ofSeconds(60))).as("a sync started after it ended").isTrue();
         awaitSyncs();
     }
 

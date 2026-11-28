@@ -84,6 +84,23 @@ public final class ClusterRecords {
     }
 
     /**
+     * Waits until every sync asked so far in this process was followed by a sync of that server that STARTED after
+     * the ask and ended, for tests: after a change was told here, the record holds it once this returns, whatever
+     * sync was already under way when it was told.
+     *
+     * @return false when one was still unanswered at the timeout
+     */
+    public static boolean awaitAsked(@NonNull Duration timeout) {
+        Now.Deadline deadline = Now.deadline(timeout);
+        for (Coalesced syncs : List.copyOf(ASKED.values())) {
+            if (!syncs.awaitAnswered(syncs.asked(), deadline.remaining())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Brings the record of a server this server manages in step now, on the calling thread, outside any transaction:
      * after a change this server asked of it and before it answers. A sync another process or a nudge holds is waited
      * for (the server's lease), so the record holds at least what that server had once this returns.
