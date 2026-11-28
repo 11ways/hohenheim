@@ -75,12 +75,14 @@ import be.elevenways.zenit.common.security.KnownValueRedactor;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.operation.OperationRunOperations;
 import be.elevenways.zenit.server.operation.RecordCodes;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.test.support.DatasourceProbe;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -137,7 +139,7 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         "hohenheim:route_notification_events",
         "hohenheim:scan_host_key", "hohenheim:scan_incus_cert", "hohenheim:site_deploy_from_repository",
         "hohenheim:spamservice_key_create", "hohenheim:spamservice_key_enable", "hohenheim:spamservice_key_revoke",
-        "hohenheim:stop_forcing_https",
+        "hohenheim:stop_forcing_https", "hohenheim:try_backup_target", "hohenheim:try_managed_backup_target",
         "hohenheim:update_game_domain", "hohenheim:update_site", "source hohenheim:access_list@admin",
         "source hohenheim:access_list@admin_picker", "source hohenheim:access_rule@admin",
         "source hohenheim:access_rule@admin_picker", "source hohenheim:auth_provider@admin",
@@ -166,7 +168,8 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
         "source hohenheim:instance_variable@admin", "source hohenheim:instance_volume@admin",
         "source hohenheim:instance_volume@admin_picker", "source hohenheim:manage_access_list@manage",
         "source hohenheim:manage_access_list@manage_picker", "source hohenheim:manage_access_rule@manage",
-        "source hohenheim:manage_access_rule@manage_picker", "source hohenheim:manage_build_hook@manage",
+        "source hohenheim:manage_access_rule@manage_picker", "source hohenheim:manage_backup_target@manage",
+        "source hohenheim:manage_backup_target@manage_picker", "source hohenheim:manage_build_hook@manage",
         "source hohenheim:manage_certificate@manage", "source hohenheim:manage_certificate@manage_picker",
         "source hohenheim:manage_database@manage", "source hohenheim:manage_database@manage_picker",
         "source hohenheim:manage_dns_record@manage", "source hohenheim:manage_dns_record@manage_picker",
@@ -246,9 +249,12 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             }
         }
 
-        // 3. No tool takes an object of undeclared members; a kind's map setting is a typed list of its entries.
+        // 3. No tool takes an object of undeclared members; a kind's map setting is a typed list of its entries. A
+        //    storage's settings are the one object whose members the kind named in the same call decides; that kind's
+        //    own trial judges them before anything is saved.
         AccessContext operator = TenantConduits.operator();
-        List<String> maps = List.of("app_create_from_template.variables", "certificate_order.dns_publisher");
+        List<String> maps = List.of("app_create_from_template.variables", "certificate_order.dns_publisher",
+            "backup_target_set.settings");
         List<String> loose = McpCoverage.looseParameters(server, operator);
         System.out.println("MCP arguments of no declared members: " + loose);
         assertThat(loose).as("step 3: arguments of no declared shape").isSubsetOf(maps);
@@ -2047,6 +2053,51 @@ public class HohenheimMcpTest extends HohenheimHttpTestBase {
             assertThat(admin.call("delete", Map.of("code", takerCode)).error()).as("step 7: the taker trashed")
                 .isFalse();
         } finally {
+            if (adopted != null) ServerMain.adoptProxyServer(null);
+        }
+    }
+
+    /**
+     * A site's own files moved to another storage by their own tool, as an administrator's key: the move is a run, and
+     * once it ended the site keeps its files in the storage named; a storage the caller may not use is refused.
+     */
+    @Test
+    void anAdministratorMovesASitesOwnFilesByTheirOwnTool() throws Exception {
+        URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
+        McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
+        McpHttpSession admin = presetSession(server, endpoint, TenantConduits.operatorUser().get(UserModel.ID),
+            "Test Admin");
+        ProxyServer adopted = ServerMain.getProxyServer() == null ? new ProxyServer() : null;
+        if (adopted != null) ServerMain.adoptProxyServer(adopted);
+        String tag = letters();
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", PREFIX + "files-" + tag, "files-" + tag,
+            new LinkedHashMap<>(Map.of("own_files", true)));
+        int siteId = site.get(SiteModel.ID);
+        Row storage = Models.get(BackupTargetModel.class).createEmptyRow();
+        storage.set(BackupTargetModel.NAME, PREFIX + "moved-" + tag);
+        storage.set(BackupTargetModel.KIND, LocalFolderStorageKind.ID.toString());
+        storage.set(BackupTargetModel.SETTINGS, Map.of(LocalFolderStorageKind.FOLDER.getName(),
+            Files.createTempDirectory("hh-mcp-moved").toString()));
+        Models.get(BackupTargetModel.class).save(storage);
+        try {
+            String siteCode = code(SiteModel.MODEL_ID, siteId, TenantConduits.operator());
+
+            // 1. A storage that does not exist is refused by its argument, nothing started.
+            McpHttpSession.Answer refused = admin.call("site_files_move", Map.of("code", siteCode, "storage",
+                PREFIX + "nowhere-" + tag));
+            assertThat(refused.error()).as("step 1: " + refused.text()).isTrue();
+
+            // 2. The move is a run the answer names; once it ended the site keeps its files in the storage named.
+            McpHttpSession.Answer started = admin.call("site_files_move", Map.of("code", siteCode, "storage",
+                PREFIX + "moved-" + tag));
+            assertThat(started.error()).as("step 2: " + started.text()).isFalse();
+            followed(admin, found(RUN_CODE, started.text(), "step 2: the answer names its run"), "step 2");
+            assertThat(RawValues.map(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId))
+                .get(SiteModel.SETTINGS)).get("storage")).as("step 2: THE ASSERTION, the site switched over")
+                .isEqualTo(PREFIX + "moved-" + tag);
+        } finally {
+            HardDeletes.byId(Models.get(SiteModel.class), siteId);
+            Models.get(BackupTargetModel.class).delete(storage);
             if (adopted != null) ServerMain.adoptProxyServer(null);
         }
     }

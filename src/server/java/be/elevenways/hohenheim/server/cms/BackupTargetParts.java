@@ -378,12 +378,17 @@ public final class BackupTargetParts {
     private static @NonNull Operation<Void, OperationInput.Values, String> tryOn(@NonNull String name,
                                                                                   @NonNull FormSpec form) {
         return Operation.declare(HohenheimIds.id(name))
+            // Both twins' Tests are one deed in the history: a storage's settings tried before a save.
+            .happened(OperationSentences.of("try_backup_target"))
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
             .description(HohenheimMicrocopy.HOHENHEIM.of("test_backup_target_description"))
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.derived(form))
             .facts(OperationFact.READ_ONLY, OperationFact.REACHES_OUTSIDE)
+            // The form foot's Test of settings not saved yet; an assistant's backup_target_set runs this same trial
+            // before it saves and refuses a failing storage with why, and test code=BT.. tests a saved one.
+            .notForAssistants("backup_target_set runs this trial before it saves; test tests a saved storage")
             .result(String.class)
             .register();
     }

@@ -67,7 +67,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -383,7 +383,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -437,7 +437,7 @@ control EDIT%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zenit
 control EDIT%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -1293,7 +1293,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -1347,7 +1347,7 @@ control EDIT%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zenit
 control EDIT%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -1437,7 +1437,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -1529,7 +1529,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -1583,7 +1583,7 @@ control EDIT%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zenit
 control EDIT%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
-control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=true options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
@@ -1671,7 +1671,7 @@ control CREATE%20settings[hohenheim:redirect]/settings.http_status at=1 kind=zen
 control CREATE%20settings[hohenheim:redirect]/settings.preserve_path at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:redirect]/settings.delay_ms at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.own_files at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:static]/settings.storage at=1 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:static]/settings.root_path at=2 kind=zenitforms:control/string input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.autoindex at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:static]/settings.indexes at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
@@ -2042,12 +2042,13 @@ control EDIT%20settings[hohenheim:address]/settings.private_paths at=2 kind=zeni
 control EDIT%20settings[hohenheim:instance]/settings.readable_by_websites at=0 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
 control EDIT%20settings[hohenheim:instance]/settings.browser_keep at=1 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:instance]/settings.private_paths at=2 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
-control EDIT%20settings[hohenheim:static]/settings.autoindex at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.indexes at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.show_hidden_files at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.readable_by_websites at=3 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
-control EDIT%20settings[hohenheim:static]/settings.browser_keep at=4 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.private_paths at=5 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
+control EDIT%20settings[hohenheim:static]/settings.storage at=0 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:static]/settings.autoindex at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.indexes at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.show_hidden_files at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.readable_by_websites at=4 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
+control EDIT%20settings[hohenheim:static]/settings.browser_keep at=5 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.private_paths at=6 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
 
 case manage.domains.tenant-one.domain manage domains tenant-one v2
 admission - verdict=admitted
@@ -2129,12 +2130,13 @@ control EDIT%20settings[hohenheim:address]/settings.private_paths at=2 kind=zeni
 control EDIT%20settings[hohenheim:instance]/settings.readable_by_websites at=0 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
 control EDIT%20settings[hohenheim:instance]/settings.browser_keep at=1 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:instance]/settings.private_paths at=2 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
-control EDIT%20settings[hohenheim:static]/settings.autoindex at=0 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.indexes at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.show_hidden_files at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.readable_by_websites at=3 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
-control EDIT%20settings[hohenheim:static]/settings.browser_keep at=4 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control EDIT%20settings[hohenheim:static]/settings.private_paths at=5 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
+control EDIT%20settings[hohenheim:static]/settings.storage at=0 kind=zenitforms:form/select input=text required=false readonly=false options=hohenheim-site-files binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20settings[hohenheim:static]/settings.autoindex at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.indexes at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.show_hidden_files at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.readable_by_websites at=4 kind=zenitforms:form/select input=select required=false readonly=false options=nobody,listed,any binding=searchable:false,clearable:false,presentation:SEGMENTS
+control EDIT%20settings[hohenheim:static]/settings.browser_keep at=5 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:static]/settings.private_paths at=6 kind=zenitcms:form/related-list input= required=false readonly=true options= binding=columns:path%252Cway_in,actions:hohenheim:protect_path
 
 case manage.sites.tenant-one.trashed manage sites tenant-one v2
 admission - verdict=admitted

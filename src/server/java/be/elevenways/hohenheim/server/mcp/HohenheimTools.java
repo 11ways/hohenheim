@@ -42,6 +42,7 @@ import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.hohenheim.server.cms.SiteKindWrites;
 import be.elevenways.hohenheim.server.cms.SitePortMoves;
+import be.elevenways.hohenheim.server.files.SiteFileMoves;
 import be.elevenways.hohenheim.server.cms.SiteRedirectParts;
 import be.elevenways.hohenheim.server.cms.SiteRegistrationTokens;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
@@ -273,8 +274,15 @@ public final class HohenheimTools extends McpToolCollection {
             .code(words("mcp_code_site_ports_move"))
             .route(SitePortMoves.MOVE, HohenheimMcpAnswers::portsMoved)
             .build();
+        // Its own tool, never an argument of site_static_files_set: a set never copies a site's files, and a change of
+        // where they are kept is refused while files are there.
+        McpHostTool moveFiles = McpCodeTool.builder("site_files_move", words("mcp_tool_site_files_move"), writes())
+            .code(words("mcp_code_site_files_move"))
+            .route(SiteFileMoves.MOVE, null)
+            .build();
         List<McpHostTool> tools = new ArrayList<>(List.of(logs, delete, deploy, rollBack, restore, power, backUp,
-            exec, variables, test, recordList, recordSet, zoneSet, address, order, renew, gitConnection, movePorts));
+            exec, variables, test, recordList, recordSet, zoneSet, address, order, renew, gitConnection, movePorts,
+            moveFiles));
         for (KindSettingsWrites.Kind kind : AppKindWrites.all()) {
             tools.add(McpCodeTool.builder(kind.tool(), words("mcp_tool_" + kind.tool()), writes())
                 .code(words("mcp_code_set"))

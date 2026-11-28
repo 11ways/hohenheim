@@ -269,7 +269,16 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
                 "els => els.map(el => el.getAttribute('href')).find(href => !!href) || null");
         if (record == null && opened.locator("[data-row-key]").count() > 0) {
             String key = opened.locator("[data-row-key]").first().getAttribute("data-row-key");
-            record = CmsRoutes.detail(panel.slug(), entry.slug(), key).toUrl();
+            // A key names a record of this entry only where the rows are its own (a settings page's rows are the
+            // lists it embeds), and a typed store's row with no link may name no page at all (a storage the server's
+            // settings declare, read-only on the Storages list): there it is a page only where the store loads it.
+            boolean ownRows = entry.embeddedLists().isEmpty();
+            boolean page = !(entry instanceof PanelResource<?> resource) || resource.reads().isRows()
+                || (resource.reads().load() != null
+                    && resource.reads().load().apply(key, TenantConduits.operator()) != null);
+            if (ownRows && page) {
+                record = CmsRoutes.detail(panel.slug(), entry.slug(), key).toUrl();
+            }
         }
         if (record != null) {
             // A record opens on itself or one of its own declared tabs (its front door or read view), never
