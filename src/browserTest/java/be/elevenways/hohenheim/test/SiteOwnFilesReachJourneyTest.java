@@ -6,13 +6,18 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.files.InstanceSftpRealm;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
+import be.elevenways.hohenheim.server.files.SiteFileMoves;
 import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.test.SftpTestClient.Connection;
+import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServer;
 import be.elevenways.zenit.ai.server.mcp.host.McpHostServers;
 import be.elevenways.zenit.ai.server.mcp.host.McpHttpSession;
@@ -21,6 +26,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.SshKeys;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -29,6 +35,7 @@ import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.server.operation.RecordCodes;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.Storages;
 import be.elevenways.zenit.sftp.server.SftpKeyLogins;
 import com.microsoft.playwright.Page;
@@ -39,6 +46,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +72,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * Every way a site's own files are reached: its manager signs in over SFTP with his SSH key as {@code <email>.S<code>}
  * and puts installers there that anyone then downloads from the site, a range as a range; the Files tab uploads and
  * downloads in a browser; an assistant reads, writes, moves and deletes them by the site's code. Nobody else reaches
- * them, nor anyone a site serving a folder of the host.
+ * them, nor anyone a site serving a folder of the host. Files a change of storage left where they were are reached the
+ * same way over each of the three: listed, read and deleted where they stay, new ones written to the storage chosen.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -204,6 +213,30 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
                 assertThat(catchThrowable(() -> client.signIn(port, InstanceSftpRealm.username(
                     operator.get(UserModel.EMAIL), folderCode), operatorsKey)))
                     .as("step 7: a site serving a host folder stays closed to him too").isNotNull();
+
+                // 8. The site's files kept in another storage without moving them: over SFTP he still lists and reads
+                //    them, a new file lands in the storage chosen alone, and a delete takes one out of the earlier one.
+                Path newer = keptElsewhere(siteId);
+                Path earlier = storage.resolve(SiteFiles.prefixOf(siteId)).resolve("releases");
+                try (Connection keyed = client.signIn(port, InstanceSftpRealm.username(email, code), laptop)) {
+                    assertThat(names(keyed.sftp(), "/releases")).as("step 8: the files not moved are listed")
+                        .contains("Tadoma 1.2.dmg", "notes.txt");
+                    assertThat(readBytes(keyed.sftp(), "/releases/Tadoma 1.2.dmg")).as("step 8: and read")
+                        .isEqualTo(dmg);
+                    byte[] next = bytes(4096, 5);
+                    writeBytes(keyed.sftp(), "/releases/tadoma-1.3.dmg", next);
+                    assertThat(newer.resolve(SiteFiles.prefixOf(siteId)).resolve("releases/tadoma-1.3.dmg"))
+                        .as("step 8: a new file lands in the storage chosen").hasBinaryContent(next);
+                    assertThat(Files.exists(earlier.resolve("tadoma-1.3.dmg"))).as("step 8: not in the earlier one")
+                        .isFalse();
+                    assertThat(names(keyed.sftp(), "/releases")).as("step 8: the listing holds both")
+                        .contains("tadoma-1.3.dmg", "Tadoma 1.2.dmg");
+                    keyed.sftp().remove("/releases/notes.txt");
+                    assertThat(Files.exists(earlier.resolve("notes.txt"))).as("step 8: a delete takes it out of the "
+                        + "earlier storage").isFalse();
+                    assertThat(names(keyed.sftp(), "/releases")).as("step 8: and it is gone")
+                        .doesNotContain("notes.txt");
+                }
             }
         } finally {
             if (proxy != null) {
@@ -280,6 +313,28 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
             HttpResponse<String> foreign = httpGet(tab, sessionFor(stranger).token());
             assertThat(foreign.statusCode()).as("step 4: not for someone who does not manage it").isIn(403, 404);
             assertThat(foreign.body()).as("step 4: nothing of it shown").doesNotContain("Release notes.txt");
+
+            // 5. Moved into a storage of the operator's and then kept in another without moving them: the tab still
+            //    lists the file and it downloads, and the storage it stays in says on its page that the site still
+            //    reads from it.
+            String movedName = storageRow(Files.createTempDirectory("hh-tab-moved"));
+            SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)), movedName,
+                ProgressSink.SILENT, step -> { });
+            keptElsewhere(siteId);
+            navigateToAppAs(tab, session);
+            waitForHydration();
+            page.locator("pl-table-cell code", new Page.LocatorOptions().setHasText("Release notes.txt")).waitFor();
+            HttpResponse<byte[]> again = sendRequestBytes(requestTo(download)
+                .header("Cookie", sessionCookieHeader(session)).GET());
+            assertThat(again.body()).as("step 5: it downloads from the storage it stays in").isEqualTo(notes);
+            Object movedId = Objects.requireNonNull(Models.get(BackupTargetModel.class).find()
+                .where(BackupTargetModel.NAME.eq(movedName)).first()).get(BackupTargetModel.ID);
+            String operator = sessionFor(TenantConduits.operatorUser().get(UserModel.ID)).token();
+            navigateToAppAs(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.BACKUP_TARGETS, movedId,
+                RecordOverview.SLUG).toUrl(), operator);
+            waitForHydration();
+            assertThat(page.content()).as("step 5: its page says the site still reads from it")
+                .contains("Files not moved yet: the site still reads them here");
         } finally {
             restore.forEach(Runnable::run);
         }
@@ -291,7 +346,7 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
      * argument is refused by its name, a site serving a host folder and someone else's assistant are refused.
      */
     @Test
-    void anAssistantReadsWritesMovesAndDeletesASitesOwnFilesByItsCode() {
+    void anAssistantReadsWritesMovesAndDeletesASitesOwnFilesByItsCode() throws IOException {
         String tag = HohenheimMcpTest.letters();
         URI endpoint = URI.create(baseUrl() + "/zn/mcp/" + HohenheimMcpModule.SERVER_NAME);
         McpHostServer server = Objects.requireNonNull(McpHostServers.routed(HohenheimMcpModule.SERVER_NAME));
@@ -355,6 +410,25 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
         McpHttpSession.Answer refused = foreign.call("file_read", Map.of("code", code, "path", "/docs"));
         assertThat(refused.error()).as("step 5: " + refused.text()).isTrue();
         assertThat(refused.text()).as("step 5: nothing of it").doesNotContain("Read me.txt");
+
+        // 6. Kept in another storage without moving them: the file left behind is listed and read by tool, a new one
+        //    lands in the storage chosen, and a delete takes the old one out of the earlier storage.
+        McpHttpSession.Answer kept = own.call("file_write", Map.of("code", code, "path", "/docs/Kept.txt",
+            "content", "kept " + tag));
+        assertThat(kept.error()).as("step 6: " + kept.text()).isFalse();
+        Path newer = keptElsewhere(siteId);
+        assertThat(own.call("file_read", Map.of("code", code, "path", "/docs/Kept.txt")).text())
+            .as("step 6: the file left behind reads").contains("kept " + tag);
+        assertThat(own.call("file_write", Map.of("code", code, "path", "/docs/New.txt", "content", "new " + tag))
+            .error()).as("step 6: a new one is written").isFalse();
+        assertThat(newer.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/New.txt"))
+            .as("step 6: in the storage chosen").hasContent("new " + tag);
+        assertThat(own.call("file_read", Map.of("code", code, "path", "/docs")).text())
+            .as("step 6: the listing holds both").contains("Kept.txt").contains("New.txt");
+        assertThat(own.call("file_delete", Map.of("code", code, "path", "/docs/Kept.txt")).error())
+            .as("step 6: the old one is deleted").isFalse();
+        assertThat(Files.exists(storage.resolve(SiteFiles.prefixOf(siteId)).resolve("docs/Kept.txt")))
+            .as("step 6: out of the earlier storage").isFalse();
     }
 
     // -- plumbing -------------------------------------------------------------
@@ -364,6 +438,34 @@ class SiteOwnFilesReachJourneyTest extends HohenheimTestBase {
         Row site = ProxyTestSupport.setupSite("hohenheim:static", slug, slug,
             new LinkedHashMap<>(Map.of("own_files", ownFiles, "autoindex", true)));
         return site.get(SiteModel.ID);
+    }
+
+    /**
+     * Changes where the site keeps its files to a new storage of the operator's, by a save alone: the files stay
+     * where they are.
+     *
+     * @return the new storage's folder
+     */
+    private static Path keptElsewhere(int siteId) throws IOException {
+        Path folder = Files.createTempDirectory("hh-site-unmoved");
+        String name = storageRow(folder);
+        Row site = Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId));
+        Map<String, Object> settings = new LinkedHashMap<>(RawValues.map(site.get(SiteModel.SETTINGS)));
+        settings.put(StaticUpstreamKind.STORAGE.getName(), name);
+        site.set(SiteModel.SETTINGS, settings);
+        Models.get(SiteModel.class).save(site);
+        return folder;
+    }
+
+    /** @return the name of a new storage of the operator's on a folder of this server */
+    private static String storageRow(Path folder) {
+        String name = "hh-reach-" + UUID.randomUUID();
+        Row row = Models.get(BackupTargetModel.class).createEmptyRow();
+        row.set(BackupTargetModel.NAME, name);
+        row.set(BackupTargetModel.KIND, LocalFolderStorageKind.ID.toString());
+        row.set(BackupTargetModel.SETTINGS, Map.of(LocalFolderStorageKind.FOLDER.getName(), folder.toString()));
+        Models.get(BackupTargetModel.class).save(row);
+        return name;
     }
 
     /** @return the port of the SFTP server started from hohenheim.sftp.*, the settings put back by restore */

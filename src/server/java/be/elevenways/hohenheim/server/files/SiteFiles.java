@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.data.DataItem;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.home.ReadThroughStorage;
 import be.elevenways.zenit.server.io.FilesystemNodeKind;
 import be.elevenways.zenit.server.storage.StorageAdapter;
 import be.elevenways.zenit.server.storage.StoredObject;
@@ -43,6 +44,12 @@ public final class SiteFiles {
 
     /** The storage name of the installation's own site files, a local folder following its setting. */
     public static final String STORAGE = "hohenheim-site-files";
+
+    /**
+     * The settings key naming the storages a site still reads the files it did not move from, newest first: written
+     * by {@link SiteFileMoves} alone, never a person's setting, so no form or tool offers it.
+     */
+    public static final String EARLIER_STORAGES = "earlier_storages";
 
     /** How long a counted usage is trusted before the stored objects are counted again. */
     private static final Duration USAGE_TTL = Duration.ofMinutes(1);
@@ -87,14 +94,58 @@ public final class SiteFiles {
         return named.isEmpty() ? STORAGE : named;
     }
 
+    /** @return the storages a site still reads the files it did not move from, newest first; none for most sites */
+    public static @NonNull List<String> earlierStorageNamesOf(@Nullable Map<String, Object> settings) {
+        Object stored = settings == null ? null : settings.get(EARLIER_STORAGES);
+        List<String> names = new ArrayList<>();
+        if (stored instanceof List<?> listed) {
+            for (Object name : listed) {
+                String trimmed = RawValues.trimmed(name);
+                if (!trimmed.isEmpty() && !names.contains(trimmed)) {
+                    names.add(trimmed);
+                }
+            }
+        }
+        return names;
+    }
+
+    /** @return every storage a site reads its own files from: the one they are kept in, then the earlier ones */
+    public static @NonNull List<String> readStorageNamesOf(@Nullable Map<String, Object> settings) {
+        List<String> names = new ArrayList<>(List.of(storageNameOf(settings)));
+        for (String earlier : earlierStorageNamesOf(settings)) {
+            if (!names.contains(earlier)) {
+                names.add(earlier);
+            }
+        }
+        return names;
+    }
+
     /**
      * The storage a site's own files live in: this server's own site files, a mount its settings declare, or a storage
-     * a person added (opened through the storage layer's declared source).
+     * a person added (opened through the storage layer's declared source). A site that changed storage without moving
+     * its files reads through to the storages it kept them in before (ReadThroughStorage.over): writes land in the new
+     * one, a delete removes a file from every one of them.
      *
      * @throws Violations {@code site_files_storage_missing} when the site names a storage this host does not know
      */
     public static @NonNull StorageAdapter storageOf(@Nullable Map<String, Object> settings) {
-        String named = storageNameOf(settings);
+        StorageAdapter kept = storageNamed(storageNameOf(settings));
+        List<String> earlierNames = earlierStorageNamesOf(settings);
+        if (earlierNames.isEmpty()) {
+            return kept;
+        }
+        List<StorageAdapter> earlier = new ArrayList<>(earlierNames.size());
+        for (String name : earlierNames) {
+            earlier.add(storageNamed(name));
+        }
+        return ReadThroughStorage.over(kept, earlier);
+    }
+
+    /**
+     * @return the storage under the name, this server's own site files included
+     * @throws Violations {@code site_files_storage_missing} when this host knows no storage under the name
+     */
+    public static @NonNull StorageAdapter storageNamed(@NonNull String named) {
         if (STORAGE.equals(named)) {
             return Storages.mountLocalFollowing(STORAGE, HohenheimSettings.Files.SITE_FILES_DIRECTORY, null);
         }

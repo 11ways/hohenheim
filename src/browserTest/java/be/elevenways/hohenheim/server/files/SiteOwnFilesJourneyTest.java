@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -25,6 +26,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.storage.LocalDiskStorageAdapter;
 import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.Storages;
@@ -56,7 +58,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * A static-files site serving its own files: files put through the one file manager land in the storage under the
  * site's own keys and are served at the same paths through the proxy, a range as a range, a large file streamed;
- * whoever manages the site reaches them, nobody else.
+ * whoever manages the site reaches them, nobody else. Moved to another storage they follow; left behind by a
+ * change of storage they keep being served, listed and deleted until a later move consolidates them.
  */
 class SiteOwnFilesJourneyTest {
 
@@ -237,13 +240,58 @@ class SiteOwnFilesJourneyTest {
             .as("step 10: served from the new storage").startsWith("HTTP/1.1 200")
             .contains("TADOMA-INSTALLER-0123456789");
 
-        // 11. A save that changes where the files are kept without moving them is refused while files are there.
+        // 11. A save that changes where the files are kept without moving them: saved, and the files keep working.
+        //     The old file is served and listed from the storage it stays in; a new one lands in the storage chosen
+        //     alone; the listing holds both; a delete takes a file out of the earlier storage.
         Row switched = Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId));
         Map<String, Object> back = new LinkedHashMap<>(RawValues.map(switched.get(SiteModel.SETTINGS)));
         back.put(StaticUpstreamKind.STORAGE.getName(), SiteFiles.STORAGE);
+        back.put(SiteFiles.EARLIER_STORAGES, List.of("a-storage-the-writer-names"));
         switched.set(SiteModel.SETTINGS, back);
-        assertThat(keyOf(catchThrowable(() -> Models.get(SiteModel.class).save(switched))))
-            .as("step 11: move them first").isEqualTo("site_files_move_first");
+        Models.get(SiteModel.class).save(switched);
+        Map<String, Object> saved = RawValues.map(Objects.requireNonNull(Models.get(SiteModel.class)
+            .findById(siteId)).get(SiteModel.SETTINGS));
+        assertThat(SiteFiles.earlierStorageNamesOf(saved)).as("step 11: the storage left is still read, whatever "
+            + "the write carried").containsExactly(operatorStore);
+        proxy.reload();
+        assertThat(ProxyTestSupport.rawRequest(port, "downloads.files.test", "/releases/Tadoma-1.2.EXE"))
+            .as("step 11: the file not moved is served").startsWith("HTTP/1.1 200")
+            .contains("TADOMA-INSTALLER-0123456789");
+        verbs.uploadFrom(root, "/releases/new.txt", upload, false, 1L << 30);
+        assertThat(storage.resolve("sites/" + siteId + "/releases/new.txt")).as("step 11: a new file lands in the "
+            + "storage chosen").hasBinaryContent(installer);
+        assertThat(Files.exists(movedTo.resolve("sites/" + siteId + "/releases/new.txt")))
+            .as("step 11: and not in the earlier one").isFalse();
+        assertThat(new InstanceFiles().list(root, "/releases").entries()).as("step 11: the listing holds both")
+            .extracting(InstanceFiles.Entry::name).containsExactlyInAnyOrder("Tadoma-1.2.EXE", "late.txt", "new.txt");
+        verbs.delete(root, "/releases/late.txt");
+        assertThat(Files.exists(movedTo.resolve("sites/" + siteId + "/releases/late.txt")))
+            .as("step 11: a delete takes it out of the earlier storage").isFalse();
+        assertThat(new InstanceFiles().list(root, "/releases").entries()).as("step 11: and it is gone")
+            .extracting(InstanceFiles.Entry::name).containsExactlyInAnyOrder("Tadoma-1.2.EXE", "new.txt");
+
+        // 12. The earlier storage counts as in use: its delete is offered dead while the site reads from it.
+        Row earlierRow = Objects.requireNonNull(Models.get(BackupTargetModel.class).find()
+            .where(BackupTargetModel.NAME.eq(operatorStore)).first());
+        assertThat(OperationPipeline.offer(BackupTargetParts.DELETE, TenantConduits.operator(), earlierRow))
+            .as("step 12: the earlier storage's delete is dead").isInstanceOf(OperationPipeline.Offer.Unavailable.class);
+
+        // 13. A later move into the storage chosen consolidates: the file left behind is copied, the earlier storage
+        //     emptied, and the site reads from the one storage again; the earlier storage's delete is offered.
+        int consolidated = SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)),
+            SiteFiles.STORAGE, ProgressSink.SILENT, step -> { });
+        assertThat(consolidated).as("step 13: the one file left behind").isEqualTo(1);
+        assertThat(storage.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")).as("step 13: in the storage "
+            + "chosen").hasBinaryContent(installer);
+        assertThat(Files.exists(movedTo.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")))
+            .as("step 13: gone from the earlier one").isFalse();
+        assertThat(SiteFiles.earlierStorageNamesOf(RawValues.map(Objects.requireNonNull(Models.get(SiteModel.class)
+            .findById(siteId)).get(SiteModel.SETTINGS)))).as("step 13: the read-through ended").isEmpty();
+        assertThat(OperationPipeline.offer(BackupTargetParts.DELETE, TenantConduits.operator(), earlierRow))
+            .as("step 13: the earlier storage may go").isNotInstanceOf(OperationPipeline.Offer.Unavailable.class);
+        assertThat(keyOf(catchThrowable(() -> SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class)
+            .findById(siteId)), SiteFiles.STORAGE, ProgressSink.SILENT, step -> { }))))
+            .as("step 13: and a move to where it reads alone is refused").isEqualTo("site_files_move_same");
     }
 
 

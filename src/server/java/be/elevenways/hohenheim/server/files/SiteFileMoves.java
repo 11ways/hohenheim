@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.home.ReadThroughStorage;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.storage.PutOptions;
 import be.elevenways.zenit.server.storage.StorageAdapter;
@@ -37,16 +38,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
- * Changing where a site keeps its own files ("Files kept in") while it has some: THE move, a background run that
- * copies every file to the new storage, verifies each copy by the SHA-256 the new storage computes, switches the site
- * over and removes the old copies last, the site serving its files throughout.
+ * Changing where a site keeps its own files ("Files kept in"): THE move, a background run that copies every file to the
+ * new storage, verifies each copy by the SHA-256 the new storage computes, switches the site over and removes the old
+ * copies last, the site serving its files throughout; or a save of the new storage alone, which leaves the files where
+ * they are and keeps them working (Jelle, 2026-11-28).
  *
  * AIDEV-NOTE: the site reads the storage its settings name on every request and every write resolves it again, so
  * before the switch the old storage holds every file and after it the new one does. A file written to the old storage
@@ -55,9 +59,16 @@ import java.util.function.Consumer;
  * old storage holds is settled again (copied when the new storage lacks it or holds only this move's earlier copy,
  * left alone when a write since the switch put a newer one there) right before its old copy is removed, so nothing
  * written is left only where the site no longer reads. No write is held: a hold would stall a person's upload for the
- * length of a save. A save that changes the storage while the old one holds a file the new one lacks is refused
- * ({@code site_files_move_first}): the change is offered only with the move until Jelle rules on leaving files where
- * they are (H1 brief item 6).
+ * length of a save.
+ *
+ * AIDEV-NOTE: a save that changes the storage while the old one still holds files of the site records the old one in
+ * the site's settings ({@link SiteFiles#EARLIER_STORAGES}, newest first), whoever saves and whatever the write
+ * carried there: the site then reads through to it (SiteFiles.storageOf), so every file keeps being served, listed
+ * and deleted, while writes land in the new storage; the earlier storage counts as in use (StorageUsage). Choosing an
+ * earlier storage again takes it off that list. A later move consolidates: it reads every storage the site reads, the
+ * newest copy of each file winning, writes them into the storage chosen and removes them from the others, which ends
+ * the read-through. A site's keys are listed under its folder with the slash ({@code sites/<id>/}): the bare prefix
+ * also names {@code sites/<id>0/}, another site's files.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -115,23 +126,26 @@ public final class SiteFileMoves {
             .handle(call -> move(call.subject(), Objects.requireNonNull(Objects.requireNonNull(call.input(),
                 "a move names its storage").storage(), "a move names its storage"), call.progress(),
                 call::reportStepDone));
-        SiteModel.SCHEMA.addBeforeWriteHook(context -> {
+        SiteModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null || context.isCreate() || !row.has(SiteModel.SETTINGS.getName())) {
                 return;
             }
             Row stored = StoredRows.of(Models.get(SiteModel.class), row);
-            if (stored == null || !SiteFiles.servesOwnFiles(stored)) {
+            // The move's own switch writes the list it ended; nobody else's write carries one.
+            if (stored == null || Objects.equals(SWITCHING.get(), stored.get(SiteModel.ID))) {
                 return;
             }
-            Map<String, Object> before = RawValues.map(stored.get(SiteModel.SETTINGS));
-            Map<String, Object> after = RawValues.map(row.get(SiteModel.SETTINGS));
-            String from = SiteFiles.storageNameOf(before);
-            String to = SiteFiles.storageNameOf(after);
-            // The move's own switch is let through: what landed in the old storage since its second pass is settled
-            // right after it (verify-after-switch), which a refusal here would only turn into a failed move.
-            if (!from.equals(to) && !Objects.equals(SWITCHING.get(), stored.get(SiteModel.ID))) {
-                requireHeldBy(stored.get(SiteModel.ID), before, after, to);
+            Map<String, Object> written = RawValues.map(row.get(SiteModel.SETTINGS));
+            Map<String, Object> after = new LinkedHashMap<>(written);
+            List<String> earlier = earlierAfter(stored, after);
+            if (earlier.isEmpty()) {
+                after.remove(SiteFiles.EARLIER_STORAGES);
+            } else {
+                after.put(SiteFiles.EARLIER_STORAGES, earlier);
+            }
+            if (!after.equals(written)) {
+                row.set(SiteModel.SETTINGS, after);
             }
         });
     }
@@ -140,55 +154,89 @@ public final class SiteFileMoves {
     }
 
     /**
-     * Refuses a change of storage that would leave a file behind: every file the old storage holds for the site must
-     * be in the new one first.
-     *
-     * @throws Violations {@code site_files_move_first} naming how many files the new storage lacks
+     * @param stored the site as stored before the write
+     * @param after  the settings the write stores
+     * @return the storages the site reads the files it did not move from after the write, newest first: the stored
+     *         ones, the one it leaves first while that still holds a file of the site, the one it chooses left out
      */
-    static void requireHeldBy(int siteId, @NonNull Map<String, Object> before, @NonNull Map<String, Object> after,
-                              @NonNull String to) {
-        StorageAdapter source = SiteFiles.storageOf(before);
-        StorageAdapter target = SiteFiles.storageOf(after);
-        long missing = 0;
-        for (String key : source.list(SiteFiles.keysOf(siteId))) {
-            if (!target.exists(key)) {
-                missing++;
-            }
+    static @NonNull List<String> earlierAfter(@NonNull Row stored, @NonNull Map<String, Object> after) {
+        Map<String, Object> before = RawValues.map(stored.get(SiteModel.SETTINGS));
+        List<String> earlier = new ArrayList<>(SiteFiles.earlierStorageNamesOf(before));
+        String from = SiteFiles.storageNameOf(before);
+        String to = SiteFiles.storageNameOf(after);
+        earlier.remove(to);
+        if (!from.equals(to) && SiteFiles.servesOwnFiles(stored) && !earlier.contains(from)
+                && holdsFilesOf(from, stored.get(SiteModel.ID))) {
+            earlier.addFirst(from);
         }
-        if (missing > 0) {
-            throw Violations.ofField(SiteModel.SETTINGS.getName() + "." + StaticUpstreamKind.STORAGE.getName(), to,
-                HohenheimMicrocopy.VIOLATIONS.of("site_files_move_first")
-                    .withArg("files", HohenheimCounts.of("files", missing)));
+        return earlier;
+    }
+
+    /** @return whether the storage holds a file of the site; one it cannot be asked now is taken to hold some */
+    private static boolean holdsFilesOf(@NonNull String storage, int siteId) {
+        StorageAdapter adapter;
+        try {
+            adapter = SiteFiles.storageNamed(storage);
+        } catch (Violations unknown) {
+            // No storage of that name is known here: nothing could be read from it.
+            return false;
+        }
+        try {
+            return !adapter.list(SiteFiles.keysOf(siteId)).isEmpty();
+        } catch (RuntimeException unreachable) {
+            return true;
         }
     }
 
     /**
      * The move: copy and verify each file, a second pass for what was written meanwhile, the switch, then the removal
-     * of the old copies.
+     * of the old copies. Every storage the site reads is a source, the newest copy of a file winning; the storage
+     * chosen keeps a copy of its own that is newer than every other.
      *
      * @param progress told the fraction of the files copied
      * @param stepDone told each step's line as it finishes: copied, switched, removed
-     * @return how many files moved
-     * @throws Violations {@code site_files_move_same} when the site keeps its files there already, or
+     * @return how many files were copied
+     * @throws Violations {@code site_files_move_same} when the site reads its files from that storage alone already, or
      *         {@code site_files_copy_unverified} when a copy's SHA-256 differs from its source's
      */
     public static int move(@NonNull Row site, @NonNull String to, @NonNull ProgressSink progress,
                            @NonNull Consumer<Microcopy> stepDone) {
         int siteId = site.get(SiteModel.ID);
         Map<String, Object> settings = RawValues.map(site.get(SiteModel.SETTINGS));
-        if (SiteFiles.storageNameOf(settings).equals(to)) {
+        List<String> reads = SiteFiles.readStorageNamesOf(settings);
+        if (reads.equals(List.of(to))) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_files_move_same").withArg("storage", to));
         }
         Map<String, Object> moved = new LinkedHashMap<>(settings);
         moved.put(StaticUpstreamKind.STORAGE.getName(), to);
-        StorageAdapter source = SiteFiles.storageOf(settings);
-        StorageAdapter target = SiteFiles.storageOf(moved);
+        moved.remove(SiteFiles.EARLIER_STORAGES);
+        List<StorageAdapter> others = new ArrayList<>();
+        List<StorageAdapter> newer = new ArrayList<>();
+        boolean past = false;
+        for (String name : reads) {
+            if (name.equals(to)) {
+                past = true;
+                continue;
+            }
+            StorageAdapter read = SiteFiles.storageNamed(name);
+            others.add(read);
+            if (!past) {
+                newer.add(read);
+            }
+        }
+        StorageAdapter source = others.size() == 1 ? others.getFirst()
+            : ReadThroughStorage.over(others.getFirst(), others.subList(1, others.size()));
+        StorageAdapter target = SiteFiles.storageNamed(to);
+        // A copy the chosen storage holds already wins when no storage read before it holds the file.
+        boolean targetRead = past;
+        Predicate<String> targetWins = key -> targetRead && target.exists(key)
+            && newer.stream().noneMatch(read -> read.exists(key));
         String keys = SiteFiles.keysOf(siteId);
 
         Map<String, String> copied = new LinkedHashMap<>();
-        copyAll(source, target, source.list(keys), copied, progress);
+        copyAll(source, target, source.list(keys), copied, progress, targetWins);
         // What a person put there, or replaced, while the first pass ran: copied again when its bytes changed.
-        copyAll(source, target, source.list(keys), copied, progress);
+        copyAll(source, target, source.list(keys), copied, progress, targetWins);
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_copied")
             .withArg("files", HohenheimCounts.of("files", copied.size())));
 
@@ -202,8 +250,8 @@ public final class SiteFileMoves {
         SiteFiles.forget(siteId);
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_switched").withArg("storage", to));
 
-        // Verify after the switch: each key the old storage still holds is settled once more right before its old
-        // copy goes, so a write that landed there after the second pass is in the new storage first.
+        // Verify after the switch: each key the old storages still hold is settled once more right before its old
+        // copies go, so a write that landed there after the second pass is in the new storage first.
         for (String key : source.list(keys)) {
             String settled = settled(source, target, key, copied);
             // Removed only while it still holds the bytes just settled: a write landing between the two is kept for
@@ -254,19 +302,20 @@ public final class SiteFileMoves {
 
     /**
      * Copies each key whose bytes the new storage does not hold yet, durably, and verifies it by the SHA-256 the new
-     * storage computes.
+     * storage computes; a key whose copy in the new storage wins is left as it is there.
      *
-     * @param copied the verified SHA-256 of each key copied so far, extended here
+     * @param copied     the verified SHA-256 of each key copied so far, extended here
+     * @param targetWins whether the new storage's own copy of a key is the newest the site reads
      */
     private static void copyAll(@NonNull StorageAdapter source, @NonNull StorageAdapter target,
                                 @NonNull List<String> keys, @NonNull Map<String, String> copied,
-                                @NonNull ProgressSink progress) {
+                                @NonNull ProgressSink progress, @NonNull Predicate<String> targetWins) {
         int walked = 0;
         for (String key : keys) {
             walked++;
             StoredObject object = source.stat(key);
-            if (object == null) {
-                // Removed since it was listed: nothing to keep.
+            if (object == null || targetWins.test(key)) {
+                // Removed since it was listed, or newest where it goes: nothing to copy.
                 continue;
             }
             String held = source.storedSha256(key);

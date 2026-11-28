@@ -32,7 +32,8 @@ import java.util.Set;
 
 /**
  * What uses each storage (board FO128): the recovery archive and the dumps a server setting sends there, the sites
- * keeping their own files there, the databases with dumps stored there and the apps backing up there.
+ * keeping their own files there or still reading the files they did not move from there, the databases with dumps
+ * stored there and the apps backing up there.
  *
  * AIDEV-NOTE: a page of storages is read in a fixed number of statements whatever its size: one for the sites, one
  * grouped count of databases, one of apps; the settings are read from memory. A site names its storage by name in
@@ -156,11 +157,15 @@ final class StorageUsage {
                 access.text(HohenheimMicrocopy.BACKUP_TARGET.of("keeps_database_dumps"))));
         }
         for (Row site : liveFileSites()) {
-            if (name.equals(SiteFiles.storageNameOf(RawValues.map(site.get(SiteModel.SETTINGS))))) {
-                facts.add(WidgetFact.link(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("keeps_site")),
-                    String.valueOf((Object) site.get(SiteModel.NAME)),
-                    CmsRoutes.detail(panelSlug, HohenheimSlugs.SITES, site.get(SiteModel.ID)).toUrl()));
+            Map<String, Object> settings = RawValues.map(site.get(SiteModel.SETTINGS));
+            if (!SiteFiles.readStorageNamesOf(settings).contains(name)) {
+                continue;
             }
+            // A site that moved away without moving its files still reads them here: the page says so.
+            boolean kept = name.equals(SiteFiles.storageNameOf(settings));
+            facts.add(WidgetFact.link(access.text(HohenheimMicrocopy.BACKUP_TARGET.of(kept ? "keeps_site"
+                    : "keeps_site_unmoved")), String.valueOf((Object) site.get(SiteModel.NAME)),
+                CmsRoutes.detail(panelSlug, HohenheimSlugs.SITES, site.get(SiteModel.ID)).toUrl()));
         }
         if (id != null) {
             Map<Integer, long[]> dumps = new LinkedHashMap<>();
@@ -205,11 +210,13 @@ final class StorageUsage {
         return facts;
     }
 
-    /** @return how many live sites keep their own files in each storage, by its name; one read */
+    /** @return how many live sites keep or still read their own files in each storage, by its name; one read */
     static @NonNull Map<String, Long> sitesByStorage() {
         Map<String, Long> sites = new HashMap<>();
         for (Row site : liveFileSites()) {
-            sites.merge(SiteFiles.storageNameOf(RawValues.map(site.get(SiteModel.SETTINGS))), 1L, Long::sum);
+            for (String name : SiteFiles.readStorageNamesOf(RawValues.map(site.get(SiteModel.SETTINGS)))) {
+                sites.merge(name, 1L, Long::sum);
+            }
         }
         return sites;
     }

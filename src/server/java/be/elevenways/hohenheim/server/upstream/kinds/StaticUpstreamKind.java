@@ -54,8 +54,9 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
 
     /**
      * The storage a site's own files live in ("Files kept in"), picked from the storages the editing person may use
-     * ({@code SitePicks}); blank is the installation's own site-files folder. The site's manager may change it, and a
-     * change while files are kept is made by moving them ({@code SiteFileMoves}), never by a save alone.
+     * ({@code SitePicks}); blank is the installation's own site-files folder. The site's manager may change it: by
+     * moving the files ({@code SiteFileMoves}), or by a save alone, which leaves them where they are and has the site
+     * read through to that storage ({@code SiteFiles.EARLIER_STORAGES}) until a move consolidates them.
      */
     public static final StringField STORAGE = SETTINGS_SCHEMA.addField(
         SiteStorageField.builder("storage")

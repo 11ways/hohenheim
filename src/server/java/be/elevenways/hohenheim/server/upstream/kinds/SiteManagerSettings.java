@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.key.IdentityKey;
@@ -25,7 +26,9 @@ import java.util.Set;
  * AIDEV-NOTE: fail closed. A setting that does not declare the fact, a key no schema of the kind declares and a kind
  * this build does not know are all administrator-only, so a setting added later stays host power until its
  * declaration says otherwise. What a manager changes is what the site shares and what its folders list; everything
- * that says where traffic goes or what the host serves (an upstream, a host path, a storage, the trust) is not.
+ * that says where traffic goes or what the host serves (an upstream, a host path, a storage, the trust) is not. The
+ * storages a site still reads the files it did not move from ({@link SiteFiles#EARLIER_STORAGES}) are neither: Hohenheim
+ * writes them itself whoever saves (SiteFileMoves), so they are no host setting a write could change.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -64,7 +67,7 @@ public final class SiteManagerSettings {
      */
     public static @Nullable String firstHostKeyChanged(@Nullable Object kind, @NonNull Map<?, ?> stored,
                                                        @NonNull Map<?, ?> written) {
-        Set<String> managed = new LinkedHashSet<>();
+        Set<String> managed = new LinkedHashSet<>(List.of(SiteFiles.EARLIER_STORAGES));
         for (Field<?, ?> field : ofKind(kind)) managed.add(field.getName());
         Set<Object> keys = new LinkedHashSet<>(stored.keySet());
         keys.addAll(written.keySet());
@@ -97,6 +100,7 @@ public final class SiteManagerSettings {
     public static @NonNull Map<String, Object> hostSettings(@Nullable Object kind,
                                                             @NonNull Map<String, Object> settings) {
         Map<String, Object> host = new LinkedHashMap<>(settings);
+        host.remove(SiteFiles.EARLIER_STORAGES);
         for (Field<?, ?> field : ofKind(kind)) host.remove(field.getName());
         return host;
     }
