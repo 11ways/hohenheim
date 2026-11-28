@@ -311,15 +311,16 @@ class LinkedServersJourneyTest {
             assertThat(titled(masterApps(OWN_SITE), OWN_SITE)).as("step 2: the master's own app beside it").isNotNull();
             //    That page, the page a website of the master's opens, is drawn from what Kuifje told: Kuifje's app
             //    under its name, its server named, never the master's own app of that number; the tabs that show what
-            //    runs on Kuifje say they wait and are not offered, and a website runs no verb where it lives yet.
+            //    runs on Kuifje say they wait and are not offered (its Addresses tab is: step 2b), and a website runs
+            //    no verb where it lives yet.
             HttpResponse<String> typed = asAdministrator(heldPage);
             assertThat(typed.statusCode()).as("step 2: the master's page of Kuifje's app").isEqualTo(200);
             assertThat(typed.body()).as("step 2: Kuifje's app, by Kuifje's facts").contains("later-site")
                 .contains("Kuifje").doesNotContain(OWN_SITE)
                 .contains("Logs, console, files, stats, backups, volumes, databases and history wait");
             assertThat(pagesLinked(typed.body(), "/admin/" + HohenheimSlugs.SITES + "/" + peer + "-" + made))
-                .as("step 2: no tab beside the overview (a strip of one is not drawn)")
-                .isSubsetOf(RecordOverview.SLUG);
+                .as("step 2: the overview and the Addresses tab, no other")
+                .containsExactlyInAnyOrder(RecordOverview.SLUG, SiteParts.DOMAINS_TAB);
             assertThat(asAdministrator("/admin/" + HohenheimSlugs.SITES + "/" + peer + "-" + made).statusCode())
                 .as("step 2: the master serves no form of Kuifje's site").isEqualTo(404);
             //    Its state settles: with nothing changed on Kuifje, two reads answer the same generations, so a
@@ -359,6 +360,19 @@ class LinkedServersJourneyTest {
             assertThat(addressesTab.body()).as("step 2b: the tab lists the site's address, no server's")
                 .contains("own.robbedoes.test").doesNotContain("later.kuifje.test")
                 .doesNotContain("data-column=\"server\"").doesNotContain("\"filter.server\"");
+            //     Kuifje's site's Addresses tab on the master lists the addresses Kuifje keeps of that site, drawn as
+            //     the address list draws them, never the master's own of a site of that number; it offers no add, edit
+            //     or remove.
+            String heldTab = "/admin/" + HohenheimSlugs.SITES + "/" + peer + "-" + made + "/page/"
+                + SiteParts.DOMAINS_TAB;
+            HttpResponse<String> heldAddresses = asAdministrator(heldTab);
+            assertThat(heldAddresses.statusCode()).as("step 2b: Kuifje's site's Addresses tab").isEqualTo(200);
+            assertThat(rowOf(heldAddresses.body(), "hostname", "later.kuifje.test"))
+                .as("step 2b: Kuifje's address of that site, its reach as told").contains("data-state=")
+                .doesNotContain("pl-table-select-row").doesNotContainPattern("href=\"[^\"]");
+            assertThat(heldAddresses.body()).as("step 2b: none of the master's own")
+                .doesNotContain("own.robbedoes.test").doesNotContain("data-column=\"server\"")
+                .doesNotContain("/" + HohenheimSlugs.DOMAINS + "/create");
             assertThat(rowOf(masterList(HohenheimSlugs.CERTIFICATES, "later-cert"), "nice_name", "later-cert"))
                 .as("step 2b: Kuifje's certificate, failing as Kuifje told it").contains("Kuifje")
                 .contains("data-state=\"renewal_failing\"").doesNotContain("pl-table-select-row")

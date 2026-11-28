@@ -186,6 +186,19 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                 .contains("Kuifje");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-page.png"))
                 .setFullPage(true));
+            //    Its Addresses tab lists the address Kuifje keeps of it, under no Server column, offering no add.
+            navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(kuifje) + "-101/page/"
+                + SiteParts.DOMAINS_TAB);
+            waitForHydration();
+            Locator heldAddress = page.locator("pl-table-body pl-table-row")
+                .filter(new Locator.FilterOptions().setHasText("shop.kuifje.test"));
+            BoundedAssertions.assertThat(heldAddress).isVisible();
+            assertThat(page.locator("pl-table-cell[data-column='server']").count()).as("step 6: no Server column")
+                .isZero();
+            assertThat(page.locator("a[href*='/" + HohenheimSlugs.DOMAINS + "/create']").count())
+                .as("step 6: no add on Kuifje's site").isZero();
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-addresses.png"))
+                .setFullPage(true));
             navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + site.get(SiteModel.ID) + "/page/"
                 + RecordOverview.SLUG);
             waitForHydration();

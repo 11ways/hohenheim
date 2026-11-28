@@ -123,13 +123,16 @@ public final class SiteParts {
      *
      * AIDEV-NOTE: the rows, their edit and remove, the add link with its parent preset, the scope and a trashed site's
      * read-only state are the child list's own; what a hostless site's empty tab tells the reader is the domain list's
-     * own empty description (DomainParts).
+     * own empty description (DomainParts). A linked server's site opens this tab too: it lists that server's kept
+     * addresses of that site (the address list's held records, DomainParts.HELD), drawn as that list draws them, and
+     * offers no add, edit or remove.
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
             HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), HohenheimSlugs.DOMAINS)
         .hide(HohenheimSlugs.DOMAINS, DomainParts.APP_COLUMN)
         // A stream is reached on its own port, never at an address: it has no Addresses tab.
-        .visibleWhen((site, access) -> reachOf(site).asksAddress());
+        .visibleWhen((site, access) -> reachOf(site).asksAddress())
+        .servingHeld();
 
     /**
      * The Protection tab, in the overview card's word: first the whole app's protection (the site's own access list,
@@ -352,8 +355,8 @@ public final class SiteParts {
      * keeps them, drawn by this list's own cells from those records, the same server's kept addresses and apps, and
      * the TLS line and verdict it told (SiteStates); a silent server's say when it last answered.
      *
-     * AIDEV-NOTE: a held site opens nothing yet (its page is a later step) and offers no action; no cell reads this
-     * process under its id, which names another server's site.
+     * AIDEV-NOTE: a held site opens on this entry's own page (its overview and its Addresses tab, the parts that serve
+     * a held record) and offers no action; no cell reads this process under its id, which names another server's site.
      */
     private static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("site"),
             access -> List.copyOf(ClusterLists.rows(Models.get(SiteModel.class), SiteModel.MODEL_ID)),
