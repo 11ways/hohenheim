@@ -65,19 +65,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-final class ClusterToolCalls implements PeerCalls.Carrier {
+final class ClusterCalls implements PeerCalls.Carrier {
 
-    private static final ClusterToolCalls CARRIER = new ClusterToolCalls();
+    private static final ClusterCalls CARRIER = new ClusterCalls();
 
     private static final JobRunnerGroup.Member RELAYS =
         RuntimeJobs.GROUP.member("hh-cluster-relays", JobRunnerGroup.StopMode.DRAIN, 1);
 
-    private static final Coalesced RELAY = new Coalesced(RELAYS, ClusterToolCalls::sendRelays);
+    private static final Coalesced RELAY = new Coalesced(RELAYS, ClusterCalls::sendRelays);
 
     /** The latest state of each relayed run not sent yet, by the invocation the master carried it under. */
     private static final Map<UUID, Map<String, Object>> PENDING = new ConcurrentHashMap<>();
 
-    private ClusterToolCalls() {
+    private ClusterCalls() {
     }
 
     /** Makes this server carry calls about its managed servers' things, and serve the calls its master carries. */

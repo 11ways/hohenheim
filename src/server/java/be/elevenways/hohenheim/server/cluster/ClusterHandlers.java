@@ -55,7 +55,7 @@ import java.util.UUID;
  *
  * AIDEV-NOTE: "call" is the one call that speaks for a person, so it answers this server's master alone, as
  * generations and rows do (401, then 403 for a server this one manages); the call runs on the master's word as the
- * person it names (ClusterToolCalls). A body that cannot be read is 400, a surface or a call this build does not
+ * person it names (ClusterCalls). A body that cannot be read is 400, a surface or a call this build does not
  * serve 404, and scopes not admitting the surface 403. "run" is the opposite way, like "changed": only a server this
  * one manages tells it a state of a run, and only of a run carried to that server (404 for any other).
  *
@@ -80,7 +80,7 @@ public final class ClusterHandlers {
     public static void init() {
         ClusterNudge.install();
         ClusterCodes.install();
-        ClusterToolCalls.install();
+        ClusterCalls.install();
         AppStates.declare();
         ClusterEndpoints.GENERATIONS.setHandler(conduit -> asMaster(conduit, (master, caller) -> {
             Map<String, Object> generations = new LinkedHashMap<>();
@@ -247,13 +247,13 @@ public final class ClusterHandlers {
             return refusal(conduit, ZenitRefusalReason.FORBIDDEN);
         }
         Map<String, Object> body = bodyOf(conduit);
-        ClusterToolCalls.Asked asked = body == null ? null : ClusterToolCalls.asked(body);
+        ClusterCalls.Asked asked = body == null ? null : ClusterCalls.asked(body);
         if (asked == null) {
             return refusal(conduit, ZenitRefusalReason.BAD_REQUEST);
         }
         Map<String, Object> answer;
         try {
-            answer = ClusterToolCalls.runHere(row, Reader.READER.principal(row.get(LinkedServerModel.ID),
+            answer = ClusterCalls.runHere(row, Reader.READER.principal(row.get(LinkedServerModel.ID),
                 String.valueOf((Object) row.get(LinkedServerModel.NAME))), Reader.READER, asked, conduit);
         } catch (DomainRefusal refused) {
             return refusal(conduit, refused.reason());
