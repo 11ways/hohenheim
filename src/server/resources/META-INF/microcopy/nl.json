@@ -21715,7 +21715,6 @@
   "added_by_administrator": {"text": "Een beheerder", "scope": "backup_target"},
   "added_by_you": {"text": "U", "scope": "backup_target"},
   "in_settings_title": {"text": "Uit de instellingen van de server", "scope": "backup_target"},
-  "in_settings_lead": {"text": "Vastgelegd in het instellingenbestand van deze server, en daar gewijzigd.", "scope": "backup_target"},
   "card_where": {"text": "Waar", "scope": "backup_target"},
   "secret_stored": {"text": "Ingesteld", "scope": "backup_target"},
   "card_used_by": {"text": "Gebruikt door", "scope": "backup_target"},

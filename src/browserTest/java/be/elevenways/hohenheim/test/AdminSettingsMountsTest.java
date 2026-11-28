@@ -68,11 +68,11 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(mounts).filteredOn(mount -> !mount.advanced()).extracting(mount -> mount.icon().name())
             .as("step 2b: each section's icon").containsExactly("sliders", "lock", "box-archive", "bell", "sitemap",
                 "shield-halved", "cubes", "server", "id-badge", "robot", "palette", "hard-drive");
-        assertThat(mounts.get(2).records()).as("step 2b: Backups lists the backup targets")
-            .containsExactly(HohenheimSlugs.BACKUP_TARGETS);
+        assertThat(mounts.get(2).records()).as("step 2b: Backups lists the storages")
+            .containsExactly(HohenheimSlugs.STORAGES);
         assertThat(mounts.get(3).records()).as("step 2b: Notifications lists the channels")
             .containsExactly(HohenheimSlugs.NOTIFICATIONS);
-        for (String slug : List.of(HohenheimSlugs.BACKUP_TARGETS, HohenheimSlugs.NOTIFICATIONS)) {
+        for (String slug : List.of(HohenheimSlugs.STORAGES, HohenheimSlugs.NOTIFICATIONS)) {
             assertThat(admin.entryBySlug(slug).standsUnder()).as("step 2b: " + slug + " stands under Settings")
                 .isEqualTo(SettingsPage.DEFAULT_SLUG);
         }

@@ -53,7 +53,7 @@ class AdminListPresentationTest extends HohenheimHttpTestBase {
         "access-lists", "dns-zones", "bans", "domains", "instance-snapshots",
         "instance-template-variables", "instance-quotas", "instance-databases",
         "reconcile-findings", "builds", "releases", "instance-schedule-runs",
-        "released-claims", "instance-schedules", "backup-targets",
+        "released-claims", "instance-schedules",
         "instance-template-files", "instance-files", "stack-services", "stack-files",
         "auth-providers", "activity");
 

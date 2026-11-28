@@ -814,6 +814,10 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
                 .isInstanceOf(Offer.Unavailable.class);
             assertThat(twoDeletes.offers().get(1)).as("step 1: an unused one's is live")
                 .isInstanceOf(Offer.Available.class);
+            String[] listed = {"backup_targets", "sites", "database_dumps", "instances", "auth_record_grants"};
+            Cells twoListed = storagesList(listed);
+            assertThat(twoListed.cells()).as("step 1: the Storages list holds both records")
+                .contains(PREFIX + "store0", PREFIX + "store1");
 
             // 2. Forty storages: the same reads, for the cells and for the deletes.
             for (int i = 2; i < 40; i++) {
@@ -825,6 +829,10 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
             assertThat(measure(BackupTargetParts.DELETE, Models.get(BackupTargetModel.class), BackupTargetModel.ID,
                 storages, tables).statements()).as("step 2: and so do their deletes")
                 .isEqualTo(twoDeletes.statements());
+            Cells fortyListed = storagesList(listed);
+            assertThat(fortyListed.statements()).as("step 2: the Storages list reads forty as it reads two")
+                .isEqualTo(twoListed.statements());
+            assertThat(fortyListed.cells()).as("step 2: forty records listed").contains(PREFIX + "store39");
         } finally {
             runAll(cleanup);
         }
@@ -912,6 +920,20 @@ class GroupedReadsQueryCountJourneyTest extends HohenheimTestBase {
 
     /** One list page's cells of one column, and the statements naming each measured table. */
     private record Cells(List<Object> cells, Map<String, Integer> statements) {
+    }
+
+    /** Reads the administrator's Storages list rows as its page does, their names and each table's reads. */
+    private static Cells storagesList(String... tables) {
+        AccessContext operator = TenantConduits.operator();
+        DatasourceProbe probe = DatasourceProbe.on((SqlDatasource) Datasources.getDefault());
+        List<Object> names = new ArrayList<>();
+        try (DatasourceProbe.Armed ignored = probe.recordStatements()) {
+            probe.reset();
+            for (StorageListParts.Listed row : StorageListParts.rows(operator)) {
+                names.add(row.values().get("name"));
+            }
+        }
+        return new Cells(names, tableCounts(probe.preparedStatements(), tables));
     }
 
     /** Reads one list's page of cells as the list page does, counting each table's reads. */

@@ -84,8 +84,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "environments", "environment-variables", "reconcile-findings", "dns-peers",
         // Access: the People list's Roles card and Role column.
         "roles",
-        // Settings: the Notifications and Backups sections list them.
-        "notifications", "backup-targets",
+        // Settings: the Notifications and Backups sections list them; a storage record stands under Storages.
+        "notifications", HohenheimSlugs.STORAGES, "backup-targets",
         // Access: the abuse-protection overview page.
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
         "spamservice-security-events", "spamservice-words", "spamservice-reputation",
@@ -170,6 +170,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         // 5. And each demoted peer is REACHABLE BY CLICKING, not only by typing: the Apps list's toolbar links what
         //    an app is made of, and the abuse-protection front door every spamservice sub-surface it swallowed.
         String settingsPage = adminGet("/admin/settings").body();
+        // The Backups section embeds the Storages list, whose Add and rows open the storage records.
         for (String slug : List.of("notifications", "backup-targets")) {
             assertThat(settingsPage).as("step 5: the settings page lists /admin/" + slug).contains("/admin/" + slug);
         }
@@ -187,7 +188,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         // 6. The sibling catalogs demoted onto a parent list are linked from that list's header.
         assertThat(adminGet("/admin/instances").body())
             .as("step 6: the Instances list heads to its sibling catalogs and histories")
-            .contains("/admin/backup-targets")
+            .contains("/admin/" + HohenheimSlugs.STORAGES)
             .contains("/admin/instance-quotas")
             .contains("/admin/game-domains")
             .contains("/admin/builds")

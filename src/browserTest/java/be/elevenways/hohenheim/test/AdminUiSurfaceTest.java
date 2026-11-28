@@ -552,7 +552,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         //    client-side into the portal, so the served HTML holds an empty element.
         assertThat(relatedItems("/admin/instances"))
             .as("step 2: every demoted catalog is offered as a related page")
-            .contains("/admin/backup-targets", "/admin/instance-quotas",
+            .contains("/admin/storages", "/admin/instance-quotas",
                 "/admin/game-domains", "/admin/builds", "/admin/releases");
 
         // 3. And the sites list makes the same promise over its own two siblings.

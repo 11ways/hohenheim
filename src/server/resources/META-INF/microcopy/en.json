@@ -21715,7 +21715,6 @@
   "added_by_administrator": {"text": "An administrator", "scope": "backup_target"},
   "added_by_you": {"text": "You", "scope": "backup_target"},
   "in_settings_title": {"text": "From the server's settings", "scope": "backup_target"},
-  "in_settings_lead": {"text": "Declared in this server's settings file, and changed there.", "scope": "backup_target"},
   "card_where": {"text": "Where", "scope": "backup_target"},
   "secret_stored": {"text": "Set", "scope": "backup_target"},
   "card_used_by": {"text": "Used by", "scope": "backup_target"},

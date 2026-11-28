@@ -91,6 +91,8 @@ public final class HohenheimSlugs {
     public static final String STACK_FILES = "stack-files";
     public static final String STACK_SERVICES = "stack-services";
     public static final String STACKS = "stacks";
+    /** The administrator's one Storages list: the settings' storages beside the storage records. */
+    public static final String STORAGES = "storages";
     /** The server's Traffic report: every site's requests at once. */
     public static final String TRAFFIC = "traffic";
     /** The server's Traffic page's Activity tab: the live picture of every site's requests. */

@@ -145,7 +145,7 @@ public enum HohenheimSettingsSections {
     /** @return the slugs of the resources whose lists the section holds above its settings, in display order */
     public @NonNull List<String> records() {
         return switch (this) {
-            case BACKUPS -> List.of(HohenheimSlugs.BACKUP_TARGETS);
+            case BACKUPS -> List.of(HohenheimSlugs.STORAGES);
             case NOTIFICATIONS -> List.of(HohenheimSlugs.NOTIFICATIONS);
             case GENERAL, HTTPS, DNS, BLOCKING, APPS, HOSTS, SIGNIN, ABUSE, BRAND, INSTALLATION -> List.of();
         };

@@ -28,6 +28,7 @@ import be.elevenways.zenit.storage.sftp.server.SftpStorageKind;
 import be.elevenways.zenit.storage.sftp.test.support.SftpTestServer;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -87,23 +88,32 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
                 server.hostKey()));
             StorageReadings.check(BackupStorages.of(box));
 
-            // 1. The list: name, kind, where (the place, then the rest in muted words under it), added by, used by and
-            //    room left; the storages of the server's settings read-only above the records, saying so.
-            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS);
+            // 1. The one Storages list: name, kind, where (the place, then the rest in muted words under it), added
+            //    by, used by and room left; the storages of the server's settings are rows of it, read-only, saying
+            //    they come from the server's settings, with no Edit; each record has its Test and its Edit.
+            navigateToApp("/admin/" + HohenheimSlugs.STORAGES);
             waitForHydration();
             String list = page.content();
             assertThat(list).as("step 1: the records").contains("Backup disk " + tag, "Storage box " + tag)
                 .contains("Folder on this server", "SFTP server").contains(folder.toString())
                 .contains(SftpTestServer.HOST).contains("folder " + boxFolder);
-            assertThat(list).as("step 1: the settings' storages, read-only: this server's site files, never a module's "
-                + "own home").contains("From the server's settings").contains("Site files")
-                .doesNotContain("/data/media")
+            Locator siteFiles = page.locator("pl-table-row").filter(new Locator.FilterOptions().setHasText("Site files"));
+            assertThat(siteFiles.count()).as("step 1: this server's site files are one row of the list").isEqualTo(1);
+            assertThat(siteFiles.textContent()).as("step 1: a settings row says where it comes from")
+                .contains("From the server's settings", "Folder on this server").doesNotContain("Edit");
+            assertThat(list).as("step 1: no separate card, and never a module's own home")
+                .doesNotContain("Declared in this server's settings file").doesNotContain("/data/media")
                 .doesNotContain("/data/content");
+            Locator diskRow = page.locator("pl-table-row").filter(new Locator.FilterOptions()
+                .setHasText("Backup disk " + tag));
+            assertThat(diskRow.textContent()).as("step 1: a record offers Test and Edit").contains("Test", "Edit");
             for (String head : List.of("Kind", "Where", "Added by", "Used by", "Room left")) {
                 assertThat(page.locator("pl-table-head").allTextContents().toString()).as("step 1: " + head)
                     .contains(head);
             }
             shoot("storages-list");
+            diskRow.locator("a, button").filter(new Locator.FilterOptions().setHasText("Edit")).first().click();
+            page.waitForURL("**/" + HohenheimSlugs.BACKUP_TARGETS + "/" + disk.get(BackupTargetModel.ID) + "**");
 
             // 2. A storage's page (its overview tab; the record's own address is its edit form): where it is in its
             //    kind's facts, its secret set and never shown, its room read by a check (a backup's or a Test's) as
