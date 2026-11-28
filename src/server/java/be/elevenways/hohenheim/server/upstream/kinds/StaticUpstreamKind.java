@@ -59,7 +59,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
      */
     public static final StringField STORAGE = SETTINGS_SCHEMA.addField(
         SiteStorageField.builder("storage")
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("files_kept_in"))
             .help(HohenheimMicrocopy.HELP.of("site_storage"))
             .attribute(SiteManagerSettings.MANAGER_CHANGES, true).build());
 

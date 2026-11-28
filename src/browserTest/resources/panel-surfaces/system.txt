@@ -41,7 +41,7 @@ control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms
 control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:SEGMENTS
 control CREATE%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -141,7 +141,7 @@ control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms
 control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:SEGMENTS
 control CREATE%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -162,7 +162,7 @@ control EDIT%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:c
 control EDIT%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.folder at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.user at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20settings[zenit:storage_sftp]/settings.sign_in at=4 kind=zenitforms:form/select input=select required=true readonly=false options=password,key binding=searchable:false,clearable:false,presentation:SEGMENTS
 control EDIT%20settings[zenit:storage_sftp]/settings.password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.host_key at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.connections at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=

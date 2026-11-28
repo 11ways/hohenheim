@@ -34,10 +34,10 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
-import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.JsonValue;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
@@ -75,10 +75,12 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetItem;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -136,7 +138,7 @@ public final class BackupTargetParts {
         .add(BackupTargetModel.NAME)
         .add(Select.of(BackupTargetModel.KIND).options(FieldFormEntryDefaults.enumOptionSource(BackupTargetModel.KIND))
             .presentation(Select.Presentation.SEGMENTS).build())
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
+        .add(Nested.of(BackupTargetModel.SETTINGS).schemaFrom(BackupTargetModel.KIND.getName()).unheaded().build())
         .build();
 
     /** A customer's form: only the kinds a tenant may declare. */
@@ -145,7 +147,7 @@ public final class BackupTargetParts {
         .add(BackupTargetModel.NAME)
         .add(Select.of(BackupTargetModel.KIND).options(OptionSource.supplied(BackupTargetParts::tenantKinds))
             .presentation(Select.Presentation.SEGMENTS).build())
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
+        .add(Nested.of(BackupTargetModel.SETTINGS).schemaFrom(BackupTargetModel.KIND.getName()).unheaded().build())
         .build();
 
     /** The add and edit form's Test on the administrator's page: the save's own check, saving nothing. */
@@ -325,7 +327,8 @@ public final class BackupTargetParts {
      * @param settingsCard whether the list shows the storages the server's settings declare above the records
      */
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id, @NonNull FormSpec form,
-                                                           @NonNull Operation<Void, OperationInput.Values, String> trying,
+                                                           @NonNull Operation<Void, OperationInput.Values,
+                                                               String> trying,
                                                            boolean settingsCard) {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(BackupTargetModel.NAME).subtext(FAILURE_COLUMN).build())
@@ -362,7 +365,7 @@ public final class BackupTargetParts {
             .icon(Icon.of("box-archive"))
             .reads(ResourceReads.rows().pageBatch(BackupTargetParts::cells))
             .list(list.build())
-            .form(ResourceForm.<Row>of(form).landingTab(RecordOverview.SLUG).build())
+            .form(ResourceForm.<Row>of(form).landingTab(RecordOverview.SLUG).savesAtFootOnly().build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
@@ -371,7 +374,8 @@ public final class BackupTargetParts {
                 PanelAction.<Row, String>places(trying, ActionPlacement.FORM,
                     (request, where) -> CmsActionResult.successToast(HohenheimMicrocopy.BACKUP_TARGET.of("try_ok")
                         .withArg("where", Objects.requireNonNull(where, "a Test says where"))
-                        .withArg("at", Now.instant())))
+                        .withArg("at", Now.instant()))
+                        .withTitle(HohenheimMicrocopy.BACKUP_TARGET.of("try_ok_title")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
                 .build()));
     }
@@ -734,8 +738,17 @@ public final class BackupTargetParts {
         if (failing != null) {
             room.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("last_check")), failing));
         }
-        side.add(roomLead == null ? CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_room"), room)
-            : CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_room"), roomLead, room));
+        Microcopy roomTitle = HohenheimMicrocopy.BACKUP_TARGET.of("card_room");
+        if (roomLead != null && reading.room().totalBytes() > 0) {
+            // The board's usage bar over the facts: the framework gauge, so the reading's own sizes say it.
+            long usedBytes = reading.room().totalBytes() - reading.room().freeBytes();
+            WidgetInstance gauge = AppOverview.gauge(HohenheimMicrocopy.BACKUP_TARGET.of("room_used"),
+                UsageData.bytes(usedBytes, reading.room().totalBytes(), reading.roomReadAt().toString()));
+            side.add(CardWidget.of(roomTitle, roomLead, new WidgetTree(List.of(gauge, FactListWidget.of(room)))));
+        } else {
+            side.add(roomLead == null ? CardWidget.ofFacts(roomTitle, room)
+                : CardWidget.ofFacts(roomTitle, roomLead, room));
+        }
         return AppOverview.compose(List.of(), main, side);
     }
 

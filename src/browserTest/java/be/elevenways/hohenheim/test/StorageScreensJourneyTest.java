@@ -96,7 +96,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
                 .contains("Folder on this server", "SFTP server").contains(folder.toString())
                 .contains(SftpTestServer.HOST).contains("folder " + boxFolder);
             assertThat(list).as("step 1: the settings' storages, read-only: this server's site files, never a module's "
-                + "own home").contains("From the server's settings").contains("Site files").doesNotContain("/data/media")
+                + "own home").contains("From the server's settings").contains("Site files")
+                .doesNotContain("/data/media")
                 .doesNotContain("/data/content");
             for (String head : List.of("Kind", "Where", "Added by", "Used by", "Room left")) {
                 assertThat(page.locator("pl-table-head").allTextContents().toString()).as("step 1: " + head)
@@ -105,7 +106,10 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             shoot("storages-list");
 
             // 2. A storage's page (its overview tab; the record's own address is its edit form): where it is in its
-            //    kind's facts, its secret set and never shown, its room and what uses it.
+            //    kind's facts, its secret set and never shown, its room read by a check (a backup's or a Test's) as
+            //    the board's bar, and what uses it.
+            assertThat(StorageReadings.room(BackupStorages.of(box))).as("step 2: the SFTP server tells its room")
+                .isPresent();
             navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/" + box.get(BackupTargetModel.ID) + "/page/"
                 + RecordOverview.SLUG);
             waitForHydration();
@@ -113,6 +117,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             assertThat(shown).as("step 2: where").contains("Host", SftpTestServer.HOST, "Server's key");
             assertThat(shown).as("step 2: the secret is set, never shown").contains("Password", "never shown")
                 .doesNotContain(SftpTestServer.PASSWORD);
+            assertThat(page.locator("pl-usage-bar").count())
+                .as("step 2: the room as a usage bar").isPositive();
             shoot("storage-page");
 
             // 3. Adding a storage: the kind's own form; the S3 one filled for the Garage test server and Tested in its
@@ -123,6 +129,10 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             page.waitForSelector("pl-input[name='settings.bucket']");
             assertThat(page.content()).as("step 3: the S3 form").contains("Bucket", "Folder inside the bucket",
                 "Secret key", "Bucket name in the path");
+            assertThat(page.locator("cms-record-save").count()).as("step 3: one pair of buttons, at the foot")
+                .isZero();
+            assertThat(page.locator("pl-fieldset-legend").allTextContents()).as("step 3: the kind's settings unheaded")
+                .doesNotContain("Settings");
             GarageServer garage = GarageServer.shared();
             OutboundFixture[] garageRoutes = garage.route();
             try {
@@ -136,8 +146,10 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
                 fill("settings.secret_key", S3TestServer.SECRET_KEY);
                 page.locator("[data-cms-form-foot-action]").first().click();
                 page.waitForSelector("[data-cms-form-foot-result][data-worked]");
+                assertThat(page.locator("[data-cms-form-foot-result] pl-alert[variant='success'] pl-alert-title")
+                    .textContent()).as("step 3: the Test's alert, headed as drawn").isEqualTo("Reachable and writable");
                 assertThat(page.locator("[data-cms-form-foot-result]").textContent()).as("step 3: what the Test did")
-                    .contains("Reachable and writable", "bucket " + garage.bucket());
+                    .contains("Hohenheim wrote a small file", "bucket " + garage.bucket());
                 assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(releases))
                     .count()).as("step 3: nothing saved").isZero();
                 shoot("storage-add-s3");
@@ -154,6 +166,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             waitForHydration();
             chooseKind(SftpStorageKind.ID.toString());
             page.waitForSelector("pl-input[name='settings.host']");
+            assertThat(page.locator("pl-toggle-group[name='settings.sign_in']").count())
+                .as("step 4: Sign in with as segments, as the SFTP module declares").isEqualTo(1);
             String unpinned = "Unpinned " + tag;
             this.made.add(unpinned);
             fill("name", unpinned);
@@ -203,6 +217,19 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
         assertThat(page.locator("he-bottom .pl-select-popup[data-open]").textContent())
             .as("step 6: the storages the operator may use").contains("Backup disk " + tag);
         shoot("storage-chosen-site");
+
+        // 7. In Dutch: the add form and the Test's alert in the reader's words.
+        page.setExtraHTTPHeaders(Map.of("Accept-Language", "nl"));
+        try {
+            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/new");
+            waitForHydration();
+            chooseKind(SftpStorageKind.ID.toString());
+            page.waitForSelector("pl-input[name='settings.host']");
+            assertThat(page.content()).as("step 7: the form in Dutch").contains("Een opslag toevoegen");
+            shoot("storage-add-nl");
+        } finally {
+            page.setExtraHTTPHeaders(Map.of());
+        }
     }
 
     /**
@@ -263,6 +290,20 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
         assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(inside)).count())
             .as("step 5: nothing saved").isZero();
 
+        // 5b. Settings naming a host record (an SSH-era row's) are never a customer's: the host's client key is the
+        //     operator's alone, so the declaration is refused before anything is opened.
+        Row borrowed = Models.get(BackupTargetModel.class).createEmptyRow();
+        borrowed.set(BackupTargetModel.NAME, "Borrowed " + tag);
+        borrowed.set(BackupTargetModel.KIND, SftpStorageKind.ID.toString());
+        borrowed.set(BackupTargetModel.SETTINGS, Map.of("server", "backup-host", "path", "/srv"));
+        assertThat(catchThrowable(() -> HohenheimStorages.declarationOf(borrowed,
+            HohenheimStorages.ownerOfCreator(theirs)))).as("step 5b: a host record is no customer's")
+            .isInstanceOf(IllegalArgumentException.class);
+
+        // 5c. A creator who is nobody (no account, no administrator) declares no operator's storage.
+        assertThat(catchThrowable(() -> HohenheimStorages.ownerOfCreator(AccessContext.anonymous())))
+            .as("step 5c: nobody owns no operator's storage").isInstanceOf(IllegalStateException.class);
+
         // 6. Deleted through the twin: it is gone.
         PanelResourceCalls.delete(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS, key, theirs);
         assertThat(Models.get(BackupTargetModel.class).findById(key)).as("step 6: deleted").isNull();
@@ -276,7 +317,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
     }
 
     private void fill(String name, String value) {
-        page.locator("[name='" + name + "'] input:not([type='hidden']), input[name='" + name + "']:not([type='hidden'])")
+        page.locator("[name='" + name + "'] input:not([type='hidden']), input[name='" + name
+                + "']:not([type='hidden'])")
             .first().fill(value);
     }
 
