@@ -15,6 +15,7 @@ import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.StorageCheck;
 import be.elevenways.zenit.server.storage.StorageKinds;
 import be.elevenways.zenit.server.storage.StorageOwner;
+import be.elevenways.zenit.server.storage.StorageReach;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.nio.file.Path;
@@ -67,7 +68,7 @@ public final class DatabaseDumpTargetSeeder implements Seeder {
         StorageCheck check;
         try {
             check = StorageKinds.trial(new DeclaredStorage(TARGET_NAME, TARGET_NAME, LocalFolderStorageKind.ID,
-                settings, StorageOwner.OPERATOR, true)).check();
+                settings, StorageOwner.OPERATOR, StorageReach.PRIVATE_NETWORKS)).check();
         } catch (RuntimeException refused) {
             check = StorageCheck.found(CommonStorageProblem.REFUSED, String.valueOf(refused.getMessage()));
         }

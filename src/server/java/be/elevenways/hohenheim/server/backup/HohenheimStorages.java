@@ -23,6 +23,7 @@ import be.elevenways.zenit.server.storage.DeclaredStorage;
 import be.elevenways.zenit.server.storage.DeclaredStorages;
 import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.StorageOwner;
+import be.elevenways.zenit.server.storage.StorageReach;
 import be.elevenways.zenit.server.storage.Storages;
 import be.elevenways.zenit.storage.sftp.server.SftpStorageKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -51,7 +52,10 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  *
  * AIDEV-NOTE: who owns a storage is who holds its manage grant (no owner column, the ProjectModel rule); none is the
  * operator. Only an operator's storage may reach a private address, and only where this host's boot allows it
- * ({@code storage.allow_private_networks}): there is no column for a per-storage switch.
+ * ({@code storage.allow_private_networks}): there is no column for a per-storage switch. An SSH-era row is the one
+ * exception: its address is the host record's, which HostAdmission admitted as a backup destination (checked again
+ * on every read), so that admission decides its reach as it decided where ssh went
+ * ({@link StorageReach#ADMITTED_HOST}), loopback and private hosts included, with no boot opt-in.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -64,6 +68,9 @@ public final class HohenheimStorages implements DeclaredStorages {
 
     /** The kind backup targets were stored under while they wrote over ssh to a host record. */
     public static final Identifier STORED_SSH_KIND = HohenheimIds.id("ssh");
+
+    /** The setting an SSH-era row names its host record by. */
+    private static final String SSH_HOST_RECORD = "server";
 
     /** The one instance, installed as the class loads. */
     public static final HohenheimStorages INSTANCE = new HohenheimStorages();
@@ -116,20 +123,46 @@ public final class HohenheimStorages implements DeclaredStorages {
 
     /**
      * @return the declaration a row holds once saved by {@code owner}: a row not yet created has no grants to read
+     * @throws IllegalArgumentException when SFTP settings name a host record outside an operator's SSH-era row: the
+     *                                  host record's client key is the operator's alone
      */
     public static @NonNull DeclaredStorage declarationOf(@NonNull Row row, @NonNull StorageOwner owner) {
         Identifier kind = kindOf(row);
-        Map<String, Object> settings = HohenheimStoredIds.CHAIN.applyConfigUpgrades(kind,
-            RawValues.map(row.get(BackupTargetModel.SETTINGS)));
+        Map<String, Object> stored = RawValues.map(row.get(BackupTargetModel.SETTINGS));
+        boolean hostRecord = SftpStorageKind.ID.equals(kind) && stored.containsKey(SSH_HOST_RECORD);
+        if (hostRecord && !(owner instanceof StorageOwner.Operator
+                && STORED_SSH_KIND.toString().equals(trimmed(row.get(BackupTargetModel.KIND))))) {
+            // The upgrade below would hand these settings the host record's client key and pin: only a row the
+            // operator stored under the SSH kind before storages existed may name one.
+            throw new IllegalArgumentException("Only an operator's storage stored as an SSH backup target names a "
+                + "host record");
+        }
+        Map<String, Object> settings = HohenheimStoredIds.CHAIN.applyConfigUpgrades(kind, stored);
         Object id = row.get(BackupTargetModel.ID);
+        // An SSH-era row reaches what its host record's admission admitted (HostAdmission, just checked by the
+        // upgrade); every other operator storage private networks under the boot's opt-in; a tenant's the internet.
+        StorageReach reach = !(owner instanceof StorageOwner.Operator) ? StorageReach.PUBLIC_INTERNET
+            : hostRecord ? StorageReach.ADMITTED_HOST : StorageReach.PRIVATE_NETWORKS;
         return new DeclaredStorage(id == null ? "new" : String.valueOf(id), trimmed(row.get(BackupTargetModel.NAME)),
-            kind, settings, owner, owner instanceof StorageOwner.Operator);
+            kind, settings, owner, reach);
     }
 
-    /** @return who a storage the caller creates now belongs to ({@link HohenheimAccess#creationOwnerSubjects}) */
+    /**
+     * @return who a storage the caller creates now belongs to ({@link HohenheimAccess#creationOwnerSubjects})
+     * @throws IllegalStateException when that would be the operator but the caller is no administrator and no system
+     *                               work (a guest, a bearer, nobody): an operator's storage may reach private
+     *                               addresses, so an unknown creator never gets one
+     */
     public static @NonNull StorageOwner ownerOfCreator(@Nullable AccessContext caller) {
-        return ownerOfSubjects(HohenheimAccess.creationOwnerSubjects(caller), "a new storage");
+        Set<String> subjects = HohenheimAccess.creationOwnerSubjects(caller);
+        if (subjects.isEmpty() && (caller == null
+                || !(HohenheimAccess.isAdmin(caller) || caller.systemIdentity() != null))) {
+            throw new IllegalStateException("Only an administrator or the system's own work declares an operator's "
+                + "storage; this caller is neither and holds no account");
+        }
+        return ownerOfSubjects(subjects, "a new storage");
     }
+
     /** @return the kind the row names, a former spelling read through the stored-id chains */
     public static @NonNull Identifier kindOf(@NonNull Row row) {
         return StoredIdChains.resolve(trimmed(row.get(BackupTargetModel.KIND)));
@@ -198,11 +231,11 @@ public final class HohenheimStorages implements DeclaredStorages {
      * @throws IllegalArgumentException when the settings name no host or no absolute path
      */
     private static @NonNull Map<String, Object> sftpOfHostRecord(@NonNull Map<String, Object> settings) {
-        if (!settings.containsKey("server")) {
+        if (!settings.containsKey(SSH_HOST_RECORD)) {
             return settings;
         }
         String path = trimmed(settings.get("path"));
-        String spelling = trimmed(settings.get("server"));
+        String spelling = trimmed(settings.get(SSH_HOST_RECORD));
         if (spelling.isEmpty() || !path.startsWith("/")) {
             throw new IllegalArgumentException("An SSH backup target needs a host and an absolute remote directory");
         }

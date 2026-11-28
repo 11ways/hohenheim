@@ -128,12 +128,15 @@ class BackupTargetsTest {
     void anSshTargetIsTheSftpStorageOfItsHostRecordsPinnedIdentity() throws Exception {
         LiveLane.require(LiveLane.Need.SSH_TOOLS, sshd != null,
             "no OpenSSH binaries: the ssh target lane is not exercised here");
-        Path remoteBase = tmp.resolve("remote");
+        // The base folder exists, as on every host an SSH target wrote to: the SFTP kind refuses a missing folder
+        // rather than creating a mistyped one.
+        Path remoteBase = Files.createDirectories(tmp.resolve("remote"));
         Path file = payload("ssh-artifact");
 
         try (PrivateNetworkBootFixture ignored = new PrivateNetworkBootFixture()) {
-            // The sshd listens on loopback: an operator's storage may reach it only where the boot allows it.
-            PrivateNetworkBootFixture.declare(StorageKinds.PRIVATE_NETWORKS, true);
+            // The sshd listens on loopback. The host record's admission decides where an SSH-era storage reaches, as
+            // it decided where ssh went: no boot opt-in is needed, so this journey declares it off.
+            PrivateNetworkBootFixture.declare(StorageKinds.PRIVATE_NETWORKS, false);
             Db.run(datasource, () -> {
                 HostService servers = new HostService();
                 servers.add("backup-host", sshd.target());
