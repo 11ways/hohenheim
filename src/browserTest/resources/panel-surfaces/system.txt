@@ -27,15 +27,18 @@ column failure at=1 shown=false hidden=true sortable=false filterable=false copy
 column kind_words at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column where at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext=where_detail relation=false
 column where_detail at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column used_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column room_left at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext=added_by_detail relation=false
+column added_by_detail at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column used_by at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column room_left at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab overview at=0 landing=true view=false
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3 binding=searchable:false,clearable:true,presentation:SEGMENTS
 control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20private_addresses_allowed at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -124,9 +127,10 @@ column failure at=1 shown=false hidden=true sortable=false filterable=false copy
 column kind_words at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column where at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext=where_detail relation=false
 column where_detail at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column used_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column room_left at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column added_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext=added_by_detail relation=false
+column added_by_detail at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column used_by at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column room_left at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:test_backup_target at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_backup_target
 row zenit:edit at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:delete_backup_target at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.delete_backup_target?ids%3D{record}
@@ -136,6 +140,8 @@ tab access at=2 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3 binding=searchable:false,clearable:true,presentation:SEGMENTS
 control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20private_addresses_allowed at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control CREATE%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -157,6 +163,8 @@ control CREATE%20settings[zenit:storage_s3]/settings.page at=8 kind=zenitforms:c
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=zenit:storage_local_folder,zenit:storage_sftp,zenit:storage_s3,hohenheim:filesystem binding=searchable:false,clearable:true,presentation:SEGMENTS
 control EDIT%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:zenit:storage_local_folder%252Czenit:storage_sftp%252Czenit:storage_s3
+control EDIT%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20private_addresses_allowed at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[zenit:storage_local_folder]/settings.folder at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.host at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20settings[zenit:storage_sftp]/settings.port at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=

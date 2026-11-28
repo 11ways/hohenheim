@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.backup.BackupStorages;
 import be.elevenways.hohenheim.server.backup.HohenheimStorages;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
+import be.elevenways.hohenheim.server.files.SitePicks;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.test.stack.StackServiceSecretsTest;
@@ -22,6 +23,7 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -215,18 +217,38 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
                 .containsEntry("host_key", server.hostKey()).containsKey("password");
         }
 
-        // 5. A customer's list: their own storages only, "You" as who added them, never the operator's.
+        // 5. A customer's list: their own storages, "You" as who added them, never the operator's own, and the ones
+        //    an administrator lets everyone use by name and kind alone, "Shared with everyone", no address, no Test.
         UUID customer = ApiSupport.user("storage-screens-" + tag + "@hohenheim.local", "Mira Voss");
         Path own = Files.createTempDirectory("hh-own-storage");
         Row mine = storage("Tadoma backups " + tag, LocalFolderStorageKind.ID.toString(),
             Map.of(LocalFolderStorageKind.FOLDER.getName(), own.toString()));
         RecordGrants.grant(GrantSubjectType.USER, customer, BackupTargetModel.MODEL_ID, mine.get(BackupTargetModel.ID),
             HohenheimCapabilities.MANAGE, true);
-        navigateToAppAs("/manage/" + HohenheimSlugs.BACKUP_TARGETS, sessionFor(customer).token());
+        Path sharedFolder = Files.createTempDirectory("hh-shared-storage");
+        Row shared = storage("Shared bucket " + tag, LocalFolderStorageKind.ID.toString(),
+            Map.of(LocalFolderStorageKind.FOLDER.getName(), sharedFolder.toString()));
+        shared.set(BackupTargetModel.SHARED, true);
+        Models.get(BackupTargetModel.class).save(shared);
+        navigateToAppAs("/manage/" + HohenheimSlugs.STORAGES, sessionFor(customer).token());
         waitForHydration();
         String theirs = page.content();
         assertThat(theirs).as("step 5: their own").contains("Tadoma backups " + tag, "You")
             .doesNotContain("Backup disk " + tag).doesNotContain("From the server's settings");
+        Locator sharedRow = page.locator("pl-table-row").filter(new Locator.FilterOptions()
+            .setHasText("Shared bucket " + tag));
+        assertThat(sharedRow.count()).as("step 5: the storage everyone may use is a row").isEqualTo(1);
+        assertThat(sharedRow.textContent()).as("step 5: by name and kind alone")
+            .contains("Folder on this server", "Shared with everyone").doesNotContain(sharedFolder.toString())
+            .doesNotContain("Test").doesNotContain("Edit");
+        AccessContext customerAccess = AccessContext.of(TenantConduits.stubIn(new UserPrincipal(customer,
+            "user-" + customer), HohenheimSlugs.MANAGE));
+        assertThat(SitePicks.offered(customerAccess)).extracting(FieldOption::value)
+            .as("step 5: and they may choose it where a storage is chosen")
+            .contains("Shared bucket " + tag, "Tadoma backups " + tag).doesNotContain("Backup disk " + tag);
+        assertThat(PanelResourceCalls.tab(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS,
+            shared.get(BackupTargetModel.ID), RecordOverview.SLUG, customerAccess).status())
+            .as("step 5: never theirs to open").isEqualTo(404);
         shoot("storages-customer");
 
         // 6. Where a site's own files are kept: one picker of the storages the person may use.
@@ -279,6 +301,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             Row saved = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key), "step 1: saved");
             assertThat(HohenheimStorages.ownerOf(saved)).as("step 1: the customer owns it")
                 .isInstanceOf(StorageOwner.Tenant.class);
+            assertThat(BackupTargetModel.addedByOf(saved)).as("step 1: and is named as who added it")
+                .isEqualTo(theirs.principal().reference());
 
             // 2. Its Test runs the storage's own check against the server; what it found is what the list says next.
             assertThat(PanelResourceCalls.invoke(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS,
@@ -286,11 +310,19 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             assertThat(StorageReadings.of(name).check()).as("step 2: checked").isNotNull()
                 .satisfies(check -> assertThat(check.isUsable()).as(check.diagnostic()).isTrue());
 
-            // 3. Renamed through the twin.
+            // 3. Renamed through the twin; a customer's storage is saved with the operator's two switches off, even
+            //    when its row held them on (as the upgrade values every storage older than the switch).
+            saved.set(BackupTargetModel.SHARED, true);
+            saved.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, true);
+            Models.get(BackupTargetModel.class).saveWritten(saved);
             PanelResourceCalls.patch(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS, key,
                 Map.of("name", "Lumen archive " + tag), theirs);
-            assertThat((String) Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key))
-                .get(BackupTargetModel.NAME)).as("step 3: renamed").isEqualTo("Lumen archive " + tag);
+            Row renamed = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key));
+            assertThat((String) renamed.get(BackupTargetModel.NAME)).as("step 3: renamed")
+                .isEqualTo("Lumen archive " + tag);
+            assertThat(List.of(renamed.get(BackupTargetModel.SHARED),
+                renamed.get(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED))).as("step 3: neither switch is theirs")
+                .containsExactly(false, false);
         }
 
         // 4. An operator's storage is not one the customer can open, and its address reaches no customer.
@@ -310,6 +342,31 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
                 HohenheimSlugs.BACKUP_TARGETS, Map.of("name", inside, "kind", SftpStorageKind.ID.toString(),
                     "settings", sftp(server, server.freshFolder("tenant"), server.hostKey())), theirs)))
                 .as("step 5: refused").isInstanceOf(Violations.class);
+
+            // 5a. An operator's storage at that private address: refused while its own switch is off, though the
+            //     boot allows private networks; with the switch on it passes the save's check and connects.
+            Row lanBox = Models.get(BackupTargetModel.class).createEmptyRow();
+            lanBox.set(BackupTargetModel.NAME, "LAN box " + tag);
+            lanBox.set(BackupTargetModel.KIND, SftpStorageKind.ID.toString());
+            lanBox.set(BackupTargetModel.SETTINGS, sftp(server, server.freshFolder("operator"), server.hostKey()));
+            lanBox.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, false);
+            assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(lanBox, StorageOwner.OPERATOR)))
+                .as("step 5a: the switch off refuses a private address").isInstanceOf(Violations.class);
+            lanBox.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, true);
+            assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(lanBox, StorageOwner.OPERATOR)))
+                .as("step 5a: the switch on with the boot's opt-in connects").isNull();
+        }
+
+        // 5a'. Without the boot's opt-in, the switch alone reaches no private address.
+        try (OutboundFixture lan = OutboundFixture.routeResolved(SftpTestServer.HOST,
+                InetAddress.getByName("10.0.0.5"), server.port())) {
+            Row lanBox = Models.get(BackupTargetModel.class).createEmptyRow();
+            lanBox.set(BackupTargetModel.NAME, "LAN box " + tag);
+            lanBox.set(BackupTargetModel.KIND, SftpStorageKind.ID.toString());
+            lanBox.set(BackupTargetModel.SETTINGS, sftp(server, server.freshFolder("operator"), server.hostKey()));
+            lanBox.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, true);
+            assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(lanBox, StorageOwner.OPERATOR)))
+                .as("step 5a': the switch needs the boot's opt-in too").isInstanceOf(Violations.class);
         }
         assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(inside)).count())
             .as("step 5: nothing saved").isZero();

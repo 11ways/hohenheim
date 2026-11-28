@@ -415,6 +415,11 @@ public final class HohenheimAccess {
         return CapabilityScopes.gitProviderScope(ctx);
     }
 
+    /** THE storage visibility policy; see {@link CapabilityScopes#storageScope}. */
+    public static @Nullable Criteria storageScope(@NonNull AccessContext ctx) {
+        return CapabilityScopes.storageScope(ctx);
+    }
+
     /** THE access-list visibility policy; see {@link CapabilityScopes#accessListScope}. */
     public static @Nullable Criteria accessListScope(@NonNull AccessContext ctx) {
         return CapabilityScopes.accessListScope(ctx);

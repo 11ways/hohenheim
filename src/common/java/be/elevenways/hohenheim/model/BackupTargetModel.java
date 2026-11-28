@@ -21,8 +21,11 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.peer.SharedWithPeersBehaviour;
 import be.elevenways.zenit.common.storage.StorageKindRegistry;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 
@@ -34,7 +37,11 @@ import java.util.Map;
  * names no kind and no setting, so a storage module adds a kind here with no change. Rows written before (kinds
  * {@code hohenheim:filesystem} and {@code hohenheim:ssh}) resolve to the framework's kinds through
  * {@link be.elevenways.hohenheim.HohenheimStoredIds} and are never rewritten. Who owns a storage is who holds its
- * {@code manage} grant (the ProjectModel rule: no owner column); none is the operator.
+ * {@code manage} grant (the ProjectModel rule: no owner column); none is the operator. Who ADDED it is
+ * {@link #ADDED_BY}, stamped at its create from the work's identity: an administrator adding an operator's storage is
+ * named there although no grant names them. {@link #PRIVATE_ADDRESSES_ALLOWED} and {@link #SHARED} are an operator's
+ * switches: a tenant's storage never reaches a private address and is never shared, whatever they hold
+ * (M009_StorageChoices turned the first on for every storage older than it).
  */
 public class BackupTargetModel extends Model {
 
@@ -71,6 +78,24 @@ public class BackupTargetModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
+    /** An operator's storage may reach an address inside a private network, while the boot allows that too. */
+    public static final BooleanField PRIVATE_ADDRESSES_ALLOWED = SCHEMA.addField(
+        BooleanField.builder("private_addresses_allowed").defaultValue(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage_private_addresses"))
+            .help(HohenheimMicrocopy.HELP.of("storage_private_addresses"))
+            .build());
+
+    /** "Everyone may use it": an operator's storage every customer may choose, seeing its name and kind only. */
+    public static final BooleanField SHARED = SCHEMA.addField(BooleanField.builder("shared").defaultValue(false)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage_shared"))
+        .help(HohenheimMicrocopy.HELP.of("storage_shared"))
+        .build());
+
+    /** Who added the storage, as a {@link PrincipalRef#key()}; null for a storage older than the column. */
+    public static final StringField ADDED_BY = SCHEMA.addField(StringField.builder().name("added_by").nullable(true)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage_added_by"))
+        .build());
+
     static {
         SCHEMA.setDisplayFields(NAME);
         // Deleting a target used to succeed while COMPLETE backup rows still pointed at
@@ -82,6 +107,21 @@ public class BackupTargetModel extends Model {
         // it out from under its rows. Schema hook, so it runs on EVERY delete path
         // (admin resource, model.delete, criteria delete) -- the HostModel rule.
         SCHEMA.addBeforeRemoveHook(BackupTargetModel::refuseRemovalWhileReferenced);
+        // Who added it, stamped once on every create path (a form, a tool, a seeder): the work's own principal.
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && row.get(ID) == null && row.get(ADDED_BY) == null) {
+                ExecutionIdentity identity = ExecutionIdentity.current();
+                PrincipalRef by = identity == null ? null : identity.principalRef();
+                // A person, never the system's own work: an unattended create names nobody, as an older row does.
+                row.set(ADDED_BY, by == null || !by.kind().human() ? null : by.key());
+            }
+        });
+    }
+
+    /** @return who added the storage, null when it is older than the column or names no principal known here */
+    public static @Nullable PrincipalRef addedByOf(@NonNull Row storage) {
+        return PrincipalRef.fromKey(storage.get(ADDED_BY));
     }
 
     /**
@@ -134,7 +174,8 @@ public class BackupTargetModel extends Model {
      * dump setting's target refuses like the control-plane one: both are named by the same unique {@code name}.
      *
      * @throws Violations {@code backup_target_in_use}, {@code backup_target_control_plane} or
-     *                    {@code backup_target_database_dumps}
+     *                    {@code backup_target_database_dumps}; a database choosing the storage as its own counts as a
+     *                    use (its column has no foreign key: M009_StorageChoices)
      */
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
         String controlPlane = Zenit.SETTINGS_VALUES.getValue(
@@ -167,6 +208,9 @@ public class BackupTargetModel extends Model {
                 .count();
             long instances = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
+                .count()
+                + Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.BACKUP_TARGET_ID.eq(targetId))
                 .count();
             if (backups > 0 || instances > 0) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_in_use")

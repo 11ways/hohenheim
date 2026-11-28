@@ -121,11 +121,11 @@ class DatabaseDumpTargetTest {
             assertThatThrownBy(() -> DatabaseBackups.backUp(service, "dumpshop"))
                 .as("step 1: no target, no dump").isInstanceOf(IOException.class)
                 .hasMessageContaining(HohenheimSettings.Database.BACKUP_TARGET.getPath());
-            assertThat(DatabaseBackups.targetRefusal()).as("step 1: the offer is dead with a reason").isNotNull();
+            assertThat(DatabaseBackups.targetRefusal(shop)).as("step 1: the offer is dead with a reason").isNotNull();
             assertThat(Models.get(DatabaseDumpModel.class).find().count()).as("step 1: no row").isZero();
 
             try (DumpTargetFixture target = DumpTargetFixture.install("dump-target-test")) {
-                assertThat(DatabaseBackups.targetRefusal()).as("step 2: a set target takes dumps").isNull();
+                assertThat(DatabaseBackups.targetRefusal(shop)).as("step 2: a set target takes dumps").isNull();
 
                 // 2. The dump lands on the target compressed and encrypted, verified by the target's own hash, nothing
                 // left staged.
@@ -273,6 +273,43 @@ class DatabaseDumpTargetTest {
                     .as("step 8: the oldest row is gone").isNull();
                 assertThat(DatabaseBackups.newest(shopId)).extracting(DatabaseBackups.Stored::id)
                     .isEqualTo(third.get(DatabaseDumpModel.ID));
+
+                // 8b. A database with a storage and a number kept of its own (board FO128 screen 5b): its dump goes
+                //     there, never to the server's default; it keeps its own three where the server keeps two; the
+                //     restore's fetch reads the dump from that storage; the storage it chose cannot be deleted.
+                try (DumpTargetFixture own = DumpTargetFixture.install("dump-own-target")) {
+                    Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_TARGET, target.name());
+                    Integer ownId = Objects.requireNonNull(Models.get(BackupTargetModel.class).find()
+                        .where(BackupTargetModel.NAME.eq(own.name())).first()).get(BackupTargetModel.ID);
+                    Row chosen = Objects.requireNonNull(Models.get(DatabaseModel.class).findById(shopId));
+                    chosen.set(DatabaseModel.BACKUP_TARGET_ID, ownId);
+                    chosen.set(DatabaseModel.DUMPS_KEPT, 3);
+                    Models.get(DatabaseModel.class).save(chosen);
+                    assertThat(DatabaseBackups.targetNameFor(chosen)).as("step 8b: its own storage")
+                        .isEqualTo(own.name());
+                    Row fourth = DatabaseBackups.backUp(service, "dumpshop");
+                    assertThat((Integer) fourth.get(DatabaseDumpModel.TARGET_ID)).as("step 8b: stored on its own")
+                        .isEqualTo(ownId);
+                    assertThat(Files.exists(own.artifactOf(fourth))).as("step 8b: the artifact is there").isTrue();
+                    assertThat(Files.exists(target.artifactOf(fourth))).as("step 8b: and not on the default")
+                        .isFalse();
+                    assertThat(DatabaseBackups.stored(shopId)).extracting(DatabaseBackups.Stored::id)
+                        .as("step 8b: its own three kept, where the server keeps two")
+                        .containsExactly((Integer) fourth.get(DatabaseDumpModel.ID),
+                            (Integer) third.get(DatabaseDumpModel.ID), (Integer) second.get(DatabaseDumpModel.ID));
+                    Path fetched = DatabaseBackups.fetchVerified(fourth, Files.createTempDirectory("dump-own-fetch"));
+                    assertThat(Files.readString(fetched)).as("step 8b: the restore reads it from its own storage")
+                        .startsWith(DumpTargetFixture.DUMP_SQL);
+                    Row ownRow = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(ownId));
+                    Models.get(DatabaseDumpModel.class).find()
+                        .where(DatabaseDumpModel.ID.eq((Integer) fourth.get(DatabaseDumpModel.ID))).delete();
+                    assertThat(catchThrowable(() -> Models.get(BackupTargetModel.class).delete(ownRow)))
+                        .as("step 8b: chosen by a database, the storage refuses its deletion")
+                        .isInstanceOf(Violations.class);
+                    chosen.set(DatabaseModel.BACKUP_TARGET_ID, null);
+                    chosen.set(DatabaseModel.DUMPS_KEPT, null);
+                    Models.get(DatabaseModel.class).save(chosen);
+                }
 
                 // 9. The database deleted: its dumps stay listed, and an in-place restore says the source is gone.
                 Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(shopId)).delete();

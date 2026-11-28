@@ -272,13 +272,14 @@ public final class TenantScopes {
     public static final RowScope USABLE_GIT_PROVIDERS = RowScope.perPrincipal(HohenheimAccess::gitProviderScope);
 
 
-    /**
-     * The storages a tenant OWNS: the /manage list and every storage picker, since nothing shares a storage yet (no
-     * column says "everyone may use it"); an administrator reaches every one.
-     */
+    /** The storages a tenant OWNS: the /manage records they open, test, edit and delete. */
     public static final RowScope MANAGED_STORAGES = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(BackupTargetModel.class),
             BackupTargetModel.MODEL_ID, HohenheimCapabilities.MANAGE, BackupTargetModel.ID::in));
+
+    /** The storages a tenant may USE: the ones everyone may use plus their own (every storage picker). */
+    public static final RowScope USABLE_STORAGES = RowScope.perPrincipal(HohenheimAccess::storageScope);
+
     private TenantScopes() {
     }
 

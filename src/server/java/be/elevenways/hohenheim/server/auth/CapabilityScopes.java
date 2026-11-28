@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -9,6 +10,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
@@ -70,15 +73,35 @@ final class CapabilityScopes {
      *         shared rows plus the confirmed ids
      */
     static @Nullable Criteria gitProviderScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(GitProviderModel.class);
+        return sharedOrManaged(ctx, Models.get(GitProviderModel.class), GitProviderModel.MODEL_ID,
+            GitProviderModel.SHARED, GitProviderModel.ID);
+    }
+
+    /**
+     * THE storage visibility policy, the {@link #gitProviderScope} shape: storages an administrator lets everyone use
+     * ({@link BackupTargetModel#SHARED}) are offered to every authenticated principal, everything else only to the
+     * subjects the walk confirms {@code manage} for. Anonymous reaches nothing.
+     *
+     * @return null for an unconstrained scope, else a criteria that never widens past shared rows plus the confirmed
+     *         ids
+     */
+    static @Nullable Criteria storageScope(@NonNull AccessContext ctx) {
+        return sharedOrManaged(ctx, Models.get(BackupTargetModel.class), BackupTargetModel.MODEL_ID,
+            BackupTargetModel.SHARED, BackupTargetModel.ID);
+    }
+
+    /** @return null for an every-record holder, else the rows {@code shared} marks plus those the walk confirms */
+    private static @Nullable Criteria sharedOrManaged(@NonNull AccessContext ctx, @NonNull Model model,
+                                                      @NonNull Identifier modelId, @NonNull BooleanField sharedField,
+                                                      @NonNull IntegerField idField) {
         if (!ctx.isAccount()) {
             return model.matchNone();
         }
-        RecordCapabilityScope scope = capabilityScope(ctx, GitProviderModel.MODEL_ID, MANAGE);
+        RecordCapabilityScope scope = capabilityScope(ctx, modelId, MANAGE);
         if (scope.isAll()) {
             return null;
         }
-        Criteria shared = GitProviderModel.SHARED.eq(true);
+        Criteria shared = sharedField.eq(true);
         if (scope.isNone()) {
             return shared;
         }
@@ -86,8 +109,7 @@ final class CapabilityScopes {
         if (managed.isEmpty()) {
             return shared;
         }
-        return new CompositeCriteria(CompositeOperator.OR, shared,
-            GitProviderModel.ID.in(managed));
+        return new CompositeCriteria(CompositeOperator.OR, shared, idField.in(managed));
     }
 
     /**
@@ -99,24 +121,8 @@ final class CapabilityScopes {
      *         shared rows plus the confirmed ids
      */
     static @Nullable Criteria accessListScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(AccessListModel.class);
-        if (!ctx.isAccount()) {
-            return model.matchNone();
-        }
-        RecordCapabilityScope scope = capabilityScope(ctx, AccessListModel.MODEL_ID, MANAGE);
-        if (scope.isAll()) {
-            return null;
-        }
-        Criteria shared = AccessListModel.SHARED.eq(true);
-        if (scope.isNone()) {
-            return shared;
-        }
-        Set<Integer> managed = intIds(scope.recordIds());
-        if (managed.isEmpty()) {
-            return shared;
-        }
-        return new CompositeCriteria(CompositeOperator.OR, shared,
-            AccessListModel.ID.in(managed));
+        return sharedOrManaged(ctx, Models.get(AccessListModel.class), AccessListModel.MODEL_ID,
+            AccessListModel.SHARED, AccessListModel.ID);
     }
 
     /**

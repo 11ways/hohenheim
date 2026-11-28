@@ -21764,5 +21764,22 @@
   "move_files_removed": {"text": "{$files} verwijderd uit de oude opslagplaats", "scope": "site"},
   "move_site_files_description": {"text": "Verplaatst de eigen bestanden van een site naar een andere opslagplaats, nagegaan, terwijl de site ze blijft serveren.", "scope": "hohenheim"},
   "move_site_files": {"text": "{$actor} verplaatste de bestanden van site {$subject}", "scope": "hohenheim", "target": "happened"},
-  "move_files_confirm": {"text": "Verplaats de bestanden van deze site naar de opslagplaats die u kiest. De site blijft ze serveren tijdens het verplaatsen en schakelt om zodra elk bestand is overgezet en nagegaan.", "scope": "site"}
+  "move_files_confirm": {"text": "Verplaats de bestanden van deze site naar de opslagplaats die u kiest. De site blijft ze serveren tijdens het verplaatsen en schakelt om zodra elk bestand is overgezet en nagegaan.", "scope": "site"},
+  "storage_private_addresses": [{"text": "Mag een privéadres bereiken", "scope": "hohenheim_field"}, {"text": "Deze opslagplaats mag een adres binnen een privénetwerk bereiken. Dat gebeurt alleen zolang de opstart van deze server privénetwerken ook toelaat.", "scope": "help"}],
+  "storage_shared": [{"text": "Iedereen mag ze gebruiken", "scope": "hohenheim_field"}, {"text": "Aan: elke klant mag deze opslagplaats kiezen en ziet alleen de naam en de soort. Uit: alleen u en andere beheerders zien deze opslagplaats.", "scope": "help"}],
+  "storage_added_by": {"text": "Toegevoegd door", "scope": "hohenheim_field"},
+  "database_backup_target": [{"text": "Dumps gaan naar", "scope": "hohenheim_field"}, {"text": "De opslagplaats waar de dumps van deze database naartoe gaan. Leeg gebruikt de keuze van de server, onder Instellingen, Back-ups.", "scope": "help"}],
+  "database_dumps_kept": [{"text": "Bewaarde dumps", "scope": "hohenheim_field"}, {"text": "Hoeveel dumps deze database bewaart. Leeg bewaart het aantal van de server.", "scope": "help"}],
+  "database_backup_target_code": {"text": "De opslagplaats (BT1) waar de dumps van deze database naartoe gaan; weggelaten de keuze van de server. Een wijziging kan ze wissen met null.", "scope": "help"},
+  "everyone_may_use": {"text": "Iedereen mag ze gebruiken", "scope": "backup_target"},
+  "shared_with_everyone": {"text": "Gedeeld met iedereen", "scope": "backup_target"},
+  "card_private_address": {"text": "Privéadres", "scope": "backup_target"},
+  "private_address_lead": {"text": "Alleen een beheerder ziet dit. Bewerken wijzigt het.", "scope": "backup_target"},
+  "private_address_on": {"text": "Aan", "scope": "backup_target"},
+  "private_address_off": {"text": "Uit", "scope": "backup_target"},
+  "added_by_on": {"text": "{$kind}, toegevoegd door {$person} op {$at :date}", "scope": "backup_target"},
+  "added_on": {"text": "{$kind}, toegevoegd op {$at :date}", "scope": "backup_target"},
+  "keeps_no_dumps_yet": {"text": "Zijn dumps, nog geen", "scope": "backup_target"},
+  "back_up_own_target_missing": {"text": "De opslagplaats die deze database voor zijn dumps koos, bestaat niet meer. Kies een andere in het formulier.", "scope": "database"},
+  "database_dumps_kept_positive": {"text": "Een database bewaart minstens één dump. Laat het leeg om het aantal van de server te bewaren.", "scope": "violations"}
 }

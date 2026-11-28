@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimCounts;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -8,9 +9,11 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.backup.HohenheimStorages;
 import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -49,20 +52,27 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * The administrator's one Storages list (board FO128 screen 1): the storages the server's settings declare, read-only
- * rows saying so, then every storage people added, records of {@link BackupTargetParts#admin}.
+ * The one Storages list (board FO128 screens 1 and 6): to an administrator the storages the server's settings
+ * declare, read-only rows saying so, then every storage people added, records of {@link BackupTargetParts#admin}; to
+ * a customer their own records of {@link BackupTargetParts#manage}, then the storages an administrator lets everyone
+ * use, by name and kind alone.
  *
- * AIDEV-NOTE: a typed store over both, loaded whole per request and paged in memory ({@link StorePages#inMemory}) as
- * the Apps list is: storages are counted in tens. A record's row opens its page and draws the storage entry's own Test
- * ({@link PanelAction#fromEntry}, so its gate and invoke stay that entry's) and an Edit link; a settings row opens
- * nothing and offers neither, since the settings file is where it changes. The record cells are the storage entry's
- * own page batch ({@link BackupTargetParts#cells}), so both lists read the same words in the same fixed reads.
+ * AIDEV-NOTE: a typed store over all of them, loaded whole per request and paged in memory
+ * ({@link StorePages#inMemory}) as the Apps list is: storages are counted in tens. A record's row opens its page and
+ * draws the storage entry's own Test ({@link PanelAction#fromEntry}, so its gate and invoke stay that entry's) and an
+ * Edit link; a settings row and a shared row open nothing and offer neither: the settings file is where the first
+ * changes, and a shared storage is no customer's to open, test or edit (its address and room stay the operator's).
+ * A shared row's Used by stays empty: what else uses an operator's storage is no customer's to count. The record
+ * cells are the storage entry's own page batch ({@link BackupTargetParts#cells}), so both lists read the same words
+ * in the same fixed reads.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -75,7 +85,8 @@ public final class StorageListParts {
     /** The columns a row fills beside its name, each worded as the storage entry's own list words it. */
     private static final List<String> CELLS = List.of(BackupTargetParts.FAILURE_COLUMN,
         BackupTargetParts.KIND_COLUMN, BackupTargetParts.WHERE_COLUMN, BackupTargetParts.WHERE_DETAIL_COLUMN,
-        BackupTargetParts.ADDED_BY_COLUMN, BackupTargetParts.USED_BY_COLUMN, BackupTargetParts.ROOM_COLUMN);
+        BackupTargetParts.ADDED_BY_COLUMN, BackupTargetParts.ADDED_BY_DETAIL_COLUMN, BackupTargetParts.USED_BY_COLUMN,
+        BackupTargetParts.ROOM_COLUMN);
 
     /** The list hears every storage record and the sites choosing one, so a change there reaches it at once. */
     private static final LiveFeed FEED = LiveFeed.of(AccessContext::isAccount, BackupTargetModel.MODEL_ID,
@@ -83,8 +94,12 @@ public final class StorageListParts {
 
     private static final TableSpec<Listed> TABLE = table();
 
+    /** The row kind both panels' lists hold. */
+    private static final SubjectType<Listed> SUBJECT = SubjectType.of(HohenheimIds.id("storage"), Listed.class,
+        Listed::key);
+
     /** One row of the list: its key, its name and the words of each of its columns. */
-    sealed interface Listed permits Stored, Declared {
+    sealed interface Listed permits Stored, Declared, Shared {
 
         @NonNull String key();
 
@@ -99,11 +114,27 @@ public final class StorageListParts {
     record Declared(@NonNull String key, @NonNull Map<String, Object> values) implements Listed {
     }
 
+    /** An operator's storage everyone may use, as a customer sees it: its name and kind, read-only. */
+    record Shared(@NonNull String key, @NonNull Map<String, Object> values) implements Listed {
+    }
+
     private StorageListParts() {
     }
 
     /** @return the administrator's Storages list, inside the settings page's Backups section */
     static @NonNull PanelResource<Listed> admin() {
+        // Listed inside the settings page's Backups section (board Settings), never a sidebar row of its own; a
+        // storage's record trails "Storages / record", never through the records' own list.
+        return list(HohenheimIds.id("storage"), HohenheimSlugs.ADMIN, SettingsPage.DEFAULT_SLUG);
+    }
+
+    /** @return a customer's Storages list: their own storages and the ones everyone may use, reached as the twin was */
+    static @NonNull PanelResource<Listed> manage() {
+        return list(ManageTwin.id("storage"), HohenheimSlugs.MANAGE, HohenheimSlugs.APPS);
+    }
+
+    private static @NonNull PanelResource<Listed> list(@NonNull Identifier id, @NonNull String panelSlug,
+                                                       @NonNull String standsUnder) {
         StorePages<Listed> pages = new StorePages<>() {
             @Override
             public @NonNull List<Field<?, ?>> fields() {
@@ -118,30 +149,29 @@ public final class StorageListParts {
             @Override
             public @NonNull RecordPage<Listed> page(TableView.@NonNull Applied<Listed> applied,
                                                     @NonNull AccessContext access) {
-                return this.inMemory(applied, rows(access), (row, column) -> row.values().get(column.name()), access);
+                return this.inMemory(applied, rows(panelSlug, access), (row, column) -> row.values().get(column.name()),
+                    access);
             }
         };
         ResourceList.Builder<Listed> list = ResourceList.store(TABLE, pages, FEED).chrome(ListChrome.MINIMAL)
             .emptyDescription(HohenheimMicrocopy.BACKUP_TARGET.of("empty"))
             .rowLink((row, request) -> switch (row) {
-                case Stored stored -> CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.BACKUP_TARGETS,
+                case Stored stored -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.BACKUP_TARGETS,
                     stored.id(), RecordOverview.SLUG);
                 case Declared declared -> null;
+                case Shared shared -> null;
             });
-        return PanelResource.builder(HohenheimIds.id("storage"), HohenheimSlugs.STORAGES,
-                SubjectType.of(HohenheimIds.id("storage"), Listed.class, Listed::key))
+        return PanelResource.builder(id, HohenheimSlugs.STORAGES, SUBJECT)
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("plural"))
             .recordLabel(HohenheimMicrocopy.BACKUP_TARGET.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.BACKUP_TARGET))
             .icon(Icon.of("box-archive"))
-            // Listed inside the settings page's Backups section (board Settings), never a sidebar row of its own; a
-            // storage's record trails "Storages / record", never through the records' own list.
             .showInNav(false)
-            .standsUnder(SettingsPage.DEFAULT_SLUG)
+            .standsUnder(standsUnder)
             .showsRowsOf(HohenheimSlugs.BACKUP_TARGETS)
             .list(list.build())
-            .actions(List.of(addAction(), testAction(), editAction()))
-            // A row is no page of this entry: a record's opens the storage entry's page, a settings row none.
+            .actions(List.of(addAction(panelSlug), testAction(panelSlug), editAction(panelSlug)))
+            // A row is no page of this entry: a record's opens the storage entry's page, the others none.
             .reads(ResourceReads.<Listed>typed(Listed::key)
                 .load((key, access) -> null)
                 .values(Listed::values)
@@ -164,7 +194,10 @@ public final class StorageListParts {
             .column(ColumnSpec.virtual(BackupTargetParts.WHERE_DETAIL_COLUMN,
                 HohenheimMicrocopy.BACKUP_TARGET.of("column_where")).hidden().build())
             .column(ColumnSpec.virtual(BackupTargetParts.ADDED_BY_COLUMN,
-                HohenheimMicrocopy.BACKUP_TARGET.of("column_added_by")).build())
+                HohenheimMicrocopy.BACKUP_TARGET.of("column_added_by"))
+                .subtext(BackupTargetParts.ADDED_BY_DETAIL_COLUMN).build())
+            .column(ColumnSpec.virtual(BackupTargetParts.ADDED_BY_DETAIL_COLUMN,
+                HohenheimMicrocopy.BACKUP_TARGET.of("column_added_by")).hidden().build())
             .column(ColumnSpec.virtual(BackupTargetParts.USED_BY_COLUMN,
                 HohenheimMicrocopy.BACKUP_TARGET.of("column_used_by")).build())
             .column(ColumnSpec.virtual(BackupTargetParts.ROOM_COLUMN,
@@ -174,50 +207,57 @@ public final class StorageListParts {
             .build();
     }
 
-    /** The list's primary verb: the storage entry's add form. */
-    private static @NonNull PanelAction<Listed> addAction() {
+    /** The list's primary verb: the storage entry's add form, in the list's own panel. */
+    private static @NonNull PanelAction<Listed> addAction(@NonNull String panelSlug) {
         return PanelAction.<Listed>link(HohenheimIds.id("storage_add"), ActionPlacement.HEADER)
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("add_storage"))
             .icon(Icon.of("plus"))
             .style(ActionStyle.PRIMARY)
             .inlineInHeader(true)
-            .route((row, request) -> CmsRoutes.create(HohenheimSlugs.ADMIN, HohenheimSlugs.BACKUP_TARGETS))
+            .route((row, request) -> CmsRoutes.create(panelSlug, HohenheimSlugs.BACKUP_TARGETS))
             .build();
     }
 
     /** A record's Test: the storage entry's own row action, drawn for the record the row names. */
-    private static @NonNull PanelAction<Listed> testAction() {
+    private static @NonNull PanelAction<Listed> testAction(@NonNull String panelSlug) {
         return PanelAction.<Listed>fromEntry(HohenheimIds.id("storage_test"), ActionPlacement.ROW)
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
             .icon(Icon.of("plug-circle-check"))
-            .drawing(HohenheimIds.id("admin"), HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.TEST.id(),
+            .drawing(HohenheimIds.id(panelSlug), HohenheimSlugs.BACKUP_TARGETS, BackupTargetParts.TEST.id(),
                 row -> row instanceof Stored stored ? String.valueOf(stored.id()) : null)
             .build();
     }
 
     /** A record's Edit beside its Test, as the board draws it: the record's own form. */
-    private static @NonNull PanelAction<Listed> editAction() {
+    private static @NonNull PanelAction<Listed> editAction(@NonNull String panelSlug) {
         return PanelAction.<Listed>link(HohenheimIds.id("storage_edit"), ActionPlacement.ROW)
             .label(CmsMicrocopy.of("edit"))
             .icon(Icon.of("pen"))
             .inlineInRow(true)
             .shownWhen((row, access) -> row instanceof Stored)
-            .route((row, request) -> CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.BACKUP_TARGETS,
+            .route((row, request) -> CmsRoutes.detail(panelSlug, HohenheimSlugs.BACKUP_TARGETS,
                 ((Stored) row).id()))
             .build();
     }
 
-    /**
-     * @return the settings' storages first (to an administrator only: they are the server's own), then the records
-     *         the viewer may list, each with its words read for this viewer
-     */
+    /** @return the administrator's list rows; see {@link #rows(String, AccessContext)} */
     static @NonNull List<Listed> rows(@NonNull AccessContext access) {
-        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        return rows(HohenheimSlugs.ADMIN, access);
+    }
+
+    /**
+     * @return to an administrator the settings' storages first (they are the server's own), then the records the
+     *         viewer may list in the panel, each with its words read for this viewer, then (to anyone else) the
+     *         storages everyone may use that are not theirs, by name and kind alone
+     */
+    static @NonNull List<Listed> rows(@NonNull String panelSlug, @NonNull AccessContext access) {
+        Panel panel = PanelRegistry.getBySlug(panelSlug);
         if (panel == null) {
             return List.of();
         }
         List<Listed> rows = new ArrayList<>();
-        if (HohenheimAccess.isAdmin(access)) {
+        boolean admin = HohenheimAccess.isAdmin(access);
+        if (admin) {
             Map<String, Long> sites = StorageUsage.sitesByStorage();
             for (Map.Entry<DeclaredStorage, @Nullable Microcopy> declared : declared().entrySet()) {
                 rows.add(declaredRow(declared.getKey(), declared.getValue(), sites, access));
@@ -225,6 +265,7 @@ public final class StorageListParts {
         }
         List<Row> records = AppDirectory.listed(panel, HohenheimSlugs.BACKUP_TARGETS, access);
         CellMapper<Row> cells = BackupTargetParts.cells(records, access);
+        Set<Object> own = new HashSet<>();
         for (Row record : records) {
             Map<String, Object> values = new HashMap<>();
             values.put(NAME.getName(), String.valueOf((Object) record.get(BackupTargetModel.NAME)));
@@ -232,9 +273,34 @@ public final class StorageListParts {
                 values.put(column, cells.cell(record, Objects.requireNonNull(TABLE.column(column), column)));
             }
             Object id = Objects.requireNonNull(record.get(BackupTargetModel.ID), "a listed storage has its id");
+            own.add(id);
             rows.add(new Stored("record-" + id, values, id));
         }
+        if (!admin) {
+            for (Row shared : Models.get(BackupTargetModel.class).find()
+                    .where(BackupTargetModel.SHARED.eq(true)).all()) {
+                Object id = shared.get(BackupTargetModel.ID);
+                if (id != null && !own.contains(id)) {
+                    rows.add(sharedRow(shared, access));
+                }
+            }
+        }
         return rows;
+    }
+
+    /** @return a storage everyone may use as a customer reads it: its name and kind, "Shared with everyone" */
+    private static @NonNull Shared sharedRow(@NonNull Row storage, @NonNull AccessContext access) {
+        StorageKindInfo kind = StorageKindRegistry.REGISTRY.get(HohenheimStorages.kindOf(storage));
+        Map<String, Object> values = new HashMap<>();
+        values.put(NAME.getName(), String.valueOf((Object) storage.get(BackupTargetModel.NAME)));
+        for (String column : CELLS) {
+            values.put(column, CellMapper.Computed.orEmpty(null));
+        }
+        values.put(BackupTargetParts.KIND_COLUMN,
+            CellMapper.Computed.orEmpty(kind == null ? null : access.text(kind.getLabel())));
+        values.put(BackupTargetParts.ADDED_BY_COLUMN,
+            access.text(HohenheimMicrocopy.BACKUP_TARGET.of("shared_with_everyone")));
+        return new Shared("shared-" + storage.get(BackupTargetModel.ID), values);
     }
 
     /**

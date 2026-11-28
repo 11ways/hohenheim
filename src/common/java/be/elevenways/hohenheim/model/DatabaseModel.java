@@ -301,6 +301,23 @@ public class DatabaseModel extends Model {
         .filterable(false)
         .build());
 
+    /**
+     * The storage this database's dumps go to (backup_targets.id), null for the server's default
+     * (HohenheimSettings.Database.BACKUP_TARGET); no foreign key: BackupTargetModel's removal hook refuses instead.
+     */
+    public static final IntegerField BACKUP_TARGET_ID = SCHEMA.addField(IntegerField.builder().name("backup_target_id")
+        .nullable(true)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database_backup_target"))
+        .help(HohenheimMicrocopy.HELP.of("database_backup_target"))
+        .build());
+
+    /** How many of its dumps this database keeps, null for the server's number (HohenheimSettings.Database). */
+    public static final IntegerField DUMPS_KEPT = SCHEMA.addField(IntegerField.builder().name("dumps_kept")
+        .nullable(true)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database_dumps_kept"))
+        .help(HohenheimMicrocopy.HELP.of("database_dumps_kept"))
+        .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -392,6 +409,15 @@ public class DatabaseModel extends Model {
             Object name = row.get(NAME.getName());
             if (name != null) {
                 requireValidName(NAME.getName(), name);
+            }
+        });
+        // A database keeps at least one dump of its own number; none is the server's number, never "keep all".
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            Object kept = row == null || !row.has(DUMPS_KEPT.getName()) ? null : row.get(DUMPS_KEPT.getName());
+            if (kept instanceof Number number && number.longValue() < 1) {
+                throw Violations.ofField(DUMPS_KEPT.getName(), kept,
+                    HohenheimMicrocopy.VIOLATIONS.of("database_dumps_kept_positive"));
             }
         });
         // A managed database always has a concrete host; default the FK at create time

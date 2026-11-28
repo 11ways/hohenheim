@@ -51,6 +51,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.orm.history.HistoryText;
 import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.storage.StorageKindInfo;
 import be.elevenways.zenit.common.storage.StorageKindRegistry;
@@ -85,9 +87,11 @@ import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,10 +109,12 @@ import java.util.Set;
  * shadows one ({@link BackupStorages#of}). The list's failure line and room come from the storage layer's last
  * readings ({@link StorageReadings}), never a store dialled per render: a backup, a Test or a save reads them.
  *
- * AIDEV-NOTE: "Everyone may use it" (a shared storage) and the per-storage "may reach a private address" switch of the
- * board have no column (backup_targets holds id, name, kind, settings, timestamps) and no grant expresses "everyone"
- * (CapabilityScopes: sharing is deliberately a column, never a capability), so neither is drawn: an operator's storage
- * follows the boot's private-network opt-in, a tenant's never reaches a private address, and nothing is shared.
+ * AIDEV-NOTE: "Everyone may use it" ({@link BackupTargetModel#SHARED}) and "may reach a private address"
+ * ({@link BackupTargetModel#PRIVATE_ADDRESSES_ALLOWED}) are an administrator's switches on the operator's form alone;
+ * a customer's form has neither, and a tenant's storage is saved with both off whatever it held. A shared storage is
+ * offered to every customer's pickers (TenantScopes.USABLE_STORAGES) and listed to them by name and kind alone
+ * (StorageListParts), never opened. The page's Private address card shows the switch's state to an administrator;
+ * the switch itself is the form's (no widget draws a record switch inside a card yet).
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -131,6 +137,7 @@ public final class BackupTargetParts {
     static final String ADDED_BY_COLUMN = "added_by";
     static final String USED_BY_COLUMN = "used_by";
     static final String ROOM_COLUMN = "room_left";
+    static final String ADDED_BY_DETAIL_COLUMN = "added_by_detail";
     static final String KIND_COLUMN = "kind_words";
 
     /** The administrator's form: every kind the registry holds. */
@@ -140,6 +147,8 @@ public final class BackupTargetParts {
         .add(Select.of(BackupTargetModel.KIND).options(FieldFormEntryDefaults.enumOptionSource(BackupTargetModel.KIND))
             .presentation(Select.Presentation.SEGMENTS).build())
         .add(Nested.of(BackupTargetModel.SETTINGS).schemaFrom(BackupTargetModel.KIND.getName()).unheaded().build())
+        .add(BackupTargetModel.SHARED)
+        .add(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED)
         .build();
 
     /** A customer's form: only the kinds a tenant may declare. */
@@ -203,7 +212,8 @@ public final class BackupTargetParts {
      */
     public static final PanelRecordWrites WRITES = PanelRecordWrites.of("backup_target", BackupTargetModel.MODEL_ID,
             SUBJECT, BackupTargetModel.ID, HohenheimSlugs.BACKUP_TARGETS)
-        .settings(List.of(BackupTargetModel.NAME))
+        .settings(List.of(BackupTargetModel.NAME, BackupTargetModel.SHARED,
+            BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED))
         // A caller names the kind by its plain word (storage_s3, storage_sftp); the stored key carries the namespace.
         .byWord(BackupTargetModel.KIND)
         // One object in the kind's own shape, judged by that kind when the record is written: an open object here,
@@ -309,7 +319,7 @@ public final class BackupTargetParts {
         return ManageTwin.reached(base(ManageTwin.id("backup_target"), MANAGE_FORM, TRY_MANAGED),
                 TenantScopes.MANAGED_STORAGES,
                 ResourceTabs.<Row>of(List.of(overview())).withContributions())
-            .standsUnder(HohenheimSlugs.APPS)
+            .standsUnder(HohenheimSlugs.STORAGES)
             .writes(ResourceMutations.rows().create().update().delete(DELETE)
                 .beforeSave(save -> judgeBeforeSave(save.row(), save.isCreate()
                     ? HohenheimStorages.ownerOfCreator(save.access()) : HohenheimStorages.ownerOf(save.row())))
@@ -338,7 +348,9 @@ public final class BackupTargetParts {
             .column(ColumnSpec.virtual(WHERE_DETAIL_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_where"))
                 .hidden().build())
             .column(ColumnSpec.virtual(ADDED_BY_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_added_by"))
-                .build())
+                .subtext(ADDED_BY_DETAIL_COLUMN).build())
+            .column(ColumnSpec.virtual(ADDED_BY_DETAIL_COLUMN,
+                HohenheimMicrocopy.BACKUP_TARGET.of("column_added_by")).hidden().build())
             .column(ColumnSpec.virtual(USED_BY_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_used_by"))
                 .build())
             .column(ColumnSpec.virtual(ROOM_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_room_left"))
@@ -348,7 +360,7 @@ public final class BackupTargetParts {
             .emptyDescription(HohenheimMicrocopy.BACKUP_TARGET.of("empty"));
         // The one-record read of each computed column; a listed page answers from the page batch.
         for (String column : List.of(FAILURE_COLUMN, KIND_COLUMN, WHERE_COLUMN, WHERE_DETAIL_COLUMN, ADDED_BY_COLUMN,
-                USED_BY_COLUMN, ROOM_COLUMN)) {
+                ADDED_BY_DETAIL_COLUMN, USED_BY_COLUMN, ROOM_COLUMN)) {
             ColumnSpec spec = Objects.requireNonNull(table.column(column), column);
             list.computed(spec, (storage, request) -> cells(List.of(storage), request.access()).cell(storage, spec));
         }
@@ -424,7 +436,8 @@ public final class BackupTargetParts {
 
     /**
      * Refuses saving a storage whose name a settings mount holds, or that its kind's trial finds unusable or asks a
-     * confirmation of: the check a Test runs, before anything is written.
+     * confirmation of: the check a Test runs, before anything is written. A tenant's storage is saved with the
+     * operator's two switches off, so neither its reach nor who sees it can widen.
      *
      * @throws Violations naming the name, the problem or the fingerprint to pin
      */
@@ -434,6 +447,10 @@ public final class BackupTargetParts {
         if (Storages.has(name)) {
             throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_taken").withArg("name", name));
+        }
+        if (!(owner instanceof StorageOwner.Operator)) {
+            row.set(BackupTargetModel.SHARED, false);
+            row.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, false);
         }
         DeclaredStorage declaration = HohenheimStorages.declarationOf(row, owner);
         StorageTrial trial = StorageKinds.trial(declaration);
@@ -497,8 +514,8 @@ public final class BackupTargetParts {
 
     /**
      * The list's computed cells for one page of storages, in a fixed number of reads: one for their owners' grants,
-     * one for those owners' names, and {@link StorageUsage}'s; the failure line and the room are the storage layer's
-     * last readings, read from memory.
+     * one for those owners' names, one for the names of who added them, and {@link StorageUsage}'s; the failure line
+     * and the room are the storage layer's last readings, read from memory.
      */
     static @NonNull CellMapper<Row> cells(@NonNull List<Row> storages, @NonNull AccessContext access) {
         List<Object> ids = new ArrayList<>(storages.size());
@@ -513,6 +530,14 @@ public final class BackupTargetParts {
         Map<String, String> labels = subjects.isEmpty() ? Map.of() : HohenheimAccess.subjectLabels(subjects);
         Set<String> mine = HohenheimAccess.creationOwnerSubjects(access);
         Map<Integer, StorageUsage.Counts> usage = StorageUsage.of(storages);
+        Set<PrincipalRef> adders = new LinkedHashSet<>();
+        for (Row storage : storages) {
+            PrincipalRef by = BackupTargetModel.addedByOf(storage);
+            if (by != null && !by.equals(access.principal().reference())) {
+                adders.add(by);
+            }
+        }
+        Map<PrincipalRef, String> adderNames = adders.isEmpty() ? Map.of() : HistoryText.principals(adders, access);
         Map<Object, List<StorageFact>> where = new HashMap<>();
         return (storage, column) -> {
             String name = String.valueOf((Object) storage.get(BackupTargetModel.NAME));
@@ -527,8 +552,11 @@ public final class BackupTargetParts {
                     ignored -> listedFacts(storage)), access, true));
                 case WHERE_DETAIL_COLUMN -> CellMapper.Computed.orEmpty(place(where.computeIfAbsent(id,
                     ignored -> listedFacts(storage)), access, false));
-                case ADDED_BY_COLUMN -> CellMapper.Computed.orEmpty(addedBy(owners == null ? null
-                    : owners.get(String.valueOf(id)), labels, mine, access));
+                case ADDED_BY_COLUMN -> CellMapper.Computed.orEmpty(addedBy(storage, adderNames, owners == null
+                    ? null : owners.get(String.valueOf(id)), labels, mine, access));
+                case ADDED_BY_DETAIL_COLUMN -> CellMapper.Computed.orEmpty(
+                    Boolean.TRUE.equals(storage.get(BackupTargetModel.SHARED))
+                        ? access.text(HohenheimMicrocopy.BACKUP_TARGET.of("everyone_may_use")) : null);
                 case USED_BY_COLUMN -> {
                     Microcopy words = usage.getOrDefault(id, StorageUsage.Counts.NONE).words();
                     yield CellMapper.Computed.orEmpty(words == null ? null : access.text(words));
@@ -559,11 +587,22 @@ public final class BackupTargetParts {
     }
 
     /**
-     * @param subjects the storage's manage-grant subjects, empty for the operator's, null when unreadable
-     * @return "You" for the viewer's own, the owner's name, "An administrator" for the operator's
+     * @param adderNames the names of who added the page's storages, the viewer left out
+     * @param subjects   the storage's manage-grant subjects, empty for the operator's, null when unreadable
+     * @return "You" for the viewer, the name of who added it (the person alone, never a credential), else for a
+     *         storage older than that record its owner's name or "An administrator" for the operator's
      */
-    private static @Nullable String addedBy(@Nullable Set<String> subjects, @NonNull Map<String, String> labels,
+    private static @Nullable String addedBy(@NonNull Row storage, @NonNull Map<PrincipalRef, String> adderNames,
+                                            @Nullable Set<String> subjects, @NonNull Map<String, String> labels,
                                             @NonNull Set<String> mine, @NonNull AccessContext access) {
+        PrincipalRef by = BackupTargetModel.addedByOf(storage);
+        if (by != null) {
+            String named = by.equals(access.principal().reference())
+                ? access.text(HohenheimMicrocopy.BACKUP_TARGET.of("added_by_you")) : adderNames.get(by);
+            if (named != null) {
+                return named;
+            }
+        }
         if (subjects == null) {
             return null;
         }
@@ -651,6 +690,27 @@ public final class BackupTargetParts {
         return secrets;
     }
 
+    /** @return "SFTP server, added by Mira Voss on 14-10-2026", the page's line of what it is and who added it */
+    private static @NonNull Microcopy added(@NonNull Row storage, @NonNull AccessContext access) {
+        StorageKindInfo kind = StorageKindRegistry.REGISTRY.get(HohenheimStorages.kindOf(storage));
+        Microcopy kindWords = kind == null
+            ? Microcopy.literal(String.valueOf((Object) storage.get(BackupTargetModel.KIND))) : kind.getLabel();
+        Instant at = storage.get(BackupTargetModel.CREATED_AT);
+        PrincipalRef by = BackupTargetModel.addedByOf(storage);
+        Microcopy line = by == null ? HohenheimMicrocopy.BACKUP_TARGET.of("added_on")
+            : HohenheimMicrocopy.BACKUP_TARGET.of("added_by_on").withArg("person", HistoryText.principal(by, access));
+        return line.withArg("kind", kindWords).withArg("at", at);
+    }
+
+    /** @return whether no customer owns the storage; an owner that cannot be read is never taken for the operator */
+    private static boolean operators(@NonNull Row storage) {
+        try {
+            return HohenheimStorages.ownerOf(storage) instanceof StorageOwner.Operator;
+        } catch (RuntimeException unreadable) {
+            return false;
+        }
+    }
+
     private static @NonNull WidgetTree widgets(@NonNull Row storage, @NonNull AccessContext access) {
         String panelSlug = CmsSupport.panelSlug(access.conduit());
         String name = String.valueOf((Object) storage.get(BackupTargetModel.NAME));
@@ -663,7 +723,7 @@ public final class BackupTargetParts {
         if (host != null) {
             where.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("follows_host")), host));
         }
-        main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_where"), where));
+        main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_where"), added(storage, access), where));
         // One card per secret the storage holds, named by it as the board draws "Password": set, never shown.
         for (WidgetFact secret : secrets(storage, access)) {
             main.add(CardWidget.ofFacts(Microcopy.literal(secret.label()), List.of(WidgetFact.of(
@@ -676,6 +736,15 @@ public final class BackupTargetParts {
             ? CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_used_by"),
                 HohenheimMicrocopy.BACKUP_TARGET.of("in_use_lead"), used)
             : CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_used_by"), used));
+        if (HohenheimAccess.isAdmin(access) && operators(storage)) {
+            // The board's Private address card, to an administrator alone: the switch's state, changed on Edit.
+            boolean allowed = Boolean.TRUE.equals(storage.get(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED));
+            main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_private_address"),
+                HohenheimMicrocopy.BACKUP_TARGET.of("private_address_lead"), List.of(WidgetFact.of(
+                    access.text(HohenheimMicrocopy.HOHENHEIM_FIELD.of("storage_private_addresses")),
+                    access.text(HohenheimMicrocopy.BACKUP_TARGET.of(allowed ? "private_address_on"
+                        : "private_address_off"))))));
+        }
 
         List<WidgetInstance> side = new ArrayList<>();
         StorageReadings.Reading reading = StorageReadings.of(name);

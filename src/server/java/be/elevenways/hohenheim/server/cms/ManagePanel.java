@@ -176,8 +176,10 @@ public final class ManagePanel extends Panel {
         // tenant's own sites. Shared operator providers are usable but never listed
         // here -- see GitProviderParts.manage().
         HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
-        // The tenant's OWN storages: where its sites keep their files and its backups go (board FO128 screen 6).
+        // The tenant's OWN storages: where its sites keep their files and its backups go (board FO128 screen 6),
+        // listed with the ones everyone may use by StorageListParts.manage, which their records stand under.
         HohenheimPanel.addIf(peers, BackupTargetParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, StorageListParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
@@ -462,10 +464,11 @@ public final class ManagePanel extends Panel {
 
         // Storages: the SAME two-derived-defaults hazard (BackupTargetParts.admin and .manage both derive one from the
         // model's display field), and the widest would name every tenant's storage, host and bucket included, to
-        // whoever a picker rendered for. The scope is the one the /manage list keeps: nothing shares a storage yet.
+        // whoever a picker rendered for. The pickers offer what a tenant may USE (their own and the ones everyone may
+        // use); the /manage records keep their owned scope (TenantScopes.MANAGED_STORAGES).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(BackupTargetModel.REF)
             .search(BackupTargetModel.NAME)
-            .scopedBy(TenantScopes.MANAGED_STORAGES)
+            .scopedBy(TenantScopes.USABLE_STORAGES)
             .referencePolicy()
             .build());
 

@@ -48,7 +48,7 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
             !CmsSupport.isDelegatedPanel(conduit)));
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DATABASE_RESTORE, name));
         DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(record);
-        Microcopy noTarget = DatabaseBackups.targetRefusal();
+        Microcopy noTarget = DatabaseBackups.targetRefusal(record);
         if (!verdict.serves()) {
             vars.put("restoreRefusal", HohenheimMicrocopy.DATABASE_TAB.of("restore_needs_running")
                 .withArg("state", verdict.state().label()));

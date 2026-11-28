@@ -11,8 +11,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * only its cross-stream edges, never its predecessor. The stream starts with ONE baseline, M001_HohenheimBaseline,
  * which squashed 001..019 on 2026-10-21 and is published (kuifje, robbedoes). The last published version is
  * M008_StreamPortLists, which starfleet, robbedoes and kuifje applied on 2026-11-25; M001 to M008 are all applied on
- * the live hosts, so no migration is open and a schema change is a NEW migration, the one open migration until the
- * next live deploy publishes it. MigrationIntegrityTest pins the list and that a migration at or below
+ * the live hosts. M009_StorageChoices (Jelle's approval of 2026-11-28) is the one open migration until the next live
+ * deploy publishes it. MigrationIntegrityTest pins the list and that a migration at or below
  * MigrationIntegrityTest.DEPLOYED_THROUGH is never edited: a deploy that applies the open migration raises PUBLISHED
  * and pins it in the same commit, or the open migration stays editable while installs already recorded it.
  *

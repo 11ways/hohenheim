@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimVerbs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
@@ -96,11 +97,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -166,6 +169,12 @@ public final class DatabaseParts {
         .add(RelationPick.of(DatabaseModel.HOST_ID, HostModel.MODEL_ID).creatable(false).build())
         .add(DatabaseModel.STATUS)
         .add(DatabaseModel.FAILURE_REASON)
+        // Where its dumps go and how many it keeps (board FO128 screen 5b); both empty follow the server's settings.
+        .add(RelationPick.of(DatabaseModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID).creatable(false)
+            .clearable(true).build())
+        .add(DatabaseModel.DUMPS_KEPT)
+        .section(FormSection.of("backups", HohenheimMicrocopy.INSTANCE.of("backups"),
+            DatabaseModel.BACKUP_TARGET_ID.getName(), DatabaseModel.DUMPS_KEPT.getName()))
         // A managed database is an engine, a database name and its credentials. The image override, the
         // ephemeral flag and the resource ceilings all have defaults.
         .section(FormSection.advanced(
@@ -801,7 +810,22 @@ public final class DatabaseParts {
                 persistent.add(database);
             }
         }
-        Microcopy noTarget = persistent.isEmpty() ? null : DatabaseBackups.targetRefusal();
+        Microcopy noTarget = persistent.isEmpty() ? null : DatabaseBackups.defaultTargetRefusal();
+        // The storages the databases chose for themselves, read once for the page.
+        Set<Integer> chosen = new HashSet<>();
+        for (Row database : persistent) {
+            Integer own = database.get(DatabaseModel.BACKUP_TARGET_ID);
+            if (own != null) {
+                chosen.add(own);
+            }
+        }
+        Set<Integer> existing = new HashSet<>();
+        if (!chosen.isEmpty()) {
+            for (Row storage : Models.get(BackupTargetModel.class).find().where(BackupTargetModel.ID.in(chosen))
+                    .all()) {
+                existing.add(storage.get(BackupTargetModel.ID));
+            }
+        }
         // A dump runs inside the engine serving it.
         Iterator<Microcopy> notServing = whileNotServing(persistent,
             HohenheimMicrocopy.DATABASE.of("back_up_not_active"),
@@ -812,7 +836,10 @@ public final class DatabaseParts {
                 reasons.add(HohenheimMicrocopy.DATABASE.of("back_up_temporary"));
             } else {
                 Microcopy engine = notServing.next();
-                reasons.add(engine != null ? engine : noTarget);
+                Integer own = database.get(DatabaseModel.BACKUP_TARGET_ID);
+                Microcopy target = own == null ? noTarget : existing.contains(own) ? null
+                    : HohenheimMicrocopy.DATABASE.of("back_up_own_target_missing");
+                reasons.add(engine != null ? engine : target);
             }
         }
         return reasons;

@@ -467,8 +467,8 @@ class MigrationIntegrityTest {
             .isNotEmpty()
             .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
         assertThat(found)
-            .as("step 1: and the stream is the published baseline and its published successors through M008; no"
-                + " migration is open, a new one is appended here")
+            .as("step 1: and the stream is the published baseline and its published successors through M008, then"
+                + " the open M009; a new one is appended here")
             .containsExactly("M001_HohenheimBaseline stream=" + HohenheimMigration.STREAM,
                 "M002_AfterBaseline stream=" + HohenheimMigration.STREAM,
                 "M003_CertificateSigningRequests stream=" + HohenheimMigration.STREAM,
@@ -476,7 +476,8 @@ class MigrationIntegrityTest {
                 "M005_LinkedServers stream=" + HohenheimMigration.STREAM,
                 "M006_SharedRecords stream=" + HohenheimMigration.STREAM,
                 "M007_LinkConfirmations stream=" + HohenheimMigration.STREAM,
-                "M008_StreamPortLists stream=" + HohenheimMigration.STREAM);
+                "M008_StreamPortLists stream=" + HohenheimMigration.STREAM,
+                "M009_StorageChoices stream=" + HohenheimMigration.STREAM);
 
         // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
         //    APPLIED somewhere, so its structural checksum is recorded in that install's

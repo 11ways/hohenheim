@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Count-based retention: the rows of a newest-first query past its newest N are removed, a thousand per sweep.
@@ -73,7 +74,17 @@ public final class Retention {
          * retention keeps everything.
          */
         public void sweep(int instanceId, @NonNull Removal remove) {
-            Integer keep = Zenit.SETTINGS_VALUES.getValue(this.retention);
+            sweep(instanceId, null, remove);
+        }
+
+        /**
+         * {@link #sweep(int, Removal)} keeping the instance's own number when it has one (a database's dumps kept),
+         * else the retention setting's.
+         *
+         * @param ownKeep the instance's own number, null for the setting's
+         */
+        public void sweep(int instanceId, @Nullable Integer ownKeep, @NonNull Removal remove) {
+            Integer keep = ownKeep != null ? ownKeep : Zenit.SETTINGS_VALUES.getValue(this.retention);
             if (keep == null || keep <= 0) {
                 return;
             }

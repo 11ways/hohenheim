@@ -145,9 +145,11 @@ final class DatabaseOverview {
                 text("backup_temporary_detail", locales, resolver)));
             return facts;
         }
-        String target = DatabaseBackups.configuredTargetName();
+        String target = DatabaseBackups.targetNameFor(database);
+        Integer ownKept = database.get(DatabaseModel.DUMPS_KEPT);
         facts.add(WidgetFact.of(text("kept", locales, resolver), HohenheimMicrocopy.DATABASE_OVERVIEW.of("kept_value")
-            .withArg("count", Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION))
+            .withArg("count", ownKept != null ? ownKept
+                : Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION))
             .withArg("target", target != null ? target : "-")
             .resolve(locales, resolver)));
         List<DatabaseBackups.Stored> dumps = DatabaseBackups.stored(database.get(DatabaseModel.ID));

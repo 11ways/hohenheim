@@ -102,7 +102,9 @@ final class DatabaseHandlers {
                     .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             }
-            Microcopy noTarget = DatabaseBackups.targetRefusal();
+            Row restoring = Models.get(DatabaseModel.class).findByName(name);
+            Microcopy noTarget = restoring == null ? DatabaseBackups.defaultTargetRefusal()
+                : DatabaseBackups.targetRefusal(restoring);
             if (noTarget != null) {
                 // The restore's safety net is the pre-restore dump, which has nowhere to go.
                 HohenheimFlash.error(conduit, noTarget);

@@ -59,11 +59,13 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * which is refused ({@link #keepHostRecordLink}). The base path is unchanged, so every stored key still resolves.
  *
  * AIDEV-NOTE: who owns a storage is who holds its manage grant (no owner column, the ProjectModel rule); none is the
- * operator. Only an operator's storage may reach a private address, and only where this host's boot allows it
- * ({@code storage.allow_private_networks}): there is no column for a per-storage switch. An SSH-era row is the one
- * exception: its address is the host record's, which HostAdmission admitted as a backup destination (checked again
- * on every read), so that admission decides its reach as it decided where ssh went
- * ({@link StorageReach#ADMITTED_HOST}), loopback and private hosts included, with no boot opt-in.
+ * operator. Only an operator's storage may reach a private address, and only while BOTH its own switch
+ * ({@link BackupTargetModel#PRIVATE_ADDRESSES_ALLOWED}, an administrator's) and this host's boot
+ * ({@code storage.allow_private_networks}) allow it; M009_StorageChoices turned the switch on for every storage older
+ * than it, so each keeps the reach it had. An SSH-era row is the one exception: its address is the host record's,
+ * which HostAdmission admitted as a backup destination (checked again on every read), so that admission decides its
+ * reach as it decided where ssh went ({@link StorageReach#ADMITTED_HOST}), loopback and private hosts included, with
+ * neither the switch nor the boot opt-in.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -277,9 +279,12 @@ public final class HohenheimStorages implements DeclaredStorages {
         Map<String, Object> settings = StorageKindRegistry.settingsOf(kind, stored);
         Object id = row.get(BackupTargetModel.ID);
         // An SSH-era row reaches what its host record's admission admitted (HostAdmission, just checked by the
-        // upgrade); every other operator storage private networks under the boot's opt-in; a tenant's the internet.
+        // upgrade); every other operator storage private networks when its switch is on (and the boot opts in, which
+        // the storage layer asks), else the internet; a tenant's the internet, whatever its row holds.
         StorageReach reach = !(owner instanceof StorageOwner.Operator) ? StorageReach.PUBLIC_INTERNET
-            : hostRecord ? StorageReach.ADMITTED_HOST : StorageReach.PRIVATE_NETWORKS;
+            : hostRecord ? StorageReach.ADMITTED_HOST
+            : Boolean.TRUE.equals(row.get(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED)) ? StorageReach.PRIVATE_NETWORKS
+            : StorageReach.PUBLIC_INTERNET;
         return new DeclaredStorage(id == null ? "new" : String.valueOf(id), trimmed(row.get(BackupTargetModel.NAME)),
             kind, settings, owner, reach);
     }

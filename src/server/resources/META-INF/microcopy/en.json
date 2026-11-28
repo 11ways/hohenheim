@@ -21764,5 +21764,22 @@
   "move_files_removed": {"text": "{$files} removed from the old storage", "scope": "site"},
   "move_site_files_description": {"text": "Moves a site's own files to another storage, verified, while the site keeps serving them.", "scope": "hohenheim"},
   "move_site_files": {"text": "{$actor} moved the files of site {$subject}", "scope": "hohenheim", "target": "happened"},
-  "move_files_confirm": {"text": "Move this site's files to the storage you choose. The site keeps serving them while they move, and it switches over once every file is copied and verified.", "scope": "site"}
+  "move_files_confirm": {"text": "Move this site's files to the storage you choose. The site keeps serving them while they move, and it switches over once every file is copied and verified.", "scope": "site"},
+  "storage_private_addresses": [{"text": "May reach a private address", "scope": "hohenheim_field"}, {"text": "This storage may reach an address inside a private network. It does only while this server's boot allows private networks too.", "scope": "help"}],
+  "storage_shared": [{"text": "Everyone may use it", "scope": "hohenheim_field"}, {"text": "On, every customer may choose this storage and sees only its name and kind. Off, only you and other administrators see this storage.", "scope": "help"}],
+  "storage_added_by": {"text": "Added by", "scope": "hohenheim_field"},
+  "database_backup_target": [{"text": "Dumps go to", "scope": "hohenheim_field"}, {"text": "The storage this database's dumps go to. Empty uses the server's own choice, under Settings, Backups.", "scope": "help"}],
+  "database_dumps_kept": [{"text": "Dumps kept", "scope": "hohenheim_field"}, {"text": "How many dumps this database keeps. Empty keeps the server's number.", "scope": "help"}],
+  "database_backup_target_code": {"text": "The storage (BT1) this database's dumps go to; left out, the server's own choice. A change may clear it with null.", "scope": "help"},
+  "everyone_may_use": {"text": "Everyone may use it", "scope": "backup_target"},
+  "shared_with_everyone": {"text": "Shared with everyone", "scope": "backup_target"},
+  "card_private_address": {"text": "Private address", "scope": "backup_target"},
+  "private_address_lead": {"text": "Only an administrator sees this. Edit changes it.", "scope": "backup_target"},
+  "private_address_on": {"text": "On", "scope": "backup_target"},
+  "private_address_off": {"text": "Off", "scope": "backup_target"},
+  "added_by_on": {"text": "{$kind}, added by {$person} on {$at :date}", "scope": "backup_target"},
+  "added_on": {"text": "{$kind}, added on {$at :date}", "scope": "backup_target"},
+  "keeps_no_dumps_yet": {"text": "Its dumps, none yet", "scope": "backup_target"},
+  "back_up_own_target_missing": {"text": "The storage this database chose for its dumps is gone. Choose another one on its form.", "scope": "database"},
+  "database_dumps_kept_positive": {"text": "A database keeps at least one dump. Leave it empty to keep the server's number.", "scope": "violations"}
 }

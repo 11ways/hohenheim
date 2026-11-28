@@ -116,14 +116,36 @@ public final class DatabaseBackups {
     private DatabaseBackups() {
     }
 
-    /** @return the backup target name the setting holds, null when none is set */
+    /** @return the backup target name the setting holds, null when none is set: every database's default */
     public static @Nullable String configuredTargetName() {
         String name = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_TARGET);
         return name == null || name.isBlank() ? null : name.trim();
     }
 
-    /** @return why no dump can be stored now (no target set, or the set one is gone), null while one can */
-    public static @Nullable Microcopy targetRefusal() {
+    /**
+     * @return the name of the storage the database's dumps go to: its own when it chose one, else the server's
+     *         default; null when neither names one (its own gone included)
+     */
+    public static @Nullable String targetNameFor(@NonNull Row database) {
+        Integer own = database.get(DatabaseModel.BACKUP_TARGET_ID);
+        if (own == null) {
+            return configuredTargetName();
+        }
+        Row row = Models.get(BackupTargetModel.class).findById(own);
+        return row == null ? null : String.valueOf((Object) row.get(BackupTargetModel.NAME));
+    }
+
+    /** @return why no dump of the database can be stored now (no storage chosen or set, or it is gone), else null */
+    public static @Nullable Microcopy targetRefusal(@NonNull Row database) {
+        if (database.get(DatabaseModel.BACKUP_TARGET_ID) != null) {
+            return targetNameFor(database) == null ? HohenheimMicrocopy.DATABASE.of("back_up_own_target_missing")
+                : null;
+        }
+        return defaultTargetRefusal();
+    }
+
+    /** @return why the server's default storage takes no dump now (none set, or the set one is gone), else null */
+    public static @Nullable Microcopy defaultTargetRefusal() {
         String name = configuredTargetName();
         if (name == null) {
             return HohenheimMicrocopy.DATABASE.of("back_up_no_target");
@@ -136,8 +158,22 @@ public final class DatabaseBackups {
         return Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(name)).first();
     }
 
-    /** @throws IOException naming the setting when no target is set or the named one does not exist */
-    private static @NonNull Destination requireDestination() throws IOException {
+    /**
+     * @return where the database's dumps go: the storage it chose for itself, else the one the server's setting names
+     * @throws IOException naming the setting when no target is set or the named one does not exist, or naming the
+     *                     database when the storage it chose is gone
+     */
+    private static @NonNull Destination requireDestination(@NonNull Row database) throws IOException {
+        Integer own = database.get(DatabaseModel.BACKUP_TARGET_ID);
+        if (own != null) {
+            Row row = Models.get(BackupTargetModel.class).findById(own);
+            if (row == null) {
+                throw new IOException("The storage database '" + database.get(DatabaseModel.NAME)
+                    + "' chose for its dumps (id " + own + ") does not exist");
+            }
+            return new Destination(own, String.valueOf((Object) row.get(BackupTargetModel.NAME)),
+                BackupStorages.of(row));
+        }
         String name = configuredTargetName();
         if (name == null) {
             throw new IOException("No backup target is set for managed-database dumps: set "
@@ -184,7 +220,7 @@ public final class DatabaseBackups {
     private static @NonNull Row backUpHeld(@NonNull DatabaseService service, @NonNull Row database,
                                            InstanceOperationLock.@NonNull Contention contention) throws IOException {
         String name = database.get(DatabaseModel.NAME);
-        Destination destination = requireDestination();
+        Destination destination = requireDestination(database);
         StorageAdapter target = destination.target();
         // Usable BEFORE the dump: a dead storage must not cost the engine a dump nobody can keep.
         BackupStorages.requireUsable(target);
@@ -266,7 +302,8 @@ public final class DatabaseBackups {
             FileTrees.deleteQuietly(staging);
         }
         if (databaseId != null) {
-            RETENTION.sweep(databaseId, DatabaseBackups::delete);
+            // Its own number kept when it chose one, else the server's.
+            RETENTION.sweep(databaseId, database.get(DatabaseModel.DUMPS_KEPT), DatabaseBackups::delete);
         }
         Blast.log("DUMP: database", name, "stored on target", destination.name(), "as", key);
         return dump;

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -65,7 +66,10 @@ public final class DatabaseRecordWrites {
             DatabaseEngineModel.MODEL_ID, true)
         .createOnly(List.of(DatabaseModel.DB_NAME, DatabaseModel.DB_USER, DatabaseModel.DB_PASSWORD,
             DatabaseModel.IMAGE, DatabaseModel.EPHEMERAL))
-        .settings(List.of(DatabaseModel.MEMORY_LIMIT_MB, DatabaseModel.CPU_LIMIT))
+        .settings(List.of(DatabaseModel.MEMORY_LIMIT_MB, DatabaseModel.CPU_LIMIT, DatabaseModel.DUMPS_KEPT))
+        // Where its dumps go: the storage named by code, the app's own argument name for its backups' storage.
+        .link(AppKindWrites.BACKUP_TARGET, HohenheimMicrocopy.HELP.of("database_backup_target_code"),
+            DatabaseModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID, false)
         .link(HOST, HohenheimMicrocopy.HELP.of("database_host_code"), DatabaseModel.HOST_ID, HostModel.MODEL_ID, true)
         .also(List.of(KindSettingsWrites.entryOf(DatabaseModel.DB_PASSWORD), Plain.of(GENERATE)),
             DatabaseRecordWrites::passwordChange)

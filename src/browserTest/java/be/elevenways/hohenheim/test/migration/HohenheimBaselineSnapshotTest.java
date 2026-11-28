@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.migration.M005_LinkedServers;
 import be.elevenways.hohenheim.migration.M006_SharedRecords;
 import be.elevenways.hohenheim.migration.M007_LinkConfirmations;
 import be.elevenways.hohenheim.migration.M008_StreamPortLists;
+import be.elevenways.hohenheim.migration.M009_StorageChoices;
 import be.elevenways.zenit.common.orm.migration.M001_ZenitBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -34,9 +35,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * auto-discovery (hohenheim 718bedc3), kept to the tables the baseline creates so another stream's schema change never
  * touches it. It is history, never regenerated; an appended migration changes neither side. The baseline runs with
  * no other Hohenheim stream; core's baseline runs beside it because the published M006 depends on it, and its tables
- * are left out of the compare (read from a database core's baseline built alone). The published M002 to M008 run with
- * it (a runner admits no chain short of its published migration) and are rolled back through their own down() before
- * the compare.
+ * are left out of the compare (read from a database core's baseline built alone). The published M002 to M008 and the
+ * open M009 run with it (a runner admits no chain short of its published migration) and are rolled back through
+ * their own down() before the compare.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -60,8 +61,11 @@ class HohenheimBaselineSnapshotTest {
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
         List<Supplier<Migration>> migrations = List.of(M001_ZenitBaseline::new, M001_HohenheimBaseline::new,
             M002_AfterBaseline::new, M003_CertificateSigningRequests::new, M004_SiteOutages::new,
-            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new, M008_StreamPortLists::new);
+            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new, M008_StreamPortLists::new,
+            M009_StorageChoices::new);
         new MigrationRunner(datasource, migrations).migrate().requireSuccess();
+        new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M009_StorageChoices()))
+            .requireSuccess();
         new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M008_StreamPortLists()))
             .requireSuccess();
         new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M007_LinkConfirmations()))

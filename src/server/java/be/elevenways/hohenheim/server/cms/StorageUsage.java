@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.files.SiteFiles;
@@ -16,7 +17,6 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -24,9 +24,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * What uses each storage (board FO128): the recovery archive and the dumps a server setting sends there, the sites
@@ -50,7 +52,7 @@ final class StorageUsage {
      * @param recoveryArchive whether the recovery archive setting names it
      * @param databaseDumps   whether the server-wide dump setting names it
      * @param sites           the sites keeping their own files there
-     * @param databases       the databases with dumps stored there
+     * @param databases       the databases with dumps stored there or choosing it for their own dumps
      * @param apps            the apps backing up there
      */
     record Counts(boolean recoveryArchive, boolean databaseDumps, long sites, long databases, long apps) {
@@ -107,9 +109,20 @@ final class StorageUsage {
             return counts;
         }
         Map<String, Long> sites = sitesByStorage();
-        Map<Integer, Long> databases = Models.get(DatabaseDumpModel.class).find()
-            .countBy(DatabaseDumpModel.TARGET_ID, names.keySet(),
-                Aggregate.countDistinct(DatabaseDumpModel.DATABASE_ID));
+        // A database counts once whether it has dumps there, chose it for its own, or both.
+        Map<Integer, Set<Integer>> databaseSets = new HashMap<>();
+        for (Row dump : Models.get(DatabaseDumpModel.class).find()
+                .where(DatabaseDumpModel.TARGET_ID.in(names.keySet())).all()) {
+            databaseSets.computeIfAbsent(dump.get(DatabaseDumpModel.TARGET_ID), ignored -> new HashSet<>())
+                .add(dump.get(DatabaseDumpModel.DATABASE_ID));
+        }
+        for (Row database : Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.BACKUP_TARGET_ID.in(names.keySet())).all()) {
+            databaseSets.computeIfAbsent(database.get(DatabaseModel.BACKUP_TARGET_ID), ignored -> new HashSet<>())
+                .add(database.get(DatabaseModel.ID));
+        }
+        Map<Integer, Long> databases = new HashMap<>();
+        databaseSets.forEach((target, held) -> databases.put(target, (long) held.size()));
         Map<Integer, Long> apps = Models.get(InstanceModel.class).find()
             .countBy(InstanceModel.BACKUP_TARGET_ID, names.keySet());
         String archive = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
@@ -169,6 +182,16 @@ final class StorageUsage {
                     : WidgetFact.link(label, value, CmsRoutes.detail(panelSlug, HohenheimSlugs.DATABASES, database)
                         .toUrl()));
             });
+            // A database choosing the storage for its own dumps before it took one there.
+            for (Row database : Models.get(DatabaseModel.class).find()
+                    .where(DatabaseModel.BACKUP_TARGET_ID.eq(id)).all()) {
+                Integer databaseId = database.get(DatabaseModel.ID);
+                if (!dumps.containsKey(databaseId)) {
+                    facts.add(WidgetFact.link(String.valueOf((Object) database.get(DatabaseModel.NAME)),
+                        access.text(HohenheimMicrocopy.BACKUP_TARGET.of("keeps_no_dumps_yet")),
+                        CmsRoutes.detail(panelSlug, HohenheimSlugs.DATABASES, databaseId).toUrl()));
+                }
+            }
             for (Row app : Models.get(InstanceModel.class).find().where(InstanceModel.BACKUP_TARGET_ID.eq(id)).all()) {
                 facts.add(WidgetFact.link(String.valueOf((Object) app.get(InstanceModel.NAME)),
                     access.text(HohenheimMicrocopy.BACKUP_TARGET.of("keeps_app_backups")),
