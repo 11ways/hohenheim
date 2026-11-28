@@ -91,8 +91,9 @@ public final class ManagePanel extends Panel {
      * least one record of a model this panel projects. It asks no conduit.
      *
      * AIDEV-NOTE: every model this panel projects belongs in this disjunction: keying it on sites alone locked a pure
-     * instance tenant out of the panel built for them, and databases, git providers, projects and access lists joined
-     * for the same reason. Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
+     * instance tenant out of the panel built for them, and databases, git providers, projects, access lists and
+     * storages joined for the same reason (a customer whose one record is a storage of their own was refused the panel
+     * holding it). Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
      * every-record authority, which 403'd a hohenheim.sites.manage_all holder. The walk consults the checker's
      * decide() only, never this computation, so there is no recursion.
      */
@@ -102,6 +103,7 @@ public final class ManagePanel extends Panel {
             || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimCapabilities.VIEW)
             || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimCapabilities.MANAGE)
             || HohenheimAccess.reachesAny(ctx, AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE)
+            || HohenheimAccess.reachesAny(ctx, BackupTargetModel.MODEL_ID, HohenheimCapabilities.MANAGE)
             || !Projects.visibleTo(ctx).isEmpty();
     }
 

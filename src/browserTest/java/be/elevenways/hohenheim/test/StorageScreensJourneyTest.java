@@ -100,9 +100,10 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             }
             shoot("storages-list");
 
-            // 2. A storage's page: where it is in its kind's facts, its secret set and never shown, its room and what
-            //    uses it.
-            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/" + box.get(BackupTargetModel.ID));
+            // 2. A storage's page (its overview tab; the record's own address is its edit form): where it is in its
+            //    kind's facts, its secret set and never shown, its room and what uses it.
+            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/" + box.get(BackupTargetModel.ID) + "/page/"
+                + RecordOverview.SLUG);
             waitForHydration();
             String shown = page.content();
             assertThat(shown).as("step 2: where").contains("Host", SftpTestServer.HOST, "Server's key");
