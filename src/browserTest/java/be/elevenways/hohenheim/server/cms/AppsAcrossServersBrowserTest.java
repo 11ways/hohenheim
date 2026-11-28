@@ -168,7 +168,8 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             Object linked = page.locator("a[href*='" + heldWorkloadPage + "/page/']").evaluateAll(
                 "links => [...new Set(links.map(link => link.getAttribute('href').split('/page/')[1]"
                     + ".split(/[?#]/)[0]))]");
-            assertThat(linked instanceof List<?> slugs ? slugs.stream().map(String::valueOf).toList() : List.of())
+            assertThat(linked).as("step 6: the page's tab links read").isInstanceOf(List.class);
+            assertThat(((List<?>) linked).stream().map(String::valueOf).toList())
                 .as("step 6: no tab beside the overview (a strip of one is not drawn)")
                 .isSubsetOf(RecordOverview.SLUG);
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-page.png")).setFullPage(true));
@@ -193,6 +194,8 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             Locator heldAddress = page.locator("pl-table-body pl-table-row")
                 .filter(new Locator.FilterOptions().setHasText("shop.kuifje.test"));
             BoundedAssertions.assertThat(heldAddress).isVisible();
+            assertThat(heldAddress.locator("pl-table-cell[data-column='hostname']").count())
+                .as("step 6: the row draws its address cell").isEqualTo(1);
             assertThat(page.locator("pl-table-cell[data-column='server']").count()).as("step 6: no Server column")
                 .isZero();
             assertThat(page.locator("a[href*='/" + HohenheimSlugs.DOMAINS + "/create']").count())
