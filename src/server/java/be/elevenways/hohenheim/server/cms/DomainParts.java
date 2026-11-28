@@ -229,8 +229,8 @@ public final class DomainParts {
     }
 
     /** @return one state line a held address's server told, the unreadable line for one this build cannot read */
-    private static @Nullable StateLineCell told(@NonNull KeptRow domain, HeldRecords.@NonNull Holder server,
-                                                @NonNull String fact) {
+    static @Nullable StateLineCell told(@NonNull KeptRow domain, HeldRecords.@NonNull Holder server,
+                                        @NonNull String fact) {
         Map<String, @Nullable Map<?, ?>> told = ClusterLists.told(SiteStates.ADDRESS_KIND);
         if (!told.containsKey(domain.listKey())) {
             return null;

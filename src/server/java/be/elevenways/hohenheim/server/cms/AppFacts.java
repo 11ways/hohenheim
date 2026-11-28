@@ -32,18 +32,33 @@ import java.util.Objects;
  * @param https   what HTTPS gives its main address, null without an exact address
  * @param health  the verdict its own record page leads with, its fixes left out of a told one
  * @param started when what runs last started, null while it does not run or for an app nothing runs of
+ * @param open    where its Open site goes (AppHealth's open address), null while visitors reach nothing of it; told
+ *                to the master alone ({@link #opening}), the Apps list reads none
  * @author Jelle De Loecker
  * @since  0.10.0
  */
 record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull Microcopy kind,
                 @Nullable SiteHostnamesCell address, @Nullable String host, @Nullable StateLineCell https,
-                @NonNull RecordHealth health, @Nullable Instant started) {
+                @NonNull RecordHealth health, @Nullable Instant started, @Nullable String open) {
 
     AppFacts {
         Objects.requireNonNull(source, "source cannot be null");
         Objects.requireNonNull(name, "name cannot be null");
         Objects.requireNonNull(kind, "kind cannot be null");
         Objects.requireNonNull(health, "health cannot be null");
+    }
+
+    /** The facts without where Open site goes, the way the Apps list reads them. */
+    AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull Microcopy kind,
+             @Nullable SiteHostnamesCell address, @Nullable String host, @Nullable StateLineCell https,
+             @NonNull RecordHealth health, @Nullable Instant started) {
+        this(source, id, name, kind, address, host, https, health, started, null);
+    }
+
+    /** @return these facts with where Open site goes */
+    @NonNull AppFacts opening(@Nullable String url) {
+        return new AppFacts(this.source, this.id, this.name, this.kind, this.address, this.host, this.https,
+            this.health, this.started, url);
     }
 
     /** @return the key unique over one server's Apps list: the source's token and the record's id */
@@ -72,6 +87,9 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
             document.put("https", ToldFacts.line(this.https));
         }
         document.put("health", ToldFacts.health(this.health));
+        if (this.open != null) {
+            document.put("open", this.open);
+        }
         return Zenit.DRY.toJson(document);
     }
 
@@ -95,8 +113,11 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
                 return null;
             }
             Instant started = facts.get("started") instanceof String told ? Instant.parse(told) : null;
+            // Where Open site goes is a web address or nothing: a link of another scheme is never drawn.
+            String open = facts.get("open") instanceof String url
+                && (url.startsWith("https://") || url.startsWith("http://")) ? url : null;
             return new AppFacts(source, id.intValue(), name, kind, ToldFacts.addressOf(facts.get("address")),
-                facts.get("host") instanceof String host ? host : null, https, health, started);
+                facts.get("host") instanceof String host ? host : null, https, health, started, open);
         } catch (ToldFacts.Unreadable | DateTimeParseException unreadable) {
             return null;
         }

@@ -322,9 +322,17 @@ final class AppDirectory {
         Members records = Members.of(Models.get(SiteModel.class).find().noCache().all(),
             Models.get(InstanceModel.class).find().noCache().where(InstanceParts.listedByOperator()).all(),
             Models.get(StackModel.class).find().noCache().all());
+        // Where each app's Open site goes, as its own page offers it, told so the master's page offers the same.
+        Map<Integer, String> openWorkloads = AppHealth.openInstances(records.workloads());
+        Map<Integer, String> openWebsites = AppHealth.openSites(records.websites());
         List<AppFacts> facts = new ArrayList<>();
         for (Located located : located(records, false, AccessContext.anonymous(), HohenheimSlugs.ADMIN)) {
-            facts.add(located.facts());
+            AppFacts read = located.facts();
+            facts.add(read.opening(switch (read.source()) {
+                case WORKLOAD -> openWorkloads.get(read.id());
+                case WEBSITE -> openWebsites.get(read.id());
+                case STACK -> null;
+            }));
         }
         return facts;
     }

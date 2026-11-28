@@ -16,7 +16,7 @@ import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
-import be.elevenways.hohenheim.site.SiteHostnamesCell;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.upstream.kinds.StreamUpstreamKind;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -526,8 +526,35 @@ final class AppOverview {
     static @NonNull WidgetTree heldWidgets(@NonNull Row kept, @NonNull Source source, @NonNull AccessContext access) {
         KeptRow row = (KeptRow) kept;
         HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(row), "a held app's server");
-        return server.silent() ? remembered(row, source, server, access)
-            : heldWidgets(toldApp(kept, source, Wording.of(access)), access);
+        AppFacts facts = AppStates.told(server, source.token() + "-" + row.key());
+        List<KeptRow> domains = keptDomains(row, source);
+        if (server.silent()) {
+            return remembered(facts, domains, server, access);
+        }
+        Wording words = Wording.of(access);
+        HeldApp app = facts == null ? HeldApp.unreadable(row.key(), row.title(), server, words)
+            : HeldApp.of(facts, server, words);
+        return heldWidgets(app, domains, facts == null ? null : facts.open(), access);
+    }
+
+    /**
+     * @return the addresses a linked server keeps of its app, as its record shows them: a website's own, the ones of
+     *         every site serving a workload, none of a stack; read with the kept rows of the request
+     */
+    private static @NonNull List<KeptRow> keptDomains(@NonNull KeptRow row, @NonNull Source source) {
+        List<KeptRow> sites = switch (source) {
+            case WEBSITE -> List.of(row);
+            case WORKLOAD -> ClusterLists.grouped(Models.get(SiteModel.class), SiteModel.MODEL_ID,
+                SiteModel.INSTANCE_ID.getName()).getOrDefault(ClusterLists.sibling(row, row.key()), List.of());
+            case STACK -> List.of();
+        };
+        List<KeptRow> domains = new ArrayList<>();
+        for (KeptRow site : sites) {
+            for (Row domain : SiteParts.keptDomainsOf(site)) {
+                domains.add((KeptRow) domain);
+            }
+        }
+        return domains;
     }
 
     /**
@@ -562,19 +589,22 @@ final class AppOverview {
      * What this server remembers of a silent server's app, as one card (board FO119): what it is, its addresses, its
      * host and its state when its server last answered, all as that server last told them.
      */
-    private static @NonNull WidgetTree remembered(@NonNull KeptRow row, @NonNull Source source,
+    private static @NonNull WidgetTree remembered(@Nullable AppFacts facts, @NonNull List<KeptRow> domains,
                                                   HeldRecords.@NonNull Holder server, @NonNull AccessContext access) {
-        AppFacts facts = AppStates.told(server, source.token() + "-" + row.key());
         List<WidgetFact> lines = new ArrayList<>();
         if (facts != null) {
             lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("kind")),
                 access.text(facts.kind())));
-            SiteHostnamesCell address = facts.address();
-            if (address != null && address.primary() != null) {
+            List<String> names = new ArrayList<>();
+            for (KeptRow domain : domains) {
+                names.add(String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME)));
+            }
+            if (names.isEmpty() && facts.address() != null && facts.address().primary() != null) {
+                names.add(facts.address().primary());
+            }
+            if (!names.isEmpty()) {
                 lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_OVERVIEW.of("addresses")),
-                    address.moreCount() > 0 ? access.text(HohenheimMicrocopy.HELD_APP.of("held_app_address_and_more")
-                        .withArg("address", address.primary()).withArg("count", address.moreCount()))
-                        : address.primary()));
+                    String.join(", ", names)));
             }
             if (facts.host() != null) {
                 lines.add(WidgetFact.of(access.text(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host")), facts.host()));
@@ -601,30 +631,61 @@ final class AppOverview {
         return told != null ? told : HeldApp.unreadable(row.key(), row.title(), server, words);
     }
 
-    private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull AccessContext access) {
+    /**
+     * A linked server's app's composition: the waiting tabs said in words, its Addresses card as its server keeps its
+     * addresses (with what HTTPS gives each, as told) and Open site where that server says visitors reach it, and its
+     * Details. An app its server keeps no address of (a stack, an app not online yet) draws no Addresses card: its
+     * empty card here could only ask for an address this server cannot add.
+     *
+     * @param open where its Open site goes, as its server told it; null for none
+     */
+    private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull List<KeptRow> domains,
+                                                   @Nullable String open, @NonNull AccessContext access) {
         Cells cells = app.cells();
         String server = app.held().name();
         List<WidgetInstance> top = new ArrayList<>();
         top.add(notice(AlertVariant.INFO, access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs_title")),
             access.text(HohenheimMicrocopy.HELD_APP.of("held_app_waiting_tabs").withArg("server", server))));
-
-        // Its addresses as its server told them: the main one with what HTTPS gives it, and how many more it has.
-        List<WidgetFact> addresses = new ArrayList<>();
-        if (cells.address() != null && cells.address().primary() != null) {
-            addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.HELD_APP.of("held_app_main_address")),
-                cells.address().primary()));
-            if (cells.https() != null) {
-                addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.APP_LIST.of("https")),
-                    access.text(cells.https().label())));
+        List<WidgetInstance> main = new ArrayList<>();
+        if (!domains.isEmpty()) {
+            List<AppAddress> rows = new ArrayList<>();
+            for (KeptRow domain : domains) {
+                rows.add(heldAddress(domain, rows.isEmpty(), app.held(), access));
             }
-            if (cells.address().moreCount() > 0) {
-                addresses.add(WidgetFact.of(access.text(HohenheimMicrocopy.HELD_APP.of("held_app_also")),
-                    access.text(HohenheimMicrocopy.HELD_APP.of("held_app_more_addresses")
-                        .withArg("count", cells.address().moreCount()))));
-            }
+            main.add(card(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"),
+                new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
+                HohenheimMicrocopy.APP_OVERVIEW.of("open_site"), open, "up-right-from-square"));
         }
-        return compose(top, List.of(CardWidget.ofFacts(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), addresses)),
-            List.of(details(identity(cells, null, server, access))));
+        return compose(top, main, List.of(details(identity(cells, null, server, access))));
+    }
+
+    /**
+     * One address a linked server keeps of its app, as {@link #address} draws one of this server's: its HTTPS state as
+     * that server told it (an exact name that told none reads as not used), a pattern as a pattern, its notes; no
+     * link, since the address's own page is that server's.
+     */
+    private static @NonNull AppAddress heldAddress(@NonNull KeptRow domain, boolean main,
+                                                   HeldRecords.@NonNull Holder server, @NonNull AccessContext access) {
+        LocaleChain locales = access.conduit().getLocales();
+        MessageResolver resolver = access.conduit().getMessageResolver();
+        String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
+        List<String> notes = new ArrayList<>();
+        if (main) {
+            notes.add(text("main_address", locales, resolver));
+        }
+        if (!AppHealth.exact(domain)) {
+            notes.add(text("pattern_note", locales, resolver));
+            return new AppAddress(hostname, null, CertCoverage.PATTERN.label(), CertCoverage.PATTERN.variant(),
+                String.join(" · ", notes));
+        }
+        if (Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))) {
+            notes.add(text("https_forced", locales, resolver));
+        }
+        StateLineCell https = DomainParts.told(domain, server, "https");
+        return https == null || https.label() == null
+            ? new AppAddress(hostname, null, CertCoverage.NOT_USED.label(), CertCoverage.NOT_USED.variant(),
+                String.join(" · ", notes))
+            : new AppAddress(hostname, null, https.label(), https.variant(), String.join(" · ", notes));
     }
 
     private static @NonNull WidgetInstance notice(@NonNull AlertVariant variant, @NonNull String title,

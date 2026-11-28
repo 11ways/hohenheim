@@ -21800,11 +21800,7 @@
   "held_app_silent_body": {"text": "This is what {$master} remembers of this app. Nothing can be changed until {$server} answers.", "scope": "held_app"},
   "held_app_waiting_tabs_title": {"text": "Logs, console, files, stats, backups, volumes, databases and history wait", "scope": "held_app"},
   "held_app_waiting_tabs": {"text": "They show what runs on {$server} and are not brought to this server yet. Open them on {$server} meanwhile.", "scope": "held_app"},
-  "held_app_main_address": {"text": "Main address", "scope": "held_app"},
-  "held_app_also": {"text": "Also", "scope": "held_app"},
-  "held_app_more_addresses": {"text": ".match {$count :integer}\none {{1 more address}}\n* {{{$count :integer} more addresses}}", "scope": "held_app"},
   "held_app_remembers": {"text": "What {$master} remembers", "scope": "held_app"},
-  "held_app_address_and_more": {"text": ".match {$count :integer}\none {{{$address} and 1 more}}\n* {{{$address} and {$count :integer} more}}", "scope": "held_app"},
   "held_app_last_state": {"text": "State when last seen", "scope": "held_app"},
   "held_app_state_at": {"text": ".match {$day :string}\ntoday {{{$state} at {$at :time}}}\n* {{{$state} at {$at :datetime}}}", "scope": "held_app"}
 }

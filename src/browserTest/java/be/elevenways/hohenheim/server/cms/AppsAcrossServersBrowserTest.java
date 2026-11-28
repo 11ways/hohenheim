@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
@@ -87,7 +89,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             servers.add(haddock);
             AppFacts own = AppDirectory.operatorFacts().stream().filter(facts -> "robbedoes-blog".equals(facts.name()))
                 .findFirst().orElseThrow();
-            told(kuifje, own, 101, "kuifje-shop");
+            told(kuifje, own, 101, "kuifje-shop", "https://shop.kuifje.test");
             told(kuifje, own, 102, "kuifje-wiki");
             told(gaston, own, 201, "gaston-forum");
             told(haddock, own, 301, "haddock-docs");
@@ -99,6 +101,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             heldWorkload(kuifje, 103, "kuifje-api");
             heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test");
             heldEstate(gaston, 201, "gaston-forum", "forum.gaston.test");
+            heldStack(kuifje, 104, "kuifje-stack", own);
 
             // 2. One list: the master's app and both servers' apps, each under its server's name.
             navigateToApp("/admin/" + HohenheimSlugs.APPS);
@@ -182,11 +185,17 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             assertThat(page.locator("body").textContent()).as("step 6: this server's workload")
                 .contains("robbedoes-api");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("local-app-page.png")).setFullPage(true));
-            //    A linked server's website opens the page this server's website opens, and this server's own beside it.
+            //    A linked server's website opens the page this server's website opens, and this server's own beside it:
+            //    its Addresses card lists the address Kuifje keeps of it, with what HTTPS gives it as Kuifje told, and
+            //    Open site goes where Kuifje says visitors reach it.
             navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(kuifje) + "-101/page/" + RecordOverview.SLUG);
             waitForHydration();
             assertThat(page.locator("body").textContent()).as("step 6: Kuifje's website").contains("kuifje-shop")
                 .contains("Kuifje");
+            Locator addressesCard = page.locator("main").getByText("shop.kuifje.test");
+            BoundedAssertions.assertThat(addressesCard.first()).isVisible();
+            assertThat(page.locator("main [href='https://shop.kuifje.test']").count())
+                .as("step 6: Open site goes where Kuifje says").isPositive();
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-page.png"))
                 .setFullPage(true));
             //    Its Addresses tab lists the address Kuifje keeps of it, under no Server column, offering no add.
@@ -204,6 +213,15 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                 .as("step 6: no add on Kuifje's site").isZero();
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-website-addresses.png"))
                 .setFullPage(true));
+            //    A linked server's stack opens the page this server's stacks open, on its Overview: what Kuifje told,
+            //    and the Deploy Kuifje tells it offers.
+            navigateToApp("/admin/" + HohenheimSlugs.STACKS + "/" + peerOf(kuifje) + "-104/page/"
+                + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.locator("main").innerText()).as("step 6: Kuifje's stack").contains("kuifje-stack")
+                .contains("Kuifje").contains("Deploy");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-stack-page.png"))
+                .setFullPage(true));
             navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + site.get(SiteModel.ID) + "/page/"
                 + RecordOverview.SLUG);
             waitForHydration();
@@ -220,7 +238,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             assertThat(silentPage).as("step 7: the silent server's app page")
                 .containsPattern("Gaston does not answer since \\d{1,2}:\\d{2}")
                 .contains("Nothing can be changed until Gaston answers.").contains("What Robbedoes remembers")
-                .contains("Check now");
+                .contains("Check now").contains("forum.gaston.test");
             assertThat(silentPage.split("does not answer", -1).length - 1).as("step 7: said once").isEqualTo(1);
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-silent.png"))
                 .setFullPage(true));
@@ -341,8 +359,13 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
 
     /** Keeps an app's state as that server told it, as the master's sync keeps it: this server's facts renamed. */
     private static void told(UUID server, AppFacts own, int id, String name) {
+        told(server, own, id, name, null);
+    }
+
+    /** {@link #told(UUID, AppFacts, int, String)}, telling where its Open site goes. */
+    private static void told(UUID server, AppFacts own, int id, String name, String open) {
         keep(server, new AppFacts(own.source(), id, name, own.kind(), own.address(), own.host(), own.https(),
-            own.health(), own.started()));
+            own.health(), own.started(), open));
     }
 
     /** @return the key the master keeps a linked server's records under */
@@ -368,6 +391,23 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         row.set(PeerRecordModel.FIRST_SEEN, Now.instant());
         row.set(PeerRecordModel.LAST_CHANGED, Now.instant());
         Models.get(PeerRecordModel.class).insert(row, Change.PLAIN);
+    }
+
+    /**
+     * Keeps one stack of a linked server as its sync keeps it: its record, its app state (this server's own verdict
+     * renamed) and what that server tells it offers (a stack never deployed: Deploy).
+     */
+    private static void heldStack(UUID server, int id, String name, AppFacts own) {
+        StackModel stacks = Models.get(StackModel.class);
+        Row stack = stacks.createEmptyRow();
+        stack.set(StackModel.ID, id);
+        stack.set(StackModel.NAME, name);
+        stack.set(StackModel.STATUS, StackModel.STATUS_INACTIVE);
+        keep(server, StackModel.MODEL_ID, String.valueOf(id), name, portable(stacks, stack));
+        keep(server, new AppFacts(AppDirectory.Source.STACK, id, name,
+            HohenheimMicrocopy.APP_LIST.of("stack_kind").withArg("count", 2), null, "kuifje", null, own.health(), null));
+        keep(server, CarriedOperations.OFFERS, CarriedOperations.offerKey(StackModel.MODEL_ID, String.valueOf(id)),
+            String.valueOf(id), Zenit.DRY.toJson(Map.of(StackOperations.DEPLOY.id().toString(), Map.of())));
     }
 
     /**
