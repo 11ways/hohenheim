@@ -196,9 +196,14 @@ class SiteOwnFilesJourneyTest {
 
         // 10. Moving the files: each copied and verified, the site switched over and the old copies removed last;
         //     the site serves the file at its path from the new storage, and nothing is left in the old one. A file a
-        //     write put in the old storage after the second pass, just before the switch, is in the new one too.
+        //     write put in the old storage after the second pass, just before the switch, is in the new one too. The
+        //     site whose folder starts with this one's id (sites/<id>0) keeps its file where it is, served there.
         List<Microcopy> steps = new ArrayList<>();
         Path late = storage.resolve("sites/" + siteId + "/releases/late.txt");
+        int neighbourId = Integer.parseInt(siteId + "0");
+        Path neighbour = storage.resolve("sites/" + neighbourId + "/keep.txt");
+        Files.createDirectories(neighbour.getParent());
+        Files.writeString(neighbour, "NOT-THIS-SITE");
         int moved = SiteFileMoves.move(Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)),
             operatorStore, ProgressSink.SILENT, step -> {
                 steps.add(step);
@@ -222,6 +227,10 @@ class SiteOwnFilesJourneyTest {
             .hasBinaryContent(installer);
         assertThat(Files.exists(storage.resolve("sites/" + siteId + "/releases/Tadoma-1.2.EXE")))
             .as("step 10: gone from the old one").isFalse();
+        assertThat(neighbour).as("step 10: another site's folder is not this site's").hasContent("NOT-THIS-SITE");
+        assertThat(Files.exists(movedTo.resolve("sites/" + neighbourId))).as("step 10: nor copied").isFalse();
+        assertThat(SiteFiles.servedTree(neighbourId, Map.of("own_files", true)).readFile("", "/keep.txt", 1024))
+            .as("step 10: still served to that site").asString(StandardCharsets.UTF_8).isEqualTo("NOT-THIS-SITE");
         // This test's own proxy is no ServerMain proxy, which the site's save reloads: reload it as that hook does.
         proxy.reload();
         assertThat(ProxyTestSupport.rawRequest(port, "downloads.files.test", "/releases/Tadoma-1.2.EXE"))

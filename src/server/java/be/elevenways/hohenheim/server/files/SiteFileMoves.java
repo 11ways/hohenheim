@@ -150,7 +150,7 @@ public final class SiteFileMoves {
         StorageAdapter source = SiteFiles.storageOf(before);
         StorageAdapter target = SiteFiles.storageOf(after);
         long missing = 0;
-        for (String key : source.list(SiteFiles.prefixOf(siteId))) {
+        for (String key : source.list(SiteFiles.keysOf(siteId))) {
             if (!target.exists(key)) {
                 missing++;
             }
@@ -183,12 +183,12 @@ public final class SiteFileMoves {
         moved.put(StaticUpstreamKind.STORAGE.getName(), to);
         StorageAdapter source = SiteFiles.storageOf(settings);
         StorageAdapter target = SiteFiles.storageOf(moved);
-        String prefix = SiteFiles.prefixOf(siteId);
+        String keys = SiteFiles.keysOf(siteId);
 
         Map<String, String> copied = new LinkedHashMap<>();
-        copyAll(source, target, source.list(prefix), copied, progress);
+        copyAll(source, target, source.list(keys), copied, progress);
         // What a person put there, or replaced, while the first pass ran: copied again when its bytes changed.
-        copyAll(source, target, source.list(prefix), copied, progress);
+        copyAll(source, target, source.list(keys), copied, progress);
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_copied")
             .withArg("files", HohenheimCounts.of("files", copied.size())));
 
@@ -204,7 +204,7 @@ public final class SiteFileMoves {
 
         // Verify after the switch: each key the old storage still holds is settled once more right before its old
         // copy goes, so a write that landed there after the second pass is in the new storage first.
-        for (String key : source.list(prefix)) {
+        for (String key : source.list(keys)) {
             String settled = settled(source, target, key, copied);
             // Removed only while it still holds the bytes just settled: a write landing between the two is kept for
             // the next look rather than lost.
@@ -212,8 +212,8 @@ public final class SiteFileMoves {
                 source.deleteIfExists(key);
             }
         }
-        if (source.list(prefix).isEmpty()) {
-            source.deleteFolder(prefix);
+        if (source.list(keys).isEmpty()) {
+            source.deleteFolder(SiteFiles.prefixOf(siteId));
         }
         stepDone.accept(HohenheimMicrocopy.SITE.of("move_files_removed")
             .withArg("files", HohenheimCounts.of("files", copied.size())));

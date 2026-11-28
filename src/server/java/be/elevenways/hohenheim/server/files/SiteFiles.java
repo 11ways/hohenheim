@@ -54,9 +54,20 @@ public final class SiteFiles {
     private SiteFiles() {
     }
 
-    /** @return the key prefix every file of the site is stored under */
+    /** @return the folder key every file of the site is stored under, without the trailing slash */
     public static @NonNull String prefixOf(int siteId) {
         return "sites/" + siteId;
+    }
+
+    /**
+     * The prefix every key of the site's files starts with: its folder and the slash, what a listing of its keys asks.
+     *
+     * AIDEV-NOTE: a storage lists by string prefix, so the bare folder ({@link #prefixOf}) also names
+     * {@code sites/<id>0/}, another site's files; a move listing that took site 29's files with site 2's and removed
+     * them from the old storage.
+     */
+    public static @NonNull String keysOf(int siteId) {
+        return prefixOf(siteId) + "/";
     }
 
     /** @return whether the site's settings say it serves its own files */
