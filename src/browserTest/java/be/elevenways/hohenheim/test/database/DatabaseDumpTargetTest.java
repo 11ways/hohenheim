@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.BackupStatus;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.DatabaseDumpModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.cms.BackupTargetParts;
 import be.elevenways.hohenheim.server.cms.DatabaseDumpParts;
 import be.elevenways.hohenheim.server.backup.BackupCipher;
@@ -32,9 +33,11 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.testsupport.thread.Racers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.storedid.StoredIdReconciler;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.storage.StorageKindRegistry;
@@ -149,6 +152,20 @@ class DatabaseDumpTargetTest {
                 Path plain = DatabaseBackups.fetchVerified(dump, work);
                 assertThat(Files.readString(plain)).as("step 3: the round trip is exact")
                     .isEqualTo(DumpTargetFixture.DUMP_SQL + "1);\n");
+
+                // 3a. The boot's stored-id reconciler rewrites the target's kind (stored as hohenheim:filesystem) to
+                //     the folder kind's spelling; its stored path still translates, so the dump still downloads. A
+                //     storage kind's former spelling is the storage kind registry's alone: hohenheim:ssh still names
+                //     the git connection kind, never the SFTP storage kind.
+                StoredIdReconciler.run(Models.get(BackupTargetModel.class).getResolvedDatasource());
+                Row reconciled = Objects.requireNonNull(Models.get(BackupTargetModel.class).find()
+                    .where(BackupTargetModel.NAME.eq(target.name())).first(), "step 3a: the target");
+                assertThat((String) reconciled.get(BackupTargetModel.KIND)).as("step 3a: the kind's spelling today")
+                    .isEqualTo(LocalFolderStorageKind.ID.toString());
+                assertThat(Files.readString(DatabaseBackups.fetchVerified(dump, work))).as("step 3a: THE ASSERTION,"
+                    + " the dump still downloads").isEqualTo(DumpTargetFixture.DUMP_SQL + "1);\n");
+                assertThat(((RegistryMemberField) GitProviderModel.KIND).memberFor("hohenheim:ssh"))
+                    .as("step 3a: hohenheim:ssh is still the git connection kind").isNotNull();
 
                 // 3b. A dump the size of a real one is stored a fraction of its size, and one stored uncompressed
                 // before (HDB1, as every dump was until now) still downloads to the very dump.

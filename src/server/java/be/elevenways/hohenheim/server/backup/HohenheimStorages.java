@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimStoredIds;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostModel;
@@ -12,13 +11,13 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.registry.StoredIdChains;
 import be.elevenways.zenit.auth.cms.SubjectTag;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.PrincipalKind;
 import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.storage.StorageKindRegistry;
 import be.elevenways.zenit.server.storage.DeclaredStorage;
 import be.elevenways.zenit.server.storage.DeclaredStorages;
 import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
@@ -42,13 +41,15 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * Hohenheim's source of the storages people declare: its {@link BackupTargetModel} rows, handed to the storage layer
  * through {@link DeclaredStorages#SEAM} and opened there through their kind.
  *
- * AIDEV-NOTE: a row written before storages existed keeps its stored kind and settings. Its kind resolves through
- * {@link HohenheimStoredIds#CHAIN} ({@code hohenheim:filesystem} is the local folder kind, {@code hohenheim:ssh} the
- * SFTP kind) and its settings through the config upgrades declared there, read on every use and never written back:
- * a folder's {@code path} is the folder; an SSH target's host record gives the address, the account, the client key
- * and the pinned host key, re-read and re-gated (HostAdmission) each time, so the host record stays the one trust
- * authority and a rotated key or a quarantine reaches the storage at once. The base path is unchanged, so every
- * stored key still resolves.
+ * AIDEV-NOTE: a row written before storages existed keeps its settings. Its kind resolves through the storage kind
+ * registry's own former spellings ({@link StorageKindRegistry#STORED_NAMES}: {@code hohenheim:filesystem} is the local
+ * folder kind, {@code hohenheim:ssh} the SFTP kind), never a repo-wide stored-id chain, since {@code hohenheim:ssh} is
+ * also a live git connection kind; the boot's stored-id reconciler rewrites the kind column to today's spelling. Its
+ * settings translate through the upgrades declared there on every use and are never written back: a folder's
+ * {@code path} is the folder; an SSH target's host record gives the address, the account, the client key and the
+ * pinned host key, re-read and re-gated (HostAdmission) each time, so the host record stays the one trust authority
+ * and a rotated key or a quarantine reaches the storage at once. The base path is unchanged, so every stored key
+ * still resolves.
  *
  * AIDEV-NOTE: who owns a storage is who holds its manage grant (no owner column, the ProjectModel rule); none is the
  * operator. Only an operator's storage may reach a private address, and only where this host's boot allows it
@@ -79,10 +80,10 @@ public final class HohenheimStorages implements DeclaredStorages {
     private static final Set<String> ANSWERED = ConcurrentHashMap.newKeySet();
 
     static {
-        HohenheimStoredIds.CHAIN.renameType(STORED_FOLDER_KIND, LocalFolderStorageKind.ID);
-        HohenheimStoredIds.CHAIN.upgradeConfig(LocalFolderStorageKind.ID, HohenheimStorages::folderOfPath);
-        HohenheimStoredIds.CHAIN.renameType(STORED_SSH_KIND, SftpStorageKind.ID);
-        HohenheimStoredIds.CHAIN.upgradeConfig(SftpStorageKind.ID, HohenheimStorages::sftpOfHostRecord);
+        StorageKindRegistry.STORED_NAMES.renameType(STORED_FOLDER_KIND, LocalFolderStorageKind.ID);
+        StorageKindRegistry.STORED_NAMES.upgradeConfig(LocalFolderStorageKind.ID, HohenheimStorages::folderOfPath);
+        StorageKindRegistry.STORED_NAMES.renameType(STORED_SSH_KIND, SftpStorageKind.ID);
+        StorageKindRegistry.STORED_NAMES.upgradeConfig(SftpStorageKind.ID, HohenheimStorages::sftpOfHostRecord);
         DeclaredStorages.SEAM.install(INSTANCE);
         BackupTargetModel.SCHEMA.addAfterSaveHook(context -> refreshAnswered());
         BackupTargetModel.SCHEMA.addAfterRemoveHook(context -> refreshAnswered());
@@ -130,14 +131,15 @@ public final class HohenheimStorages implements DeclaredStorages {
         Identifier kind = kindOf(row);
         Map<String, Object> stored = RawValues.map(row.get(BackupTargetModel.SETTINGS));
         boolean hostRecord = SftpStorageKind.ID.equals(kind) && stored.containsKey(SSH_HOST_RECORD);
-        if (hostRecord && !(owner instanceof StorageOwner.Operator
-                && STORED_SSH_KIND.toString().equals(trimmed(row.get(BackupTargetModel.KIND))))) {
-            // The upgrade below would hand these settings the host record's client key and pin: only a row the
-            // operator stored under the SSH kind before storages existed may name one.
+        if (hostRecord && !(owner instanceof StorageOwner.Operator)) {
+            // The upgrade below would hand these settings the host record's client key and pin: only the operator's
+            // row stored as an SSH target before storages existed names one. Its kind spelling is no mark (the boot's
+            // reconciler rewrites it); the settings are: a kind's form and tool are closed-world, so no write since
+            // names a host record.
             throw new IllegalArgumentException("Only an operator's storage stored as an SSH backup target names a "
                 + "host record");
         }
-        Map<String, Object> settings = HohenheimStoredIds.CHAIN.applyConfigUpgrades(kind, stored);
+        Map<String, Object> settings = StorageKindRegistry.settingsOf(kind, stored);
         Object id = row.get(BackupTargetModel.ID);
         // An SSH-era row reaches what its host record's admission admitted (HostAdmission, just checked by the
         // upgrade); every other operator storage private networks under the boot's opt-in; a tenant's the internet.
@@ -163,9 +165,9 @@ public final class HohenheimStorages implements DeclaredStorages {
         return ownerOfSubjects(subjects, "a new storage");
     }
 
-    /** @return the kind the row names, a former spelling read through the stored-id chains */
+    /** @return the kind the row names, a former spelling read through the storage kind registry */
     public static @NonNull Identifier kindOf(@NonNull Row row) {
-        return StoredIdChains.resolve(trimmed(row.get(BackupTargetModel.KIND)));
+        return StorageKindRegistry.current(trimmed(row.get(BackupTargetModel.KIND)));
     }
 
     /**
