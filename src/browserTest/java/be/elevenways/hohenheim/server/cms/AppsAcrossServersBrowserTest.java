@@ -73,6 +73,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Cluster.NAME, "Robbedoes");
         List<UUID> servers = new ArrayList<>();
         Row site = ownSite("robbedoes-blog");
+        Row ownApp = ownWorkload("robbedoes-api");
         try {
             // 1. Kuifje answers and told two apps; Gaston stopped answering a moment ago and told one; Haddock last
             //    answered three days ago and told one.
@@ -164,12 +165,20 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
             assertThat(held).as("step 6: Kuifje's workload by its told facts").contains("kuifje-api")
                 .contains("Kuifje").contains("kuifje").contains("Restart")
                 .contains("Logs, console, files, stats, backups, volumes, databases and history wait");
-            assertThat(page.locator("a[href*='" + heldWorkloadPage + "/page/']").evaluateAll(
-                    "links => [...new Set(links.map(link => link.getAttribute('href').split('/page/')[1]"
-                        + ".split(/[?#]/)[0]))]"))
+            Object linked = page.locator("a[href*='" + heldWorkloadPage + "/page/']").evaluateAll(
+                "links => [...new Set(links.map(link => link.getAttribute('href').split('/page/')[1]"
+                    + ".split(/[?#]/)[0]))]");
+            assertThat(linked instanceof List<?> slugs ? slugs.stream().map(String::valueOf).toList() : List.of())
                 .as("step 6: no tab beside the overview (a strip of one is not drawn)")
-                .isSubsetOf(List.of(RecordOverview.SLUG));
+                .isSubsetOf(RecordOverview.SLUG);
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-page.png")).setFullPage(true));
+            //    This server's own workload opens the same page, for the board's comparison of the two.
+            navigateToApp("/admin/" + HohenheimSlugs.INSTANCES + "/" + ownApp.get(InstanceModel.ID) + "/page/"
+                + RecordOverview.SLUG);
+            waitForHydration();
+            assertThat(page.locator("body").textContent()).as("step 6: this server's workload")
+                .contains("robbedoes-api");
+            page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("local-app-page.png")).setFullPage(true));
             //    A linked server's website opens the page this server's website opens, and this server's own beside it.
             navigateToApp("/admin/" + HohenheimSlugs.SITES + "/" + peerOf(kuifje) + "-101/page/" + RecordOverview.SLUG);
             waitForHydration();
@@ -252,6 +261,7 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                 .map(String::valueOf).toList())).delete();
             Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.in(servers)).delete();
             Models.get(SiteModel.class).find().where(SiteModel.ID.eq(site.get(SiteModel.ID))).delete();
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(ownApp.get(InstanceModel.ID))).delete();
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Cluster.NAME, nameBefore);
         }
     }
@@ -268,6 +278,18 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, false);
         sites.save(site);
         return site;
+    }
+
+    /** @return a workload of this server's own, made for the journey */
+    private static Row ownWorkload(String name) {
+        InstanceModel instances = Models.get(InstanceModel.class);
+        Row instance = instances.createEmptyRow();
+        instance.set(InstanceModel.NAME, name);
+        instance.set(InstanceModel.KIND, "hohenheim:docker_container");
+        instance.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+        instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+        instances.save(instance);
+        return instance;
     }
 
     /**

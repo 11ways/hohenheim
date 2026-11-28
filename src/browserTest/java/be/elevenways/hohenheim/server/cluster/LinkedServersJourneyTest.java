@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.instance.FakeNativeDaemons;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -39,6 +40,8 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.test.TestSessions;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
@@ -61,6 +64,7 @@ import be.elevenways.zenit.common.peer.PeerModelSyncModel;
 import be.elevenways.zenit.common.peer.PeerRecordModel;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.security.CredentialPresets;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
@@ -127,6 +131,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -634,6 +640,9 @@ class LinkedServersJourneyTest {
         ForkedHohenheim kuifje = boot(directory, directory.resolve("kuifje.db"), true, reporter);
         relay.retarget(kuifje.port());
         try {
+            // 0. The master runs the build Kuifje runs, so it knows the kind of the app Kuifje will hold (the fake
+            //    runtime's, declared for this class alone).
+            FakeNativeDaemons.register();
             // 1. Kuifje is linked and holds an app that runs (on a daemon-free fake runtime of a host of its own); the
             //    master names Kuifje as where its code lives. A key of the "Hohenheim assistant" preset connects the
             //    master's administrator to the master; Kuifje holds no account of that person.
@@ -770,11 +779,12 @@ class LinkedServersJourneyTest {
                     + " servers", table).isEqualTo(oneServer.executedNaming(table)).isPositive();
             }
 
-            // 9. Restart from that page restarts it ON Kuifje, as the person: Kuifje's record says it started again,
-            //    later, and Kuifje's history names the person through the master.
+            // 9. Restart pressed on that page (its button's own invoke route) restarts it ON Kuifje, as the person:
+            //    Kuifje's record says it started again, later, and Kuifje's history names the person through the master.
             Instant startedBefore = startedOn(kuifje, appKey, "step 9");
             assertThat(kuifje.ask("offset 1")).isEqualTo("ok");
-            invokeHeld(kuifje, InstanceOperations.RESTART, listKey, Uuids.v7());
+            assertThat(pressOnPage(InstanceOperations.RESTART, listKey)).as("step 9: the page's Restart answered")
+                .isNotNull();
             Instant restarted = startedOn(kuifje, appKey, "step 9");
             assertThat(restarted).as("step 9: restarted on Kuifje").isAfter(startedBefore);
             assertThat(kuifje.ask("last-action")).as("step 9: Kuifje names the person through the master")
@@ -807,6 +817,34 @@ class LinkedServersJourneyTest {
             assertThat(ended).as("step 11: the master's run ended").isNotNull();
             assertThat(ended.status()).as("step 11: as Kuifje's did").isEqualTo(OperationRunStatus.SUCCEEDED);
             assertThat(ended.stepsDone()).as("step 11: its step done").isEqualTo(1L);
+
+            //     Stop pressed on the page stops it ON Kuifje: Kuifje's record says it is stopped.
+            settle(kuifje);
+            assertThat(pressOnPage(InstanceOperations.STOP, listKey)).as("step 11: the page's Stop answered")
+                .isNotNull();
+            assertThat(after("started ", kuifje.ask("started " + appKey)).split(" ")[0])
+                .as("step 11: stopped on Kuifje").isEqualTo(InstanceModel.STATUS_STOPPED);
+            //     Roll back pressed on the page starts the master's run of it, judged on Kuifje, which keeps no release
+            //     of an app of this kind: Kuifje refuses it, the master's run ends refused, and Kuifje's app stays as it
+            //     was.
+            int beforeRollback = relay.accepted();
+            assertThat(pressOnPage(InstanceOperations.ROLLBACK, listKey))
+                .as("step 11: the page's Roll back answered its run").isNotNull();
+            OperationRun rolledBack = CommittedWrites.awaitValue(OperationRunModel.MODEL_ID, Duration.ofSeconds(60),
+                () -> {
+                    List<OperationRun> runs = OperationRuns.recentFor(InstanceOperations.INSTANCE, listKey, 1,
+                        TenantConduits.operator());
+                    OperationRun now = runs.isEmpty() ? null : runs.getFirst();
+                    return now != null && now.operation() != null
+                        && InstanceOperations.ROLLBACK.id().equals(now.operation().id()) && now.status().isTerminal()
+                        ? now : null;
+                });
+            assertThat(rolledBack).as("step 11: the master's run of the roll back ended").isNotNull();
+            assertThat(rolledBack.status()).as("step 11: refused, as Kuifje judged it")
+                .isEqualTo(OperationRunStatus.REFUSED);
+            assertThat(relay.accepted()).as("step 11: it was asked of Kuifje").isGreaterThan(beforeRollback);
+            assertThat(after("started ", kuifje.ask("started " + appKey)).split(" ")[0])
+                .as("step 11: Kuifje's app is as it was").isEqualTo(InstanceModel.STATUS_STOPPED);
 
             // 12. Kuifje does not answer: its app's page says since when and offers none of Kuifje's verbs.
             relay.retarget(closedPort());
@@ -844,6 +882,15 @@ class LinkedServersJourneyTest {
         String[] started = after("started ", kuifje.ask("started " + appKey)).split(" ");
         assertThat(started[0]).as(step + ": it runs on Kuifje").isEqualTo(InstanceModel.STATUS_RUNNING);
         return Instant.parse(started[1]);
+    }
+
+    /**
+     * @return the answer of a verb pressed on the master's page of Kuifje's app, through the invoke route its button
+     *         posts to (the panel's admission, the action's offer and the pipeline), null when it answered a refusal
+     */
+    private static @Nullable ActionResult<?> pressOnPage(Operation<Row, Void, ?> operation, String key) {
+        return PanelResourceCalls.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, operation.id(), key,
+            CmsConfirmation.PLAIN_PROOF, TenantConduits.operator());
     }
 
     /** @return the outcome of a verb the master's page of a linked server's app offers, asked by its administrator */
