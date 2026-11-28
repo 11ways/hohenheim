@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.key.IdentityKey;
+import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -83,15 +84,9 @@ public final class SiteManagerSettings {
      */
     public static @NonNull Map<String, Object> merged(@Nullable Object kind, @NonNull Map<String, Object> stored,
                                                       @NonNull Map<String, Object> posted) {
-        Map<String, Object> settings = new LinkedHashMap<>(stored);
-        for (Field<?, ?> field : ofKind(kind)) {
-            Object value = posted.get(field.getInputName());
-            if (value == null) {
-                settings.remove(field.getName());
-            } else {
-                settings.put(field.getName(), value);
-            }
-        }
+        FormSpec form = formOf(kind);
+        Map<String, Object> settings = hostSettings(kind, stored);
+        settings.putAll(form.byStoredNames(givenOf(form, posted)));
         return settings;
     }
 
@@ -108,11 +103,22 @@ public final class SiteManagerSettings {
 
     /** @return the manager's stored settings keyed by their input names, the shape the /manage form posts */
     public static @NonNull Map<String, Object> posted(@Nullable Object kind, @NonNull Map<String, Object> stored) {
-        Map<String, Object> values = new LinkedHashMap<>();
-        for (Field<?, ?> field : ofKind(kind)) {
-            Object value = stored.get(field.getName());
-            if (value != null) values.put(field.getInputName(), value);
-        }
-        return values;
+        FormSpec form = formOf(kind);
+        return givenOf(form, form.byEntryNames(stored));
+    }
+
+    /** @return the form of the kind's manager settings, whose entry names are their input names */
+    private static @NonNull FormSpec formOf(@Nullable Object kind) {
+        FormSpec.Builder form = FormSpec.builder();
+        for (Field<?, ?> field : ofKind(kind)) form.add(field);
+        return form.build();
+    }
+
+    /** @return the values the form's entries hold, keyed by entry name, a value left blank left out */
+    private static @NonNull Map<String, Object> givenOf(@NonNull FormSpec form, @NonNull Map<String, Object> named) {
+        Map<String, Object> given = new LinkedHashMap<>(named);
+        given.keySet().retainAll(form.entryNames());
+        given.values().removeIf(Objects::isNull);
+        return given;
     }
 }
