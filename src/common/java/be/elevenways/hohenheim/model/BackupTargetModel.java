@@ -61,7 +61,6 @@ public class BackupTargetModel extends Model {
 
     public static final EnumField KIND = SCHEMA.addField(StorageKindRegistry.kindField("kind")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
-        .help(HohenheimMicrocopy.HELP.of("backup_target_kind"))
         .build());
 
     public static final SchemaField SETTINGS = SCHEMA.addField(StorageKindRegistry.settingsField("settings", "kind")

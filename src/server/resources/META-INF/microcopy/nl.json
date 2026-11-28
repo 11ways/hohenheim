@@ -7037,10 +7037,6 @@
     "text": "De naam {$name} is al van een opslag uit de instellingen van deze server; kies een andere",
     "scope": "violations"
   },
-  "backup_target_confirm": {
-    "text": "{$question} De server toonde {$presented}: vergelijk die met de vingerafdruk die de eigenaar u geeft en bewaar ze dan als sleutel van de server om ze te bevestigen",
-    "scope": "violations"
-  },
   "backup_target_unusable": {
     "text": "{$name} is niet bewaard: {$reason} ({$diagnostic})",
     "scope": "violations"
@@ -7360,10 +7356,6 @@
   "host_key": {
     "text": "Hostsleutel",
     "scope": "hohenheim_field"
-  },
-  "backup_target_kind": {
-    "text": "Waar back-upexports terechtkomen; of dat het verlies van deze host overleeft, is een deploymentfeit dat u beheert",
-    "scope": "help"
   },
   "variable_wrong_carrier": {
     "text": "Een {$kind}-variabele mag zijn waarde enkel in de bijhorende kolom dragen",
@@ -20841,7 +20833,7 @@
   "database_link_app": {"text": "De app (AP12) waaraan u de database koppelt, op een Docker-host.", "scope": "help"},
   "database_link_database": {"text": "De beheerde database (DB12) om te koppelen, op de eigen host van de app.", "scope": "help"},
   "backup_restore_host": {"text": "De host (SR1) waarop de nieuwe app landt; weggelaten wordt een host met ruimte gekozen. Alleen beheerders.", "scope": "help"},
-  "backup_target_name": {"text": "De naam waaronder het doel getoond en gekozen wordt; geen twee doelen delen er een.", "scope": "help"},
+  "backup_target_name": {"text": "De naam waaronder ze getoond en gekozen wordt.", "scope": "help"},
   "backup_target_settings": {"text": "De instellingen van de opslagsoort bij naam, zoals het formulier ze bewaart (een map neemt folder; een S3-opslag address, bucket, access_key, secret_key; een SFTP-server host, user, password of private_key, host_key). Een wijziging stuurt alleen de instellingen die veranderen.", "scope": "help"},
   "database_password_twice": {"text": "Geef een wachtwoord of vraag een gegenereerd wachtwoord, niet allebei.", "scope": "violations"},
   "restore_new_description": {"text": "Zet de back-up terug als een nieuwe app, op de host die u kiest of een host met ruimte; de eigen app van de back-up blijft draaien.", "scope": "instance_backup"},
@@ -21724,8 +21716,6 @@
   "in_settings_title": {"text": "Uit de instellingen van de server", "scope": "backup_target"},
   "in_settings_lead": {"text": "Vastgelegd in het instellingenbestand van deze server, en daar gewijzigd.", "scope": "backup_target"},
   "card_where": {"text": "Waar", "scope": "backup_target"},
-  "card_secrets": {"text": "Aanmeldgeheimen", "scope": "backup_target"},
-  "secrets_lead": {"text": "Nooit getoond. Met Bewerken vervangt u er een: typ daar de nieuwe waarde.", "scope": "backup_target"},
   "secret_stored": {"text": "Ingesteld", "scope": "backup_target"},
   "card_used_by": {"text": "Gebruikt door", "scope": "backup_target"},
   "card_room": {"text": "Ruimte", "scope": "backup_target"},
@@ -21733,8 +21723,6 @@
   "room_left_value": {"text": "{$free :bytes} vrij", "scope": "backup_target"},
   "room_used": {"text": "Gebruikt", "scope": "backup_target"},
   "room_used_value": {"text": "{$used :bytes} van {$total :bytes} gebruikt", "scope": "backup_target"},
-  "room_read_at": {"text": "Gelezen op", "scope": "backup_target"},
-  "room_unknown": {"text": "Nog niet gelezen", "scope": "backup_target"},
   "room_unknown_detail": {"text": "Druk op Testen om te lezen hoeveel ruimte er is. Een S3-compatibele opslag vertelt zijn ruimte niet.", "scope": "backup_target"},
   "last_check": {"text": "Laatste test", "scope": "backup_target"},
   "used_by_recovery_archive": {"text": "Herstelarchief", "scope": "backup_target"},
@@ -21745,8 +21733,12 @@
   "keeps_site": {"text": "Zijn bestanden", "scope": "backup_target"},
   "keeps_dumps": {"text": "{$dumps}, {$bytes :bytes}", "scope": "backup_target"},
   "keeps_app_backups": {"text": "Zijn back-ups", "scope": "backup_target"},
-  "site_files_own": {"text": "Sitebestanden op deze server", "scope": "backup_target"},
+  "site_files_own": {"text": "Sitebestanden", "scope": "backup_target"},
   "dumps": {"text": ".match {$count :integer}\none {{1 dump}}\n* {{{$count :integer} dumps}}", "scope": "count"},
+  "try_ok": {"text": "Bereikbaar en beschrijfbaar: Hohenheim schreef een klein bestand naar {$where}, las het terug en verwijderde het, om {$at :datetime}.", "scope": "backup_target"},
+  "add_storage": {"text": "Een opslag toevoegen", "scope": "backup_target"},
+  "secret_never_shown": {"text": "Het wordt nooit getoond. Met Bewerken vervangt u het.", "scope": "backup_target"},
+  "room_read_lead": {"text": "Gelezen op {$at :datetime}.", "scope": "backup_target"},
   "manage_storage_description": {"text": "Deze opslagplaats bewerken, testen en verwijderen.", "scope": "capability"},
   "site_storage_not_usable": {"text": "Opslagplaats '{$storage}' is er geen waarin u de bestanden van deze site mag bewaren", "scope": "violations"},
   "site_files_move_first": {"text": "De nieuwe opslagplaats mist {$files} van deze site. Gebruik Bestanden verplaatsen om te wijzigen waar de bestanden bewaard worden.", "scope": "violations"},

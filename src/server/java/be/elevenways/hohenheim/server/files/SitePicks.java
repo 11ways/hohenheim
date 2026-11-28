@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.setting.SettingReference;
+import be.elevenways.zenit.server.storage.DeclaredStorage;
 import be.elevenways.zenit.server.storage.Storages;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -66,10 +67,10 @@ public final class SitePicks {
         options.put(SiteFiles.STORAGE, FieldOption.of(SiteFiles.STORAGE,
             HohenheimMicrocopy.BACKUP_TARGET.of("site_files_own")));
         if (access != null && HohenheimAccess.isAdmin(access)) {
-            for (String mount : Storages.names()) {
-                if (!Storages.DEFAULT.equals(mount)) {
-                    options.putIfAbsent(mount, FieldOption.of(mount, Microcopy.literal(mount)));
-                }
+            // The storage lines of the settings, never a module's own home (media, content, the default store).
+            for (DeclaredStorage declared : Storages.inSettings()) {
+                options.putIfAbsent(declared.name(), FieldOption.of(declared.name(),
+                    Microcopy.literal(declared.name())));
             }
         }
         STORAGES.offered(access).forEach((name, words) ->

@@ -7037,10 +7037,6 @@
     "text": "The name {$name} is taken by a storage of this server's settings; choose another",
     "scope": "violations"
   },
-  "backup_target_confirm": {
-    "text": "{$question} The server presented {$presented}: compare it with the fingerprint its owner gives you, then save it as the server's key to confirm it",
-    "scope": "violations"
-  },
   "backup_target_unusable": {
     "text": "{$name} was not saved: {$reason} ({$diagnostic})",
     "scope": "violations"
@@ -7360,10 +7356,6 @@
   "host_key": {
     "text": "Host key",
     "scope": "hohenheim_field"
-  },
-  "backup_target_kind": {
-    "text": "Where backup exports are written; whether it survives the loss of this host is a deployment fact you own",
-    "scope": "help"
   },
   "variable_wrong_carrier": {
     "text": "A {$kind} variable must carry its value in the matching column only",
@@ -20841,7 +20833,7 @@
   "database_link_app": {"text": "The app (AP12) to attach the database to, on a Docker host.", "scope": "help"},
   "database_link_database": {"text": "The managed database (DB12) to attach, on the app's own host.", "scope": "help"},
   "backup_restore_host": {"text": "The host (SR1) the new app lands on; left out, a host with room is picked. Administrators only.", "scope": "help"},
-  "backup_target_name": {"text": "The name the target is listed and picked by; no two targets share one.", "scope": "help"},
+  "backup_target_name": {"text": "The name it is listed and picked by.", "scope": "help"},
   "backup_target_settings": {"text": "The storage kind's settings by name, as its form holds them (a folder storage takes folder; an S3 store address, bucket, access_key, secret_key; an SFTP server host, user, password or private_key, host_key). A change sends only the settings that change.", "scope": "help"},
   "database_password_twice": {"text": "Give a password or ask for a generated one, not both.", "scope": "violations"},
   "restore_new_description": {"text": "Restores the backup as a new app, on the host you pick or one with room; the backup's own app keeps running.", "scope": "instance_backup"},
@@ -21724,8 +21716,6 @@
   "in_settings_title": {"text": "From the server's settings", "scope": "backup_target"},
   "in_settings_lead": {"text": "Declared in this server's settings file, and changed there.", "scope": "backup_target"},
   "card_where": {"text": "Where", "scope": "backup_target"},
-  "card_secrets": {"text": "Sign-in secrets", "scope": "backup_target"},
-  "secrets_lead": {"text": "Never shown. Edit replaces one: type the new value there.", "scope": "backup_target"},
   "secret_stored": {"text": "Set", "scope": "backup_target"},
   "card_used_by": {"text": "Used by", "scope": "backup_target"},
   "card_room": {"text": "Room", "scope": "backup_target"},
@@ -21733,8 +21723,6 @@
   "room_left_value": {"text": "{$free :bytes} left", "scope": "backup_target"},
   "room_used": {"text": "Used", "scope": "backup_target"},
   "room_used_value": {"text": "{$used :bytes} of {$total :bytes} used", "scope": "backup_target"},
-  "room_read_at": {"text": "Read at", "scope": "backup_target"},
-  "room_unknown": {"text": "Not read yet", "scope": "backup_target"},
   "room_unknown_detail": {"text": "Press Test to read how much room it has. An S3-compatible store does not tell its room.", "scope": "backup_target"},
   "last_check": {"text": "Last test", "scope": "backup_target"},
   "used_by_recovery_archive": {"text": "Recovery archive", "scope": "backup_target"},
@@ -21745,8 +21733,12 @@
   "keeps_site": {"text": "Its files", "scope": "backup_target"},
   "keeps_dumps": {"text": "{$dumps}, {$bytes :bytes}", "scope": "backup_target"},
   "keeps_app_backups": {"text": "Its backups", "scope": "backup_target"},
-  "site_files_own": {"text": "Site files on this server", "scope": "backup_target"},
+  "site_files_own": {"text": "Site files", "scope": "backup_target"},
   "dumps": {"text": ".match {$count :integer}\none {{1 dump}}\n* {{{$count :integer} dumps}}", "scope": "count"},
+  "try_ok": {"text": "Reachable and writable: Hohenheim wrote a small file to {$where}, read it back and removed it, at {$at :datetime}.", "scope": "backup_target"},
+  "add_storage": {"text": "Add a storage", "scope": "backup_target"},
+  "secret_never_shown": {"text": "It is never shown. Edit replaces it.", "scope": "backup_target"},
+  "room_read_lead": {"text": "Read at {$at :datetime}.", "scope": "backup_target"},
   "manage_storage_description": {"text": "Edit, test and delete this storage.", "scope": "capability"},
   "site_storage_not_usable": {"text": "Storage '{$storage}' is not one you may keep this site's files in", "scope": "violations"},
   "site_files_move_first": {"text": "The new storage lacks {$files} of this site. Use Move files to change where its files are kept.", "scope": "violations"},

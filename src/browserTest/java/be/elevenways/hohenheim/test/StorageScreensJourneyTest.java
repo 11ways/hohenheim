@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.backup.BackupStorages;
@@ -21,6 +22,8 @@ import be.elevenways.zenit.server.storage.StorageKinds;
 import be.elevenways.zenit.server.storage.StorageOwner;
 import be.elevenways.zenit.server.storage.StorageReadings;
 import be.elevenways.zenit.storage.s3.server.S3StorageKind;
+import be.elevenways.zenit.storage.s3.test.support.GarageServer;
+import be.elevenways.zenit.storage.s3.test.support.S3TestServer;
 import be.elevenways.zenit.storage.sftp.server.SftpStorageKind;
 import be.elevenways.zenit.storage.sftp.test.support.SftpTestServer;
 import be.elevenways.zenit.test.support.OutboundFixture;
@@ -92,8 +95,9 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             assertThat(list).as("step 1: the records").contains("Backup disk " + tag, "Storage box " + tag)
                 .contains("Folder on this server", "SFTP server").contains(folder.toString())
                 .contains(SftpTestServer.HOST).contains("folder " + boxFolder);
-            assertThat(list).as("step 1: the settings' storages, read-only")
-                .contains("From the server's settings").contains("hohenheim-site-files");
+            assertThat(list).as("step 1: the settings' storages, read-only: this server's site files, never a module's "
+                + "own home").contains("From the server's settings").contains("Site files").doesNotContain("/data/media")
+                .doesNotContain("/data/content");
             for (String head : List.of("Kind", "Where", "Added by", "Used by", "Room left")) {
                 assertThat(page.locator("pl-table-head").allTextContents().toString()).as("step 1: " + head)
                     .contains(head);
@@ -107,35 +111,70 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             waitForHydration();
             String shown = page.content();
             assertThat(shown).as("step 2: where").contains("Host", SftpTestServer.HOST, "Server's key");
-            assertThat(shown).as("step 2: the secret is set, never shown").contains("Sign-in secrets", "Password")
+            assertThat(shown).as("step 2: the secret is set, never shown").contains("Password", "never shown")
                 .doesNotContain(SftpTestServer.PASSWORD);
             shoot("storage-page");
 
-            // 3. Adding a storage: the kind's own form, the S3 one with its bucket and the path-style switch.
+            // 3. Adding a storage: the kind's own form; the S3 one filled for the Garage test server and Tested in its
+            //    foot, which runs the save's check over the form as it stands and says what it did, saving nothing.
             navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/new");
             waitForHydration();
             chooseKind(S3StorageKind.ID.toString());
             page.waitForSelector("pl-input[name='settings.bucket']");
             assertThat(page.content()).as("step 3: the S3 form").contains("Bucket", "Folder inside the bucket",
                 "Secret key", "Bucket name in the path");
-            shoot("storage-add-s3");
+            GarageServer garage = GarageServer.shared();
+            OutboundFixture[] garageRoutes = garage.route();
+            try {
+                String releases = "Tadoma releases " + tag;
+                fill("name", releases);
+                fill("settings.address", "http://" + garage.host() + ":3900");
+                fill("settings.region", garage.region());
+                fill("settings.bucket", garage.bucket());
+                fill("settings.prefix", "screens-" + tag);
+                fill("settings.access_key", S3TestServer.ACCESS_KEY);
+                fill("settings.secret_key", S3TestServer.SECRET_KEY);
+                page.locator("[data-cms-form-foot-action]").first().click();
+                page.waitForSelector("[data-cms-form-foot-result][data-worked]");
+                assertThat(page.locator("[data-cms-form-foot-result]").textContent()).as("step 3: what the Test did")
+                    .contains("Reachable and writable", "bucket " + garage.bucket());
+                assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(releases))
+                    .count()).as("step 3: nothing saved").isZero();
+                shoot("storage-add-s3");
+            } finally {
+                for (int at = garageRoutes.length - 1; at >= 0; at--) {
+                    garageRoutes[at].close();
+                }
+            }
 
-            // 4. An SFTP server whose key is not confirmed yet: saving asks whether it is the right server and shows
-            //    the key it presented; nothing is saved.
+            // 4. An SFTP server whose key is not confirmed yet: its Test asks whether it is the right server and shows
+            //    the key it presented, nothing saved; the one button confirming it saves the form as it stands with
+            //    that key pinned.
+            navigateToApp("/admin/" + HohenheimSlugs.BACKUP_TARGETS + "/new");
+            waitForHydration();
             chooseKind(SftpStorageKind.ID.toString());
             page.waitForSelector("pl-input[name='settings.host']");
             String unpinned = "Unpinned " + tag;
+            this.made.add(unpinned);
             fill("name", unpinned);
             fill("settings.host", SftpTestServer.HOST);
             fill("settings.folder", server.freshFolder("screens"));
             fill("settings.user", SftpTestServer.USER);
             fill("settings.password", SftpTestServer.PASSWORD);
-            page.locator(".cms-form-actions pl-button[type='submit']").first().click();
-            page.waitForSelector("text=Is this the right server?");
-            assertThat(page.content()).as("step 4: the key it presented").contains(server.hostKey());
+            page.locator("[data-cms-form-foot-action]").first().click();
+            page.waitForSelector("[data-zf-proposal-accept]");
+            assertThat(page.locator("zf-proposal").textContent()).as("step 4: the question and the key presented")
+                .contains("Is this the right server?", server.hostKey(), "This is the right server");
             assertThat(Models.get(BackupTargetModel.class).find().where(BackupTargetModel.NAME.eq(unpinned)).count())
                 .as("step 4: nothing saved").isZero();
             shoot("storage-add-sftp-key");
+            page.locator("[data-zf-proposal-accept]").first().click();
+            page.waitForURL("**/" + RecordOverview.SLUG + "**");
+            Row pinned = Objects.requireNonNull(Models.get(BackupTargetModel.class).find()
+                .where(BackupTargetModel.NAME.eq(unpinned)).first(), "step 4: saved once confirmed");
+            assertThat(RawValues.map(pinned.get(BackupTargetModel.SETTINGS)))
+                .as("step 4: the key pinned, the typed password kept")
+                .containsEntry("host_key", server.hostKey()).containsKey("password");
         }
 
         // 5. A customer's list: their own storages only, "You" as who added them, never the operator's.
@@ -230,12 +269,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
     }
 
     private void chooseKind(String kind) {
-        String card = "pl-choice-group[name='kind'] pl-choice-card[data-value='" + kind + "'] button";
-        if (page.locator(card).count() > 0) {
-            page.click(card);
-        } else {
-            chooseOption("kind", kind);
-        }
+        // The kinds are segments of one band, as the board draws them.
+        page.locator("pl-toggle-group[name='kind'] pl-toggle-group-item[data-value='" + kind + "']").first().click();
         waitForReactiveIdle();
         waitForReactiveIdle();
     }

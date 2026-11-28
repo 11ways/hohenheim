@@ -38,6 +38,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.storage.StorageKindRegistry;
+import be.elevenways.zenit.common.validation.Proposal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -71,6 +72,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -296,12 +298,14 @@ class DatabaseDumpTargetTest {
                 .containsKey(LocalFolderStorageKind.ID.toString());
 
             try (OutboundFixture ignored = server.route()) {
-                // 2. An SFTP storage whose server key is not pinned yet is not saved: the refusal names the key.
+                // 2. An SFTP storage whose server key is not pinned yet is not saved: the refusal proposes the key the
+                //    server presented for the settings entry the kind names.
                 Row unpinned = sftpRow("sftp-unpinned", server, server.freshFolder("dumps"), null);
                 assertThat(catchThrowable(() -> BackupTargetParts.judgeBeforeSave(unpinned, StorageOwner.OPERATOR)))
                     .as("step 2: asked to confirm the key").isInstanceOfSatisfying(Violations.class, refused ->
-                        assertThat(refused.all().get(0).message().args().get("presented"))
-                            .isEqualTo(server.hostKey()));
+                        assertThat(Objects.requireNonNull(refused.all().get(0).proposal(), "a proposal"))
+                            .extracting(Proposal::path, Proposal::value)
+                            .containsExactly("settings.host_key", server.hostKey()));
 
                 // 3. Pinned, it passes, and a dump lands on the SFTP server, verified there, and comes back whole.
                 String folder = server.freshFolder("dumps");

@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -43,15 +44,18 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationVerb;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.storage.StorageKindInfo;
 import be.elevenways.zenit.common.storage.StorageKindRegistry;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Proposal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.Availability;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -65,7 +69,9 @@ import be.elevenways.zenit.server.storage.StorageRoom;
 import be.elevenways.zenit.server.storage.StorageTrial;
 import be.elevenways.zenit.server.storage.Storages;
 import be.elevenways.zenit.server.storage.DeclaredStorage;
+import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.hohenheim.HohenheimCounts;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.files.SiteFiles;
 import be.elevenways.zenit.widget.common.builtin.ItemListWidget;
@@ -122,6 +128,32 @@ public final class BackupTargetParts {
     static final String ADDED_BY_COLUMN = "added_by";
     static final String USED_BY_COLUMN = "used_by";
     static final String ROOM_COLUMN = "room_left";
+    static final String KIND_COLUMN = "kind_words";
+
+    /** The administrator's form: every kind the registry holds. */
+    private static final FormSpec ADMIN_FORM = FormSpec.builder()
+        .createTitle(HohenheimMicrocopy.BACKUP_TARGET.of("add_storage"))
+        .add(BackupTargetModel.NAME)
+        .add(Select.of(BackupTargetModel.KIND).options(FieldFormEntryDefaults.enumOptionSource(BackupTargetModel.KIND))
+            .presentation(Select.Presentation.SEGMENTS).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
+        .build();
+
+    /** A customer's form: only the kinds a tenant may declare. */
+    private static final FormSpec MANAGE_FORM = FormSpec.builder()
+        .createTitle(HohenheimMicrocopy.BACKUP_TARGET.of("add_storage"))
+        .add(BackupTargetModel.NAME)
+        .add(Select.of(BackupTargetModel.KIND).options(OptionSource.supplied(BackupTargetParts::tenantKinds))
+            .presentation(Select.Presentation.SEGMENTS).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
+        .build();
+
+    /** The add and edit form's Test on the administrator's page: the save's own check, saving nothing. */
+    public static final Operation<Void, OperationInput.Values, String> TRY = tryOn("try_backup_target", ADMIN_FORM);
+
+    /** The same Test on a customer's page, over their form. */
+    public static final Operation<Void, OperationInput.Values, String> TRY_MANAGED =
+        tryOn("try_managed_backup_target", MANAGE_FORM);
 
     /** Runs the storage's check against its real destination, and reads its room. */
     public static final Operation<Row, Void, TestOutcome> TEST =
@@ -223,6 +255,28 @@ public final class BackupTargetParts {
                 StorageReadings.forget(String.valueOf((Object) call.subject().get(BackupTargetModel.NAME)));
                 return 1;
             });
+        for (Operation<Void, OperationInput.Values, String> trying : List.of(TRY, TRY_MANAGED)) {
+            OperationHandlers.attach(trying).handle(call -> {
+                OperationInput.Values values = Objects.requireNonNull(call.input(), "a Test takes the form");
+                Row row = Models.get(BackupTargetModel.class).createEmptyRow();
+                row.set(BackupTargetModel.NAME, values.get(BackupTargetModel.NAME));
+                row.set(BackupTargetModel.KIND, values.get(BackupTargetModel.KIND));
+                row.set(BackupTargetModel.SETTINGS, revealed(RawValues.map(values.get(SETTINGS))));
+                DeclaredStorage declaration = HohenheimStorages.declarationOf(row,
+                    HohenheimStorages.ownerOfCreator(call.access()));
+                refuseUnfit(declaration, StorageKinds.trial(declaration));
+                AccessContext access = Objects.requireNonNull(call.access(), "a Test has its caller");
+                List<StorageFact> listed = new ArrayList<>();
+                for (StorageFact fact : StorageKinds.facts(declaration)) {
+                    if (fact.listed() != null) {
+                        listed.add(fact);
+                    }
+                }
+                String detail = place(listed, access, false);
+                return detail != null ? detail : Objects.requireNonNullElse(place(listed, access, true),
+                    declaration.name());
+            });
+        }
     }
 
     private BackupTargetParts() {
@@ -230,12 +284,7 @@ public final class BackupTargetParts {
 
     /** @return the administrator's Storages page: every storage people declared, who added it and what uses it */
     public static @NonNull PanelResource<Row> admin() {
-        FormSpec form = FormSpec.builder()
-            .add(BackupTargetModel.NAME)
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.KIND))
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
-            .build();
-        return base(HohenheimIds.id("backup_target"), form, true)
+        return base(HohenheimIds.id("backup_target"), ADMIN_FORM, TRY, true)
             // Listed inside the settings page's Backups section (board Settings), beside the settings that name one
             // of these storages, never a sidebar row of its own.
             .showInNav(false)
@@ -253,13 +302,8 @@ public final class BackupTargetParts {
      *         declare; the creator's manage grant IS the ownership, as for a tenant's git connection
      */
     public static @NonNull PanelResource<Row> manage() {
-        FormSpec form = FormSpec.builder()
-            .add(BackupTargetModel.NAME)
-            .add(Select.of(BackupTargetModel.KIND).options(OptionSource.supplied(BackupTargetParts::tenantKinds))
-                .build())
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
-            .build();
-        return ManageTwin.reached(base(ManageTwin.id("backup_target"), form, false), TenantScopes.MANAGED_STORAGES,
+        return ManageTwin.reached(base(ManageTwin.id("backup_target"), MANAGE_FORM, TRY_MANAGED, false),
+                TenantScopes.MANAGED_STORAGES,
                 ResourceTabs.<Row>of(List.of(overview())).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
             .writes(ResourceMutations.rows().create().update().delete(DELETE)
@@ -281,12 +325,14 @@ public final class BackupTargetParts {
      * @param settingsCard whether the list shows the storages the server's settings declare above the records
      */
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id, @NonNull FormSpec form,
+                                                           @NonNull Operation<Void, OperationInput.Values, String> trying,
                                                            boolean settingsCard) {
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(BackupTargetModel.NAME).filterable().subtext(FAILURE_COLUMN).build())
+            .column(ColumnSpec.fromField(BackupTargetModel.NAME).subtext(FAILURE_COLUMN).build())
             .column(ColumnSpec.virtual(FAILURE_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_failure"))
                 .hidden().build())
-            .column(ColumnSpec.fromField(BackupTargetModel.KIND).filterable().build())
+            // The kind in its own words, plain text as the board draws it: never a coloured pill.
+            .column(ColumnSpec.virtual(KIND_COLUMN, HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind")).build())
             .column(ColumnSpec.virtual(WHERE_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_where"))
                 .subtext(WHERE_DETAIL_COLUMN).build())
             .column(ColumnSpec.virtual(WHERE_DETAIL_COLUMN, HohenheimMicrocopy.BACKUP_TARGET.of("column_where"))
@@ -299,13 +345,12 @@ public final class BackupTargetParts {
                 .build())
             .build();
         ResourceList.Builder<Row> list = ResourceList.rows(table).chrome(ListChrome.MINIMAL)
-            .emptyDescription(HohenheimMicrocopy.BACKUP_TARGET.of("empty"))
-            .search(BackupTargetModel.NAME);
+            .emptyDescription(HohenheimMicrocopy.BACKUP_TARGET.of("empty"));
         if (settingsCard) {
             list.widgets(scope -> inSettings(scope.accessContext()));
         }
         // The one-record read of each computed column; a listed page answers from the page batch.
-        for (String column : List.of(FAILURE_COLUMN, WHERE_COLUMN, WHERE_DETAIL_COLUMN, ADDED_BY_COLUMN,
+        for (String column : List.of(FAILURE_COLUMN, KIND_COLUMN, WHERE_COLUMN, WHERE_DETAIL_COLUMN, ADDED_BY_COLUMN,
                 USED_BY_COLUMN, ROOM_COLUMN)) {
             ColumnSpec spec = Objects.requireNonNull(table.column(column), column);
             list.computed(spec, (storage, request) -> cells(List.of(storage), request.access()).cell(storage, spec));
@@ -322,7 +367,34 @@ public final class BackupTargetParts {
                     (request, outcome) -> testWords(Objects.requireNonNull(outcome, "a test answers")))
                 .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
                 .icon(Icon.of("plug-circle-check"))
+                .build(),
+                PanelAction.<Row, String>places(trying, ActionPlacement.FORM,
+                    (request, where) -> CmsActionResult.successToast(HohenheimMicrocopy.BACKUP_TARGET.of("try_ok")
+                        .withArg("where", Objects.requireNonNull(where, "a Test says where"))
+                        .withArg("at", Now.instant())))
+                .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
                 .build()));
+    }
+
+    /** @return the Test of a storage's form as it stands, over {@code form}: the save's check, writing nothing */
+    private static @NonNull Operation<Void, OperationInput.Values, String> tryOn(@NonNull String name,
+                                                                                  @NonNull FormSpec form) {
+        return Operation.declare(HohenheimIds.id(name))
+            .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
+            .description(HohenheimMicrocopy.HOHENHEIM.of("test_backup_target_description"))
+            .noSubject()
+            .gate(OperationGate.open())
+            .input(OperationInput.derived(form))
+            .facts(OperationFact.READ_ONLY, OperationFact.REACHES_OUTSIDE)
+            .result(String.class)
+            .register();
+    }
+
+    /** @return the settings with each secret the form holds as its value, as a kind reads them */
+    private static @NonNull Map<String, Object> revealed(@NonNull Map<String, Object> settings) {
+        Map<String, Object> revealed = new LinkedHashMap<>();
+        settings.forEach((key, value) -> revealed.put(key, value instanceof Secret secret ? secret.reveal() : value));
+        return revealed;
     }
 
     /**
@@ -337,20 +409,34 @@ public final class BackupTargetParts {
             throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_taken").withArg("name", name));
         }
-        StorageTrial trial = StorageKinds.trial(HohenheimStorages.declarationOf(row, owner));
+        DeclaredStorage declaration = HohenheimStorages.declarationOf(row, owner);
+        StorageTrial trial = StorageKinds.trial(declaration);
         if (row.get(BackupTargetModel.ID) != null) {
             // A saved storage's check is what its list line says next, a failed save's included.
             StorageReadings.recordCheck(name, trial.check());
         }
-        if (trial.question() != null) {
-            throw Violations.ofField(BackupTargetModel.SETTINGS.getName(), null,
-                HohenheimMicrocopy.VIOLATIONS.of("backup_target_confirm")
-                    .withArg("question", trial.question().asked().question())
-                    .withArg("presented", trial.question().presented()));
+        refuseUnfit(declaration, trial);
+    }
+
+    /**
+     * Refuses a storage its kind's trial asks a confirmation of, proposing the value its server presented for the
+     * settings entry the kind names (a form offers the button saving it), or finds unusable.
+     *
+     * @throws Violations the proposal, or the problem in the trial's words
+     */
+    private static void refuseUnfit(@NonNull DeclaredStorage declaration, @NonNull StorageTrial trial) {
+        StorageTrial.Question question = trial.question();
+        if (question != null) {
+            String entry = question.asked().entry();
+            StorageKindInfo kind = StorageKindRegistry.REGISTRY.get(declaration.kind());
+            Field<?, ?> field = kind == null ? null : kind.getSchema().getField(entry);
+            throw Violations.proposing(entry, new Proposal(SETTINGS + "." + entry, question.presented(),
+                question.asked().question(), question.asked().help(),
+                field == null ? null : FieldLabels.labelFor(field), question.asked().confirm()));
         }
         if (!trial.check().isUsable()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_unusable")
-                .withArg("name", name)
+                .withArg("name", declaration.name())
                 .withArg("reason", Objects.requireNonNull(trial.check().problem()).copy())
                 .withArg("diagnostic", trial.check().diagnostic()));
         }
@@ -407,6 +493,10 @@ public final class BackupTargetParts {
             Object id = storage.get(BackupTargetModel.ID);
             return switch (column.name()) {
                 case FAILURE_COLUMN -> CellMapper.Computed.orEmpty(failure(name, access));
+                case KIND_COLUMN -> {
+                    StorageKindInfo kind = StorageKindRegistry.REGISTRY.get(HohenheimStorages.kindOf(storage));
+                    yield CellMapper.Computed.orEmpty(kind == null ? null : access.text(kind.getLabel()));
+                }
                 case WHERE_COLUMN -> CellMapper.Computed.orEmpty(place(where.computeIfAbsent(id,
                     ignored -> listedFacts(storage)), access, true));
                 case WHERE_DETAIL_COLUMN -> CellMapper.Computed.orEmpty(place(where.computeIfAbsent(id,
@@ -506,23 +596,29 @@ public final class BackupTargetParts {
     }
 
     /**
-     * The storages the server's settings declare (board FO128 screen 1, "From the server's settings"): read-only,
-     * each with where it is in its kind's words, the sites keeping their files there and the room it last told.
+     * The storages the server's settings declare (board FO128 screen 1, "From the server's settings"): this server's
+     * own site files first, then each storage line of its settings, read-only, each with where it is in its kind's
+     * words, the sites keeping their files there and the room it last told. A module's own home (media, content) is
+     * no storage a person chooses and is not here ({@link Storages#inSettings}).
      *
      * AIDEV-NOTE: drawn as a card above the records, not as rows of the records' table: a list's rows are records of
-     * its model, and these are no row of backup_targets. The site-files folder is mounted on first use, so it is
-     * mounted here first to be listed.
+     * its model, and these are no row of backup_targets. One list over both needs a list source uniting records with
+     * declared read-only rows (zenit-cms typed stores); until the Storages page reads one, the card says the same
+     * facts per storage as a row does.
      */
     static @NonNull WidgetTree inSettings(@NonNull AccessContext access) {
+        List<DeclaredStorage> declared = new ArrayList<>();
+        Map<String, Microcopy> named = new HashMap<>();
         try {
             SiteFiles.storageOf(null);
+            declared.add(DeclaredStorage.inSettings(SiteFiles.STORAGE, LocalFolderStorageKind.ID,
+                Map.of(LocalFolderStorageKind.FOLDER.getName(),
+                    Storages.localDirectory(HohenheimSettings.Files.SITE_FILES_DIRECTORY).toString())));
+            named.put(SiteFiles.STORAGE, HohenheimMicrocopy.BACKUP_TARGET.of("site_files_own"));
         } catch (RuntimeException unmounted) {
             Blast.log("STORAGE: this server's site files are not mounted:", unmounted.getMessage());
         }
-        List<DeclaredStorage> declared = Storages.inSettings();
-        if (declared.isEmpty()) {
-            return WidgetTree.empty();
-        }
+        declared.addAll(Storages.inSettings());
         Map<String, Long> sites = StorageUsage.sitesByStorage();
         List<WidgetItem> items = new ArrayList<>();
         for (DeclaredStorage storage : declared) {
@@ -552,7 +648,9 @@ public final class BackupTargetParts {
             if (used > 0) {
                 line.add(access.text(HohenheimCounts.of("sites", used)));
             }
-            WidgetItem item = new WidgetItem(storage.name(), null, List.of()).withFacts(line);
+            Microcopy name = named.get(storage.name());
+            WidgetItem item = new WidgetItem(name == null ? storage.name() : access.text(name), null, List.of())
+                .withFacts(line);
             String room = room(storage.name(), access);
             items.add(room == null ? item : item.withAside(room));
         }
@@ -602,10 +700,11 @@ public final class BackupTargetParts {
             where.add(WidgetFact.of(access.text(fact.label()), fact.value()));
         }
         main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_where"), where));
-        List<WidgetFact> secrets = secrets(storage, access);
-        if (!secrets.isEmpty()) {
-            main.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_secrets"),
-                HohenheimMicrocopy.BACKUP_TARGET.of("secrets_lead"), secrets));
+        // One card per secret the storage holds, named by it as the board draws "Password": set, never shown.
+        for (WidgetFact secret : secrets(storage, access)) {
+            main.add(CardWidget.ofFacts(Microcopy.literal(secret.label()), List.of(WidgetFact.of(
+                access.text(HohenheimMicrocopy.BACKUP_TARGET.of("secret_stored")),
+                access.text(HohenheimMicrocopy.BACKUP_TARGET.of("secret_never_shown"))))));
         }
         StorageUsage.Counts counts = StorageUsage.of(storage);
         List<WidgetFact> used = StorageUsage.facts(storage, panelSlug, access);
@@ -617,7 +716,9 @@ public final class BackupTargetParts {
         List<WidgetInstance> side = new ArrayList<>();
         StorageReadings.Reading reading = StorageReadings.of(name);
         List<WidgetFact> room = new ArrayList<>();
+        Microcopy roomLead = null;
         if (reading.room() != null && reading.roomReadAt() != null) {
+            roomLead = HohenheimMicrocopy.BACKUP_TARGET.of("room_read_lead").withArg("at", reading.roomReadAt());
             room.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_left")),
                 access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_left_value")
                     .withArg("free", reading.room().freeBytes()))));
@@ -625,17 +726,16 @@ public final class BackupTargetParts {
                 access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_used_value")
                     .withArg("used", reading.room().totalBytes() - reading.room().freeBytes())
                     .withArg("total", reading.room().totalBytes()))));
-            room.add(WidgetFact.instant(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_read_at")),
-                reading.roomReadAt().toString()));
         } else {
-            room.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_unknown")),
+            room.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_left")),
                 access.text(HohenheimMicrocopy.BACKUP_TARGET.of("room_unknown_detail"))));
         }
         String failing = failure(name, access);
         if (failing != null) {
             room.add(WidgetFact.of(access.text(HohenheimMicrocopy.BACKUP_TARGET.of("last_check")), failing));
         }
-        side.add(CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_room"), room));
+        side.add(roomLead == null ? CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_room"), room)
+            : CardWidget.ofFacts(HohenheimMicrocopy.BACKUP_TARGET.of("card_room"), roomLead, room));
         return AppOverview.compose(List.of(), main, side);
     }
 
