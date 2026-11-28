@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.storage.LocalFolderStorageKind;
 import be.elevenways.zenit.server.storage.StorageKinds;
 import be.elevenways.zenit.server.storage.StorageOwner;
+import be.elevenways.zenit.server.storage.StorageReach;
 import be.elevenways.zenit.server.storage.StorageReadings;
 import be.elevenways.zenit.storage.s3.server.S3StorageKind;
 import be.elevenways.zenit.storage.s3.test.support.GarageServer;
@@ -280,7 +281,8 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
 
     /**
      * A customer's own storage through the /manage twin: added (the save runs the storage's check), tested, renamed
-     * and deleted; an operator's storage is not theirs to open, and one aimed at a private address is refused.
+     * and deleted; one whose grant is taken away reaches the public internet alone; an operator's storage is not theirs
+     * to open, and one aimed at a private address is refused.
      */
     @Test
     void aCustomerAddsTestsEditsAndDeletesTheirOwnStorage() throws Exception {
@@ -310,11 +312,15 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             assertThat(StorageReadings.of(name).check()).as("step 2: checked").isNotNull()
                 .satisfies(check -> assertThat(check.isUsable()).as(check.diagnostic()).isTrue());
 
-            // 3. Renamed through the twin; a customer's storage is saved with the operator's two switches off, even
-            //    when its row held them on (as the upgrade values every storage older than the switch).
+            // 3. Renamed through the twin; a customer's storage is stored with the operator's two switches off on
+            //    every write, a direct one carrying them on included.
             saved.set(BackupTargetModel.SHARED, true);
             saved.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, true);
             Models.get(BackupTargetModel.class).saveWritten(saved);
+            Row direct = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key));
+            assertThat(List.of(direct.get(BackupTargetModel.SHARED),
+                direct.get(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED))).as("step 3: a direct write keeps them off")
+                .containsExactly(false, false);
             PanelResourceCalls.patch(HohenheimSlugs.MANAGE, HohenheimSlugs.BACKUP_TARGETS, key,
                 Map.of("name", "Lumen archive " + tag), theirs);
             Row renamed = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key));
@@ -323,6 +329,17 @@ class StorageScreensJourneyTest extends HohenheimTestBase {
             assertThat(List.of(renamed.get(BackupTargetModel.SHARED),
                 renamed.get(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED))).as("step 3: neither switch is theirs")
                 .containsExactly(false, false);
+
+            // 3b. Its customer's grant removed, the storage is the operator's with the switch off: it reaches the
+            //     public internet alone, never a private address. The grant given back, it is theirs again.
+            RecordGrants.revokeAllForRecord(BackupTargetModel.MODEL_ID, key);
+            Row orphaned = Objects.requireNonNull(Models.get(BackupTargetModel.class).findById(key));
+            assertThat(HohenheimStorages.ownerOf(orphaned)).as("step 3b: owned by the operator now")
+                .isInstanceOf(StorageOwner.Operator.class);
+            assertThat(HohenheimStorages.declarationOf(orphaned).reach()).as("step 3b: public reach alone")
+                .isEqualTo(StorageReach.PUBLIC_INTERNET);
+            RecordGrants.grant(GrantSubjectType.USER, customer, BackupTargetModel.MODEL_ID, key,
+                HohenheimCapabilities.MANAGE, true);
         }
 
         // 4. An operator's storage is not one the customer can open, and its address reaches no customer.

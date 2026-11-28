@@ -258,7 +258,7 @@ table migration:be.elevenways.hohenheim@2026_11_25_000001
   name stream_port_lists
   op data:give every TCP/UDP stream site its single public port as a list of one@1
 table migration:be.elevenways.hohenheim@2026_11_28_000001
-  checksum 869e26d3db5159ab0a9eacdd519aed11eca299788a335112d098e38ad0be325d
+  checksum 1cd4e1e118b9d78a6f794a62fdbf080f30ca4e5e2f88fea2dd16e5d082144121
   class be.elevenways.hohenheim.migration.M009_StorageChoices
   name storage_choices
   op add_column:backup_targets:added_by|string|null=true|uniq=false|pk=false|auto=false|def=none|len=191|prec=null,null
@@ -266,4 +266,4 @@ table migration:be.elevenways.hohenheim@2026_11_28_000001
   op add_column:backup_targets:shared|boolean|null=true|uniq=false|pk=false|auto=false|def=lit:false|len=null|prec=null,null
   op add_column:managed_databases:backup_target_id|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
   op add_column:managed_databases:dumps_kept|integer|null=true|uniq=false|pk=false|auto=false|def=none|len=null|prec=null,null
-  op data:let every storage declared before the switch reach private addresses as it did@1
+  op data:let every operator's storage declared before the switch reach private addresses as it did@2

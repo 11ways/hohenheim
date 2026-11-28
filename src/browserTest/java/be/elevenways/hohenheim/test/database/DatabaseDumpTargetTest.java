@@ -4,6 +4,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
 import be.elevenways.zenit.test.support.ServedApp;
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.test.HohenheimServedApp;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -304,8 +305,13 @@ class DatabaseDumpTargetTest {
                     Models.get(DatabaseDumpModel.class).find()
                         .where(DatabaseDumpModel.ID.eq((Integer) fourth.get(DatabaseDumpModel.ID))).delete();
                     assertThat(catchThrowable(() -> Models.get(BackupTargetModel.class).delete(ownRow)))
-                        .as("step 8b: chosen by a database, the storage refuses its deletion")
-                        .isInstanceOf(Violations.class);
+                        .as("step 8b: chosen by a database, the storage refuses its deletion, counting a database")
+                        .isInstanceOfSatisfying(Violations.class, chosenBy -> {
+                            assertThat(chosenBy.all().get(0).message().key()).isEqualTo("backup_target_database_own");
+                            assertThat(((Microcopy) chosenBy.all().get(0).message().args().get("databases")).key())
+                                .as("step 8b: as databases, not apps")
+                                .isEqualTo(HohenheimCounts.of("databases", 1).key());
+                        });
                     chosen.set(DatabaseModel.BACKUP_TARGET_ID, null);
                     chosen.set(DatabaseModel.DUMPS_KEPT, null);
                     Models.get(DatabaseModel.class).save(chosen);

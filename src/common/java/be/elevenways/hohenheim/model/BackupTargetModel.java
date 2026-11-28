@@ -40,8 +40,9 @@ import java.util.Map;
  * {@code manage} grant (the ProjectModel rule: no owner column); none is the operator. Who ADDED it is
  * {@link #ADDED_BY}, stamped at its create from the work's identity: an administrator adding an operator's storage is
  * named there although no grant names them. {@link #PRIVATE_ADDRESSES_ALLOWED} and {@link #SHARED} are an operator's
- * switches: a tenant's storage never reaches a private address and is never shared, whatever they hold
- * (M009_StorageChoices turned the first on for every storage older than it).
+ * switches: a tenant's storage never reaches a private address and is never shared, and every write of one stores
+ * both off (HohenheimStorages.keepSwitchesOperators); M009_StorageChoices turned the first on for every storage older
+ * than it that no manage grant named.
  */
 public class BackupTargetModel extends Model {
 
@@ -173,9 +174,9 @@ public class BackupTargetModel extends Model {
      * could not reach the target names its key), and only the row's own delete, through its target, removes it. The
      * dump setting's target refuses like the control-plane one: both are named by the same unique {@code name}.
      *
-     * @throws Violations {@code backup_target_in_use}, {@code backup_target_control_plane} or
-     *                    {@code backup_target_database_dumps}; a database choosing the storage as its own counts as a
-     *                    use (its column has no foreign key: M009_StorageChoices)
+     * @throws Violations {@code backup_target_in_use}, {@code backup_target_control_plane},
+     *                    {@code backup_target_database_dumps} or, for databases choosing the storage as their own
+     *                    (that column has no foreign key: M009_StorageChoices), {@code backup_target_database_own}
      */
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
         String controlPlane = Zenit.SETTINGS_VALUES.getValue(
@@ -206,17 +207,22 @@ public class BackupTargetModel extends Model {
                 + Models.get(DatabaseDumpModel.class).find()
                 .where(DatabaseDumpModel.TARGET_ID.eq(targetId))
                 .count();
-            long instances = Models.get(InstanceModel.class).find()
+            long apps = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
-                .count()
-                + Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.BACKUP_TARGET_ID.eq(targetId))
                 .count();
-            if (backups > 0 || instances > 0) {
+            if (backups > 0 || apps > 0) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_in_use")
                     .withArg("name", name)
                     .withArg("backups", HohenheimCounts.of("backups", backups))
-                    .withArg("instances", HohenheimCounts.of("instances", instances)));
+                    .withArg("instances", HohenheimCounts.of("instances", apps)));
+            }
+            long databases = Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.BACKUP_TARGET_ID.eq(targetId))
+                .count();
+            if (databases > 0) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_database_own")
+                    .withArg("name", name)
+                    .withArg("databases", HohenheimCounts.of("databases", databases)));
             }
             InstanceModel.detachTrashed(InstanceModel.BACKUP_TARGET_ID,
                 InstanceModel.BACKUP_TARGET_ID.eq(targetId));

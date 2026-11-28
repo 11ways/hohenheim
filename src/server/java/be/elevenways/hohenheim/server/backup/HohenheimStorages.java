@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.security.PrincipalKind;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.Secret;
@@ -58,14 +59,19 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * ({@link #readableSettings}, never the client key), and a save keeps the link unless it changes where the row goes,
  * which is refused ({@link #keepHostRecordLink}). The base path is unchanged, so every stored key still resolves.
  *
- * AIDEV-NOTE: who owns a storage is who holds its manage grant (no owner column, the ProjectModel rule); none is the
- * operator. Only an operator's storage may reach a private address, and only while BOTH its own switch
- * ({@link BackupTargetModel#PRIVATE_ADDRESSES_ALLOWED}, an administrator's) and this host's boot
- * ({@code storage.allow_private_networks}) allow it; M009_StorageChoices turned the switch on for every storage older
- * than it, so each keeps the reach it had. An SSH-era row is the one exception: its address is the host record's,
- * which HostAdmission admitted as a backup destination (checked again on every read), so that admission decides its
- * reach as it decided where ssh went ({@link StorageReach#ADMITTED_HOST}), loopback and private hosts included, with
- * neither the switch nor the boot opt-in.
+ * AIDEV-NOTE: who owns a storage is who holds its manage grant (no owner column, the ProjectModel rule, read through
+ * RecordOwners like every record's owner); none is the operator. Only an operator's storage may reach a private
+ * address, and only while BOTH its own switch ({@link BackupTargetModel#PRIVATE_ADDRESSES_ALLOWED}, an
+ * administrator's) and this host's boot ({@code storage.allow_private_networks}) allow it. Ownership changes where
+ * no write sees it (a grant revoked or expired, an account deleted), so the switch is what a customer's storage can
+ * never carry: every write of a storage a customer owns or creates stores it off, whatever the write held
+ * ({@link #keepSwitchesOperators}, on the model, so every write path), and M009_StorageChoices turned it on only for
+ * the storages no manage grant ever named. A storage that was a customer's and lost its last owner is so the
+ * operator's with the switch off: it reaches the public internet alone until an administrator turns the switch on.
+ * An SSH-era row is the one exception: its address is the host record's, which HostAdmission admitted as a backup
+ * destination (checked again on every read), so that admission decides its reach as it decided where ssh went
+ * ({@link StorageReach#ADMITTED_HOST}), loopback and private hosts included, with neither the switch nor the boot
+ * opt-in.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -103,8 +109,38 @@ public final class HohenheimStorages implements DeclaredStorages {
         // A host record an SSH-era storage reaches through decides that storage's settings and its gate: a rotated key,
         // a new pin or a quarantine releases the adapter opened before, so an exchange in flight fails at once.
         HostModel.SCHEMA.addAfterSaveHook(context -> refreshAnswered());
+        BackupTargetModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null) {
+                keepSwitchesOperators(row, ownerOfWrite(row));
+            }
+        });
     }
 
+
+    /** Stores the operator's two switches off on a storage {@code owner} holds unless that is the operator. */
+    public static void keepSwitchesOperators(@NonNull Row row, @Nullable StorageOwner owner) {
+        if (!(owner instanceof StorageOwner.Operator)) {
+            row.set(BackupTargetModel.SHARED, false);
+            row.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, false);
+        }
+    }
+
+    /** @return who holds the storage a write stores, null when that cannot be told (taken for a customer) */
+    private static @Nullable StorageOwner ownerOfWrite(@NonNull Row row) {
+        try {
+            if (row.get(BackupTargetModel.ID) != null) {
+                return ownerOf(row);
+            }
+            ExecutionIdentity identity = ExecutionIdentity.current();
+            // Unattended work (a seeder, a boot step) declares the operator's storages, as a create without a
+            // grant leaves them.
+            return identity == null || identity.kind() != ExecutionIdentity.Kind.CALLER ? StorageOwner.OPERATOR
+                : ownerOfCreator(identity.callerContext());
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
     private HohenheimStorages() {}
 
     /**

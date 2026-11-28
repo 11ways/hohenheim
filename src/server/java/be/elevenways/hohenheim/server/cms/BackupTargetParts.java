@@ -448,10 +448,7 @@ public final class BackupTargetParts {
             throw Violations.ofField(BackupTargetModel.NAME.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("backup_target_name_taken").withArg("name", name));
         }
-        if (!(owner instanceof StorageOwner.Operator)) {
-            row.set(BackupTargetModel.SHARED, false);
-            row.set(BackupTargetModel.PRIVATE_ADDRESSES_ALLOWED, false);
-        }
+        HohenheimStorages.keepSwitchesOperators(row, owner);
         DeclaredStorage declaration = HohenheimStorages.declarationOf(row, owner);
         StorageTrial trial = StorageKinds.trial(declaration);
         if (row.get(BackupTargetModel.ID) != null) {

@@ -21751,6 +21751,7 @@
   "room_read_lead": {"text": "Read at {$at :datetime}.", "scope": "backup_target"},
   "manage_storage_description": {"text": "Edit, test and delete this storage.", "scope": "capability"},
   "site_storage_not_usable": {"text": "Storage '{$storage}' is not one you may keep this site's files in", "scope": "violations"},
+  "backup_target_database_own": {"text": "Storage {$name} keeps the dumps of {$databases}; choose another storage for them first", "scope": "violations"},
   "site_files_move_first": {"text": "The new storage lacks {$files} of this site. Use Move files to change where its files are kept.", "scope": "violations"},
   "site_files_move_same": {"text": "This site keeps its files in {$storage} already", "scope": "violations"},
   "site_files_copy_unverified": {"text": "The copy of {$file} does not match its original; the site was not switched over", "scope": "violations"},

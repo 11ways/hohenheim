@@ -21751,6 +21751,7 @@
   "room_read_lead": {"text": "Gelezen op {$at :datetime}.", "scope": "backup_target"},
   "manage_storage_description": {"text": "Deze opslagplaats bewerken, testen en verwijderen.", "scope": "capability"},
   "site_storage_not_usable": {"text": "Opslagplaats '{$storage}' is er geen waarin u de bestanden van deze site mag bewaren", "scope": "violations"},
+  "backup_target_database_own": {"text": "Opslag {$name} bewaart de dumps van {$databases}; kies er eerst een andere opslag voor", "scope": "violations"},
   "site_files_move_first": {"text": "De nieuwe opslagplaats mist {$files} van deze site. Gebruik Bestanden verplaatsen om te wijzigen waar de bestanden bewaard worden.", "scope": "violations"},
   "site_files_move_same": {"text": "Deze site bewaart zijn bestanden al in {$storage}", "scope": "violations"},
   "site_files_copy_unverified": {"text": "De kopie van {$file} komt niet overeen met het origineel; de site is niet omgeschakeld", "scope": "violations"},

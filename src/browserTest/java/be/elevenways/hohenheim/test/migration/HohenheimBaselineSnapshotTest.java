@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.migration.M006_SharedRecords;
 import be.elevenways.hohenheim.migration.M007_LinkConfirmations;
 import be.elevenways.hohenheim.migration.M008_StreamPortLists;
 import be.elevenways.hohenheim.migration.M009_StorageChoices;
+import be.elevenways.zenit.auth.server.migration.M001_AuthBaseline;
 import be.elevenways.zenit.common.orm.migration.M001_ZenitBaseline;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationKey;
@@ -34,10 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@value #CHAIN_RESOURCE}): rendered once on 2026-10-21 from a fresh SQLite database the old chain migrated through
  * auto-discovery (hohenheim 718bedc3), kept to the tables the baseline creates so another stream's schema change never
  * touches it. It is history, never regenerated; an appended migration changes neither side. The baseline runs with
- * no other Hohenheim stream; core's baseline runs beside it because the published M006 depends on it, and its tables
- * are left out of the compare (read from a database core's baseline built alone). The published M002 to M008 and the
- * open M009 run with it (a runner admits no chain short of its published migration) and are rolled back through
- * their own down() before the compare.
+ * no other Hohenheim stream; core's baseline runs beside it because the published M006 depends on it, and zenit-auth's
+ * because the open M009 reads its grants; their tables are left out of the compare (read from a database those two
+ * baselines built alone). The published M002 to M008 and the open M009 run with it (a runner admits no chain short of
+ * its published migration) and are rolled back through their own down() before the compare.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -59,10 +60,10 @@ class HohenheimBaselineSnapshotTest {
         db.delete();
         db.deleteOnExit();
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
-        List<Supplier<Migration>> migrations = List.of(M001_ZenitBaseline::new, M001_HohenheimBaseline::new,
-            M002_AfterBaseline::new, M003_CertificateSigningRequests::new, M004_SiteOutages::new,
-            M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new, M008_StreamPortLists::new,
-            M009_StorageChoices::new);
+        List<Supplier<Migration>> migrations = List.of(M001_ZenitBaseline::new, M001_AuthBaseline::new,
+            M001_HohenheimBaseline::new, M002_AfterBaseline::new, M003_CertificateSigningRequests::new,
+            M004_SiteOutages::new, M005_LinkedServers::new, M006_SharedRecords::new, M007_LinkConfirmations::new,
+            M008_StreamPortLists::new, M009_StorageChoices::new);
         new MigrationRunner(datasource, migrations).migrate().requireSuccess();
         new MigrationRunner(datasource, migrations).rollback(MigrationKey.of(new M009_StorageChoices()))
             .requireSuccess();
@@ -87,14 +88,15 @@ class HohenheimBaselineSnapshotTest {
         datasource.close();
     }
 
-    /** @return the tables core's baseline builds on its own */
+    /** @return the tables core's and zenit-auth's baselines build on their own */
     private static Set<String> coreTables() throws Exception {
         File db = File.createTempFile("hohenheim-baseline-snapshot-core", ".db");
         db.delete();
         db.deleteOnExit();
         SqliteDatasource datasource = new SqliteDatasource(TestSqliteFiles.url(db.toPath()));
         try {
-            new MigrationRunner(datasource, List.<Supplier<Migration>>of(M001_ZenitBaseline::new)).migrate()
+            new MigrationRunner(datasource, List.<Supplier<Migration>>of(M001_ZenitBaseline::new,
+                M001_AuthBaseline::new)).migrate()
                 .requireSuccess();
             return SchemaSnapshot.of(datasource, table -> true).tables();
         } finally {
