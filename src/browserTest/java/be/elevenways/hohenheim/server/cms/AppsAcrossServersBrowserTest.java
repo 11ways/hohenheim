@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkRole;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -29,6 +30,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.history.Change;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.peer.PeerRecordModel;
+import be.elevenways.zenit.server.operation.CarriedOperations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -364,7 +366,10 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         Models.get(PeerRecordModel.class).insert(row, Change.PLAIN);
     }
 
-    /** Keeps one workload of a linked server as its sync keeps it: the portable document of a row never stored here. */
+    /**
+     * Keeps one workload of a linked server as its sync keeps it: the portable document of a row never stored here,
+     * and what that server tells it offers (a running workload: Restart and Stop).
+     */
     private static void heldWorkload(UUID server, int id, String name) {
         InstanceModel instances = Models.get(InstanceModel.class);
         Row instance = instances.createEmptyRow();
@@ -373,6 +378,9 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
         instance.set(InstanceModel.KIND, "hohenheim:docker_container");
         instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         keep(server, InstanceModel.MODEL_ID, String.valueOf(id), name, portable(instances, instance));
+        keep(server, CarriedOperations.OFFERS, CarriedOperations.offerKey(InstanceModel.MODEL_ID, String.valueOf(id)),
+            String.valueOf(id), Zenit.DRY.toJson(Map.of(InstanceOperations.RESTART.id().toString(), Map.of(),
+                InstanceOperations.STOP.id().toString(), Map.of())));
     }
 
     /**
