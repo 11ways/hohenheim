@@ -1,12 +1,22 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkRole;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.site.SiteTls;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.common.orm.datasource.StoredDocumentValues;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.hohenheim.server.cluster.ClusterRecords;
 import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -30,6 +40,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -159,6 +170,61 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
                 .contains("Nothing can be changed until Gaston answers.");
             page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve("held-app-silent.png"))
                 .setFullPage(true));
+
+            // 8. The Sites, Addresses and Certificates lists hold Kuifje's and Gaston's beside this server's, drawn by
+            //    this server's cells from their records and told state, under their server's name; Gaston's recede
+            //    with when it was last seen, under the list's notice in its own words; none draws a selection box.
+            heldEstate(kuifje, 101, "kuifje-shop", "shop.kuifje.test");
+            heldEstate(gaston, 201, "gaston-forum", "forum.gaston.test");
+            String[][] lists = {{HohenheimSlugs.SITES, "name", "kuifje-shop", "gaston-forum", "Its sites are shown"},
+                {HohenheimSlugs.DOMAINS, "hostname", "shop.kuifje.test", "forum.gaston.test",
+                    "Its addresses are shown"},
+                {HohenheimSlugs.CERTIFICATES, "nice_name", "kuifje-shop-cert", "gaston-forum-cert",
+                    "Its certificates are shown"}};
+            for (String[] list : lists) {
+                navigateToApp("/admin/" + list[0]);
+                waitForHydration();
+                Locator listed = page.locator("pl-table-body pl-table-row");
+                if (HohenheimSlugs.SITES.equals(list[0])) {
+                    BoundedAssertions.assertThat(listed.filter(new Locator.FilterOptions()
+                        .setHasText("robbedoes-blog"))).isVisible();
+                }
+                Locator answering = listed.filter(new Locator.FilterOptions().setHasText(list[2]));
+                BoundedAssertions.assertThat(answering).isVisible();
+                assertThat(answering.locator("pl-table-cell[data-column='server']").textContent().trim())
+                    .as("step 8: %s under Kuifje", list[2]).isEqualTo("Kuifje");
+                assertThat(answering.getAttribute("inactive")).as("step 8: %s does not recede", list[2]).isNull();
+                assertThat(answering.locator("pl-table-select-row").count()).as("step 8: %s draws no box", list[2])
+                    .isZero();
+                Locator receding = listed.filter(new Locator.FilterOptions().setHasText(list[3]));
+                assertThat(receding.getAttribute("inactive")).as("step 8: %s recedes", list[3]).isNotNull();
+                assertThat(receding.textContent()).as("step 8: %s says when Gaston was last seen", list[3])
+                    .contains("Last seen");
+                assertThat(page.locator("[data-cms-list-card-notice]").textContent())
+                    .as("step 8: the %s notice", list[0]).contains("Gaston does not answer since").contains(list[4]);
+                page.screenshot(new Page.ScreenshotOptions().setPath(OUT.resolve(list[0] + "-across-servers.png"))
+                    .setFullPage(true));
+            }
+
+            // 9. Each list stays open while Kuifje tells of a new site, its address and its certificate: the new
+            //    thing joins the open list by itself, no reload.
+            String[][] told = {{HohenheimSlugs.SITES, "kuifje-news"}, {HohenheimSlugs.DOMAINS, "mail.kuifje.test"},
+                {HohenheimSlugs.CERTIFICATES, "kuifje-docs-cert"}};
+            String[][] estates = {{"kuifje-news", "news.kuifje.test"}, {"kuifje-mail", "mail.kuifje.test"},
+                {"kuifje-docs", "docs.kuifje.test"}};
+            for (int at = 0; at < told.length; at++) {
+                navigateToApp("/admin/" + told[at][0]);
+                waitForHydration();
+                waitForReactiveIdle();
+                Locator joined = page.locator("pl-table-body pl-table-row")
+                    .filter(new Locator.FilterOptions().setHasText(told[at][1]));
+                assertThat(joined.count()).as("step 9: %s is not listed before Kuifje tells it", told[at][1]).isZero();
+                heldEstate(kuifje, 106 + at, estates[at][0], estates[at][1]);
+                BoundedAssertions.assertThat(joined).isVisible();
+                assertThat(joined.locator("pl-table-cell[data-column='server']").textContent().trim())
+                    .as("step 9: %s joined the open %s list under Kuifje", told[at][1], told[at][0])
+                    .isEqualTo("Kuifje");
+            }
         } finally {
             Models.get(PeerRecordModel.class).find().where(PeerRecordModel.PEER.in(servers.stream()
                 .map(String::valueOf).toList())).delete();
@@ -220,16 +286,78 @@ class AppsAcrossServersBrowserTest extends HohenheimTestBase {
 
     /** Keeps the facts as the state that server told of one app, as the master's sync keeps it. */
     private static void keep(UUID server, AppFacts facts) {
+        keep(server, AppStates.KIND, facts.key(), facts.name(), facts.document());
+    }
+
+    /** Keeps a record or state of one thing as that server told it, as the master's sync keeps it. */
+    private static void keep(UUID server, Identifier kind, String key, String title, String document) {
         Row row = Models.get(PeerRecordModel.class).createEmptyRow();
         row.set(PeerRecordModel.ID, Uuids.v7());
         row.set(PeerRecordModel.PEER, peerOf(server));
-        row.set(PeerRecordModel.MODEL, AppStates.KIND.toString());
-        row.set(PeerRecordModel.RECORD_KEY, facts.key());
-        row.set(PeerRecordModel.TITLE, facts.name());
-        row.set(PeerRecordModel.DOCUMENT, facts.document());
+        row.set(PeerRecordModel.MODEL, kind.toString());
+        row.set(PeerRecordModel.RECORD_KEY, key);
+        row.set(PeerRecordModel.TITLE, title);
+        row.set(PeerRecordModel.DOCUMENT, document);
         row.set(PeerRecordModel.DIGEST, "planted");
         row.set(PeerRecordModel.FIRST_SEEN, Now.instant());
         row.set(PeerRecordModel.LAST_CHANGED, Now.instant());
         Models.get(PeerRecordModel.class).insert(row, Change.PLAIN);
+    }
+
+    /**
+     * Keeps one website of a linked server, its one address and the certificate covering it, as that server's sync
+     * keeps them: the records as portable documents of rows never stored here, the state as that server tells it.
+     */
+    private static void heldEstate(UUID server, int id, String name, String hostname) {
+        SiteModel sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.ID, id);
+        site.set(SiteModel.NAME, name);
+        site.set(SiteModel.SLUG, name);
+        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/srv/" + name));
+        site.set(SiteModel.ENABLED, true);
+        site.set(SiteModel.CREATED_AT, Now.instant());
+        keep(server, SiteModel.MODEL_ID, String.valueOf(id), name, portable(sites, site));
+        SiteDomainModel domains = Models.get(SiteDomainModel.class);
+        Row domain = domains.createEmptyRow();
+        domain.set(SiteDomainModel.ID, id + 400);
+        domain.set(SiteDomainModel.SITE_ID, id);
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domain.set(SiteDomainModel.FORCE_SSL, true);
+        keep(server, SiteDomainModel.MODEL_ID, String.valueOf(id + 400), hostname, portable(domains, domain));
+        RecordHealth working = new RecordHealth(HealthTone.OK, AppParts.stateLabel(HealthTone.OK.token()), null,
+            List.of(), null);
+        keep(server, SiteStates.SITE_KIND, String.valueOf(id), name, Zenit.DRY.toJson(Map.of(
+            "tls", ToldFacts.line(StateLineCell.of(SiteTls.WORKS, null)), "health", ToldFacts.health(working))));
+        keep(server, SiteStates.ADDRESS_KIND, String.valueOf(id + 400), hostname, Zenit.DRY.toJson(Map.of(
+            "reach", ToldFacts.line(StateLineCell.of(AddressReach.POINTS_HERE, null)),
+            "https", ToldFacts.line(StateLineCell.of(CertCoverage.ACTIVE, null)))));
+        CertificateModel certificates = Models.get(CertificateModel.class);
+        Row cert = certificates.createEmptyRow();
+        cert.set(CertificateModel.ID, id + 600);
+        cert.set(CertificateModel.NICE_NAME, name + "-cert");
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, hostname);
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        cert.set(CertificateModel.AUTO_RENEW, true);
+        cert.set(CertificateModel.KEY_HOLDER, CertificateModel.KEY_HOLDER_HOHENHEIM);
+        cert.set(CertificateModel.EXPIRES_ON, Now.instant().plus(Duration.ofDays(60)));
+        Map<String, Object> told = new LinkedHashMap<>();
+        Map<String, Object> values = StoredDocumentValues.portableDocument(certificates, cert,
+            certificates.getResolvedDatasource());
+        for (String column : CertificateParts.toldColumns()) {
+            told.put(column, values.get(column));
+        }
+        told.put("state", ToldFacts.line(CertificateParts.stateCell(cert, true)));
+        told.put("health", ToldFacts.health(working));
+        keep(server, CertificateStates.KIND, String.valueOf(id + 600), name + "-cert", Zenit.DRY.toJson(told));
+    }
+
+    /** @return a row's portable document, as a linked server's sync sends its shared record */
+    private static String portable(Model model, Row row) {
+        return Zenit.DRY.toJson(StoredDocumentValues.portableDocument(model, row, model.getResolvedDatasource()));
     }
 }

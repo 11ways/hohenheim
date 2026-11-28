@@ -12,11 +12,13 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.cms.AppStates;
 import be.elevenways.hohenheim.server.cms.ClusterAttention;
 import be.elevenways.hohenheim.server.cms.LinkedServerParts;
+import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.hohenheim.server.mcp.HohenheimMcpModule;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -312,6 +314,48 @@ class LinkedServersJourneyTest {
                 .as("step 2: the state's generation stays while nothing moves")
                 .isEqualTo(bodyOf(LinkCalls.generations(CHILD_ADDRESS, masterKey)));
 
+            // 2b. The master's Sites, Addresses and Certificates lists draw Kuifje's beside its own, by the master's own
+            //     cells from Kuifje's record and the state Kuifje told: each under Kuifje's name in the Server column,
+            //     opening nothing and offering no selection box; the master's own site stands beside them.
+            assertThat(kuifje.ask("address " + made + " later.kuifje.test")).startsWith("address ");
+            String cert = after("certificate ", kuifje.ask("certificate later-cert later.kuifje.test"));
+            settle(kuifje);
+            String sites = masterList(HohenheimSlugs.SITES, "later-site");
+            assertThat(rowOf(sites, "name", "later-site")).as("step 2b: Kuifje's site, its address from its record")
+                .contains("Kuifje").contains("later.kuifje.test").contains("data-column=\"tls\"")
+                .doesNotContain("pl-table-select-row").doesNotContainPattern("href=\"[^\"]");
+            assertThat(sites).as("step 2b: the Sites list names the servers").contains("\"filter.server\"");
+            assertThat(titled(masterList(HohenheimSlugs.SITES, OWN_SITE), "name", OWN_SITE))
+                .as("step 2b: the master's own site beside it").isNotNull();
+            assertThat(rowOf(masterList(HohenheimSlugs.DOMAINS, "later.kuifje.test"), "hostname", "later.kuifje.test"))
+                .as("step 2b: Kuifje's address, the app it serves named from Kuifje's record, its reach as told")
+                .contains("Kuifje").contains("later-site").contains("data-state=")
+                .doesNotContain("pl-table-select-row").doesNotContainPattern("href=\"[^\"]");
+            //     A site's own Addresses tab lists that site's addresses only, so it has no Server column or filter,
+            //     though the address list it is drawn from has them for an administrator while a server is linked.
+            Row ownDomain = Models.get(SiteDomainModel.class).createEmptyRow();
+            ownDomain.set(SiteDomainModel.SITE_ID, Integer.parseInt(ownSite));
+            ownDomain.set(SiteDomainModel.HOSTNAME, "own.robbedoes.test");
+            ownDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            ownDomain.set(SiteDomainModel.FORCE_SSL, false);
+            Models.get(SiteDomainModel.class).save(ownDomain);
+            HttpResponse<String> addressesTab = asAdministrator("/admin/" + HohenheimSlugs.SITES + "/" + ownSite
+                + "/page/" + SiteParts.DOMAINS_TAB);
+            assertThat(addressesTab.statusCode()).as("step 2b: the master's own site's Addresses tab").isEqualTo(200);
+            assertThat(addressesTab.body()).as("step 2b: the tab lists the site's address, no server's")
+                .contains("own.robbedoes.test").doesNotContain("later.kuifje.test")
+                .doesNotContain("data-column=\"server\"").doesNotContain("\"filter.server\"");
+            assertThat(rowOf(masterList(HohenheimSlugs.CERTIFICATES, "later-cert"), "nice_name", "later-cert"))
+                .as("step 2b: Kuifje's certificate, failing as Kuifje told it").contains("Kuifje")
+                .contains("data-state=\"renewal_failing\"").doesNotContain("pl-table-select-row")
+                .doesNotContainPattern("href=\"[^\"]");
+            //    A certificate renewed on Kuifje is no shared-model write, and still reaches the master's list at once.
+            assertThat(kuifje.ask("renewed " + cert)).isEqualTo("ok");
+            settle(kuifje);
+            assertThat(rowOf(masterList(HohenheimSlugs.CERTIFICATES, "later-cert"), "nice_name", "later-cert"))
+                .as("step 2b: the renewal reached the master's list").contains("Kuifje")
+                .doesNotContain("renewal_failing");
+
             // 3. A change and a removal there are followed.
             assertThat(kuifje.ask("describe " + made + " described-on-kuifje")).isEqualTo("ok");
             settle(kuifje);
@@ -364,6 +408,42 @@ class LinkedServersJourneyTest {
                     .isEqualTo(fewApps.executedNaming(table)).isPositive();
                 assertThat(threeServers.executedNaming(table)).as("step 3: %s read as often for three servers", table)
                     .isEqualTo(fewApps.executedNaming(table));
+            }
+            //    The Sites, Addresses and Certificates lists read the same statements on the kept records and the
+            //    links for one of Kuifje's sites, addresses and certificates as for forty, and with three servers.
+            List<String> lists = List.of(HohenheimSlugs.SITES, HohenheimSlugs.DOMAINS, HohenheimSlugs.CERTIFICATES);
+            assertThat(kuifje.ask("estate 1")).isEqualTo("ok");
+            settle(kuifje);
+            Map<String, DatasourceProbe.Statements> fewThings = new LinkedHashMap<>();
+            for (String list : lists) {
+                fewThings.put(list, probe.statementsOf(() -> masterList(list, "estate")));
+            }
+            assertThat(kuifje.ask("estate 39")).isEqualTo("ok");
+            settle(kuifje);
+            Map<String, DatasourceProbe.Statements> manyThings = new LinkedHashMap<>();
+            for (String list : lists) {
+                manyThings.put(list, probe.statementsOf(() -> masterList(list, "estate")));
+            }
+            Map<String, DatasourceProbe.Statements> threeServersThings = new LinkedHashMap<>();
+            List<UUID> plantedAgain = new ArrayList<>();
+            try {
+                plantedAgain.add(plant("gaston", "https://gaston.cluster.test"));
+                plantedAgain.add(plant("lagaffe", "https://lagaffe.cluster.test"));
+                for (String list : lists) {
+                    threeServersThings.put(list, probe.statementsOf(() -> masterList(list, "estate")));
+                }
+            } finally {
+                Models.get(LinkedServerModel.class).find().where(LinkedServerModel.ID.in(plantedAgain)).delete();
+            }
+            for (String list : lists) {
+                for (String table : List.of(PeerRecordModel.TABLE, "linked_servers")) {
+                    assertThat(manyThings.get(list).executedNaming(table))
+                        .as("step 3: the %s list's reads on %s stay flat as rows grow", list, table)
+                        .isEqualTo(fewThings.get(list).executedNaming(table)).isPositive();
+                    assertThat(threeServersThings.get(list).executedNaming(table))
+                        .as("step 3: the %s list reads %s as often for three servers", list, table)
+                        .isEqualTo(fewThings.get(list).executedNaming(table));
+                }
             }
 
             //    The wire pages: Kuifje's sites read three at a time through the master's own wire come over more
@@ -441,6 +521,18 @@ class LinkedServersJourneyTest {
             //    for a silent server ("Kuifje, does not answer"), counted.
             assertThat(silentList).as("step 5: the Server filter names the silent server as the board does")
                 .containsPattern("\"filter\\.server\",\\$\\d+:\\[[^\\]]*\"server_silent_option\"");
+            //    The Sites and Certificates lists keep Kuifje's as Kuifje had them, receding the same way, under the
+            //    notice saying so in their own words.
+            String silentSites = masterList(HohenheimSlugs.SITES, "early-site");
+            assertThat(rowOf(silentSites, "name", "early-site")).as("step 5: Kuifje's site recedes")
+                .contains(" inactive").contains("Last seen").doesNotContain("pl-state-glyph");
+            assertThat(silentSites).as("step 5: the Sites notice").contains("Kuifje does not answer since")
+                .contains("Its sites are shown as it had them when it last answered.");
+            String silentCertificates = masterList(HohenheimSlugs.CERTIFICATES, "later-cert");
+            assertThat(rowOf(silentCertificates, "nice_name", "later-cert")).as("step 5: Kuifje's certificate recedes")
+                .contains(" inactive").contains("Last seen");
+            assertThat(silentCertificates).as("step 5: the Certificates notice")
+                .contains("Its certificates are shown as it had them when it last answered.");
 
             // 6. Kuifje's database is put back to an earlier state: the copy taken now, before one more site the
             //    master takes in. The state, the attention item and the alert come once; nothing kept changes.
@@ -883,6 +975,13 @@ class LinkedServersJourneyTest {
         return answer.body();
     }
 
+    /** @return the master's list of one entry searched for {@code search}, as its administrator's browser is sent it */
+    private static String masterList(String slug, String search) {
+        HttpResponse<String> answer = asAdministrator("/admin/" + slug + "?text=" + search);
+        assertThat(answer.statusCode()).as("the master's %s list answers", slug).isEqualTo(200);
+        return answer.body();
+    }
+
     /** @return the master's answer to a page its administrator's browser asks for, redirects not followed */
     private static HttpResponse<String> asAdministrator(String path) {
         String cookie = SessionCookies.requestHeaderValue(Zenit.getSessionStore().get(
@@ -901,21 +1000,35 @@ class LinkedServersJourneyTest {
      *         search box and the return addresses repeating the name are no row of it
      */
     private static String rowOf(String page, String name) {
-        String row = titled(page, name);
+        return rowOf(page, "name", name);
+    }
+
+    /** {@link #rowOf(String, String)} of a list whose title column is {@code column} */
+    private static String rowOf(String page, String column, String name) {
+        String row = titled(page, column, name);
         if (row == null) {
-            throw new AssertionError("no row of the list is titled " + name);
+            throw new AssertionError("no row of the list is titled " + name + "; the list draws "
+                + (page.split("<pl-table-row", -1).length - 1) + " rows"
+                + (page.contains("data-cms-list-tool-note") ? ", its count line: " + page.substring(
+                    page.indexOf("data-cms-list-tool-note"), Math.min(page.length(),
+                        page.indexOf("data-cms-list-tool-note") + 200)) : ""));
         }
         return row;
     }
 
     /** @return the table row of a list page whose title cell reads {@code name}, null when none is */
     private static String titled(String page, String name) {
+        return titled(page, "name", name);
+    }
+
+    /** {@link #titled(String, String)} of a list whose title column is {@code column} */
+    private static String titled(String page, String column, String name) {
         String title = ">" + name + "<";
         int start = page.indexOf("<pl-table-row");
         while (start >= 0) {
             int end = page.indexOf("</pl-table-row>", start);
             String row = page.substring(start, end < 0 ? page.length() : end);
-            int cell = row.indexOf("data-column=\"name\"");
+            int cell = row.indexOf("data-column=\"" + column + "\"");
             if (cell >= 0) {
                 int close = row.indexOf("</pl-table-cell>", cell);
                 if (row.substring(cell, close < 0 ? row.length() : close).replaceAll(">\\s+", ">")

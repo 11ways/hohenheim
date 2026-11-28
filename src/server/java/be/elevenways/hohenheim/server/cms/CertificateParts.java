@@ -42,6 +42,8 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
+import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -178,6 +180,21 @@ public final class CertificateParts {
             .build();
     }
 
+    /**
+     * The operator's Certificates list's declaration of every linked server's certificates: as each server told them
+     * (CertificateStates: the listed columns of each, never its chain or key, with its state line and verdict),
+     * revived as certificate rows this list's own cells draw; a silent server's say when it last answered.
+     *
+     * AIDEV-NOTE: a held certificate opens nothing yet and offers no action (download, renew, delete): its state never
+     * reads this server's certificate store under its id, which names another server's certificate.
+     */
+    private static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("certificate"),
+            access -> List.copyOf(ClusterLists.rows(Models.get(CertificateModel.class), CertificateStates.KIND)),
+            "held_band_certificates", "list_certificate_count")
+        .cells(CertificateParts::heldCell)
+        .health(CertificateParts::heldHealth)
+        .build();
+
     private static final TableSpec<Row> ADMIN_TABLE = TableSpec.<Row>builder()
         // AIDEV-NOTE: eight visible columns down to six. The first pairs answer ONE
         // question in one cell -- what does it cover, why is it in this state -- while
@@ -203,6 +220,8 @@ public final class CertificateParts {
         // shared datetime cell with dateStyle(ABSOLUTE) now, not a renderer partial.)
         .column(dateColumn(CertificateModel.ISSUED_ON).hidden().build())
         .column(dateColumn(CertificateModel.EXPIRES_ON).filterable().build())
+        // The server a certificate lives on, while this server manages one (board FO119).
+        .column(HELD.column())
         // Hidden by default since the date cells became two-line (stamp over relative):
         // the list still ran past a 1440px viewport, and the next attempt only carries
         // information while a renewal is failing, which Status already says.
@@ -226,6 +245,7 @@ public final class CertificateParts {
             .label(FieldLabels.labelFor(CertificateModel.EXPIRES_ON)).build())
         .filter(FilterSpec.leaf(CertificateModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
             .label(FieldLabels.labelFor(CertificateModel.CREATED_AT)).build())
+        .filter(HELD.filter())
         .defaultSort(SortSpec.asc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 
@@ -366,6 +386,64 @@ public final class CertificateParts {
     }
 
     /**
+     * @return the names of the certificate's stored columns its list reads, which a server tells its master of each
+     *         of its certificates (CertificateStates); never a chain, key or signing request, which no column shows
+     */
+    static @NonNull List<String> toldColumns() {
+        Map<String, ?> fields = Models.get(CertificateModel.class).getSchema().getFields();
+        List<String> columns = new ArrayList<>(List.of(CertificateModel.ID.getName()));
+        for (ColumnSpec column : ADMIN_TABLE.columns()) {
+            if (column.source() != null && fields.containsKey(column.source().getName())
+                    && !columns.contains(column.source().getName())) {
+                columns.add(column.source().getName());
+            }
+        }
+        return columns;
+    }
+
+    /** @return a held certificate's cell, from its told columns and state; null where nothing is known */
+    private static @Nullable Object heldCell(@NonNull Row row, @NonNull ColumnSpec column) {
+        KeptRow cert = (KeptRow) row;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(cert), "a held certificate's server");
+        if (!cert.readable()) {
+            return CertificateModel.NICE_NAME.getName().equals(column.name()) ? cert.title()
+                : STATE_COLUMN.equals(column.name()) ? ClusterLists.unreadableLine(server) : null;
+        }
+        if (STATE_COLUMN.equals(column.name())) {
+            if (server.silent()) {
+                return ClusterLists.lastSeen(server, CmsSupport.currentReader());
+            }
+            try {
+                return ToldFacts.lineOf(cert.told("state"));
+            } catch (ToldFacts.Unreadable unreadable) {
+                return ClusterLists.unreadableLine(server);
+            }
+        }
+        if (OTHER_NAMES_COLUMN.equals(column.name())) {
+            return otherNames(cert);
+        }
+        if (KEY_CUSTODY_COLUMN.equals(column.name())) {
+            return keyCustody(cert);
+        }
+        Object names = namesCell(cert, column);
+        return names != null ? names : column.source() == null ? null : cert.get(column.source().getName());
+    }
+
+    /** @return a held certificate's verdict as its server told it; a silent or unreadable one says so */
+    private static @Nullable RecordHealth heldHealth(@NonNull Row row) {
+        KeptRow cert = (KeptRow) row;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(cert), "a held certificate's server");
+        if (server.silent()) {
+            return ClusterLists.silent(server);
+        }
+        try {
+            return cert.readable() ? ToldFacts.healthOf(cert.told("health")) : ClusterLists.unreadable(server);
+        } catch (ToldFacts.Unreadable unreadable) {
+            return ClusterLists.unreadable(server);
+        }
+    }
+
+    /**
      * A sortable date column reading absolute-first: the framework's own
      * datetime cell with {@code ColumnSpec.dateStyle(ABSOLUTE)} -- these
      * columns are planned against the calendar, not against "how long ago".
@@ -383,7 +461,12 @@ public final class CertificateParts {
                 EXPIRY_DISPLAY.getName(),
                 CHALLENGE_DISPLAY.getName(), DNS_PUBLISHER_DISPLAY.getName(), RENEWAL_ERROR_DISPLAY.getName(),
                 NEXT_ATTEMPT_DISPLAY.getName()), CertificateParts::displayValues))
-            .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
+            .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST.withNoticeOverRows(true)).facets()
+                .ruleFilters()
+                .held(HELD)
+                .notice(HELD::notice)
+                .toolNote(access -> HELD.counted(access, Models.get(CertificateModel.class).find()
+                    .where(HohenheimSources.notTheAcmeAccountRow()).count()))
                 .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
                 .computed(Objects.requireNonNull(ADMIN_TABLE.column(STATE_COLUMN)), (row, request) -> stateCell(row))
                 .computed(Objects.requireNonNull(ADMIN_TABLE.column(OTHER_NAMES_COLUMN)),

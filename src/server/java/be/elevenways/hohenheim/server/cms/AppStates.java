@@ -1,16 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.cluster.LinkRole;
-import be.elevenways.hohenheim.cluster.LinkState;
-import be.elevenways.hohenheim.model.LinkedServerModel;
-import be.elevenways.hohenheim.server.cluster.ClusterRecords;
-import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.cms.AppDirectory.HeldApp;
-import be.elevenways.hohenheim.server.cms.AppDirectory.Held;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.cms.common.resource.HeldRecords.Holder;
 import be.elevenways.zenit.server.peer.PeerRecords;
 import be.elevenways.zenit.server.peer.SharedRow;
 import be.elevenways.zenit.server.peer.SharedStates;
@@ -18,7 +12,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,13 +62,13 @@ public final class AppStates {
      * @return the apps in the order kept (by server key, then app key), worded for the viewer
      */
     static @NonNull List<HeldApp> held(@NonNull Wording words) {
-        Map<String, Held> servers = servers();
+        Map<String, Holder> servers = ClusterLists.servers();
         List<HeldApp> apps = new ArrayList<>();
         if (servers.isEmpty()) {
             return apps;
         }
         for (PeerRecords.PeerKept kept : PeerRecords.everyPeer(KIND)) {
-            Held held = servers.get(kept.peer());
+            Holder held = servers.get(kept.peer());
             if (held != null) {
                 apps.add(appOf(kept.record(), held, words));
             }
@@ -88,32 +81,17 @@ public final class AppStates {
      * @return the linked server's app the key names, as that server last told it; null for a key naming none
      */
     static @Nullable HeldApp held(@NonNull String key, @NonNull Wording words) {
-        for (Held held : servers().values()) {
-            String prefix = held.peer() + "-";
+        for (Holder held : ClusterLists.servers().values()) {
+            String prefix = held.key() + "-";
             if (key.startsWith(prefix)) {
-                PeerRecords.KeptRecord kept = PeerRecords.read(held.peer(), KIND, key.substring(prefix.length()));
+                PeerRecords.KeptRecord kept = PeerRecords.read(held.key(), KIND, key.substring(prefix.length()));
                 return kept == null ? null : appOf(kept, held, words);
             }
         }
         return null;
     }
 
-    /** @return every server this one manages by the key its records are kept under, as this server last heard of it */
-    private static @NonNull Map<String, Held> servers() {
-        Map<String, Held> servers = new HashMap<>();
-        String version = LinkedServers.ownVersion();
-        for (Row server : LinkedServers.all()) {
-            if (LinkedServers.roleOf(server) == LinkRole.MANAGES) {
-                String peer = ClusterRecords.peerKey(server);
-                servers.put(peer, new Held(peer, String.valueOf((Object) server.get(LinkedServerModel.NAME)),
-                    LinkState.of(server, version) == LinkState.NOT_ANSWERING,
-                    server.get(LinkedServerModel.LAST_SEEN_AT)));
-            }
-        }
-        return servers;
-    }
-
-    private static @NonNull HeldApp appOf(PeerRecords.@NonNull KeptRecord kept, @NonNull Held held,
+    private static @NonNull HeldApp appOf(PeerRecords.@NonNull KeptRecord kept, @NonNull Holder held,
                                           @NonNull Wording words) {
         AppFacts facts = AppFacts.of(kept.document());
         return facts == null ? HeldApp.unreadable(kept.key(), kept.title(), held, words)

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cluster;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.cluster.LinkFailure;
 import be.elevenways.hohenheim.cluster.LinkState;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.HostModel;
@@ -10,6 +11,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.LinkedServerModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -508,6 +510,54 @@ final class ForkedHohenheim implements AutoCloseable {
                     });
                     yield "ok";
                 }
+                // "address SITE HOSTNAME" gives a site an exact address, as its Addresses tab's form stores one.
+                case "address" -> {
+                    Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+                    domain.set(SiteDomainModel.SITE_ID, Integer.parseInt(words[1]));
+                    domain.set(SiteDomainModel.HOSTNAME, words[2]);
+                    domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+                    domain.set(SiteDomainModel.FORCE_SSL, false);
+                    Models.get(SiteDomainModel.class).save(domain);
+                    yield "address " + domain.get(SiteDomainModel.ID);
+                }
+                // "estate N" stores N sites, each with one address and one certificate covering it, in ONE commit.
+                case "estate" -> {
+                    int many = Integer.parseInt(words[1]);
+                    SiteModel sites = Models.get(SiteModel.class);
+                    sites.getResolvedDatasource().withTransaction(transaction -> {
+                        for (int at = 0; at < many; at++) {
+                            String name = "estate-" + Now.millis() + "-" + at;
+                            Row site = sites.createEmptyRow();
+                            site.set(SiteModel.NAME, name);
+                            site.set(SiteModel.SLUG, name);
+                            site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+                            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+                            site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + name));
+                            site.set(SiteModel.ENABLED, false);
+                            sites.save(site);
+                            Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+                            domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+                            domain.set(SiteDomainModel.HOSTNAME, name + ".kuifje.test");
+                            domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+                            domain.set(SiteDomainModel.FORCE_SSL, false);
+                            Models.get(SiteDomainModel.class).save(domain);
+                            certificate(name + "-cert", name + ".kuifje.test", CertificateModel.STATUS_ACTIVE, 0);
+                        }
+                    });
+                    yield "ok";
+                }
+                // "certificate NAME DOMAINS" stores a Let's Encrypt certificate whose renewal failed once.
+                case "certificate" -> "certificate " + certificate(words[1], words[2], CertificateModel.STATUS_ERROR,
+                    1).get(CertificateModel.ID);
+                // "renewed ID" stores a certificate's renewal as having worked.
+                case "renewed" -> {
+                    Row cert = Models.get(CertificateModel.class).findById(Integer.parseInt(words[1]));
+                    cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+                    cert.set(CertificateModel.ERROR_COUNT, 0);
+                    cert.set(CertificateModel.RENEWAL_ERROR, null);
+                    Models.get(CertificateModel.class).save(cert);
+                    yield "ok";
+                }
                 case "describe" -> {
                     Row site = Models.get(SiteModel.class).findById(Integer.parseInt(words[1]));
                     site.set(SiteModel.DESCRIPTION, words[2]);
@@ -607,6 +657,21 @@ final class ForkedHohenheim implements AutoCloseable {
                 }
                 default -> "unknown " + command;
             };
+        }
+
+        /** @return a stored Let's Encrypt certificate of {@code domains}, expiring in thirty days */
+        private static @NonNull Row certificate(@NonNull String name, @NonNull String domains, @NonNull String status,
+                                                int errors) {
+            Row cert = Models.get(CertificateModel.class).createEmptyRow();
+            cert.set(CertificateModel.NICE_NAME, name);
+            cert.set(CertificateModel.DOMAIN_NAMES_TEXT, domains);
+            cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+            cert.set(CertificateModel.STATUS, status);
+            cert.set(CertificateModel.ERROR_COUNT, errors);
+            cert.set(CertificateModel.AUTO_RENEW, true);
+            cert.set(CertificateModel.EXPIRES_ON, Now.instant().plus(Duration.ofDays(30)));
+            Models.get(CertificateModel.class).save(cert);
+            return cert;
         }
 
         /** @return every linked server as {@code name|role|state|failure|pinned token}, joined by semicolons */

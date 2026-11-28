@@ -7,8 +7,6 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
@@ -23,6 +21,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.HeldRecords.Holder;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -184,24 +183,19 @@ final class AppDirectory {
      *
      * @param held the linked server it lives on
      */
-    record HeldApp(@NonNull Cells cells, @NonNull Held held) implements Listed {
+    record HeldApp(@NonNull Cells cells, @NonNull Holder held) implements Listed {
 
         /**
          * @return a linked server's app; a silent server's keeps what it told of the app itself, while its verdict and
          *         HTTPS, no longer current, say only when the server last answered, as a plain line
          */
-        static @NonNull HeldApp of(@NonNull AppFacts facts, @NonNull Held held, @NonNull Wording words) {
-            String key = held.peer() + "-" + facts.key();
+        static @NonNull HeldApp of(@NonNull AppFacts facts, @NonNull Holder held, @NonNull Wording words) {
+            String key = held.key() + "-" + facts.key();
             if (!held.silent()) {
                 return new HeldApp(Cells.of(key, facts, facts.https(), facts.health(), words), held);
             }
-            Microcopy lastSeen = held.lastSeen() == null ? HohenheimMicrocopy.APP_LIST.of("held_never_seen")
-                : HohenheimMicrocopy.APP_LIST.of("held_last_seen").withArg("at", held.lastSeen())
-                    .withArg("day", recentDay(words.reader(), held.lastSeen()));
-            StateLineCell https = StateLineCell.line(HealthTone.SILENT.token(), lastSeen);
-            RecordHealth silent = RecordHealth.silent(HohenheimMicrocopy.APP_LIST.of("held_silent")
-                .withArg("server", held.server()));
-            return new HeldApp(Cells.of(key, facts, https, silent, words), held);
+            return new HeldApp(Cells.of(key, facts, ClusterLists.lastSeen(held, words.reader()),
+                ClusterLists.silent(held), words), held);
         }
 
         /**
@@ -210,25 +204,14 @@ final class AppDirectory {
          * @param recordKey the key its state is kept under on its server
          * @param title     the name its state is kept by
          */
-        static @NonNull HeldApp unreadable(@NonNull String recordKey, @NonNull String title, @NonNull Held held,
+        static @NonNull HeldApp unreadable(@NonNull String recordKey, @NonNull String title, @NonNull Holder held,
                                            @NonNull Wording words) {
             RecordHealth unread = new RecordHealth(HealthTone.UNKNOWN, HohenheimMicrocopy.APP_LIST.of("held_unreadable")
-                .withArg("server", held.server()), null, List.of(), null);
-            Cells cells = new Cells(held.peer() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread,
+                .withArg("server", held.name()), null, List.of(), null);
+            Cells cells = new Cells(held.key() + "-" + recordKey, null, 0, title, "", null, null, null, null, unread,
                 null);
             return new HeldApp(cells, held);
         }
-    }
-
-    /**
-     * The linked server an app lives on, as this server last heard of it.
-     *
-     * @param peer     the key the record of that server is kept under
-     * @param server   its name
-     * @param silent   whether it does not answer now, so what it told is no longer current
-     * @param lastSeen when it last answered, null when it never did
-     */
-    record Held(@NonNull String peer, @NonNull String server, boolean silent, @Nullable Instant lastSeen) {
     }
 
     /**
@@ -330,40 +313,6 @@ final class AppDirectory {
         apps.sort(Comparator.comparing((App app) -> app.cells().name().toLowerCase(Locale.ROOT))
             .thenComparing(app -> app.cells().key()));
         return List.copyOf(apps);
-    }
-
-    /**
-     * The apps the Apps list of this panel shows this viewer: this server's ({@link #read}) and, on the operator's
-     * panel for an administrator, every linked server's as it last told them ({@link AppStates#held}), by name; read
-     * once per request.
-     *
-     * AIDEV-NOTE: the master decides who sees a linked server's apps, and today it can decide that only by
-     * permission: an app's owners and grants are the linked server's own rows (RecordOwners over zenit-auth grants,
-     * no shared kind), so a viewer who is no administrator sees none of them until grants follow the master. Never
-     * widen this with a rule of its own.
-     */
-    static @NonNull List<Listed> everyServer(@NonNull Panel panel, @NonNull AccessContext access) {
-        Supplier<List<Listed>> read = () -> {
-            List<Listed> apps = new ArrayList<>(read(panel, access));
-            if (showsLinkedServers(panel, access)) {
-                apps.addAll(AppStates.held(Wording.of(access)));
-                apps.sort(Comparator.comparing((Listed app) -> app.cells().name().toLowerCase(Locale.ROOT))
-                    .thenComparing(app -> app.cells().key()));
-            }
-            return List.copyOf(apps);
-        };
-        Conduit conduit = access.conduit();
-        return conduit == null ? read.get()
-            : conduit.memo(IdentifierKey.of("hohenheim", "app_directory_all_" + panel.slug()), read);
-    }
-
-    /**
-     * @return whether this panel's Apps list shows this viewer the apps of the servers this one manages: the
-     *         operator's panel, an administrator, and a server to manage
-     */
-    static boolean showsLinkedServers(@NonNull Panel panel, @NonNull AccessContext access) {
-        return HohenheimSlugs.ADMIN.equals(panel.slug()) && HohenheimAccess.isAdmin(access)
-            && LinkedServers.managesAny();
     }
 
     /**
@@ -511,12 +460,20 @@ final class AppDirectory {
     /** @param workloadVisible whether the reader's Apps list holds the site's workload as the app */
     static @NonNull String nameOf(@NonNull Row site, boolean workloadVisible) {
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-        if (workloadVisible && instanceId != null) {
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
-            if (instance != null && !InstanceParts.isGenerated(instance)
-                    && instance.get(InstanceModel.DELETED_AT) == null) {
-                return String.valueOf((Object) instance.get(InstanceModel.NAME));
-            }
+        return nameOf(site, workloadVisible && instanceId != null
+            ? Models.get(InstanceModel.class).findById(instanceId) : null);
+    }
+
+    /**
+     * {@link #nameOf(Row)} with the site's workload already read: a linked server's site and the workload its server
+     * keeps name its app as that server's Apps list does.
+     *
+     * @param instance the site's workload, null for none or one the reader's Apps list does not hold
+     */
+    static @NonNull String nameOf(@NonNull Row site, @Nullable Row instance) {
+        if (instance != null && !InstanceParts.isGenerated(instance)
+                && instance.get(InstanceModel.DELETED_AT) == null) {
+            return String.valueOf((Object) instance.get(InstanceModel.NAME));
         }
         return String.valueOf((Object) site.get(SiteModel.NAME));
     }

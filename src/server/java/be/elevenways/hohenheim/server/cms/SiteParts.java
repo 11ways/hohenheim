@@ -52,6 +52,9 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -72,6 +75,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -281,6 +285,7 @@ public final class SiteParts {
      * filter strip instead of duplicating the badge the upstream cell already draws.
      */
     private static @NonNull ResourceList<Row> adminList() {
+        HeldRecords<Row> held = HELD;
         TableSpec<Row> table = TableSpec.<Row>builder()
             // The slug names this site in every generated path, container name and log line, so it reads under the
             // name instead of costing a column of its own.
@@ -293,6 +298,8 @@ public final class SiteParts {
                 .renderer(HohenheimTemplateIds.CELL_SITE_UPSTREAM).build())
             .column(ColumnSpec.virtual(TLS_COLUMN, HohenheimMicrocopy.SITE.of("tls"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
+            // The board's last column (FO119): the server a site lives on, while this server manages one.
+            .column(held.column())
             // Enabled reads as ROW STATE (a disabled site renders muted, the strip keeps the tri-state filter)
             // instead of costing a column; the picker still offers it.
             .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().hidden().build())
@@ -309,6 +316,8 @@ public final class SiteParts {
                 .label(FieldLabels.labelFor(SiteModel.UPSTREAM_KIND)).build())
             .filter(FilterSpec.leaf(SiteModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
+            // The board's order: Serves, Enabled, Server.
+            .filter(held.filter())
             .filter(FilterSpec.leaf(SiteModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
                 .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
             .filter(FilterSpec.globalLeaf(ResourceList.ARCHIVED_FILTER,
@@ -318,7 +327,8 @@ public final class SiteParts {
             .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED)) ? "" : "hh-site-disabled")
             .build();
         return ResourceList.rows(table)
-            .chrome(ListChrome.DEFAULT)
+            // The notice about a silent server stands over the rows it speaks of (board FO119).
+            .chrome(ListChrome.DEFAULT.withNoticeOverRows(true))
             // The legacy row resource's filter tiers: facet counts, and the query and advanced builder.
             .facets().ruleFilters()
             // An operator looks a site up by what they call it, by what the paths call it, or by their note on it.
@@ -326,12 +336,102 @@ public final class SiteParts {
             // A deleted site lands in the Trash, from where it is restored (the model's save, so every site write
             // hook runs and the quota re-books the slot) or deleted for good.
             .trash()
+            .held(held)
+            .notice(held::notice)
+            .toolNote(access -> held.counted(access, Models.get(SiteModel.class).find().count()))
             .computed(Objects.requireNonNull(table.column(HOSTNAMES_COLUMN)), (row, request) -> addressCellOf(row))
             .computed(Objects.requireNonNull(table.column(UPSTREAM_COLUMN)), (row, request) -> upstreamCellOf(row))
             // A site answering on no address (a stream) has no HTTPS state: its cell stays blank.
             .computed(Objects.requireNonNull(table.column(TLS_COLUMN)), (row, request) -> reachOf(row).asksAddress()
                 ? StateLineCell.of(tlsOf(row), null) : null)
             .build();
+    }
+
+    /**
+     * The operator's Sites list's declaration of every linked server's sites: their shared records as this server
+     * keeps them, drawn by this list's own cells from those records, the same server's kept addresses and apps, and
+     * the TLS line and verdict it told (SiteStates); a silent server's say when it last answered.
+     *
+     * AIDEV-NOTE: a held site opens nothing yet (its page is a later step) and offers no action; no cell reads this
+     * process under its id, which names another server's site.
+     */
+    private static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("site"),
+            access -> List.copyOf(ClusterLists.rows(Models.get(SiteModel.class), SiteModel.MODEL_ID)),
+            "held_band_sites", "list_site_count")
+        .cells(SiteParts::heldCell)
+        .health(SiteParts::heldHealth)
+        .build();
+
+    /** @return a held site's cell, from its kept record and what its server told; null where nothing is known */
+    private static @Nullable Object heldCell(@NonNull Row row, @NonNull ColumnSpec column) {
+        KeptRow site = (KeptRow) row;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(site), "a held site's server");
+        if (!site.readable()) {
+            return SiteModel.NAME.getName().equals(column.name()) ? site.title()
+                : TLS_COLUMN.equals(column.name()) ? ClusterLists.unreadableLine(server) : null;
+        }
+        return switch (column.name()) {
+            case HOSTNAMES_COLUMN -> addressCellOf(site, reachOf(site).asksAddress() ? keptDomainsOf(site) : List.of());
+            case UPSTREAM_COLUMN -> upstreamCellOf(site, keptInstanceTitle(site), null);
+            case TLS_COLUMN -> !reachOf(site).asksAddress() ? null : server.silent()
+                ? ClusterLists.lastSeen(server, CmsSupport.currentReader()) : toldTls(site, server);
+            default -> column.source() == null ? null : site.get(column.source().getName());
+        };
+    }
+
+    /** @return a held site's verdict as its server told it; a silent or unreadable one says so, an untold one none */
+    private static @Nullable RecordHealth heldHealth(@NonNull Row row) {
+        KeptRow site = (KeptRow) row;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(site), "a held site's server");
+        if (server.silent()) {
+            return ClusterLists.silent(server);
+        }
+        Map<String, @Nullable Map<?, ?>> told = ClusterLists.told(SiteStates.SITE_KIND);
+        if (!site.readable() || (told.containsKey(site.listKey()) && told.get(site.listKey()) == null)) {
+            return ClusterLists.unreadable(server);
+        }
+        try {
+            Map<?, ?> state = told.get(site.listKey());
+            return state == null ? null : ToldFacts.healthOf(state.get("health"));
+        } catch (ToldFacts.Unreadable unreadable) {
+            return ClusterLists.unreadable(server);
+        }
+    }
+
+    /** @return the TLS line a held site's server told, the unreadable line for one this build cannot read */
+    private static @Nullable StateLineCell toldTls(@NonNull KeptRow site, HeldRecords.@NonNull Holder server) {
+        Map<String, @Nullable Map<?, ?>> told = ClusterLists.told(SiteStates.SITE_KIND);
+        if (!told.containsKey(site.listKey())) {
+            return null;
+        }
+        try {
+            Map<?, ?> state = told.get(site.listKey());
+            if (state == null) {
+                throw new ToldFacts.Unreadable("site state");
+            }
+            return ToldFacts.lineOf(state.get("tls"));
+        } catch (ToldFacts.Unreadable unreadable) {
+            return ClusterLists.unreadableLine(server);
+        }
+    }
+
+    /** @return a held site's names as its server keeps them, in stored order */
+    static @NonNull List<Row> keptDomainsOf(@NonNull KeptRow site) {
+        List<Row> domains = new ArrayList<>(ClusterLists.grouped(Models.get(SiteDomainModel.class),
+            SiteDomainModel.MODEL_ID, SiteDomainModel.SITE_ID.getName())
+            .getOrDefault(ClusterLists.sibling(site, site.get(SiteModel.ID)), List.of()));
+        domains.sort(Comparator.comparing(domain -> (Integer) domain.get(SiteDomainModel.ID),
+            Comparator.nullsLast(Comparator.naturalOrder())));
+        return domains;
+    }
+
+    /** @return the name of the app a held site serves, as its server keeps it; null for none kept */
+    private static @Nullable String keptInstanceTitle(@NonNull KeptRow site) {
+        Object instanceId = site.get(SiteModel.INSTANCE_ID);
+        KeptRow instance = instanceId == null ? null : ClusterLists.byKey(Models.get(InstanceModel.class),
+            InstanceModel.MODEL_ID).get(ClusterLists.sibling(site, instanceId));
+        return instance == null || !instance.readable() ? null
+            : Models.get(InstanceModel.class).getDisplayTitle(instance);
     }
 
     /**
@@ -566,12 +666,6 @@ public final class SiteParts {
     }
 
     static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site) {
-        String kindKey = String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND));
-        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(kindKey);
-        Microcopy label = upstreamLabel(site);
-        String icon = handler != null && handler.getIcon() != null ? handler.getIcon().name() : null;
-        String color = handler != null ? BadgeColor.tokenOf(handler.color()) : null;
-
         String instanceName = null;
         String instanceUrl = null;
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
@@ -582,6 +676,23 @@ public final class SiteParts {
                 instanceUrl = InstanceParts.recordRoute(HohenheimSlugs.ADMIN, instance, null).toUrl();
             }
         }
+        return upstreamCellOf(site, instanceName, instanceUrl);
+    }
+
+    /**
+     * {@link #upstreamCellOf(Row)} with the app it serves already named: a linked server's site names the app its
+     * server keeps, linked nowhere here.
+     *
+     * @param instanceName the name of the app the site serves, null for none
+     * @param instanceUrl  where that app opens, null where it opens nothing
+     */
+    static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site, @Nullable String instanceName,
+                                                    @Nullable String instanceUrl) {
+        String kindKey = String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND));
+        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(kindKey);
+        Microcopy label = upstreamLabel(site);
+        String icon = handler != null && handler.getIcon() != null ? handler.getIcon().name() : null;
+        String color = handler != null ? BadgeColor.tokenOf(handler.color()) : null;
 
         String summary = null;
         if (handler != null && instanceName == null) {

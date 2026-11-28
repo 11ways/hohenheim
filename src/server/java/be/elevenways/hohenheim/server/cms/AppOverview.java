@@ -502,7 +502,7 @@ final class AppOverview {
 
     private static @NonNull WidgetTree heldWidgets(@NonNull HeldApp app, @NonNull AccessContext access) {
         Cells cells = app.cells();
-        String server = app.held().server();
+        String server = app.held().name();
         List<WidgetInstance> top = new ArrayList<>();
         if (app.held().silent()) {
             // The board's words (FO119, "App page while its server does not answer").

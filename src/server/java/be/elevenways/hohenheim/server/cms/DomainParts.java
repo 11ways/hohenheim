@@ -31,6 +31,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
 import be.elevenways.zenit.cms.common.render.table.RecordLink;
 import be.elevenways.zenit.cms.common.render.table.RecordLinksCell;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -43,6 +44,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.server.peer.KeptRow;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -166,7 +168,7 @@ public final class DomainParts {
 
     /** @return the admin domain resource: every domain of a live site */
     public static @NonNull PanelResource<Row> admin() {
-        return entry(HohenheimIds.id("site_domain"))
+        return entry(HohenheimIds.id("site_domain"), HELD)
             .scope(ROWS)
             .form(form(adminFormSpec(HohenheimSlugs.ADMIN), HohenheimSlugs.ADMIN,
                 AddressWrites.HttpsReader.OPERATOR))
@@ -177,6 +179,71 @@ public final class DomainParts {
             .actions(List.of(CertificateOperations.requestForDomainAction(), checkReachAction()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
+    }
+
+    /**
+     * The operator's Addresses list's declaration of every linked server's addresses: their shared records as this
+     * server keeps them, the app each serves named from the same server's kept sites and apps (linked nowhere here),
+     * and whether each points at its proxy and what HTTPS gives it as that server told (SiteStates).
+     *
+     * AIDEV-NOTE: a held address opens nothing yet and offers no action (Check again, Get a certificate): no cell
+     * looks its name up here or reads this server's certificates for it; a silent server's say when it last answered.
+     * A site's own Addresses tab lists that site's addresses alone, so it hides the Server column (SiteParts.DOMAINS).
+     */
+    static final HeldRecords<Row> HELD = ClusterLists.declareRows(HohenheimIds.id("site_domain"),
+            access -> List.copyOf(ClusterLists.rows(Models.get(SiteDomainModel.class), SiteDomainModel.MODEL_ID)),
+            "held_band_addresses", "list_address_count")
+        .cells(DomainParts::heldCell)
+        .build();
+
+    /** @return a held address's cell, from its kept record and what its server told; null where nothing is known */
+    private static @Nullable Object heldCell(@NonNull Row row, @NonNull ColumnSpec column) {
+        KeptRow domain = (KeptRow) row;
+        HeldRecords.Holder server = Objects.requireNonNull(ClusterLists.holderOf(domain), "a held address's server");
+        if (!domain.readable()) {
+            return SiteDomainModel.HOSTNAME.getName().equals(column.name()) ? domain.title()
+                : REACH_COLUMN.equals(column.name()) ? ClusterLists.unreadableLine(server) : null;
+        }
+        return switch (column.name()) {
+            case APP_COLUMN -> heldAppCell(domain);
+            case REACH_COLUMN -> server.silent() ? ClusterLists.lastSeen(server, CmsSupport.currentReader())
+                : told(domain, server, "reach");
+            case CERTIFICATE_COLUMN -> server.silent() ? null : told(domain, server, "https");
+            default -> column.source() == null ? null : domain.get(column.source().getName());
+        };
+    }
+
+    /** @return the app a held address serves, by the name its server's Apps list gives it, linked nowhere here */
+    private static @Nullable RecordLinksCell heldAppCell(@NonNull KeptRow domain) {
+        Object siteId = domain.get(SiteDomainModel.SITE_ID);
+        KeptRow site = siteId == null ? null : ClusterLists.byKey(Models.get(SiteModel.class), SiteModel.MODEL_ID)
+            .get(ClusterLists.sibling(domain, siteId));
+        if (site == null || !site.readable()) {
+            return null;
+        }
+        Object instanceId = site.get(SiteModel.INSTANCE_ID);
+        KeptRow instance = instanceId == null ? null : ClusterLists.byKey(Models.get(InstanceModel.class),
+            InstanceModel.MODEL_ID).get(ClusterLists.sibling(site, instanceId));
+        return RecordLinksCell.of(new RecordLink(AppDirectory.nameOf(site,
+            instance == null || !instance.readable() ? null : instance), null));
+    }
+
+    /** @return one state line a held address's server told, the unreadable line for one this build cannot read */
+    private static @Nullable StateLineCell told(@NonNull KeptRow domain, HeldRecords.@NonNull Holder server,
+                                                @NonNull String fact) {
+        Map<String, @Nullable Map<?, ?>> told = ClusterLists.told(SiteStates.ADDRESS_KIND);
+        if (!told.containsKey(domain.listKey())) {
+            return null;
+        }
+        try {
+            Map<?, ?> state = told.get(domain.listKey());
+            if (state == null) {
+                throw new ToldFacts.Unreadable("address state");
+            }
+            return ToldFacts.lineOf(state.get(fact));
+        } catch (ToldFacts.Unreadable unreadable) {
+            return ClusterLists.unreadableLine(server);
+        }
     }
 
     /** The row's "Check again": the list redraws with the fresh answer; rare beside the row's own actions. */
@@ -191,7 +258,7 @@ public final class DomainParts {
     /** @return the /manage twin: the addresses the caller may read, edited only under a site it manages */
     public static @NonNull PanelResource<Row> manage() {
         // A Domains cluster member, shown while the tenant may read an address.
-        return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
+        return ManageTwin.listed(entry(ManageTwin.id("site_domain"), null), TenantScopes.DOMAINS, ResourceTabs.none(),
                 HohenheimAccess::readsAnyAddress)
             .form(form(manageFormSpec(HohenheimSlugs.MANAGE), HohenheimSlugs.MANAGE,
                 AddressWrites.HttpsReader.DELEGATED))
@@ -199,8 +266,13 @@ public final class DomainParts {
             .build();
     }
 
-    /** The entry, list, reads, authority and parent both twins share; each declares its own writes. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+    /**
+     * The entry, list, reads, authority and parent both twins share; each declares its own writes.
+     *
+     * @param held the operator's declaration of every linked server's addresses, null on the /manage twin
+     */
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id,
+                                                             @Nullable HeldRecords<Row> held) {
         return PanelResource.builder(id, HohenheimSlugs.DOMAINS, SUBJECT)
             .label(HohenheimMicrocopy.SITE_DOMAIN.of("plural"))
             .recordLabel(HohenheimMicrocopy.SITE_DOMAIN.of("singular"))
@@ -209,7 +281,7 @@ public final class DomainParts {
             .navOrder(20)
             .icon(Icon.of("at"))
             .parent(ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab(HohenheimSlugs.DOMAINS))
-            .list(list())
+            .list(list(held))
             // The HTTPS cell of a page of addresses: their sites, the working names and the certificate rows are read
             // once for the page (its computed cell is the one-record read).
             .reads(ResourceReads.rows().pageBatch(DomainParts::certificateCells))
@@ -225,8 +297,8 @@ public final class DomainParts {
      * is {@link AppHealth#httpsOf}, the one per-name rule the app overview and the app's verdict read, so the list
      * never calls a forced name without a working certificate anything but broken.
      */
-    private static @NonNull ResourceList<Row> list() {
-        TableSpec<Row> table = TableSpec.<Row>builder()
+    private static @NonNull ResourceList<Row> list(@Nullable HeldRecords<Row> held) {
+        TableSpec.Builder<Row> columns = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME)
                 .label(HohenheimMicrocopy.SITE_DOMAINS.of("address_column"))
                 .filterable().copyable().subtext("path").build())
@@ -242,24 +314,37 @@ public final class DomainParts {
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.virtual(CERTIFICATE_COLUMN,
                     HohenheimMicrocopy.SITE_DOMAINS.of("https_column"))
-                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
-            .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().hidden().build())
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build());
+        if (held != null) {
+            // The server an address lives on, while this server manages one (board FO119).
+            columns.column(held.column());
+        }
+        columns.column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().hidden().build())
             .filter(FilterSpec.leaf(SiteDomainModel.HOSTNAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
             .filter(FilterSpec.leaf(SiteDomainModel.MATCH_TYPE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(SiteDomainModel.MATCH_TYPE)).build())
             .filter(FilterSpec.leaf(SiteDomainModel.FORCE_SSL, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
-                .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build())
-            .build();
-        return ResourceList.rows(table)
-            .chrome(ListChrome.MINIMAL)
+                .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build());
+        if (held != null) {
+            columns.filter(held.filter());
+        }
+        TableSpec<Row> table = columns.build();
+        ResourceList.Builder<Row> list = ResourceList.rows(table)
+            .chrome(held == null ? ListChrome.MINIMAL : ListChrome.MINIMAL.withNoticeOverRows(true))
             .search(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH)
             // What an empty list (a new site's Domains tab above all: it routes nothing yet) tells the reader to do.
             .emptyDescription(HohenheimMicrocopy.SITE_DOMAINS.of("empty_description"))
             .computed(Objects.requireNonNull(table.column(APP_COLUMN)), DomainParts::appCell)
             .computed(Objects.requireNonNull(table.column(REACH_COLUMN)), DomainParts::reachCell)
-            .computed(Objects.requireNonNull(table.column(CERTIFICATE_COLUMN)), DomainParts::certificateCell)
-            .build();
+            .computed(Objects.requireNonNull(table.column(CERTIFICATE_COLUMN)), DomainParts::certificateCell);
+        if (held != null) {
+            list.held(held)
+                .notice(held::notice)
+                .toolNote(access -> held.counted(access, Models.get(SiteDomainModel.class).find()
+                    .where(liveSiteScope()).count()));
+        }
+        return list.build();
     }
 
     /**

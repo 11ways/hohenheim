@@ -1,21 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hawkeye.common.customelement.AttributeToken;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -56,40 +52,26 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
     }
 
     /**
-     * @return the facts as the state document a linked server tells its master: JSON, each piece of copy in it as its
-     *         own DRY text ({@link #wired}), so it revives as copy, a composed one with its parts ({@link #of}); a
-     *         JSON tree carries no type, and a Microcopy written into it as a map no reader could revive
+     * @return the facts as the state document a linked server tells its master: JSON, through the one wire of told
+     *         facts ({@link ToldFacts}), so its copy revives as copy, a composed one with its parts ({@link #of})
      */
     @NonNull String document() {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("source", this.source.token());
         document.put("id", this.id);
         document.put("name", this.name);
-        document.put("kind", wired(this.kind));
+        document.put("kind", ToldFacts.wired(this.kind));
         if (this.address != null) {
-            Map<String, Object> address = new LinkedHashMap<>();
-            address.put("primary", this.address.primary());
-            address.put("more", this.address.moreCount());
-            document.put("address", address);
+            document.put("address", ToldFacts.address(this.address));
         }
         document.put("host", this.host);
         if (this.started != null) {
             document.put("started", this.started.toString());
         }
         if (this.https != null) {
-            Map<String, Object> https = new LinkedHashMap<>();
-            https.put("state", this.https.state());
-            https.put("variant", this.https.variant().token());
-            https.put("label", wired(this.https.label()));
-            https.put("detail", wired(this.https.detail()));
-            https.put("note", wired(this.https.note()));
-            document.put("https", https);
+            document.put("https", ToldFacts.line(this.https));
         }
-        Map<String, Object> health = new LinkedHashMap<>();
-        health.put("tone", this.health.tone().token());
-        health.put("headline", wired(this.health.headline()));
-        health.put("detail", wired(this.health.detail()));
-        document.put("health", health);
+        document.put("health", ToldFacts.health(this.health));
         return Zenit.DRY.toJson(document);
     }
 
@@ -99,63 +81,23 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
      *         leaves it out
      */
     static @Nullable AppFacts of(@NonNull String document) {
-        Microcopy kind;
-        Microcopy headline;
-        if (!(Zenit.DRY.parseJsonTree(document) instanceof Map<?, ?> facts)
-                || !(facts.get("source") instanceof String sourceToken)
-                || !(facts.get("id") instanceof Number id) || !(facts.get("name") instanceof String name)
-                || (kind = copyOf(facts.get("kind"))) == null
-                || !(facts.get("health") instanceof Map<?, ?> health)
-                || (headline = copyOf(health.get("headline"))) == null) {
-            return null;
-        }
-        Source source = sourceOf(sourceToken);
-        HealthTone tone = toneOf(health.get("tone"));
-        if (source == null || tone == null) {
-            return null;
-        }
-        SiteHostnamesCell address = null;
-        if (facts.get("address") instanceof Map<?, ?> told) {
-            address = new SiteHostnamesCell(told.get("primary") instanceof String primary ? primary : null,
-                told.get("more") instanceof Number more ? more.intValue() : 0);
-        }
-        StateLineCell https = null;
-        if (facts.get("https") instanceof Map<?, ?> told) {
-            BadgeVariant variant = told.get("variant") instanceof String token
-                ? AttributeToken.find(BadgeVariant.values(), token) : null;
-            Microcopy label = copyOf(told.get("label"));
-            if (!(told.get("state") instanceof String state) || variant == null || label == null) {
-                return null;
-            }
-            https = new StateLineCell(state, variant, label, copyOf(told.get("detail")), null, null,
-                copyOf(told.get("note")));
-        }
-        Instant started = null;
-        if (facts.get("started") instanceof String told) {
-            try {
-                started = Instant.parse(told);
-            } catch (DateTimeParseException unreadable) {
-                return null;
-            }
-        }
-        return new AppFacts(source, id.intValue(), name, kind, address,
-            facts.get("host") instanceof String host ? host : null, https,
-            new RecordHealth(tone, headline, copyOf(health.get("detail")), List.of(), null), started);
-    }
-
-    /** @return the copy as its DRY text, null for none */
-    private static @Nullable String wired(@Nullable Microcopy copy) {
-        return copy == null ? null : Zenit.DRY.stringify(copy);
-    }
-
-    /** @return the copy a DRY text holds, null for none or for a text that holds no copy this build can read */
-    private static @Nullable Microcopy copyOf(@Nullable Object value) {
-        if (!(value instanceof String text)) {
-            return null;
-        }
         try {
-            return Zenit.DRY.parse(text) instanceof Microcopy copy ? copy : null;
-        } catch (RuntimeException unreadable) {
+            if (!(Zenit.DRY.parseJsonTree(document) instanceof Map<?, ?> facts)
+                    || !(facts.get("source") instanceof String sourceToken)
+                    || !(facts.get("id") instanceof Number id) || !(facts.get("name") instanceof String name)) {
+                return null;
+            }
+            Microcopy kind = ToldFacts.readCopy(facts.get("kind"), "kind");
+            RecordHealth health = ToldFacts.healthOf(facts.get("health"));
+            StateLineCell https = ToldFacts.lineOf(facts.get("https"));
+            Source source = sourceOf(sourceToken);
+            if (source == null || kind == null || health == null || (https != null && https.label() == null)) {
+                return null;
+            }
+            Instant started = facts.get("started") instanceof String told ? Instant.parse(told) : null;
+            return new AppFacts(source, id.intValue(), name, kind, ToldFacts.addressOf(facts.get("address")),
+                facts.get("host") instanceof String host ? host : null, https, health, started);
+        } catch (ToldFacts.Unreadable | DateTimeParseException unreadable) {
             return null;
         }
     }
@@ -164,15 +106,6 @@ record AppFacts(@NonNull Source source, int id, @NonNull String name, @NonNull M
         for (Source source : Source.values()) {
             if (source.token().equals(token)) {
                 return source;
-            }
-        }
-        return null;
-    }
-
-    private static @Nullable HealthTone toneOf(@Nullable Object token) {
-        for (HealthTone tone : HealthTone.values()) {
-            if (tone.token().equals(token)) {
-                return tone;
             }
         }
         return null;

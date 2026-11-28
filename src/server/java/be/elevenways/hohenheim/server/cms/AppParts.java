@@ -9,13 +9,12 @@ import be.elevenways.hohenheim.model.*;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cluster.LinkedServers;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Cells;
-import be.elevenways.hohenheim.server.cms.AppDirectory.Held;
 import be.elevenways.hohenheim.server.cms.AppDirectory.HeldApp;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Listed;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
+import be.elevenways.hohenheim.server.cms.AppDirectory.Wording;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -28,6 +27,7 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.HeldRecords;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -46,7 +46,6 @@ import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.peer.PeerRecordModel;
 import be.elevenways.zenit.common.live.LiveFeed;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -57,12 +56,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -98,8 +96,6 @@ public final class AppParts {
         .build();
     private static final StringField HOST = StringField.builder("host").label(HohenheimMicrocopy.APP_LIST.of("host"))
         .build();
-    private static final StringField SERVER = StringField.builder("server")
-        .label(HohenheimMicrocopy.APP_LIST.of("server_column")).build();
     private static final EnumField TYPE = typeField();
     private static final EnumField STATE = stateField();
 
@@ -151,7 +147,7 @@ public final class AppParts {
     /** @return where a linked server's workload lives, null for this server's apps and what is no workload */
     private static CarriedOperations.@Nullable Located where(@NonNull Listed app) {
         return app instanceof HeldApp held && held.cells().source() == Source.WORKLOAD
-            ? new CarriedOperations.Located(held.held().peer(), String.valueOf(held.cells().id())) : null;
+            ? new CarriedOperations.Located(held.held().key(), String.valueOf(held.cells().id())) : null;
     }
 
     /** @return whether the app is a linked server's workload whose server answers, so its verbs are carried */
@@ -254,21 +250,23 @@ public final class AppParts {
     }
 
     /**
-     * The feed the app lists hear: every model an app's row and its health read, and the master's keeping of what its
-     * servers told (the kept state, the links' last seen), so a change there reaches the list at once.
+     * The feed the app lists hear: every model an app's row and its health read, so a change there reaches the list at
+     * once; what the linked servers tell wakes the operator's list through its declaration ({@link ClusterLists}).
      */
     private static final LiveFeed APPS_FEED = LiveFeed.of(AccessContext::isAccount, InstanceModel.MODEL_ID,
         SiteModel.MODEL_ID, SiteDomainModel.MODEL_ID, StackModel.MODEL_ID, StackServiceModel.MODEL_ID,
         HostModel.MODEL_ID, CertificateModel.MODEL_ID, ProtectedPathModel.MODEL_ID,
-        BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID, PeerRecordModel.MODEL_ID,
-        LinkedServerModel.MODEL_ID);
+        BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID);
 
     private static PanelResource.@NonNull Builder<Listed> entry(@NonNull Identifier id, @NonNull String panelSlug,
                                                                 boolean withHost) {
+        // The operator's list also shows every linked server's apps, as they last told them (THE declaration of a
+        // list of every server's things); the /manage twin lists the tenant's apps of this server alone.
+        HeldRecords<Listed> held = withHost ? held() : null;
         StorePages<Listed> pages = new StorePages<>() {
             @Override
             public @NonNull List<Field<?, ?>> fields() {
-                return withHost ? List.of(NAME, ADDRESS_TEXT, KIND, HOST, SERVER, TYPE, STATE)
+                return held != null ? List.of(NAME, ADDRESS_TEXT, KIND, HOST, held.field(), TYPE, STATE)
                     : List.of(NAME, ADDRESS_TEXT, KIND, TYPE, STATE);
             }
 
@@ -281,35 +279,20 @@ public final class AppParts {
             @Override
             public @NonNull RecordPage<Listed> page(TableView.@NonNull Applied<Listed> applied,
                                                     @NonNull AccessContext access) {
-                return this.inMemory(applied, apps(panelSlug, access), (app, column) -> values(app).get(column.name()),
+                // This server's own apps: the list's held merge sets the linked servers' beside them.
+                return this.inMemory(applied, own(panelSlug, access), (app, column) -> values(app).get(column.name()),
                     access);
             }
-
-            @Override
-            public @Nullable Microcopy facetLabel(@NonNull FilterSpec facet, @NonNull Listed app) {
-                // The board's Server choice for a silent server: "Kuifje, does not answer".
-                return SERVER.getName().equals(facet.name()) && app instanceof HeldApp held && held.held().silent()
-                    ? HohenheimMicrocopy.APP_LIST.of("server_silent_option").withArg("server", held.held().server())
-                    : null;
-            }
-
-            @Override
-            public int facetRank(@NonNull FilterSpec facet, @NonNull Listed app) {
-                // This server's choice first, as the board offers it; the servers it manages after it.
-                return switch (app) {
-                    case App local -> 0;
-                    case HeldApp held -> 1;
-                };
-            }
         };
-        ResourceList.Builder<Listed> list = ResourceList.store(table(withHost), pages, APPS_FEED)
+        ResourceList.Builder<Listed> list = ResourceList.store(table(held), pages, APPS_FEED)
             // The notice about a silent server stands over the rows it speaks of (board FO119).
             .chrome(ListChrome.MINIMAL.withNoticeOverRows(true))
             .emptyDescription(HohenheimMicrocopy.APP_LIST.of("empty"));
-        if (withHost) {
+        if (held != null) {
             list.search(NAME.getName(), ADDRESS_TEXT.getName(), HOST.getName());
-            list.notice(access -> silentServers(panelSlug, access));
-            list.toolNote(access -> counted(panelSlug, access));
+            list.held(held);
+            list.notice(held::notice);
+            list.toolNote(access -> held.counted(access, own(panelSlug, access).size()));
         } else {
             list.search(NAME.getName(), ADDRESS_TEXT.getName());
         }
@@ -332,77 +315,44 @@ public final class AppParts {
             .list(list.rowLink((app, request) -> switch (app) {
                 case App local -> local.target();
                 // A linked server's app opens this list's own page of it, drawn here from what that server told.
-                case HeldApp held -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.APPS, held.cells().key(),
+                case HeldApp linked -> CmsRoutes.subpage(panelSlug, HohenheimSlugs.APPS, linked.cells().key(),
                     RecordOverview.SLUG);
             }).build())
             // The list's own page is a linked server's app's; this server's app opens its record's page, so its key
-            // names nothing here. Read from the request's one read of the list, so a page of rows whose verbs each
-            // load their app reads nothing more per row.
+            // names nothing here. Read from the request's one read of the held apps, so a page of rows whose verbs
+            // each load their app reads nothing more per row.
             .reads(ResourceReads.<Listed>typed(app -> app.cells().key())
-                .load((key, access) -> apps(panelSlug, access).stream()
-                    .filter(app -> app instanceof HeldApp && app.cells().key().equals(key)).findFirst().orElse(null))
+                .load((key, access) -> held == null ? null : held.records(access).stream()
+                    .filter(app -> app.cells().key().equals(key)).findFirst().orElse(null))
                 .values(AppParts::values)
                 .build()
                 .title(app -> Microcopy.literalOrNull(app.cells().name())));
     }
 
     /**
-     * The list's count line while it holds other servers' apps, in the board's words ("24 apps on 2 servers"); null
-     * while it holds this server's alone.
+     * The operator's Apps list's declaration of every linked server's apps: as they last told them, drawn by this
+     * server's own cells, in the list's own order by name; their verbs are carried to their server (carriedVerbs).
      */
-    private static @Nullable Microcopy counted(@NonNull String panelSlug, @NonNull AccessContext access) {
-        if (!showsServers(access)) {
-            return null;
-        }
-        List<Listed> apps = apps(panelSlug, access);
-        Set<String> servers = new HashSet<>();
-        for (Listed app : apps) {
-            servers.add(serverOf(app));
-        }
-        return HohenheimMicrocopy.APP_LIST.of("list_apps_on_servers")
-            .withArg("apps", HohenheimMicrocopy.APP_LIST.of("list_app_count").withArg("count", apps.size()))
-            .withArg("servers", HohenheimMicrocopy.APP_LIST.of("list_server_count").withArg("count", servers.size()));
-    }
-
-    /**
-     * The list's notice while a server it shows apps of does not answer, in the board's words, one sentence per
-     * silent server; null while every one answers.
-     */
-    private static @Nullable Microcopy silentServers(@NonNull String panelSlug, @NonNull AccessContext access) {
-        Map<String, Held> silent = new LinkedHashMap<>();
-        for (Listed app : apps(panelSlug, access)) {
-            if (app instanceof HeldApp held && held.held().silent()) {
-                silent.putIfAbsent(held.held().peer(), held.held());
-            }
-        }
-        List<Microcopy> sentences = new ArrayList<>();
-        for (Held server : silent.values()) {
-            sentences.add(server.lastSeen() == null ? HohenheimMicrocopy.APP_LIST.of("held_silent")
-                .withArg("server", server.server()) : HohenheimMicrocopy.APP_LIST.of("held_band")
-                .withArg("server", server.server()).withArg("since", server.lastSeen())
-                .withArg("day", AppDirectory.recentDay(access.getReader(), server.lastSeen())));
-        }
-        return sentences.isEmpty() ? null : sentences.size() == 1 ? sentences.getFirst()
-            : Microcopy.concat(joined(sentences));
-    }
-
-    /** @return the sentences with a space between each two */
-    private static @NonNull List<Microcopy> joined(@NonNull List<Microcopy> sentences) {
-        List<Microcopy> parts = new ArrayList<>();
-        for (Microcopy sentence : sentences) {
-            if (!parts.isEmpty()) {
-                parts.add(Microcopy.literal(" "));
-            }
-            parts.add(sentence);
-        }
-        return parts;
+    private static @NonNull HeldRecords<Listed> held() {
+        return ClusterLists.<Listed>declare(HohenheimIds.id("app"),
+                access -> List.copyOf(AppStates.held(Wording.of(access))),
+                app -> app instanceof HeldApp linked ? linked.held() : null, app -> app.cells().key(), "held_band",
+                "list_app_count")
+            .cells((app, column) -> values(app).get(column.name()))
+            .health(app -> app.cells().health())
+            .order(Comparator.comparing((Listed app) -> app.cells().name().toLowerCase(Locale.ROOT))
+                .thenComparing(app -> app.cells().key()))
+            .actsOnHeld()
+            .build();
     }
 
     /**
      * The table: state glyph, app, address, kind, host and server (operator only; the server while one is linked),
      * HTTPS, fix; the filter columns stay hidden.
+     *
+     * @param held the operator's declaration of every linked server's apps, null on the /manage twin
      */
-    private static @NonNull TableSpec<Listed> table(boolean withHost) {
+    private static @NonNull TableSpec<Listed> table(@Nullable HeldRecords<Listed> held) {
         TableSpec.Builder<Listed> table = TableSpec.<Listed>builder()
             .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(NAME).sortable().build())
@@ -410,11 +360,11 @@ public final class AppParts {
                 .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
             .column(ColumnSpec.fromField(ADDRESS_TEXT).hidden().build())
             .column(ColumnSpec.fromField(KIND).sortable().build());
-        if (withHost) {
+        if (held != null) {
             // A website no instance serves runs on no host: a dash, never the framework's "None".
             table.column(ColumnSpec.fromField(HOST).sortable().absent(HohenheimMicrocopy.APP_LIST.of("host_none"))
                 .build());
-            table.column(ColumnSpec.fromField(SERVER).sortable().shownWhen(AppParts::showsServers).build());
+            table.column(held.column());
         }
         // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict; then the
         // framework's fix cell ("Get a certificate"), offered as the app's record's band offers it.
@@ -423,33 +373,20 @@ public final class AppParts {
             .column(ResourceHealth.fixColumn())
             .column(ColumnSpec.fromField(TYPE).hidden().build())
             .column(ColumnSpec.fromField(STATE).hidden().build())
-            .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("kind")).build())
-            // A silent server's rows stay listed as it had them, receding.
-            .rowInactive(app -> switch (app) {
-                case App local -> false;
-                case HeldApp held -> held.held().silent();
-            });
-        if (withHost) {
+            .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("kind")).build());
+        if (held != null) {
             table.filter(FilterSpec.leaf(HOST, CoreTypes.CONTAINS).label(HohenheimMicrocopy.APP_LIST.of("host"))
                 .build());
         }
         table.filter(FilterSpec.leaf(STATE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("state")).build());
-        if (withHost) {
-            // The board's order: Kind, Host, State, Server; the servers named, never counted, this one first.
-            table.filter(FilterSpec.forValues(SERVER).label(HohenheimMicrocopy.APP_LIST.of("server_column"))
-                .emptyLabel(HohenheimMicrocopy.APP_LIST.of("server_all")).uncounted()
-                .shownWhen(AppParts::showsServers).build());
+        if (held != null) {
+            // The board's order: Kind, Host, State, Server.
+            table.filter(held.filter());
         }
         return table.build();
     }
 
-    /** @return whether this viewer's Apps list holds other servers' apps, so it names each app's server */
-    private static boolean showsServers(@NonNull AccessContext access) {
-        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        return admin != null && AppDirectory.showsLinkedServers(admin, access);
-    }
-
-    /** @return every column's value of one app, keyed by the column it fills */
+    /** @return every column's value of one app, keyed by the column it fills; its server is the list's own */
     private static @NonNull Map<String, Object> values(@NonNull Listed app) {
         Cells cells = app.cells();
         Map<String, Object> values = new HashMap<>();
@@ -461,22 +398,13 @@ public final class AppParts {
         values.put(HTTPS_COLUMN, cells.https());
         values.put(TYPE.getName(), cells.source() == null ? null : cells.source().token());
         values.put(STATE.getName(), cells.health().tone().token());
-        values.put(SERVER.getName(), serverOf(app));
         return values;
     }
 
-    /** @return the name of the server the app lives on */
-    private static @NonNull String serverOf(@NonNull Listed app) {
-        return switch (app) {
-            case App local -> LinkedServers.ownName();
-            case HeldApp held -> held.held().server();
-        };
-    }
-
-    /** @return the apps the named panel lists for this viewer; none for a panel this node does not register */
-    private static @NonNull List<Listed> apps(@NonNull String panelSlug, @NonNull AccessContext access) {
+    /** @return this server's apps the named panel lists for this viewer; none for a panel this node does not register */
+    private static @NonNull List<Listed> own(@NonNull String panelSlug, @NonNull AccessContext access) {
         Panel panel = PanelRegistry.getBySlug(panelSlug);
-        return panel == null ? List.of() : AppDirectory.everyServer(panel, access);
+        return panel == null ? List.of() : List.copyOf(AppDirectory.read(panel, access));
     }
 
     /**
